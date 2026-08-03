@@ -1,0 +1,55 @@
+# --- Secrets & config ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# --- Node / frontend ---
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Desktop (Tauri/Electron) ---
+src-tauri/target/
+release/
+
+# --- Databases / local data ---
+*.sqlite
+*.sqlite3
+*.db
+pgdata/
+
+# --- Editors / OS ---
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.shared.json
+.DS_Store
+Thumbs.db
+*.swp
+
+# --- Build/artifact output ---
+*.log
+tmp/
+.cache/

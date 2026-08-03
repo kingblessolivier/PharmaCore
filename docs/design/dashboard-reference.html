@@ -1,0 +1,224 @@
+<title>PharmaCore — Dashboard & Chart Reference</title>
+<style>
+  :root{
+    color-scheme:light;
+    --page:#F1F5F9; --card:#FFFFFF; --fg:#0F172A; --ink-700:#334155; --muted:#64748B;
+    --border:#E2E8F0; --grid:#E2E8F0; --axis:#CBD5E1; --brand:#0D9488; --brand-50:#F0FDFA;
+    /* validated categorical (light) */
+    --s1:#0D9488; --s2:#D97706; --s3:#7C3AED; --s4:#15803D; --s5:#DB2777; --s6:#0891B2;
+    /* status */
+    --good:#0CA30C; --warn:#FAB219; --serious:#EC835A; --critical:#D03B3B;
+    --good-ink:#15803D;
+    --ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:"SFMono-Regular",Menlo,Consolas,monospace;
+    --r:12px;
+  }
+  @media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){
+    color-scheme:dark;
+    --page:#0B1119; --card:#151E2A; --fg:#E8EDF4; --ink-700:#C0C9D6; --muted:#8B96A6;
+    --border:#26303E; --grid:#26303E; --axis:#334155; --brand:#0FA090; --brand-50:#0C2A28;
+    --s1:#0FA090; --s2:#C87A05; --s3:#8E78F2; --s4:#17A64C; --s5:#EC4899; --s6:#0C97B8;
+    --good-ink:#22C55E;
+  }}
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --page:#0B1119; --card:#151E2A; --fg:#E8EDF4; --ink-700:#C0C9D6; --muted:#8B96A6;
+    --border:#26303E; --grid:#26303E; --axis:#334155; --brand:#0FA090; --brand-50:#0C2A28;
+    --s1:#0FA090; --s2:#C87A05; --s3:#8E78F2; --s4:#17A64C; --s5:#EC4899; --s6:#0C97B8;
+    --good-ink:#22C55E;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--fg);font-family:var(--ui);font-size:14px}
+  .wrap{max-width:1100px;margin:0 auto;padding:32px 24px 72px}
+  h1{font-size:22px;font-weight:600;letter-spacing:-.02em;margin:0}
+  .sub{color:var(--muted);margin:6px 0 0}
+  h2{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
+    margin:32px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+  .fchip{font-size:12px;border:1px solid var(--border);background:var(--card);border-radius:999px;padding:5px 12px;color:var(--ink-700)}
+  .fchip.active{background:var(--brand-50);border-color:var(--brand);color:var(--brand);font-weight:600}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
+  .kpi .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  .kpi .val{font-size:26px;font-weight:600;margin:6px 0 4px;letter-spacing:-.01em}
+  .kpi .val small{font-size:13px;color:var(--muted);font-weight:500}
+  .delta{font-size:12px;display:inline-flex;align-items:center;gap:4px;font-weight:600}
+  .delta.up{color:var(--good-ink)} .delta.down{color:var(--critical)}
+  .delta svg{width:12px;height:12px;stroke:currentColor;stroke-width:2.4;fill:none}
+  .spark{margin-top:8px}
+
+  .row{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-top:14px}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px}
+  .panel h3{margin:0 0 2px;font-size:14px;font-weight:600}
+  .panel .cap{font-size:12px;color:var(--muted);margin-bottom:12px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-top:10px}
+  .lg{display:inline-flex;align-items:center;gap:6px;color:var(--ink-700)}
+  .lg .dot{width:9px;height:9px;border-radius:3px}
+  .axis-x{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);margin-top:6px;font-family:var(--mono)}
+
+  /* bars */
+  .bar-row{display:flex;align-items:center;gap:10px;margin:9px 0}
+  .bar-row .nm{width:120px;font-size:12.5px;color:var(--ink-700);flex:0 0 auto}
+  .track{flex:1;height:16px;background:var(--grid);border-radius:5px;overflow:hidden}
+  .fill{height:100%;border-radius:5px}
+  .bar-row .v{width:56px;text-align:right;font-size:12px}
+
+  .statuslist{display:flex;flex-direction:column;gap:10px}
+  .sline{display:flex;align-items:center;gap:10px;font-size:13px}
+  .sbadge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px}
+  .sbadge svg{width:12px;height:12px;stroke:currentColor;stroke-width:2.4;fill:none}
+  .b-good{color:var(--good-ink);background:color-mix(in srgb,var(--good) 14%,transparent)}
+  .b-warn{color:#8a5a00;background:color-mix(in srgb,var(--warn) 20%,transparent)}
+  .b-crit{color:var(--critical);background:color-mix(in srgb,var(--critical) 14%,transparent)}
+  :root[data-theme="dark"] .b-warn{color:#FAB219}
+  @media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])) .b-warn{color:#FAB219}}
+  .sline .n{margin-left:auto;font-family:var(--mono);font-weight:600}
+
+  /* stacked composition bar */
+  .stack{display:flex;height:26px;border-radius:6px;overflow:hidden;gap:2px;margin:6px 0 4px}
+  .stack span{height:100%}
+  .toggle{position:fixed;top:14px;right:14px;font-size:12px;border:1px solid var(--border);
+    background:var(--card);color:var(--fg);border-radius:999px;padding:6px 12px;cursor:pointer}
+  .note{font-size:11.5px;color:var(--muted);margin-top:10px}
+  @media(max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}.row{grid-template-columns:1fr}}
+</style>
+
+<button class="toggle" onclick="var r=document.documentElement;r.setAttribute('data-theme',r.getAttribute('data-theme')==='dark'?'light':'dark')">Toggle theme</button>
+
+<div class="wrap">
+  <h1>Branch dashboard — reference</h1>
+  <p class="sub">Summary before detail · validated colour-blind-safe palette · flat cards, recessive grids, one axis. Kigali Central Pharmacy.</p>
+
+  <div class="filters" style="margin-top:18px">
+    <span class="fchip active">Last 30 days</span>
+    <span class="fchip">Today</span>
+    <span class="fchip">7 days</span>
+    <span class="fchip">MTD</span>
+    <span class="fchip" style="margin-left:8px">All branches ▾</span>
+  </div>
+
+  <h2>KPI tiles — the answer at a glance</h2>
+  <div class="kpis">
+    <div class="kpi">
+      <div class="lbl">Sales · today</div>
+      <div class="val mono">1,284,500 <small>RWF</small></div>
+      <span class="delta up"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg> 12.4% <span style="color:var(--muted);font-weight:500">vs last wk</span></span>
+      <svg class="spark" width="100%" height="34" viewBox="0 0 200 34" preserveAspectRatio="none">
+        <path d="M0,28 L25,26 L50,22 L75,24 L100,18 L125,14 L150,16 L175,9 L200,6" fill="none" stroke="var(--s1)" stroke-width="2"/>
+        <path d="M0,28 L25,26 L50,22 L75,24 L100,18 L125,14 L150,16 L175,9 L200,6 L200,34 L0,34 Z" fill="var(--s1)" opacity="0.10"/>
+        <circle cx="200" cy="6" r="2.6" fill="var(--s1)"/>
+      </svg>
+    </div>
+    <div class="kpi">
+      <div class="lbl">Cash variance</div>
+      <div class="val mono">+2,300 <small>RWF</small></div>
+      <span class="delta up"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg> within tolerance</span>
+      <div class="note" style="margin-top:14px">Drawer reconciled 18:04</div>
+    </div>
+    <div class="kpi">
+      <div class="lbl">Claims pending</div>
+      <div class="val mono">5</div>
+      <span class="delta down"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> 2 over 30 days</span>
+      <div class="note" style="margin-top:14px">RWF 214,000 awaiting</div>
+    </div>
+    <div class="kpi">
+      <div class="lbl">EBM fiscalized</div>
+      <div class="val mono">98.2<small>%</small></div>
+      <span class="delta down"><svg viewBox="0 0 24 24"><path d="M12 3 21 19H3z"/><path d="M12 10v4"/></svg> 2 errors — retry</span>
+      <div class="track" style="margin-top:12px;height:6px"><div class="fill" style="width:98.2%;background:var(--good)"></div></div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="panel">
+      <h3>Sales trend</h3>
+      <div class="cap">Daily gross, this branch vs. network average · last 30 days</div>
+      <!-- line chart -->
+      <svg width="100%" height="180" viewBox="0 0 640 180" preserveAspectRatio="none" role="img" aria-label="Sales trend line chart">
+        <!-- gridlines -->
+        <g stroke="var(--grid)" stroke-width="1">
+          <line x1="0" y1="30" x2="640" y2="30"/><line x1="0" y1="70" x2="640" y2="70"/>
+          <line x1="0" y1="110" x2="640" y2="110"/><line x1="0" y1="150" x2="640" y2="150"/>
+        </g>
+        <!-- network avg (series 2) -->
+        <path d="M0,120 L90,116 L180,118 L270,108 L360,110 L450,100 L540,104 L640,96" fill="none" stroke="var(--s2)" stroke-width="2" stroke-dasharray="4 4"/>
+        <!-- this branch (series 1) area + line -->
+        <path d="M0,130 L90,120 L180,124 L270,96 L360,104 L450,74 L540,84 L640,52 L640,180 L0,180 Z" fill="var(--s1)" opacity="0.08"/>
+        <path d="M0,130 L90,120 L180,124 L270,96 L360,104 L450,74 L540,84 L640,52" fill="none" stroke="var(--s1)" stroke-width="2.2"/>
+        <circle cx="640" cy="52" r="3.4" fill="var(--s1)"/>
+      </svg>
+      <div class="axis-x"><span>Jul 05</span><span>Jul 12</span><span>Jul 19</span><span>Jul 26</span><span>Aug 02</span></div>
+      <div class="legend">
+        <span class="lg"><span class="dot" style="background:var(--s1)"></span> This branch</span>
+        <span class="lg"><span class="dot" style="background:var(--s2)"></span> Network avg</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Needs attention</h3>
+      <div class="cap">Status roll-up · today</div>
+      <div class="statuslist">
+        <div class="sline"><span class="sbadge b-crit"><svg viewBox="0 0 24 24"><path d="M12 3 21 19H3z"/><path d="M12 10v4"/></svg> EBM errors</span> <span class="n">2</span></div>
+        <div class="sline"><span class="sbadge b-warn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Expiring ≤30d</span> <span class="n">14</span></div>
+        <div class="sline"><span class="sbadge b-warn"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10"/></svg> Low stock</span> <span class="n">8</span></div>
+        <div class="sline"><span class="sbadge b-crit"><svg viewBox="0 0 24 24"><path d="M15 9l-6 6M9 9l6 6"/><circle cx="12" cy="12" r="9"/></svg> Expired</span> <span class="n">3</span></div>
+        <div class="sline"><span class="sbadge b-good"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg> Claims approved</span> <span class="n">11</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row" style="grid-template-columns:1fr 1fr">
+    <div class="panel">
+      <h3>Top sellers</h3>
+      <div class="cap">By revenue · last 30 days</div>
+      <div class="bar-row"><span class="nm">Amoxicillin 500mg</span><div class="track"><div class="fill" style="width:92%;background:var(--s1)"></div></div><span class="v mono">842k</span></div>
+      <div class="bar-row"><span class="nm">Paracetamol 500mg</span><div class="track"><div class="fill" style="width:74%;background:var(--s1)"></div></div><span class="v mono">676k</span></div>
+      <div class="bar-row"><span class="nm">Metformin 850mg</span><div class="track"><div class="fill" style="width:58%;background:var(--s1)"></div></div><span class="v mono">531k</span></div>
+      <div class="bar-row"><span class="nm">Omeprazole 20mg</span><div class="track"><div class="fill" style="width:41%;background:var(--s1)"></div></div><span class="v mono">375k</span></div>
+      <div class="bar-row"><span class="nm">Insulin (cold)</span><div class="track"><div class="fill" style="width:33%;background:var(--s1)"></div></div><span class="v mono">301k</span></div>
+      <p class="note">Single-hue bars — one series needs no legend; the title names it.</p>
+    </div>
+
+    <div class="panel">
+      <h3>Expiry forecast</h3>
+      <div class="cap">Stock value by time-to-expiry bucket</div>
+      <!-- column buckets using status fills for the urgent ones -->
+      <svg width="100%" height="150" viewBox="0 0 420 150" role="img" aria-label="Expiry buckets column chart">
+        <g stroke="var(--grid)" stroke-width="1"><line x1="0" y1="40" x2="420" y2="40"/><line x1="0" y1="80" x2="420" y2="80"/><line x1="0" y1="120" x2="420" y2="120"/></g>
+        <rect x="18"  y="34"  width="56" height="86"  rx="4" fill="var(--critical)"/>
+        <rect x="98"  y="54"  width="56" height="66"  rx="4" fill="var(--serious)"/>
+        <rect x="178" y="70"  width="56" height="50"  rx="4" fill="var(--warn)"/>
+        <rect x="258" y="88"  width="56" height="32"  rx="4" fill="var(--s6)"/>
+        <rect x="338" y="60"  width="56" height="60"  rx="4" fill="var(--s6)"/>
+      </svg>
+      <div class="axis-x" style="padding:0 6px"><span>Expired</span><span>≤30d</span><span>≤60d</span><span>≤90d</span><span>90d+</span></div>
+      <div class="legend">
+        <span class="lg"><span class="dot" style="background:var(--critical)"></span> Expired</span>
+        <span class="lg"><span class="dot" style="background:var(--serious)"></span> Urgent</span>
+        <span class="lg"><span class="dot" style="background:var(--warn)"></span> Soon</span>
+        <span class="lg"><span class="dot" style="background:var(--s6)"></span> Healthy</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:14px">
+    <h3>Payment &amp; claims composition</h3>
+    <div class="cap">Part-to-whole as a stacked bar — never a pie</div>
+    <div class="stack">
+      <span style="width:46%;background:var(--s1)"></span>
+      <span style="width:22%;background:var(--s3)"></span>
+      <span style="width:26%;background:var(--s5)"></span>
+      <span style="width:6%;background:var(--s6)"></span>
+    </div>
+    <div class="legend">
+      <span class="lg"><span class="dot" style="background:var(--s1)"></span> Cash 46%</span>
+      <span class="lg"><span class="dot" style="background:var(--s3)"></span> Mobile money 22%</span>
+      <span class="lg"><span class="dot" style="background:var(--s5)"></span> Insurance 26%</span>
+      <span class="lg"><span class="dot" style="background:var(--s6)"></span> Card 6%</span>
+    </div>
+  </div>
+
+  <p class="note">Every hue here passed the colour-blind checker (worst adjacent ΔE 8.4 light / 8.5 dark). Status colours (expired/urgent) are reserved and always paired with a label. Dark mode is a validated set, not an inverted flip — toggle to compare.</p>
+</div>

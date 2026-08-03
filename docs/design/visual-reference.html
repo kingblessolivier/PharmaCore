@@ -1,0 +1,281 @@
+<title>PharmaCore — Design System Visual Reference</title>
+<style>
+  :root{
+    --brand-600:#0D9488; --brand-700:#0F766E; --brand-50:#F0FDFA;
+    --ink-900:#0F172A; --ink-700:#334155; --ink-500:#64748B;
+    --line-200:#E2E8F0; --surface-100:#F8FAFC; --surface-0:#FFFFFF;
+    --success:#16A34A; --warning:#D97706; --danger:#DC2626; --info:#2563EB;
+    --sys-dist:#3B5BDB; --sys-inv:#0891B2; --sys-pos:#0D9488; --sys-ins:#7C3AED;
+    --sys-fin:#15803D; --sys-hr:#EA580C; --sys-rep:#DB2777; --sys-adm:#475569;
+    --page:#F1F5F9; --card:#FFFFFF; --fg:var(--ink-900); --muted:var(--ink-500);
+    --border:var(--line-200);
+    --mono:"SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+    --ui:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    --r:8px; --r-lg:12px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --ink-900:#E8EDF4; --ink-700:#C0C9D6; --ink-500:#8B96A6;
+      --line-200:#26303E; --surface-100:#0F1722; --surface-0:#151E2A;
+      --brand-50:#0C2A28; --page:#0B1119; --card:#151E2A; --border:#26303E; }
+  }
+  :root[data-theme="dark"]{ --ink-900:#E8EDF4; --ink-700:#C0C9D6; --ink-500:#8B96A6;
+    --line-200:#26303E; --surface-100:#0F1722; --surface-0:#151E2A;
+    --brand-50:#0C2A28; --page:#0B1119; --card:#151E2A; --border:#26303E; }
+  :root[data-theme="light"]{ --ink-900:#0F172A; --ink-700:#334155; --ink-500:#64748B;
+    --line-200:#E2E8F0; --surface-100:#F8FAFC; --surface-0:#FFFFFF;
+    --brand-50:#F0FDFA; --page:#F1F5F9; --card:#FFFFFF; --border:#E2E8F0; }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--fg);font-family:var(--ui);
+    font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1120px;margin:0 auto;padding:40px 24px 80px}
+  h1{font-size:26px;font-weight:600;letter-spacing:-.02em;margin:0}
+  h2{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;
+    color:var(--muted);margin:48px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+  h3{font-size:15px;font-weight:600;margin:0 0 4px}
+  p{margin:0 0 4px} .muted{color:var(--muted)}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .lede{color:var(--ink-700);max-width:65ch;margin-top:8px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg)}
+
+  /* brand tiles */
+  .tile{width:56px;height:56px;border-radius:var(--r-lg);display:flex;align-items:center;
+    justify-content:center;flex:0 0 auto}
+  .tile svg{width:32px;height:32px;stroke:#fff;stroke-width:2;fill:none;
+    stroke-linecap:round;stroke-linejoin:round}
+  .logo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+  .logo-row{display:flex;align-items:center;gap:14px;padding:14px;background:var(--card);
+    border:1px solid var(--border);border-radius:var(--r-lg)}
+  .logo-row .lbl{font-weight:600} .logo-row .sub{font-size:12px;color:var(--muted)}
+
+  .master{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .wordmark{font-size:30px;font-weight:600;letter-spacing:-.02em}
+  .wordmark .k{color:var(--brand-600)}
+
+  /* swatches */
+  .sw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  .sw{border:1px solid var(--border);border-radius:var(--r);overflow:hidden;background:var(--card)}
+  .sw .chip{height:52px} .sw .meta{padding:8px 10px;font-size:12px}
+  .sw .meta .n{font-weight:600} .sw .meta .h{color:var(--muted)}
+
+  /* app shell mock */
+  .shell{border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;
+    background:var(--surface-0);box-shadow:0 1px 3px rgba(15,23,42,.06)}
+  .topbar{height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;
+    border-bottom:1px solid var(--border);background:var(--card)}
+  .tb-mark{width:26px;height:26px;border-radius:7px;background:var(--brand-600);
+    display:flex;align-items:center;justify-content:center}
+  .tb-mark svg{width:16px;height:16px;stroke:#fff;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .orgpill{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;
+    border:1px solid var(--border);border-radius:999px;padding:5px 10px}
+  .orgpill .dot{width:6px;height:6px;border-radius:50%;background:var(--brand-600)}
+  .cmd{flex:1;max-width:420px;display:flex;align-items:center;gap:8px;color:var(--muted);
+    border:1px solid var(--border);border-radius:var(--r);padding:6px 10px;font-size:12.5px;background:var(--surface-100)}
+  .kbd{margin-left:auto;font-family:var(--mono);font-size:10.5px;border:1px solid var(--border);
+    border-radius:5px;padding:1px 5px;color:var(--muted)}
+  .tb-icons{display:flex;gap:6px;margin-left:auto}
+  .tb-ic{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+    color:var(--ink-700);position:relative}
+  .tb-ic svg{width:17px;height:17px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .tb-ic .badge{position:absolute;top:2px;right:2px;width:7px;height:7px;border-radius:50%;
+    background:var(--danger);border:1.5px solid var(--card)}
+  .avatar{width:28px;height:28px;border-radius:50%;background:var(--sys-hr);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;position:relative}
+  .avatar .live{position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;border-radius:50%;
+    background:var(--success);border:2px solid var(--card)}
+
+  .body{display:flex;min-height:420px}
+  .side{width:200px;border-right:1px solid var(--border);padding:10px 8px;background:var(--card);
+    font-size:12.5px;flex:0 0 auto}
+  .nav-sec{margin:2px 0 10px}
+  .nav-head{display:flex;align-items:center;gap:8px;padding:6px 8px;color:var(--muted);
+    font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+  .nav-head .t{width:16px;height:16px;border-radius:5px;display:flex;align-items:center;justify-content:center}
+  .nav-head .t svg{width:10px;height:10px;stroke:#fff;stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .nav-item{display:flex;align-items:center;gap:9px;padding:6px 9px;border-radius:7px;color:var(--ink-700);cursor:pointer}
+  .nav-item svg{width:15px;height:15px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .nav-item:hover{background:var(--surface-100)}
+  .nav-item.active{background:var(--brand-50);color:var(--brand-700);font-weight:600;position:relative}
+  .nav-item.active::before{content:"";position:absolute;left:-8px;top:5px;bottom:5px;width:3px;
+    border-radius:3px;background:var(--brand-600)}
+  .nav-item .ct{margin-left:auto;font-family:var(--mono);font-size:10px;background:var(--surface-100);
+    border-radius:999px;padding:0 6px;color:var(--muted)}
+  .nav-item .ct.warn{background:color-mix(in srgb,var(--danger) 15%,transparent);color:var(--danger)}
+
+  .main{flex:1;padding:16px 18px;background:var(--surface-100);position:relative;min-width:0}
+  .crumb{font-size:11.5px;color:var(--muted);margin-bottom:2px}
+  .main h3.title{font-size:17px} .maintop{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .btn{border:none;border-radius:var(--r);font-size:12.5px;font-weight:600;padding:8px 12px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:6px}
+  .btn.primary{background:var(--brand-600);color:#fff}
+  .btn svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+
+  .pos{display:grid;grid-template-columns:1fr 220px;gap:14px}
+  .searchbox{display:flex;align-items:center;gap:8px;border:1px solid var(--brand-600);
+    border-radius:var(--r);padding:9px 11px;background:var(--card);font-size:13px;
+    box-shadow:0 0 0 3px var(--brand-50)}
+  .searchbox svg{width:16px;height:16px;stroke:var(--muted);stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .suggest{margin-top:-2px;border:1px solid var(--border);border-top:none;border-radius:0 0 var(--r) var(--r);
+    background:var(--card);overflow:hidden}
+  .sg{display:flex;align-items:center;gap:10px;padding:9px 11px;font-size:12.5px;cursor:pointer;border-top:1px solid var(--border)}
+  .sg:hover,.sg.hl{background:var(--surface-100)}
+  .sg .nm{font-weight:600} .sg .bt{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:auto}
+  .fefo{font-size:10px;font-weight:700;color:var(--warning);background:color-mix(in srgb,var(--warning) 14%,transparent);
+    border-radius:999px;padding:1px 7px}
+  .pill{width:26px;height:26px;border-radius:6px;background:var(--sys-pos);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .pill svg{width:15px;height:15px;stroke:#fff;stroke-width:1.9;fill:none;stroke-linecap:round;stroke-linejoin:round}
+
+  .cart{border:1px solid var(--border);border-radius:var(--r-lg);background:var(--card);padding:12px;font-size:12.5px}
+  .cart .ci{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)}
+  .cart .amt{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .ins{margin-top:8px;background:color-mix(in srgb,var(--sys-ins) 10%,transparent);
+    border:1px solid color-mix(in srgb,var(--sys-ins) 30%,transparent);border-radius:var(--r);padding:8px;font-size:11.5px}
+  .ins .h{color:var(--sys-ins);font-weight:700;display:flex;align-items:center;gap:6px}
+  .ins svg{width:13px;height:13px;stroke:var(--sys-ins);stroke-width:2;fill:none}
+
+  /* popover over the pos */
+  .popover{position:absolute;top:150px;left:150px;width:250px;background:var(--card);
+    border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:0 12px 32px rgba(15,23,42,.18);
+    padding:8px;font-size:12px;z-index:5}
+  .popover .ph{font-weight:600;padding:4px 6px 8px}
+  .pi{display:flex;align-items:center;gap:8px;padding:7px 6px;border-radius:6px}
+  .pi.fefo-row{background:color-mix(in srgb,var(--warning) 12%,transparent)}
+  .pi .b{font-family:var(--mono);font-weight:600}
+  .pi .q{margin-left:auto;color:var(--muted);font-family:var(--mono)}
+
+  .badges{display:flex;flex-wrap:wrap;gap:8px}
+  .badge2{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+    padding:3px 9px;border-radius:999px}
+  .badge2 svg{width:12px;height:12px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .b-suc{color:var(--success);background:color-mix(in srgb,var(--success) 13%,transparent)}
+  .b-wrn{color:var(--warning);background:color-mix(in srgb,var(--warning) 13%,transparent)}
+  .b-dng{color:var(--danger);background:color-mix(in srgb,var(--danger) 13%,transparent)}
+  .b-inf{color:var(--info);background:color-mix(in srgb,var(--info) 13%,transparent)}
+
+  .note{font-size:12px;color:var(--muted);margin-top:10px}
+  .toggle{position:fixed;top:14px;right:14px;font-size:12px;border:1px solid var(--border);
+    background:var(--card);color:var(--fg);border-radius:999px;padding:6px 12px;cursor:pointer}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.two{grid-template-columns:1fr}.pos{grid-template-columns:1fr}.side{display:none}}
+</style>
+
+<button class="toggle" onclick="var r=document.documentElement;r.setAttribute('data-theme',r.getAttribute('data-theme')==='dark'?'light':'dark')">Toggle theme</button>
+
+<div class="wrap">
+  <div class="master">
+    <div class="tile" style="background:var(--brand-600)">
+      <!-- link-node mark -->
+      <svg viewBox="0 0 24 24"><circle cx="7" cy="12" r="3"></circle><circle cx="17" cy="12" r="3"></circle><path d="M10 12h4"></path></svg>
+    </div>
+    <div>
+      <div class="wordmark">Pharma<span class="k">Core</span></div>
+      <div class="muted">by Medlink · Design System · Visual Reference</div>
+    </div>
+  </div>
+  <p class="lede">A clean, clinical B2B system in the lineage of Google Material, Microsoft Fluent, Linear and Stripe. Color carries meaning; whitespace and alignment do the work. This page is rendered <em>in</em> the system it documents.</p>
+
+  <h2>Sub-system logo family</h2>
+  <p class="muted" style="margin-top:-6px;margin-bottom:14px">One shape language, recolored + re-glyphed per product — the way Google Workspace and Microsoft 365 keep a suite feeling like one family.</p>
+  <div class="logo-grid">
+    <div class="logo-row"><div class="tile" style="background:var(--sys-dist)"><svg viewBox="0 0 24 24"><path d="M3 7h11v8H3z"></path><path d="M14 10h4l3 3v2h-7z"></path><circle cx="7" cy="17" r="1.6"></circle><circle cx="17" cy="17" r="1.6"></circle></svg></div><div><div class="lbl">Distribution</div><div class="sub">Depot · B2B transfer</div></div></div>
+    <div class="logo-row"><div class="tile" style="background:var(--sys-inv)"><svg viewBox="0 0 24 24"><path d="M3 8l9-4 9 4-9 4-9-4z"></path><path d="M3 8v8l9 4 9-4V8"></path></svg></div><div><div class="lbl">Inventory</div><div class="sub">Batch · expiry · FEFO</div></div></div>
+    <div class="logo-row"><div class="tile" style="background:var(--sys-pos)"><svg viewBox="0 0 24 24"><path d="M4 7h16l-1 5H5z"></path><path d="M4 7l-1-3"></path><circle cx="9" cy="18" r="1.6"></circle><circle cx="17" cy="18" r="1.6"></circle></svg></div><div><div class="lbl">Retail</div><div class="sub">POS · dispensing</div></div></div>
+    <div class="logo-row"><div class="tile" style="background:var(--sys-ins)"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z"></path><path d="M9 12l2 2 4-4"></path></svg></div><div><div class="lbl">Insurance</div><div class="sub">Claims · formulary</div></div></div>
+    <div class="logo-row"><div class="tile" style="background:var(--sys-fin)"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"></path><path d="M9 8h6M9 12h6"></path></svg></div><div><div class="lbl">Finance &amp; EBM</div><div class="sub">Ledger · fiscalization</div></div></div>
+    <div class="logo-row"><div class="tile" style="background:var(--sys-hr)"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3"></circle><path d="M4 19c0-3 2-5 5-5s5 2 5 5"></path><path d="M16 8a3 3 0 010 6"></path><path d="M20 19c0-2-1-4-3-4.5"></path></svg></div><div><div class="lbl">People</div><div class="sub">HR · payroll</div></div></div>
+    <div class="logo-row"><div class="tile" style="background:var(--sys-rep)"><svg viewBox="0 0 24 24"><path d="M4 20V4"></path><path d="M4 20h16"></path><path d="M8 16v-4M13 16V8M18 16v-6"></path></svg></div><div><div class="lbl">Insights</div><div class="sub">Reporting · EOD</div></div></div>
+    <div class="logo-row"><div class="tile" style="background:var(--sys-adm)"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z"></path><circle cx="12" cy="11" r="2"></circle><path d="M12 13v3"></path></svg></div><div><div class="lbl">Admin</div><div class="sub">Identity · access</div></div></div>
+  </div>
+  <p class="note">Accessibility rule: a subsystem is never identified by colour alone — the glyph and the label always travel with the hue.</p>
+
+  <h2>Color tokens</h2>
+  <div class="sw-grid">
+    <div class="sw"><div class="chip" style="background:#0D9488"></div><div class="meta"><div class="n">Brand 600</div><div class="h mono">#0D9488</div></div></div>
+    <div class="sw"><div class="chip" style="background:#0F172A"></div><div class="meta"><div class="n">Ink 900</div><div class="h mono">#0F172A</div></div></div>
+    <div class="sw"><div class="chip" style="background:#64748B"></div><div class="meta"><div class="n">Ink 500</div><div class="h mono">#64748B</div></div></div>
+    <div class="sw"><div class="chip" style="background:#E2E8F0"></div><div class="meta"><div class="n">Line 200</div><div class="h mono">#E2E8F0</div></div></div>
+    <div class="sw"><div class="chip" style="background:#16A34A"></div><div class="meta"><div class="n">Success</div><div class="h mono">#16A34A</div></div></div>
+    <div class="sw"><div class="chip" style="background:#D97706"></div><div class="meta"><div class="n">Warning</div><div class="h mono">#D97706</div></div></div>
+    <div class="sw"><div class="chip" style="background:#DC2626"></div><div class="meta"><div class="n">Danger</div><div class="h mono">#DC2626</div></div></div>
+    <div class="sw"><div class="chip" style="background:#2563EB"></div><div class="meta"><div class="n">Info</div><div class="h mono">#2563EB</div></div></div>
+  </div>
+
+  <h2>The app shell — top nav, side nav &amp; the single-page workflow</h2>
+  <div class="shell">
+    <div class="topbar">
+      <div class="tb-mark"><svg viewBox="0 0 24 24"><circle cx="7" cy="12" r="3"></circle><circle cx="17" cy="12" r="3"></circle><path d="M10 12h4"></path></svg></div>
+      <div class="orgpill"><span class="dot"></span> Kigali Central Pharmacy <span class="muted">· Retail</span> ▾</div>
+      <div class="cmd"><svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:currentColor;stroke-width:1.8;fill:none"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4-4"></path></svg> Search or run a command <span class="kbd">⌘K</span></div>
+      <div class="tb-icons">
+        <div class="tb-ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg></div>
+        <div class="tb-ic"><span class="badge"></span><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"></path><path d="M10 21a2 2 0 004 0"></path></svg></div>
+        <div class="avatar">NA<span class="live"></span></div>
+      </div>
+    </div>
+    <div class="body">
+      <div class="side">
+        <div class="nav-sec">
+          <div class="nav-item active"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg> Dashboard</div>
+        </div>
+        <div class="nav-sec">
+          <div class="nav-head"><span class="t" style="background:var(--sys-pos)"><svg viewBox="0 0 24 24"><path d="M4 7h16l-1 5H5z"></path></svg></span> Retail</div>
+          <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M4 7h16l-1 5H5z"></path><circle cx="9" cy="18" r="1.4"></circle><circle cx="16" cy="18" r="1.4"></circle></svg> Point of Sale</div>
+          <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M6 3h12v18H6z"></path><path d="M9 8h6"></path></svg> Prescriptions</div>
+          <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"></path><path d="M4 10h16"></path></svg> Cash Sessions</div>
+        </div>
+        <div class="nav-sec">
+          <div class="nav-head"><span class="t" style="background:var(--sys-ins)"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z"></path></svg></span> Insurance</div>
+          <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"></path><path d="M8 9h8M8 13h5"></path></svg> Claims Queue <span class="ct">5</span></div>
+          <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z"></path></svg> Schemes</div>
+        </div>
+        <div class="nav-sec">
+          <div class="nav-head"><span class="t" style="background:var(--sys-fin)"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"></path></svg></span> Finance</div>
+          <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"></path></svg> EBM <span class="ct warn">2</span></div>
+        </div>
+      </div>
+      <div class="main">
+        <div class="maintop">
+          <div><div class="crumb">Retail › Point of Sale</div><h3 class="title">New sale</h3></div>
+          <button class="btn primary"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"></path><path d="M4 10h16"></path></svg> Take payment</button>
+        </div>
+        <div class="pos">
+          <div>
+            <div class="searchbox"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4-4"></path></svg> amox</div>
+            <div class="suggest">
+              <div class="sg hl"><span class="pill"><svg viewBox="0 0 24 24"><path d="M8 8l8 8"></path><rect x="3" y="9" width="12" height="6" rx="3" transform="rotate(45 9 12)"></rect></svg></span><span><span class="nm">Amoxicillin 500mg</span> · capsule</span><span class="bt">AMX-2311 <span class="fefo">FEFO</span></span></div>
+              <div class="sg"><span class="pill" style="background:var(--sys-pos)"><svg viewBox="0 0 24 24"><path d="M8 8l8 8"></path><rect x="3" y="9" width="12" height="6" rx="3" transform="rotate(45 9 12)"></rect></svg></span><span><span class="nm">Amoxicillin 250mg/5ml</span> · syrup</span><span class="bt">AMX-2405</span></div>
+            </div>
+            <p class="note">Type → suggestions appear → pick a row → batch popover → added to cart. The entire sale is completed here — no page changes, works offline.</p>
+          </div>
+          <div class="cart">
+            <div style="font-weight:600;margin-bottom:6px">Cart</div>
+            <div class="ci"><span>1× Amoxicillin 500mg</span><span class="amt">1,200</span></div>
+            <div class="ci"><span>2× Paracetamol 500mg</span><span class="amt">600</span></div>
+            <div class="ins">
+              <div class="h"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z"></path></svg> CBHI · 85% covered</div>
+              <div style="display:flex;justify-content:space-between;margin-top:4px"><span class="muted">Co-pay due</span><span class="amt" style="font-weight:700">270</span></div>
+            </div>
+          </div>
+        </div>
+        <!-- batch popover -->
+        <div class="popover">
+          <div class="ph">Select batch — Amoxicillin 500mg</div>
+          <div class="pi fefo-row"><span class="b">AMX-2311</span> <span class="muted">exp 02/26</span> <span class="q">240</span></div>
+          <div class="pi"><span class="b">AMX-2405</span> <span class="muted">exp 11/26</span> <span class="q">500</span></div>
+          <div class="note" style="padding:2px 6px 4px">Oldest highlighted (FEFO) · expired batches hidden</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="note">Top bar: brand · org/branch switcher (with live shift dot on the avatar) · centered ⌘K command bar · app-switcher · notifications · user. Side nav: subsystem groups, each with its hue tile; only the active item carries colour (left accent bar). Popover, not a modal, for the batch pick.</p>
+
+  <h2>Status badges — colour + icon + label (never colour alone)</h2>
+  <div class="badges">
+    <span class="badge2 b-suc"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"></path></svg> In stock</span>
+    <span class="badge2 b-wrn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg> Expiring</span>
+    <span class="badge2 b-dng"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M15 9l-6 6M9 9l6 6"></path></svg> Expired</span>
+    <span class="badge2 b-inf"><svg viewBox="0 0 24 24"><path d="M3 7h11v8H3z"></path><path d="M14 10h4l3 3v2h-7z"></path></svg> In transit</span>
+    <span class="badge2 b-suc"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"></path></svg> Approved</span>
+    <span class="badge2 b-dng"><svg viewBox="0 0 24 24"><path d="M12 3l9 16H3z"></path><path d="M12 10v4"></path></svg> Oversell</span>
+  </div>
+</div>

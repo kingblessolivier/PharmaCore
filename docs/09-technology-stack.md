@@ -1,0 +1,225 @@
+# PharmaCore — Technology Stack
+
+The complete, recommended stack for every layer, with the reasoning and the
+alternative considered for each. This is the authoritative stack reference; the
+[architecture](05-architecture.md) doc explains how the pieces fit together.
+
+**Selection principles:** proven over trendy · typed end-to-end · hireable in the
+region · adapters for anything external · offline-capable at the counter · keep the
+early footprint small (modular monolith, not a microservice zoo).
+
+---
+
+## 0. At a glance
+
+| Layer | Choice | Why (one line) |
+|---|---|---|
+| **Frontend (web)** | **React 18 + TypeScript + Vite** | Confirmed; typed, fast, huge ecosystem, hireable |
+| **Desktop POS** | **Tauri** (Rust shell) + the same React app + **SQLite** | Small, secure, offline-first; reuses one frontend |
+| **Styling / UI** | **Tailwind CSS + shadcn/ui (Radix primitives)** | Matches the clean design tokens; accessible components |
+| **Backend API** | **Python 3.12 + FastAPI** | Async, typed (Pydantic), fast to build, great for workers |
+| **ORM / migrations** | **SQLAlchemy 2.0 + Alembic** | Mature, explicit, versioned schema |
+| **Primary DB** | **PostgreSQL 16** | ACID for stock/journals, JSONB, partitioning, integrity |
+| **POS local DB** | **SQLite** (SQLCipher-encrypted) | Embedded, offline store on the device |
+| **Async / queue** | **Celery + Redis** | Decouple PDF/EBM/claims/notify/sync from requests |
+| **Cache / broker** | **Redis** | Queue broker + cache + rate-limit store |
+| **Documents (PDF)** | **WeasyPrint + Jinja2** | Clean HTML/CSS→PDF, templates are just markup |
+| **Object storage** | **S3-compatible (MinIO self-host / cloud)** + object-lock | Write-once immutable documents |
+| **Auth** | **OAuth2 password + JWT, argon2 hashing** | Standard, stateless, offline-then-sync friendly |
+| **Realtime** | **WebSockets (FastAPI) / SSE** | Live notifications, sync status |
+| **Containers** | **Docker + docker-compose** | Reproducible dev & deploy |
+| **CI/CD** | **GitHub Actions** | Gates + deploys (see ci-cd.md) |
+| **Reverse proxy / TLS** | **Caddy** (or Nginx) | Auto-HTTPS, simple |
+| **Observability** | **Sentry + OpenTelemetry + Prometheus/Grafana + structlog** | Errors, metrics, traces, logs |
+| **Secrets** | **Cloud secret manager / Vault / Doppler** | No secrets in repo |
+
+---
+
+## 1. Frontend (web back-office)
+
+| Concern | Recommendation | Alternative considered |
+|---|---|---|
+| Framework | **React 18 + TypeScript** (confirmed) | — |
+| Build/dev | **Vite** (fast HMR, simple) | Next.js — heavier SSR we don't need for an internal tool |
+| Routing | **React Router v6/7** | TanStack Router (more type-safe; steeper) |
+| Server state / data | **TanStack Query (React Query)** | SWR — Query's caching/offline fit our needs better |
+| Client/UI state | **Zustand** (small, simple) | Redux Toolkit — overkill early |
+| Styling | **Tailwind CSS** wired to our [design tokens](design/01-design-tokens.md) | CSS Modules — loses token discipline |
+| Components | **shadcn/ui** (Radix primitives + Tailwind) | MUI/AntD — opinionated look fights our clean system |
+| Forms | **React Hook Form + Zod** | Formik — RHF is faster, less re-render |
+| Tables | **TanStack Table** (headless) | AG Grid — heavy/licensed; ours are custom-styled |
+| Charts | **Recharts** default; **visx/D3** for bespoke | Chart.js — less React-native; both themed to our [validated palette](design/09-dashboards-and-charts.md) |
+| Icons | **lucide-react** (Lucide) | — (already the design choice) |
+| Dates | **date-fns** | Day.js — either fine; date-fns tree-shakes |
+| Strings | **react-i18next** as the string catalog (English-only, externalized) | hardcoded strings — banned |
+| API client | **generated from OpenAPI** (orval / openapi-typescript) | hand-written client — drifts from backend |
+| Barcode scan | **@zxing/library** (camera) + hardware scanners as keyboard input | — |
+
+**Why this set:** it's the modern, boring-in-a-good-way React stack — every piece is
+widely used, typed, and documented. Tailwind + shadcn/ui lets us implement the design
+tokens/components exactly, accessibly, without fighting a heavy component library's look.
+
+---
+
+## 2. Desktop POS app (the counter) — **recommended: Tauri**
+
+The retail POS must **sell offline** (ADR-001), so it's a desktop app with a local
+datastore, not just a browser tab.
+
+### Recommendation: **Tauri** (with the same React frontend + SQLite)
+| Dimension | Tauri (recommended) | Electron (alternative) |
+|---|---|---|
+| Engine | System **WebView** + **Rust** core | Bundles **Chromium + Node** |
+| Bundle size | ~**3–10 MB** | ~**100–150 MB** |
+| Memory | Low | High |
+| Security | Strong (Rust, tight IPC allowlist) | Larger surface |
+| Local DB | `tauri-plugin-sql` → **SQLite** (SQLCipher for encryption) | SQLite via `better-sqlite3` |
+| Reuse of web app | **Yes** — same React build | Yes |
+| Hardware/printers | Good via Rust plugins; a little more work | Very mature (broadest device/printer support) |
+| Team skill needed | Some **Rust** for native bits | JS/Node only |
+| Auto-update | Built-in updater | electron-updater |
+
+**Why Tauri for PharmaCore:** a pharmacy counter PC benefits from a small, fast, secure
+app that boots quickly and sips memory; Tauri reuses our exact React frontend and
+stores offline sales in an **encrypted SQLite** database. The one caveat is
+**hardware/printer integration** (thermal receipt/label printers, barcode scanners) —
+more mature in Electron.
+
+**Decision rule:** default to **Tauri**. Switch to **Electron** only if, during Phase 3,
+the required thermal-printer / scanner hardware proves painful in Tauri or the team has
+no Rust capacity. Either way the **React frontend and sync logic are identical** — the
+shell is swappable. (Barcode scanners typically act as USB keyboards, so scanning works
+in both; the risk is mainly *printing*.)
+
+### Desktop-specific tech
+- **Local store:** SQLite (encrypted via SQLCipher) holding the branch working-set +
+  unsynced sales outbox.
+- **Sync:** our own outbox/pull engine over the [sync API](07-api-design.md#13-offline-sync-api-the-critical-one); revisit an off-the-shelf sync engine (ElectricSQL / PowerSync) only if device count grows large.
+- **Printing:** thermal 80mm receipts/labels via the OS print system / a printer plugin (ESC/POS where needed).
+- **Auto-update:** Tauri updater (or electron-updater) with signed releases.
+
+---
+
+## 3. Backend (API + workers)
+
+| Concern | Recommendation | Notes |
+|---|---|---|
+| Language/runtime | **Python 3.12** | typed, readable, strong libs for docs/EBM |
+| Web framework | **FastAPI** | async, Pydantic validation, auto OpenAPI (feeds the frontend client) |
+| ASGI server | **Uvicorn** (behind **Gunicorn** in prod) | standard |
+| ORM | **SQLAlchemy 2.0** (typed) | explicit, mature |
+| Migrations | **Alembic** | versioned; up+down tested in CI |
+| Schemas/config | **Pydantic v2 + pydantic-settings** | request/response + 12-factor config |
+| Auth | **OAuth2 password flow + JWT** (PyJWT), **argon2-cffi** hashing | stateless; offline-then-sync |
+| HTTP client (integrations) | **httpx** (async) | EBM/insurer/SMS/momo adapters |
+| Background jobs | **Celery** (broker Redis) | PDF, EBM fiscalize, claims manifests, notifications, sync reconcile |
+| Task scheduling | **Celery beat** | expiry alerts, EOD triggers, periodic manifests |
+| Templating (docs) | **Jinja2** → **WeasyPrint** | HTML/CSS → PDF |
+| QR/barcode gen | **segno** (QR) | on documents/receipts |
+| Money/decimal | Python `Decimal` ↔ `Numeric(14,2)` | never floats for money |
+
+**Alternative considered:** Node/NestJS (one language across stack) — rejected because
+Python is stronger for the document-generation and future analytics/ML work, and the
+team gets FastAPI's typing + auto-generated API contract for the React client. Go/Spring
+were heavier than a small team needs now.
+
+---
+
+## 4. Data layer
+
+- **PostgreSQL 16** — the single source of truth. ACID guarantees matter for stock
+  transfers and double-entry journals.
+  - Extensions: **pgcrypto** (`gen_random_uuid()`), **pg_trgm** (fuzzy product search),
+    optionally **pg_partman** (time-partition `stock_movements`, `retail_sales`, `audit_log`).
+  - Immutable tables enforced with **DB-level grants** (app role lacks UPDATE/DELETE).
+- **SQLite** — embedded local DB on each POS device (encrypted).
+- **Search:** start with **Postgres full-text + trigram** (no separate search engine).
+  Revisit OpenSearch/Meilisearch only if catalog search outgrows Postgres.
+- **Object storage:** **S3-compatible** — **MinIO** (self-hostable, supports object-lock)
+  or a cloud bucket — for write-once document PDFs.
+
+**Managed vs self-host:** prefer **managed Postgres + Redis** in production (backups,
+PITR, failover handled); MinIO if data must stay in-country and no managed S3 is available.
+
+---
+
+## 5. Integrations & adapters (all mockable)
+Every external system sits behind an interface with a **Mock** implementation for dev/test.
+
+| Integration | Tech / approach |
+|---|---|
+| **RRA EBM** | `EbmProvider` (Mock / OSDC HTTP via httpx / VSDC local) — see [ADR-003](01-key-decisions.md) |
+| **Insurers** | `InsurerClient` per scheme; batch manifest submission |
+| **SMS** | `SmsClient` → a Rwandan SMS gateway/aggregator |
+| **Email** | SMTP / a transactional email provider |
+| **Mobile money** | `MomoClient` → MTN/Airtel MoMo APIs (POS payments) |
+| **Storage** | `StorageClient` → S3/MinIO |
+
+---
+
+## 6. DevOps, infrastructure & tooling
+
+| Concern | Recommendation |
+|---|---|
+| Containerization | **Docker**; **docker-compose** for local (db, redis, minio, api, worker) |
+| Orchestration (prod) | Start with **Docker Compose / a PaaS**; grow to **Kubernetes** only when scale demands |
+| Reverse proxy / TLS | **Caddy** (automatic HTTPS) or **Nginx**/Traefik |
+| CI/CD | **GitHub Actions** (see [ci-cd.md](development/ci-cd.md)) |
+| IaC (optional, later) | **Terraform** for reproducible cloud infra |
+| Registry | container registry (GHCR / cloud) |
+| Secrets | cloud **secret manager** / **Vault** / **Doppler** — never in repo |
+| Error tracking | **Sentry** (backend + frontend) |
+| Metrics | **Prometheus + Grafana**, instrumented via **OpenTelemetry** |
+| Tracing | **OpenTelemetry** traces |
+| Logs | **structlog** (JSON) → aggregator (Loki / cloud logs) |
+| Uptime/alerting | alerts on EBM error rate, sync backlog, drawer variance, error rate |
+| Backups | managed PG **PITR** + daily encrypted backups; object storage versioned |
+
+## 7. Quality & testing tooling
+
+| Area | Tools |
+|---|---|
+| Python lint/format/type | **ruff**, **black**, **mypy** |
+| JS/TS lint/format | **ESLint** (typescript-eslint), **Prettier** |
+| Pre-commit | **pre-commit** running format+lint |
+| Backend tests | **pytest**, pytest-asyncio, **testcontainers** (Postgres), factory_boy, freezegun, **respx** (mock HTTP), coverage |
+| Frontend tests | **Vitest** + Testing Library, **MSW** (mock API) |
+| E2E | **Playwright** |
+| API contract | OpenAPI schema from FastAPI → typed client + contract checks |
+| Security scanning | dependency audit + **SAST** in CI; SBOM on release |
+
+Full policy: [testing strategy](development/testing-strategy.md), [coding standards](development/coding-standards.md).
+
+---
+
+## 8. What we deliberately are NOT using (yet)
+- **Microservices / Kubernetes from day one** — a modular monolith is simpler and
+  correct at this scale; boundaries let us extract later.
+- **GraphQL** — REST + a generated typed client is enough; no over-fetching problem
+  that warrants it.
+- **A separate search engine / data warehouse** — Postgres covers search and reporting
+  initially; add BigQuery/OpenSearch when analytics volume justifies it.
+- **Kafka / heavy event bus** — Redis+Celery covers our async needs now.
+- **NoSQL as primary** — relational integrity (stock, money) is the whole point.
+
+Revisit each in Phase 7+ if scale, team size, or analytics demand it.
+
+---
+
+## 9. Install checklist (Phase 0)
+```
+Runtime:   Python 3.12 · Node ≥ 20 · Rust (for Tauri) · Docker
+Backend:   fastapi uvicorn[standard] gunicorn sqlalchemy alembic pydantic
+           pydantic-settings pyjwt argon2-cffi httpx celery redis
+           jinja2 weasyprint segno structlog sentry-sdk
+           (dev) pytest pytest-asyncio testcontainers factory_boy freezegun respx
+                 ruff black mypy pre-commit coverage
+Frontend:  react react-dom typescript vite @tanstack/react-query zustand
+           react-router-dom tailwindcss react-hook-form zod @tanstack/react-table
+           recharts lucide-react date-fns i18next react-i18next @zxing/library
+           (dev) vitest @testing-library/react msw playwright eslint prettier
+Desktop:   @tauri-apps/cli @tauri-apps/api tauri-plugin-sql (SQLite/SQLCipher)
+Infra:     docker compose (postgres:16, redis:7, minio), caddy/nginx
+```
+
+Cross-references: [architecture](05-architecture.md) · [environments & config](development/environments-and-config.md) · [design tokens](design/01-design-tokens.md).

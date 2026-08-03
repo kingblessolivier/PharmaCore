@@ -1,0 +1,38 @@
+# Medlink CODEOWNERS
+# Requested reviewers per area. Compliance-sensitive areas require a code-owner
+# review (see docs/development/git-workflow.md). Replace the placeholder teams/handles
+# with real ones when the org/team is set up.
+
+# Default owner for everything
+*                           @medlink/maintainers
+
+# Documentation
+/docs/                      @medlink/tech-leads
+/docs/design/               @medlink/design
+/ROADMAP.md                 @medlink/product @medlink/tech-leads
+
+# Backend modules
+/backend/app/iam/           @medlink/backend @medlink/security
+/backend/app/catalog/       @medlink/backend
+/backend/app/inventory/     @medlink/backend
+/backend/app/distribution/  @medlink/backend
+/backend/app/documents/     @medlink/backend
+/backend/app/retail/        @medlink/backend
+/backend/app/sync/          @medlink/backend @medlink/tech-leads
+
+# Compliance-sensitive: require a code-owner review
+/backend/app/insurance/     @medlink/backend @medlink/compliance
+/backend/app/ebm/           @medlink/backend @medlink/compliance
+/backend/app/finance/       @medlink/backend @medlink/compliance
+/backend/app/hr/            @medlink/backend @medlink/compliance
+
+# Migrations get extra scrutiny
+/backend/alembic/           @medlink/tech-leads @medlink/backend
+
+# Frontend
+/frontend/                  @medlink/frontend @medlink/design
+
+# CI/CD, infra, and security-critical config
+/.github/                   @medlink/tech-leads
+/.github/workflows/         @medlink/tech-leads @medlink/security
+/SECURITY.md                @medlink/security
