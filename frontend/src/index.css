@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* PharmaCore design tokens — see docs/design/01-design-tokens.md.
+   Light values on :root; dark values under prefers-color-scheme. */
+:root {
+  --brand-50: #f0fdfa;
+  --brand-500: #14b8a6;
+  --brand-600: #0d9488;
+  --brand-700: #0f766e;
+  --ink-900: #0f172a;
+  --ink-700: #334155;
+  --ink-500: #64748b;
+  --line-200: #e2e8f0;
+  --surface-100: #f8fafc;
+  --surface-0: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --brand-50: #0c2a28;
+    --ink-900: #e8edf4;
+    --ink-700: #c0c9d6;
+    --ink-500: #8b96a6;
+    --line-200: #26303e;
+    --surface-100: #0f1722;
+    --surface-0: #151e2a;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--surface-100);
+  color: var(--ink-900);
+  font-family:
+    Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
