@@ -301,3 +301,41 @@ def test_rx_dispensed_by_pharmacist_with_details(
     d = Dispensing.objects.get(patient_name="Jean Uwase")
     assert d.prescriber_name == "Dr. Mugisha"
     assert d.dispensed_by_id == pharmacist.pk
+
+
+@pytest.mark.django_db
+def test_partial_customer_return(
+    cashier: User, pharmacy: Organization, product: Product, listing: PharmacyProduct
+) -> None:
+    from apps.retail.models import SaleReturn
+
+    batch = _batch(pharmacy, product, 10, date.today() + timedelta(days=100))
+    client = _auth(cashier)
+    sale = client.post(
+        "/api/retail/sales/", _sale_payload(pharmacy, product, 4, "4000"), format="json"
+    ).json()
+    batch.refresh_from_db()
+    assert batch.quantity_available == 6  # 10 - 4 sold
+    item_id = sale["items"][0]["id"]
+
+    # Return 3 of the 4.
+    resp = client.post(
+        f"/api/retail/sales/{sale['id']}/return/",
+        {"reason": "wrong item", "lines": [{"sale_item": item_id, "quantity": 3}]},
+        format="json",
+    )
+    assert resp.status_code == 200, resp.content
+    batch.refresh_from_db()
+    assert batch.quantity_available == 9  # 3 returned to shelf
+    assert resp.json()["items"][0]["returned_quantity"] == 3
+    assert SaleReturn.objects.filter(sale_id=sale["id"], refund_amount="3000.00").exists()
+    assert Document.objects.filter(doc_type="CREDIT_NOTE").exists()
+
+    # Can't return more than remains.
+    bad = client.post(
+        f"/api/retail/sales/{sale['id']}/return/",
+        {"lines": [{"sale_item": item_id, "quantity": 2}]},
+        format="json",
+    )
+    assert bad.status_code == 400
+    assert "left to return" in str(bad.content)

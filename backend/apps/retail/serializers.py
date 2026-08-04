@@ -49,6 +49,7 @@ class SaleItemSerializer(serializers.ModelSerializer):
             "product",
             "product_name",
             "quantity",
+            "returned_quantity",
             "unit_price",
             "tax_rate",
             "line_total",
@@ -59,6 +60,7 @@ class SaleItemSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "product_name",
+            "returned_quantity",
             "unit_price",
             "tax_rate",
             "line_total",

@@ -1,0 +1,18 @@
+{% extends "documents/base.html" %}
+{% block content %}
+<table class="parties">
+  <tr>
+    <td style="width:60%"><div class="plabel">Pharmacy</div>{{ seller_name }}</td>
+    <td style="width:40%"><div class="plabel">Against sale</div>{{ sale_number }}<br><span class="muted">{{ return_number }}</span></td>
+  </tr>
+</table>
+{% if reason %}<p class="muted">Reason: {{ reason }}</p>{% endif %}
+<table>
+  <tr><th>#</th><th>Item</th><th class="right">Qty returned</th><th class="right">Refund</th></tr>
+  {% for l in lines %}
+  <tr><td>{{ forloop.counter }}</td><td>{{ l.name }}</td><td class="right">{{ l.qty }}</td><td class="right">{{ l.refund }}</td></tr>
+  {% endfor %}
+  <tr><td colspan="3" class="right"><b>Total refund (RWF)</b></td><td class="right"><b>{{ refund }}</b></td></tr>
+</table>
+<p class="muted">Credit note — returned stock has been placed back and the customer refunded.</p>
+{% endblock %}

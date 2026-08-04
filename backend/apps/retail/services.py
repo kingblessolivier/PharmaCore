@@ -18,7 +18,15 @@ from apps.documents.models import DocType, Document
 from apps.documents.services import generate_document
 from apps.iam.models import User
 from apps.inventory.models import InventoryBatch, StockMovement
-from apps.retail.models import Dispensing, Payment, Sale, SaleBatchAllocation, SaleItem
+from apps.retail.models import (
+    Dispensing,
+    Payment,
+    Sale,
+    SaleBatchAllocation,
+    SaleItem,
+    SaleReturn,
+    SaleReturnItem,
+)
 
 
 class InsufficientStock(Exception):
@@ -213,6 +221,100 @@ def complete_sale(
         )
     _generate_receipt(sale, user)
     return sale
+
+
+def _return_to_stock(item: SaleItem, quantity: int, user: User | None) -> None:
+    """Put returned units back on the shelf — onto the batch(es) they were sold
+    from where those still exist, else the product's earliest-expiring batch."""
+    remaining = quantity
+    for alloc in item.allocations.select_related("batch").order_by("batch__expiry_date"):
+        if remaining <= 0:
+            break
+        take = min(remaining, alloc.quantity)
+        batch = alloc.batch
+        batch.quantity_available += take
+        batch.save(update_fields=["quantity_available", "updated_at"])
+        StockMovement.objects.create(
+            organization_id=item.sale.organization_id,
+            product=item.product,
+            batch=batch,
+            batch_number=batch.batch_number,
+            movement_type=StockMovement.Type.RETURN,
+            quantity_delta=take,
+            reference_type="sale_return",
+            reference_id=str(item.sale_id),
+            reason="Customer return",
+            created_by=user,
+        )
+        remaining -= take
+
+
+def _generate_credit_note(ret: SaleReturn, user: User | None) -> None:
+    sale = ret.sale
+    generate_document(
+        organization=sale.organization,
+        doc_type=DocType.CREDIT_NOTE,
+        context={
+            "seller_name": sale.organization.name,
+            "sale_number": sale.sale_number,
+            "return_number": ret.return_number,
+            "reason": ret.reason,
+            "lines": [
+                {
+                    "name": _product_label(ri.sale_item.product),
+                    "qty": ri.quantity,
+                    "refund": ri.refund_amount,
+                }
+                for ri in ret.items.select_related("sale_item__product").all()
+            ],
+            "refund": ret.refund_amount,
+        },
+        reference_type="sale_return",
+        reference_id=str(ret.pk),
+        user=user,
+    )
+
+
+@transaction.atomic
+def return_sale_items(
+    *, sale: Sale, lines: list[dict[str, Any]], reason: str, user: User | None
+) -> SaleReturn:
+    """Return some items from a completed sale: put stock back, refund the value,
+    and issue a credit note. ``lines`` = [{"sale_item": id, "quantity": n}]."""
+    if sale.status != Sale.Status.COMPLETED:
+        raise ValueError("Only a completed sale can be returned against.")
+
+    ret = SaleReturn.objects.create(sale=sale, reason=reason, created_by=user)
+    refund = Decimal("0")
+    any_line = False
+    for line in lines:
+        item = sale.items.select_for_update().get(pk=line["sale_item"])
+        qty = int(line.get("quantity", 0))
+        if qty <= 0:
+            continue
+        if qty > item.returnable:
+            raise ValueError(
+                f"Cannot return {qty} of '{_product_label(item.product)}' — "
+                f"only {item.returnable} left to return."
+            )
+        _return_to_stock(item, qty, user)
+        item.returned_quantity += qty
+        item.save(update_fields=["returned_quantity"])
+        line_refund = (item.unit_price * qty).quantize(Decimal("0.01"))
+        SaleReturnItem.objects.create(
+            sale_return=ret, sale_item=item, quantity=qty, refund_amount=line_refund
+        )
+        refund += line_refund
+        any_line = True
+
+    if not any_line:
+        raise ValueError("No items to return.")
+
+    ret.refund_amount = refund
+    ret.return_number = f"RET-{ret.pk:06d}"
+    ret.save(update_fields=["refund_amount", "return_number"])
+    _generate_credit_note(ret, user)
+    return ret
 
 
 @transaction.atomic
