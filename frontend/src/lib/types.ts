@@ -84,6 +84,22 @@ export interface AuditLogEntry {
   created_at: string;
 }
 
+export interface License {
+  id: number;
+  organization: number;
+  user: number | null;
+  user_name: string | null;
+  license_type: string;
+  license_number: string;
+  issuing_authority: string;
+  issue_date: string | null;
+  expiry_date: string | null;
+  days_to_expiry: number | null;
+  status: string;
+  document_url: string;
+  created_at: string;
+}
+
 export type TaxClass = "A" | "B" | "C" | "D";
 
 export interface Product {

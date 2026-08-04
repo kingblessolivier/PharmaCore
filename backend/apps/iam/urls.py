@@ -7,6 +7,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from apps.iam.views import (
     AuditLogViewSet,
     DepartmentViewSet,
+    LicenseViewSet,
     LoginView,
     MeView,
     OrganizationViewSet,
@@ -19,6 +20,7 @@ router.register("organizations", OrganizationViewSet, basename="organization")
 router.register("departments", DepartmentViewSet, basename="department")
 router.register("users", UserViewSet, basename="user")
 router.register("roles", RoleViewSet, basename="role")
+router.register("licenses", LicenseViewSet, basename="license")
 router.register("audit-logs", AuditLogViewSet, basename="audit-log")
 
 urlpatterns = [

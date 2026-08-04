@@ -2,11 +2,39 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from rest_framework import serializers
 
-from apps.iam.models import AuditLog, Department, Organization, Role, User
+from apps.iam.models import AuditLog, Department, License, Organization, Role, User
+
+
+class LicenseSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source="user.username", read_only=True, default=None)
+    days_to_expiry = serializers.SerializerMethodField()
+
+    class Meta:
+        model = License
+        fields = [
+            "id",
+            "organization",
+            "user",
+            "user_name",
+            "license_type",
+            "license_number",
+            "issuing_authority",
+            "issue_date",
+            "expiry_date",
+            "days_to_expiry",
+            "status",
+            "document_url",
+            "created_at",
+        ]
+        read_only_fields = ["id", "user_name", "days_to_expiry", "created_at"]
+
+    def get_days_to_expiry(self, obj: License) -> int | None:
+        return (obj.expiry_date - date.today()).days if obj.expiry_date else None
 
 
 class AuditLogSerializer(serializers.ModelSerializer):

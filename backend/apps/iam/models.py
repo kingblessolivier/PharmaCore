@@ -114,6 +114,47 @@ class User(AbstractUser):
         return self.roles.filter(code=code).exists()
 
 
+class License(models.Model):
+    """A regulatory licence held by an organization (premises) or a staff member
+    (professional). Tracked with expiry for compliance alerts."""
+
+    class Type(models.TextChoices):
+        PREMISES = "PREMISES", "Premises"
+        PHARMACIST = "PHARMACIST", "Pharmacist"
+        WHOLESALE = "WHOLESALE", "Wholesale"
+        RETAIL = "RETAIL", "Retail"
+        OTHER = "OTHER", "Other"
+
+    class Status(models.TextChoices):
+        ACTIVE = "ACTIVE", "Active"
+        EXPIRED = "EXPIRED", "Expired"
+        SUSPENDED = "SUSPENDED", "Suspended"
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="licenses"
+    )
+    # Set when the licence belongs to a staff member (professional licence).
+    user = models.ForeignKey(
+        "iam.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="licenses"
+    )
+    license_type = models.CharField(max_length=20, choices=Type.choices)
+    license_number = models.CharField(max_length=100)
+    issuing_authority = models.CharField(max_length=150, blank=True, default="")
+    issue_date = models.DateField(null=True, blank=True)
+    expiry_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+    document_url = models.URLField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["expiry_date"]
+        indexes = [models.Index(fields=["organization", "expiry_date"])]
+
+    def __str__(self) -> str:
+        return f"{self.license_type} · {self.license_number}"
+
+
 class AuditLog(models.Model):
     """Append-only record of every significant action (GDP requirement).
 
