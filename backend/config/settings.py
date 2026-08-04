@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "apps.iam",
     "apps.catalog",
     "apps.inventory",
+    "apps.distribution",
     "apps.core",
 ]
 

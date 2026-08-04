@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Building2,
   ChevronDown,
+  ClipboardList,
   LayoutDashboard,
   LogOut,
   Network,
@@ -89,6 +90,7 @@ const nav = [
   { to: "/departments", label: "Departments", icon: Network, end: false },
   { to: "/products", label: "Catalog", icon: Pill, end: false },
   { to: "/suppliers", label: "Suppliers", icon: Truck, end: false },
+  { to: "/orders", label: "Purchase orders", icon: ClipboardList, end: false },
 ];
 
 export function AppShell() {
@@ -160,7 +162,7 @@ export function AppShell() {
             </NavLink>
           ))}
           <div className="mt-3 px-3 text-[11px] uppercase tracking-wide text-ink-500">More modules</div>
-          {["Inventory", "Distribution", "Retail", "Finance"].map((m) => (
+          {["Retail", "Insurance", "Finance"].map((m) => (
             <div key={m} className="px-3 py-1.5 text-sm text-ink-500/60">
               {m} <span className="text-[10px]">soon</span>
             </div>

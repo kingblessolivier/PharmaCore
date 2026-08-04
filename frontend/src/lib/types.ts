@@ -100,6 +100,33 @@ export interface License {
   created_at: string;
 }
 
+export interface OrderItem {
+  id?: number;
+  product: number;
+  product_name?: string;
+  quantity_ordered: number;
+  quantity_approved?: number;
+  quantity_shipped?: number;
+  quantity_received?: number;
+  price_per_unit: string;
+  line_total?: number;
+}
+
+export interface StockOrder {
+  id: number;
+  order_number: string;
+  depot: number;
+  depot_name: string;
+  retail: number;
+  retail_name: string;
+  status: string;
+  expected_delivery: string | null;
+  notes: string;
+  total_amount: number;
+  items: OrderItem[];
+  created_at: string;
+}
+
 export type TaxClass = "A" | "B" | "C" | "D";
 
 export interface Product {
