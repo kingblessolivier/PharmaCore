@@ -5,7 +5,36 @@ from typing import Any
 
 from rest_framework import serializers
 
-from apps.retail.models import TAX_RATES, Payment, Sale, SaleItem
+from apps.retail.models import TAX_RATES, Dispensing, Payment, Sale, SaleItem
+
+
+class DispensingSerializer(serializers.ModelSerializer):
+    sale_number = serializers.CharField(source="sale.sale_number", read_only=True)
+    organization = serializers.IntegerField(source="sale.organization_id", read_only=True)
+    dispensed_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Dispensing
+        fields = [
+            "id",
+            "sale",
+            "sale_number",
+            "organization",
+            "dispensed_by_name",
+            "patient_name",
+            "patient_id_number",
+            "prescriber_name",
+            "prescriber_license",
+            "prescription_reference",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_dispensed_by_name(self, obj: Dispensing) -> str | None:
+        u = obj.dispensed_by
+        if not u:
+            return None
+        return u.get_full_name() or u.username
 
 
 class SaleItemSerializer(serializers.ModelSerializer):

@@ -365,6 +365,33 @@ export interface DashboardSummary {
   org_count: number;
 }
 
+export interface StockMovement {
+  id: number;
+  product: number;
+  product_name: string;
+  batch_number: string;
+  movement_type: string;
+  quantity_delta: number;
+  reference_type: string;
+  reason: string;
+  created_by: string | null;
+  occurred_at: string;
+}
+
+export interface DispensingRecord {
+  id: number;
+  sale: number;
+  sale_number: string;
+  organization: number;
+  dispensed_by_name: string | null;
+  patient_name: string;
+  patient_id_number: string;
+  prescriber_name: string;
+  prescriber_license: string;
+  prescription_reference: string;
+  created_at: string;
+}
+
 export type PaymentMethod = "CASH" | "MOBILE_MONEY" | "CARD";
 export type SaleStatus = "OPEN" | "COMPLETED" | "VOIDED";
 
