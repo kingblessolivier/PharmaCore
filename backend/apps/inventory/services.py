@@ -1,0 +1,57 @@
+"""Inventory service functions — the write-path that keeps batches and the
+immutable movement ledger consistent (one DB transaction each)."""
+
+from __future__ import annotations
+
+from datetime import date
+from decimal import Decimal
+
+from django.db import transaction
+
+from apps.catalog.models import Product
+from apps.iam.models import Organization, User
+from apps.inventory.models import InventoryBatch, StockMovement
+
+
+@transaction.atomic
+def receive_intake(
+    *,
+    organization: Organization,
+    product: Product,
+    batch_number: str,
+    expiry_date: date,
+    quantity: int,
+    manufacture_date: date | None = None,
+    wholesale_cost: Decimal | None = None,
+    storage_location: str = "",
+    user: User | None = None,
+) -> InventoryBatch:
+    """Receive stock: create/find the batch, add quantity, and append an INTAKE
+    movement. Batch + ledger stay consistent within one transaction."""
+    batch, created = InventoryBatch.objects.select_for_update().get_or_create(
+        organization=organization,
+        product=product,
+        batch_number=batch_number,
+        defaults={
+            "expiry_date": expiry_date,
+            "manufacture_date": manufacture_date,
+            "wholesale_cost": wholesale_cost,
+            "storage_location": storage_location,
+        },
+    )
+    batch.quantity_available += quantity
+    if wholesale_cost is not None:
+        batch.wholesale_cost = wholesale_cost
+    batch.save(update_fields=["quantity_available", "wholesale_cost", "updated_at"])
+
+    StockMovement.objects.create(
+        organization=organization,
+        product=product,
+        batch=batch,
+        batch_number=batch_number,
+        movement_type=StockMovement.Type.INTAKE,
+        quantity_delta=quantity,
+        reference_type="intake",
+        created_by=user,
+    )
+    return batch
