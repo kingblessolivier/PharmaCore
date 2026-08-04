@@ -5,6 +5,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.iam.views import (
+    AuditLogViewSet,
     DepartmentViewSet,
     LoginView,
     MeView,
@@ -18,6 +19,7 @@ router.register("organizations", OrganizationViewSet, basename="organization")
 router.register("departments", DepartmentViewSet, basename="department")
 router.register("users", UserViewSet, basename="user")
 router.register("roles", RoleViewSet, basename="role")
+router.register("audit-logs", AuditLogViewSet, basename="audit-log")
 
 urlpatterns = [
     path("auth/login", LoginView.as_view(), name="login"),

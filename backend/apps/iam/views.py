@@ -15,10 +15,11 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from apps.iam.audit import record_audit
-from apps.iam.models import Department, Organization, Role, User
+from apps.iam.models import AuditLog, Department, Organization, Role, User
 from apps.iam.permissions import CanManageOrg, IsAdminRole
 from apps.iam.scoping import organizations_visible_to
 from apps.iam.serializers import (
+    AuditLogSerializer,
     DepartmentSerializer,
     OrganizationSerializer,
     RoleSerializer,
@@ -31,11 +32,17 @@ class LoginView(TokenObtainPairView):
     """Obtain a JWT access/refresh pair; records an audit entry on success."""
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        response = super().post(request, *args, **kwargs)
-        if response.status_code == status.HTTP_200_OK:
-            username = request.data.get("username", "")
+        username = request.data.get("username", "")
+        try:
+            response = super().post(request, *args, **kwargs)
+        except Exception:
+            # Failed login (bad credentials / inactive) — record a security event.
             user = User.objects.filter(username=username).first()
-            record_audit(action="LOGIN", user=user, request=request)
+            record_audit(action="LOGIN_FAILED", user=user, entity_type="auth", request=request)
+            raise
+        if response.status_code == status.HTTP_200_OK:
+            user = User.objects.filter(username=username).first()
+            record_audit(action="LOGIN", user=user, entity_type="auth", request=request)
         return response
 
 
@@ -71,6 +78,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         record_audit(
             action="CREATE",
             user=cast(User, self.request.user),
+            organization=obj,
             entity_type="organization",
             entity_id=str(obj.pk),
             request=self.request,
@@ -81,6 +89,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         record_audit(
             action="UPDATE",
             user=cast(User, self.request.user),
+            organization=obj,
             entity_type="organization",
             entity_id=str(obj.pk),
             request=self.request,
@@ -90,6 +99,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         record_audit(
             action="DELETE",
             user=cast(User, self.request.user),
+            organization=instance,
             entity_type="organization",
             entity_id=str(instance.pk),
             request=self.request,
@@ -122,6 +132,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
         record_audit(
             action="CREATE",
             user=user,
+            organization=obj.organization,
             entity_type="department",
             entity_id=str(obj.pk),
             request=self.request,
@@ -132,6 +143,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
         record_audit(
             action="UPDATE",
             user=cast(User, self.request.user),
+            organization=obj.organization,
             entity_type="department",
             entity_id=str(obj.pk),
             request=self.request,
@@ -141,6 +153,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
         record_audit(
             action="DELETE",
             user=cast(User, self.request.user),
+            organization=instance.organization,
             entity_type="department",
             entity_id=str(instance.pk),
             request=self.request,
@@ -155,6 +168,25 @@ class RoleViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Role.objects.all()
     permission_classes = [IsAuthenticated]
     pagination_class = None
+
+
+class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """Read-only activity log, admin-only, org-scoped (?organization=<id>)."""
+
+    serializer_class = AuditLogSerializer
+    queryset = AuditLog.objects.select_related("user").all()
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    def get_queryset(self) -> QuerySet[AuditLog]:
+        actor = cast(User, self.request.user)
+        qs = AuditLog.objects.select_related("user").all()
+        if not (actor.is_superuser or actor.has_role("SYS_ADMIN")):
+            org_id = actor.organization_id
+            qs = qs.filter(organization_id=org_id) if org_id else qs.none()
+        org = self.request.query_params.get("organization")
+        if org:
+            qs = qs.filter(organization_id=org)
+        return qs
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -192,6 +224,7 @@ class UserViewSet(viewsets.ModelViewSet):
         record_audit(
             action="CREATE",
             user=cast(User, self.request.user),
+            organization=obj.organization,
             entity_type="user",
             entity_id=str(obj.pk),
             request=self.request,
@@ -203,6 +236,7 @@ class UserViewSet(viewsets.ModelViewSet):
         record_audit(
             action="UPDATE",
             user=cast(User, self.request.user),
+            organization=obj.organization,
             entity_type="user",
             entity_id=str(obj.pk),
             request=self.request,
@@ -212,6 +246,7 @@ class UserViewSet(viewsets.ModelViewSet):
         record_audit(
             action="DELETE",
             user=cast(User, self.request.user),
+            organization=instance.organization,
             entity_type="user",
             entity_id=str(instance.pk),
             request=self.request,

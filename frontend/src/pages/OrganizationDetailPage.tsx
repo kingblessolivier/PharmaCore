@@ -3,6 +3,7 @@ import { ArrowLeft, Pencil } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { OrganizationForm } from "../components/OrganizationForm";
+import { OrgLogsTab } from "../components/OrgLogsTab";
 import { OrgUsersTab } from "../components/OrgUsersTab";
 import { Badge, Button, Card, Spinner } from "../components/ui";
 import { api } from "../lib/api";
@@ -10,7 +11,7 @@ import { useAuth } from "../lib/auth";
 import { isAdmin } from "../lib/roles";
 import type { Organization } from "../lib/types";
 
-type Tab = "details" | "users";
+type Tab = "details" | "users" | "logs";
 
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
@@ -48,6 +49,7 @@ export function OrganizationDetailPage() {
   const tabs: { id: Tab; label: string }[] = [
     { id: "details", label: "Details" },
     { id: "users", label: "Users & roles" },
+    { id: "logs", label: "Activity logs" },
   ];
 
   return (
@@ -120,6 +122,7 @@ export function OrganizationDetailPage() {
       )}
 
       {tab === "users" && <OrgUsersTab organizationId={org.id} />}
+      {tab === "logs" && <OrgLogsTab organizationId={org.id} />}
     </div>
   );
 }
