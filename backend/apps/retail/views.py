@@ -20,8 +20,8 @@ from rest_framework.response import Response
 from apps.iam.audit import record_audit
 from apps.iam.models import Organization, User
 from apps.iam.scoping import organizations_visible_to
-from apps.retail.models import Sale
-from apps.retail.serializers import SaleSerializer
+from apps.retail.models import Dispensing, Sale
+from apps.retail.serializers import DispensingSerializer, SaleSerializer
 from apps.retail.services import (
     DispensingRequired,
     InsufficientStock,
@@ -165,3 +165,22 @@ class SaleViewSet(viewsets.ModelViewSet):
         )
         sale.refresh_from_db()
         return Response(SaleSerializer(sale).data)
+
+
+class DispensingViewSet(viewsets.ReadOnlyModelViewSet):
+    """Read-only regulatory dispensing log — every Rx / controlled sale, with the
+    pharmacist, patient, and prescriber. Org-scoped; filter with ?organization."""
+
+    serializer_class = DispensingSerializer
+    permission_classes = [IsAuthenticated]
+    queryset = Dispensing.objects.select_related("sale", "dispensed_by").order_by("-created_at")
+
+    def get_queryset(self) -> QuerySet[Dispensing]:
+        user = cast(User, self.request.user)
+        qs = Dispensing.objects.select_related("sale", "dispensed_by").order_by("-created_at")
+        if not _is_admin(user):
+            qs = qs.filter(sale__organization__in=organizations_visible_to(user))
+        org = self.request.query_params.get("organization")
+        if org and org.isdigit():
+            qs = qs.filter(sale__organization_id=int(org))
+        return qs

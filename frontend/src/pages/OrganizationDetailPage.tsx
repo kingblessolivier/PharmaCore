@@ -4,8 +4,10 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { OrganizationForm } from "../components/OrganizationForm";
 import { OrgCatalogTab } from "../components/OrgCatalogTab";
+import { OrgDispensingTab } from "../components/OrgDispensingTab";
 import { OrgLicensesTab } from "../components/OrgLicensesTab";
 import { OrgLogsTab } from "../components/OrgLogsTab";
+import { OrgMovementsTab } from "../components/OrgMovementsTab";
 import { OrgStockTab } from "../components/OrgStockTab";
 import { OrgUsersTab } from "../components/OrgUsersTab";
 import { Badge, Button, Card, Spinner } from "../components/ui";
@@ -14,7 +16,15 @@ import { useAuth } from "../lib/auth";
 import { isAdmin } from "../lib/roles";
 import type { Organization } from "../lib/types";
 
-type Tab = "details" | "users" | "catalog" | "stock" | "licences" | "logs";
+type Tab =
+  | "details"
+  | "users"
+  | "catalog"
+  | "stock"
+  | "movements"
+  | "dispensing"
+  | "licences"
+  | "logs";
 
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
@@ -54,6 +64,8 @@ export function OrganizationDetailPage() {
     { id: "users", label: "Users & roles" },
     { id: "catalog", label: "Catalog & pricing" },
     { id: "stock", label: "Stock" },
+    { id: "movements", label: "Movements" },
+    { id: "dispensing", label: "Dispensing" },
     { id: "licences", label: "Licences" },
     { id: "logs", label: "Activity logs" },
   ];
@@ -130,6 +142,8 @@ export function OrganizationDetailPage() {
       {tab === "users" && <OrgUsersTab organizationId={org.id} />}
       {tab === "catalog" && <OrgCatalogTab organizationId={org.id} orgType={org.type} />}
       {tab === "stock" && <OrgStockTab organizationId={org.id} orgType={org.type} />}
+      {tab === "movements" && <OrgMovementsTab organizationId={org.id} />}
+      {tab === "dispensing" && <OrgDispensingTab organizationId={org.id} />}
       {tab === "licences" && <OrgLicensesTab organizationId={org.id} />}
       {tab === "logs" && <OrgLogsTab organizationId={org.id} />}
     </div>
