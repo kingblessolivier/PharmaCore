@@ -10,6 +10,7 @@ import {
   Network,
   Pill,
   Search,
+  ShoppingCart,
   Truck,
   Users,
 } from "lucide-react";
@@ -176,6 +177,7 @@ const nav = [
   { to: "/products", label: "Catalog", icon: Pill, end: false },
   { to: "/suppliers", label: "Suppliers", icon: Truck, end: false },
   { to: "/orders", label: "Purchase orders", icon: ClipboardList, end: false },
+  { to: "/pos", label: "Point of sale", icon: ShoppingCart, end: false },
   { to: "/documents", label: "Documents", icon: FileText, end: false },
 ];
 
@@ -249,7 +251,7 @@ export function AppShell() {
             </NavLink>
           ))}
           <div className="mt-3 px-3 text-[11px] uppercase tracking-wide text-ink-500">More modules</div>
-          {["Retail", "Insurance", "Finance"].map((m) => (
+          {["Insurance", "Finance", "HR & Payroll"].map((m) => (
             <div key={m} className="px-3 py-1.5 text-sm text-ink-500/60">
               {m} <span className="text-[10px]">soon</span>
             </div>

@@ -290,3 +290,44 @@ export interface PharmacyProduct {
   is_active: boolean;
   created_at: string;
 }
+
+export type PaymentMethod = "CASH" | "MOBILE_MONEY" | "CARD";
+export type SaleStatus = "OPEN" | "COMPLETED" | "VOIDED";
+
+export interface SaleItem {
+  id?: number;
+  product: number;
+  product_name?: string;
+  quantity: number;
+  unit_price?: string;
+  tax_rate?: string;
+  line_total?: string;
+  line_tax?: string;
+}
+
+export interface Payment {
+  id?: number;
+  method: PaymentMethod;
+  amount: string;
+  created_at?: string;
+}
+
+export interface Sale {
+  id: number;
+  sale_number: string;
+  organization: number;
+  org_name: string;
+  cashier: number | null;
+  cashier_name: string | null;
+  status: SaleStatus;
+  subtotal: string;
+  tax_total: string;
+  total: string;
+  amount_tendered: string;
+  change_due: string;
+  void_reason: string;
+  items: SaleItem[];
+  payments: Payment[];
+  completed_at: string | null;
+  created_at: string;
+}

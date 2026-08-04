@@ -1,0 +1,184 @@
+"""Retail POS services — the write-path that turns a cart into stock movements.
+
+Completing a sale FEFO-consumes the pharmacy's own batches (soonest-expiring
+first), writes one immutable ``SALE`` ledger movement per batch, records the
+tenders, and generates the fiscal receipt. Voiding reverses every movement.
+Each function is one DB transaction.
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal
+from typing import Any
+
+from django.db import transaction
+from django.utils import timezone
+
+from apps.documents.models import DocType, Document
+from apps.documents.services import generate_document
+from apps.iam.models import User
+from apps.inventory.models import InventoryBatch, StockMovement
+from apps.retail.models import Payment, Sale, SaleBatchAllocation, SaleItem
+
+
+class InsufficientStock(Exception):
+    """Raised when a sale line asks for more units than are on hand (oversell)."""
+
+    def __init__(self, product_label: str, requested: int, available: int) -> None:
+        self.product_label = product_label
+        self.requested = requested
+        self.available = available
+        super().__init__(f"Only {available} of '{product_label}' in stock ({requested} requested).")
+
+
+def _product_label(product: Any) -> str:
+    return f"{product.generic_name} {product.strength}".strip()
+
+
+def _free(batch: InventoryBatch) -> int:
+    """Units free to sell — on hand minus any held for B2B orders."""
+    return batch.quantity_available - batch.quantity_reserved
+
+
+def _fefo_consume(item: SaleItem, org_id: int, user: User | None) -> None:
+    """Draw ``item.quantity`` from the org's ACTIVE batches, soonest-expiring first,
+    recording allocations and appending one SALE movement per batch touched."""
+    remaining = item.quantity
+    batches = (
+        InventoryBatch.objects.select_for_update()
+        .filter(
+            organization_id=org_id,
+            product=item.product,
+            status=InventoryBatch.Status.ACTIVE,
+        )
+        .order_by("expiry_date", "batch_number")  # FEFO
+    )
+    available = sum(max(0, _free(b)) for b in batches)
+    if available < remaining:
+        raise InsufficientStock(_product_label(item.product), item.quantity, available)
+
+    for batch in batches:
+        if remaining <= 0:
+            break
+        take = min(remaining, _free(batch))
+        if take <= 0:
+            continue
+        batch.quantity_available -= take
+        batch.save(update_fields=["quantity_available", "updated_at"])
+        SaleBatchAllocation.objects.create(sale_item=item, batch=batch, quantity=take)
+        StockMovement.objects.create(
+            organization_id=org_id,
+            product=item.product,
+            batch=batch,
+            batch_number=batch.batch_number,
+            movement_type=StockMovement.Type.SALE,
+            quantity_delta=-take,
+            reference_type="sale",
+            reference_id=str(item.sale_id),
+            created_by=user,
+        )
+        remaining -= take
+
+
+def _generate_receipt(sale: Sale, user: User | None) -> Document:
+    lines = [
+        {
+            "name": _product_label(i.product),
+            "tax_class": i.product.tax_class,
+            "qty": i.quantity,
+            "price": i.unit_price,
+            "total": i.line_total,
+        }
+        for i in sale.items.select_related("product").all()
+    ]
+    return generate_document(
+        organization=sale.organization,
+        doc_type=DocType.RECEIPT,
+        context={
+            "seller_name": sale.organization.name,
+            "cashier": (
+                sale.cashier.get_full_name() or sale.cashier.username if sale.cashier else ""
+            ),
+            "sale_number": sale.sale_number,
+            "lines": lines,
+            "subtotal": sale.subtotal,
+            "tax_total": sale.tax_total,
+            "total": sale.total,
+            "tendered": sale.amount_tendered,
+            "change": sale.change_due,
+        },
+        reference_type="sale",
+        reference_id=str(sale.pk),
+        user=user,
+    )
+
+
+@transaction.atomic
+def complete_sale(*, sale: Sale, payments: list[dict[str, Any]], user: User | None) -> Sale:
+    """Take payment for an OPEN sale: FEFO-deduct stock, record tenders, issue the
+    receipt, and mark it COMPLETED. Raises on oversell or short payment (no writes)."""
+    if sale.status != Sale.Status.OPEN:
+        raise ValueError("Only an open sale can be completed.")
+    if not sale.items.exists():
+        raise ValueError("Cannot complete an empty sale.")
+
+    tendered = sum((Decimal(str(p["amount"])) for p in payments), Decimal("0"))
+    total = sale.total
+    if tendered < total:
+        raise ValueError(f"Payment of {tendered} does not cover the total of {total}.")
+
+    for item in sale.items.select_related("product").select_for_update():
+        _fefo_consume(item, sale.organization_id, user)
+
+    for p in payments:
+        Payment.objects.create(sale=sale, method=p["method"], amount=Decimal(str(p["amount"])))
+
+    sale.amount_tendered = tendered
+    sale.change_due = tendered - total
+    sale.status = Sale.Status.COMPLETED
+    sale.cashier = sale.cashier or user
+    sale.completed_at = timezone.now()
+    sale.save(
+        update_fields=[
+            "amount_tendered",
+            "change_due",
+            "status",
+            "cashier",
+            "completed_at",
+            "updated_at",
+        ]
+    )
+    _generate_receipt(sale, user)
+    return sale
+
+
+@transaction.atomic
+def void_sale(*, sale: Sale, reason: str, user: User | None) -> Sale:
+    """Reverse a COMPLETED sale: return each allocated quantity to its batch and
+    append a RETURN movement. The receipt already issued stays in the vault."""
+    if sale.status != Sale.Status.COMPLETED:
+        raise ValueError("Only a completed sale can be voided.")
+
+    for item in sale.items.select_related("product").all():
+        for alloc in item.allocations.select_related("batch").select_for_update():
+            batch = alloc.batch
+            batch.quantity_available += alloc.quantity
+            batch.save(update_fields=["quantity_available", "updated_at"])
+            StockMovement.objects.create(
+                organization_id=sale.organization_id,
+                product=item.product,
+                batch=batch,
+                batch_number=batch.batch_number,
+                movement_type=StockMovement.Type.RETURN,
+                quantity_delta=alloc.quantity,
+                reference_type="sale_void",
+                reference_id=str(sale.pk),
+                reason=reason,
+                created_by=user,
+            )
+
+    sale.status = Sale.Status.VOIDED
+    sale.void_reason = reason
+    sale.voided_at = timezone.now()
+    sale.save(update_fields=["status", "void_reason", "voided_at", "updated_at"])
+    return sale
