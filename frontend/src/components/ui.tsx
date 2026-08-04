@@ -3,6 +3,7 @@ import type {
   InputHTMLAttributes,
   ReactNode,
   SelectHTMLAttributes,
+  TextareaHTMLAttributes,
 } from "react";
 
 type ButtonVariant = "primary" | "secondary" | "ghost";
@@ -64,6 +65,25 @@ export function SelectField({
       >
         {children}
       </select>
+    </label>
+  );
+}
+
+export function TextArea({
+  label,
+  className = "",
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: string }) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      {label && (
+        <span className="text-xs font-medium uppercase tracking-wide text-ink-500">{label}</span>
+      )}
+      <textarea
+        rows={2}
+        className={`rounded-md border border-line bg-surface-0 px-3 py-2 text-sm text-ink-900 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-50 ${className}`}
+        {...props}
+      />
     </label>
   );
 }
