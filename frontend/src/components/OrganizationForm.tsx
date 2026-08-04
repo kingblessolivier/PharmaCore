@@ -2,19 +2,26 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { api, ApiError } from "../lib/api";
 import type { Organization, OrgType } from "../lib/types";
+import { RwandaLocation } from "./RwandaLocation";
 import { Button, SelectField, TextArea, TextField } from "./ui";
 
 interface OrgFields {
   name: string;
   type: OrgType;
   tin: string;
+  registration_number: string;
   rwanda_fda_license_no: string;
   license_expiry_date: string;
+  contact_person: string;
   phone: string;
   email: string;
+  logo_url: string;
+  currency: string;
+  province: string;
   district: string;
   sector: string;
   cell: string;
+  village: string;
   address_line: string;
   latitude: string;
   longitude: string;
@@ -26,13 +33,19 @@ function initial(org?: Organization): OrgFields {
     name: org?.name ?? "",
     type: org?.type ?? "RETAIL",
     tin: org?.tin ?? "",
+    registration_number: org?.registration_number ?? "",
     rwanda_fda_license_no: org?.rwanda_fda_license_no ?? "",
     license_expiry_date: org?.license_expiry_date ?? "",
+    contact_person: org?.contact_person ?? "",
     phone: org?.phone ?? "",
     email: org?.email ?? "",
+    logo_url: org?.logo_url ?? "",
+    currency: org?.currency ?? "RWF",
+    province: org?.province ?? "",
     district: org?.district ?? "",
     sector: org?.sector ?? "",
     cell: org?.cell ?? "",
+    village: org?.village ?? "",
     address_line: org?.address_line ?? "",
     latitude: org?.latitude ?? "",
     longitude: org?.longitude ?? "",
@@ -127,32 +140,54 @@ export function OrganizationForm({
       <div className="grid grid-cols-2 gap-3">
         <TextField label="TIN (RRA)" value={f.tin} onChange={(e) => set("tin", e.target.value)} />
         <TextField
+          label="Company reg. no. (RDB)"
+          value={f.registration_number}
+          onChange={(e) => set("registration_number", e.target.value)}
+        />
+        <TextField
           label="Rwanda FDA licence no."
           value={f.rwanda_fda_license_no}
           onChange={(e) => set("rwanda_fda_license_no", e.target.value)}
         />
+        <TextField
+          label="Licence expiry date"
+          type="date"
+          value={f.license_expiry_date}
+          onChange={(e) => set("license_expiry_date", e.target.value)}
+        />
       </div>
-      <TextField
-        label="Licence expiry date"
-        type="date"
-        value={f.license_expiry_date}
-        onChange={(e) => set("license_expiry_date", e.target.value)}
-      />
 
-      <SectionLabel>Contact</SectionLabel>
+      <SectionLabel>Contact &amp; branding</SectionLabel>
       <div className="grid grid-cols-2 gap-3">
+        <TextField
+          label="Contact person"
+          value={f.contact_person}
+          onChange={(e) => set("contact_person", e.target.value)}
+        />
         <TextField label="Phone" value={f.phone} onChange={(e) => set("phone", e.target.value)} />
         <TextField label="Email" type="email" value={f.email} onChange={(e) => set("email", e.target.value)} />
+        <TextField label="Currency" value={f.currency} onChange={(e) => set("currency", e.target.value)} />
       </div>
+      <TextField
+        label="Logo URL"
+        value={f.logo_url}
+        onChange={(e) => set("logo_url", e.target.value)}
+        placeholder="https://…"
+      />
 
       <SectionLabel>Location</SectionLabel>
-      <div className="grid grid-cols-3 gap-3">
-        <TextField label="District" value={f.district} onChange={(e) => set("district", e.target.value)} />
-        <TextField label="Sector" value={f.sector} onChange={(e) => set("sector", e.target.value)} />
-        <TextField label="Cell" value={f.cell} onChange={(e) => set("cell", e.target.value)} />
-      </div>
+      <RwandaLocation
+        value={{
+          province: f.province,
+          district: f.district,
+          sector: f.sector,
+          cell: f.cell,
+          village: f.village,
+        }}
+        onChange={(v) => setF((p) => ({ ...p, ...v }))}
+      />
       <TextArea
-        label="Address"
+        label="Street address / landmark"
         value={f.address_line}
         onChange={(e) => set("address_line", e.target.value)}
       />

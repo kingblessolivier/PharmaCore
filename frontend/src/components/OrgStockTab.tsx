@@ -229,6 +229,7 @@ export function OrgStockTab({ organizationId }: { organizationId: number }) {
                 <th className="px-4 py-2.5">Expiry</th>
                 <th className="px-4 py-2.5 text-right">Qty</th>
                 <th className="px-4 py-2.5 text-right">Cost</th>
+                <th className="px-4 py-2.5">Source</th>
                 <th className="px-4 py-2.5">Location</th>
                 <th className="px-4 py-2.5 text-right">Actions</th>
               </tr>
@@ -243,6 +244,7 @@ export function OrgStockTab({ organizationId }: { organizationId: number }) {
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono">{b.quantity_available}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-ink-700">{b.wholesale_cost ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-ink-700">{b.source_name ?? "—"}</td>
                   <td className="px-4 py-2.5 text-ink-700">{b.storage_location || "—"}</td>
                   <td className="px-4 py-2.5">
                     <div className="flex justify-end gap-1">
@@ -264,7 +266,7 @@ export function OrgStockTab({ organizationId }: { organizationId: number }) {
               ))}
               {data.results.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-ink-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-ink-500">
                     No stock yet. Receive an intake to add batches.
                   </td>
                 </tr>

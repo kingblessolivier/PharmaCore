@@ -22,6 +22,11 @@ class StockOrder(models.Model):
         PARTIALLY_RECEIVED = "PARTIALLY_RECEIVED", "Partially received"
         CANCELLED = "CANCELLED", "Cancelled"
 
+    class PaymentStatus(models.TextChoices):
+        UNPAID = "UNPAID", "Unpaid"
+        PARTIAL = "PARTIAL", "Partially paid"
+        PAID = "PAID", "Paid"
+
     order_number = models.CharField(max_length=30, unique=True, blank=True, default="")
     depot = models.ForeignKey(
         "iam.Organization", on_delete=models.PROTECT, related_name="incoming_orders"
@@ -38,6 +43,12 @@ class StockOrder(models.Model):
     )
     expected_delivery = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True, default="")
+    # Settlement: whether the buying pharmacy has paid the wholesaler for this order.
+    payment_status = models.CharField(
+        max_length=10, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID
+    )
+    amount_paid = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    payment_due_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -54,6 +65,10 @@ class StockOrder(models.Model):
     @property
     def total_amount(self) -> float:
         return float(sum(i.line_total for i in self.items.all()))
+
+    @property
+    def amount_due(self) -> float:
+        return max(0.0, self.total_amount - float(self.amount_paid))
 
 
 class OrderItem(models.Model):
@@ -158,6 +173,32 @@ class GRNLine(models.Model):
     @property
     def has_discrepancy(self) -> bool:
         return self.quantity_received != self.quantity_expected or self.quantity_damaged > 0
+
+
+class OrderPayment(models.Model):
+    """A payment the buying pharmacy made to the wholesaler against an order."""
+
+    class Method(models.TextChoices):
+        CASH = "CASH", "Cash"
+        BANK_TRANSFER = "BANK_TRANSFER", "Bank transfer"
+        MOBILE_MONEY = "MOBILE_MONEY", "Mobile money"
+        CHEQUE = "CHEQUE", "Cheque"
+        CREDIT = "CREDIT", "On credit"
+
+    order = models.ForeignKey(StockOrder, on_delete=models.CASCADE, related_name="order_payments")
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    method = models.CharField(max_length=20, choices=Method.choices, default=Method.BANK_TRANSFER)
+    reference = models.CharField(max_length=100, blank=True, default="")  # txn / cheque no.
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    paid_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return f"{self.amount} for {self.order}"
 
 
 class Reservation(models.Model):

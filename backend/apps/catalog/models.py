@@ -77,6 +77,18 @@ class Product(models.Model):
         COLD_CHAIN = "COLD_CHAIN", "Cold chain"
         FROZEN = "FROZEN", "Frozen"
 
+    class Route(models.TextChoices):
+        ORAL = "ORAL", "Oral"
+        IV = "IV", "Intravenous (IV)"
+        IM = "IM", "Intramuscular (IM)"
+        SUBCUTANEOUS = "SUBCUTANEOUS", "Subcutaneous"
+        TOPICAL = "TOPICAL", "Topical"
+        INHALATION = "INHALATION", "Inhalation"
+        OPHTHALMIC = "OPHTHALMIC", "Ophthalmic (eye)"
+        NASAL = "NASAL", "Nasal"
+        RECTAL = "RECTAL", "Rectal"
+        OTHER = "OTHER", "Other"
+
     generic_name = models.CharField(max_length=255)
     brand_name = models.CharField(max_length=255, blank=True, default="")
     manufacturer = models.ForeignKey(
@@ -88,15 +100,26 @@ class Product(models.Model):
     strength = models.CharField(max_length=50, blank=True, default="")
     pack_size = models.CharField(max_length=50, blank=True, default="")
     unit_of_measure = models.CharField(max_length=20, blank=True, default="")
+    units_per_pack = models.PositiveIntegerField(default=1)  # e.g. 10×10 blister = 100
+    route_of_administration = models.CharField(
+        max_length=20, choices=Route.choices, blank=True, default=""
+    )
     atc_code = models.CharField(max_length=10, blank=True, default="")
     gtin = models.CharField(max_length=14, blank=True, default="")
+    fda_registration_number = models.CharField(  # Rwanda FDA product registration
+        max_length=100, blank=True, default=""
+    )
     tax_class = models.CharField(max_length=1, choices=TaxClass.choices, default=TaxClass.B)
     requires_prescription = models.BooleanField(default=False)
     is_controlled_substance = models.BooleanField(default=False)
+    controlled_schedule = models.CharField(  # e.g. "Schedule 2" (when controlled)
+        max_length=50, blank=True, default=""
+    )
     storage_condition = models.CharField(
         max_length=20, choices=Storage.choices, default=Storage.AMBIENT
     )
     reorder_level = models.PositiveIntegerField(default=0)
+    reorder_quantity = models.PositiveIntegerField(default=0)  # how much to reorder
     rra_item_code = models.CharField(max_length=50, blank=True, default="")  # RRA EBM item code
     image_url = models.URLField(blank=True, default="")
     leaflet_url = models.URLField(blank=True, default="")  # patient information leaflet

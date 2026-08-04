@@ -82,6 +82,8 @@ def test_receive_lands_stock_and_auto_lists(sysadmin, depot, retail, product) ->
     listing = PharmacyProduct.objects.get(organization=retail, product=product)
     assert listing.retail_price is None
     assert order.items.first().quantity_received == 40
+    # Recall traceability: the retail lot knows which depot it came from.
+    assert rbatch.source_org_id == depot.pk
 
 
 @pytest.mark.django_db

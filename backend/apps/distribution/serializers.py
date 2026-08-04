@@ -8,9 +8,17 @@ from apps.distribution.models import (
     GoodsReceivedNote,
     GRNLine,
     OrderItem,
+    OrderPayment,
     Shipment,
     StockOrder,
 )
+
+
+class OrderPaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderPayment
+        fields = ["id", "amount", "method", "reference", "paid_at"]
+        read_only_fields = ["id", "paid_at"]
 
 
 class ShipmentSerializer(serializers.ModelSerializer):
@@ -99,7 +107,9 @@ class StockOrderSerializer(serializers.ModelSerializer):
     depot_name = serializers.CharField(source="depot.name", read_only=True)
     retail_name = serializers.CharField(source="retail.name", read_only=True)
     total_amount = serializers.FloatField(read_only=True)
+    amount_due = serializers.FloatField(read_only=True)
     shipments = ShipmentSerializer(many=True, read_only=True)
+    order_payments = OrderPaymentSerializer(many=True, read_only=True)
 
     class Meta:
         model = StockOrder
@@ -114,11 +124,26 @@ class StockOrderSerializer(serializers.ModelSerializer):
             "expected_delivery",
             "notes",
             "total_amount",
+            "payment_status",
+            "amount_paid",
+            "amount_due",
+            "payment_due_date",
+            "order_payments",
             "items",
             "shipments",
             "created_at",
         ]
-        read_only_fields = ["id", "order_number", "status", "total_amount", "created_at"]
+        read_only_fields = [
+            "id",
+            "order_number",
+            "status",
+            "total_amount",
+            "payment_status",
+            "amount_paid",
+            "amount_due",
+            "order_payments",
+            "created_at",
+        ]
 
     def create(self, validated_data: dict[str, Any]) -> StockOrder:
         from apps.inventory.models import PharmacyProduct
