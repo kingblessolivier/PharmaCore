@@ -35,8 +35,9 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     "corsheaders",
-    # Local apps (modules added per phase: catalog, inventory, …)
+    # Local apps (modules added per phase: inventory, …)
     "apps.iam",
+    "apps.catalog",
     "apps.core",
 ]
 
