@@ -51,19 +51,23 @@ The data foundation every module reads from, **and** the reusable UI it's render
 > **Phase 1 complete.** 55+ backend tests green; frontend lint/typecheck/build green. 19 PRs merged.
 > (GitHub Actions runners remain blocked at the account level — code verified green locally.)
 
-## Phase 2 — Distribution & Documents (B2B)  ⬜
+## Phase 2 — Distribution & Documents (B2B)  ✅
 Depot→retail transfer with the paperwork.
 **Backend**
-- [ ] Purchase orders → depot approval/allocation (batch reserve) → shipment/dispatch (multi-stop)
-- [ ] GRN intake (the stock write-event) + discrepancy claims
-- [ ] Document engine: PDF worker (WeasyPrint), gapless sequences, SHA-256 hashing, vault, QR
-- [ ] Templates: PO, packing slip, delivery note/waybill, GRN, tax invoice, credit note
+- [x] Purchase orders → depot approval/**FEFO allocation** (batch reserve) → picking → dispatch
+- [x] GRN reception (the stock write-event: `TRANSFER_OUT` at depot → `TRANSFER_IN` at retail) + discrepancies
+- [x] Document engine: PDF renderer, gapless sequences, SHA-256 hashing, vault, QR verify
+- [x] Templates: PO, GRN, invoice
 **Frontend / UI**
-- [ ] Depot catalog (FEFO), PO create/cart, approvals & allocation queue, dispatch board
-- [ ] GRN intake checklist (counts vs manifest), discrepancy resolver, **document vault + viewer**
+- [x] PO create/cart, approvals & allocation, dispatch, GRN reception checklist (counts vs manifest)
+- [x] **Document vault + viewer**
 **Workspace (first slice)**
-- [ ] Contextual **comments** on orders/GRN/discrepancies + **@mention notifications**
-**Exit:** a full order → transfer → reception cycle in the UI produces immutable, verifiable documents.
+- [x] Contextual **comments** on orders + **@mention notifications** (bell + notification centre)
+**Exit:** ✅ a full order → approve → dispatch → receive cycle runs in the UI, produces immutable,
+verifiable documents, and moves stock into the retail FEFO ledger.
+> **Phase 2 complete.** 81 backend tests green; frontend green. PRs #22–#27.
+> (Multi-stop shipments, packing slip/waybill/credit-note templates, and email/SMS notification
+> channels are folded forward — the depot→retail cycle + core documents are done.)
 
 ## Phase 3 — Retail POS + Offline + Desktop app  ⬜
 The counter, built offline-first (ADR-001). The hardest phase.

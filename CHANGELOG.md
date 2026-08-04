@@ -51,6 +51,15 @@ Maintenance rules:
   tests pass. **Exit criterion met:** stock received/counted/viewed at batch level with
   FEFO in the UI.
 
+- **Phase 2 complete** — Distribution & Documents. B2B purchase orders (retail→depot),
+  depot approval with **FEFO batch allocation/reservation**, picking & dispatch
+  (`TRANSFER_OUT`), **GRN reception** (`TRANSFER_IN` into the retail FEFO ledger) with
+  discrepancies, a **PDF document engine** (gapless numbering, SHA-256 hashing, QR
+  verification, immutable vault: PO/GRN/invoice), and a **workspace** layer (contextual
+  comments + @mention notifications with an in-app bell). New apps: `distribution`,
+  `documents`, `workspace`. 81 backend tests pass. **Exit:** a full order→approve→dispatch→
+  receive cycle runs in the UI and produces immutable, verifiable documents.
+
 ### Changed
 - UI scope set to **English only** (ADR-004); removed the bilingual/Kinyarwanda plan.
 - Project renamed: **PharmaCore** (platform) by **Medlink** (company) — ADR-005.

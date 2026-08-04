@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
+import { MessageSquare, Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import { Comments } from "../components/Comments";
 import { Button, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -284,6 +285,7 @@ export function OrdersPage() {
   const qc = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [dispatching, setDispatching] = useState<StockOrder | null>(null);
+  const [discussing, setDiscussing] = useState<StockOrder | null>(null);
   const [receivingGrn, setReceivingGrn] = useState<GRN | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const { data, isLoading } = useQuery({ queryKey: ["orders"], queryFn: () => api<Paginated<StockOrder>>("/api/distribution/orders/") });
@@ -352,6 +354,9 @@ export function OrdersPage() {
                       {["DRAFT", "PENDING", "APPROVED", "PICKING"].includes(o.status) && (
                         <Button variant="ghost" onClick={() => act.mutate({ id: o.id, action: "cancel" })}>Cancel</Button>
                       )}
+                      <Button variant="ghost" onClick={() => setDiscussing(o)}>
+                        <MessageSquare className="h-4 w-4" />
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -366,6 +371,11 @@ export function OrdersPage() {
       {creating && <NewOrderModal defaultRetail={user?.organization ?? null} onClose={() => setCreating(false)} />}
       {dispatching && <DispatchModal order={dispatching} onClose={() => setDispatching(null)} />}
       {receivingGrn && <ReceiveModal grn={receivingGrn} onClose={() => setReceivingGrn(null)} />}
+      {discussing && (
+        <Modal title={`Discuss ${discussing.order_number}`} onClose={() => setDiscussing(null)}>
+          <Comments entityType="stock_order" entityId={discussing.id} organization={discussing.retail} />
+        </Modal>
+      )}
     </div>
   );
 }
