@@ -24,6 +24,7 @@ class PharmacyProductSerializer(serializers.ModelSerializer):
         source="product.is_controlled_substance", read_only=True
     )
     on_hand = serializers.SerializerMethodField()
+    avg_cost = serializers.SerializerMethodField()
 
     class Meta:
         model = PharmacyProduct
@@ -39,6 +40,7 @@ class PharmacyProductSerializer(serializers.ModelSerializer):
             "requires_prescription",
             "is_controlled",
             "on_hand",
+            "avg_cost",
             "retail_price",
             "wholesale_price",
             "min_stock_level",
@@ -55,6 +57,7 @@ class PharmacyProductSerializer(serializers.ModelSerializer):
             "requires_prescription",
             "is_controlled",
             "on_hand",
+            "avg_cost",
             "created_at",
         ]
 
@@ -74,6 +77,18 @@ class PharmacyProductSerializer(serializers.ModelSerializer):
             expiry_date__gte=timezone.now().date(),
         ).aggregate(total=Sum("quantity_available"))["total"]
         return int(total or 0)
+
+    def get_avg_cost(self, obj: PharmacyProduct) -> str | None:
+        # Average landed cost across this org's batches of the product — the basis
+        # for a margin figure against the selling price.
+        from django.db.models import Avg
+
+        avg = InventoryBatch.objects.filter(
+            organization=obj.organization,
+            product=obj.product,
+            wholesale_cost__isnull=False,
+        ).aggregate(a=Avg("wholesale_cost"))["a"]
+        return f"{avg:.2f}" if avg is not None else None
 
 
 class InventoryBatchSerializer(serializers.ModelSerializer):

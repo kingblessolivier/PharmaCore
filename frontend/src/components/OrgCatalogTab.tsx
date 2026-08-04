@@ -19,6 +19,15 @@ function pricing(orgType: OrgType) {
   };
 }
 
+function MarginCell({ price, cost }: { price: string | null; cost: string | null }) {
+  const p = price ? Number(price) : null;
+  const c = cost ? Number(cost) : null;
+  if (p === null || c === null || p <= 0) return <span className="text-ink-400">—</span>;
+  const pct = ((p - c) / p) * 100;
+  const tone = pct < 0 ? "text-red-600" : pct < 15 ? "text-amber-600" : "text-green-600";
+  return <span className={`font-mono ${tone}`}>{pct.toFixed(0)}%</span>;
+}
+
 function ProductThumb({ src }: { src: string }) {
   if (src)
     return (
@@ -207,6 +216,8 @@ export function OrgCatalogTab({
                 <th className="px-4 py-2.5">Rx</th>
                 <th className="px-4 py-2.5">In stock</th>
                 <th className="px-4 py-2.5">{p.label}</th>
+                <th className="px-4 py-2.5">Avg cost</th>
+                <th className="px-4 py-2.5">Margin</th>
                 <th className="px-4 py-2.5">Min stock</th>
                 <th className="px-4 py-2.5 text-right">Actions</th>
               </tr>
@@ -236,6 +247,10 @@ export function OrgCatalogTab({
                       className="w-32 rounded-md border border-line bg-surface-0 px-2 py-1 text-right font-mono text-sm outline-none focus:border-brand-600"
                     />
                   </td>
+                  <td className="px-4 py-2.5 font-mono text-ink-700">{it.avg_cost ?? "—"}</td>
+                  <td className="px-4 py-2.5">
+                    <MarginCell price={priceOf(it)} cost={it.avg_cost} />
+                  </td>
                   <td className="px-4 py-2.5 font-mono text-ink-700">{it.min_stock_level}</td>
                   <td className="px-4 py-2.5">
                     <div className="flex justify-end">
@@ -252,7 +267,7 @@ export function OrgCatalogTab({
               ))}
               {items.data.results.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-ink-500">
+                  <td colSpan={10} className="px-4 py-8 text-center text-ink-500">
                     This pharmacy carries no products yet. Add from the catalog, or order/receive
                     stock and it will appear here.
                   </td>
