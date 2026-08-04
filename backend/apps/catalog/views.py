@@ -5,12 +5,27 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from django.db.models import QuerySet
 from rest_framework import filters, viewsets
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.serializers import BaseSerializer
 
-from apps.catalog.models import Manufacturer, Product
-from apps.catalog.serializers import ManufacturerSerializer, ProductSerializer
+from apps.catalog.models import (
+    ActiveIngredient,
+    Manufacturer,
+    Product,
+    ProductBarcode,
+    ProductIngredient,
+    Supplier,
+)
+from apps.catalog.serializers import (
+    ActiveIngredientSerializer,
+    ManufacturerSerializer,
+    ProductBarcodeSerializer,
+    ProductIngredientSerializer,
+    ProductSerializer,
+    SupplierSerializer,
+)
 from apps.iam.audit import record_audit
 from apps.iam.models import User
 from apps.iam.permissions import IsAdminRole
@@ -66,3 +81,41 @@ class ManufacturerViewSet(_AuditedAdminViewSet):
     queryset = Manufacturer.objects.all()
     filter_backends = [filters.SearchFilter]
     search_fields = ["name", "country"]
+
+
+class SupplierViewSet(_AuditedAdminViewSet):
+    entity_type = "supplier"
+    serializer_class = SupplierSerializer
+    queryset = Supplier.objects.all()
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["name", "tin"]
+
+
+class ActiveIngredientViewSet(_AuditedAdminViewSet):
+    entity_type = "active_ingredient"
+    serializer_class = ActiveIngredientSerializer
+    queryset = ActiveIngredient.objects.all()
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["name", "atc_code"]
+
+
+class ProductIngredientViewSet(_AuditedAdminViewSet):
+    entity_type = "product_ingredient"
+    serializer_class = ProductIngredientSerializer
+    queryset = ProductIngredient.objects.select_related("ingredient").all()
+
+    def get_queryset(self) -> QuerySet[ProductIngredient]:
+        qs = ProductIngredient.objects.select_related("ingredient").all()
+        product = self.request.query_params.get("product")
+        return qs.filter(product_id=product) if product else qs
+
+
+class ProductBarcodeViewSet(_AuditedAdminViewSet):
+    entity_type = "product_barcode"
+    serializer_class = ProductBarcodeSerializer
+    queryset = ProductBarcode.objects.all()
+
+    def get_queryset(self) -> QuerySet[ProductBarcode]:
+        qs = ProductBarcode.objects.all()
+        product = self.request.query_params.get("product")
+        return qs.filter(product_id=product) if product else qs

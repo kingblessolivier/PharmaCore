@@ -1,4 +1,4 @@
-import { Building2, LayoutDashboard, LogOut, Network, Pill, Users } from "lucide-react";
+import { Building2, LayoutDashboard, LogOut, Network, Pill, Truck, Users } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 
@@ -19,6 +19,7 @@ const nav = [
   { to: "/organizations", label: "Organizations", icon: Building2, end: false },
   { to: "/departments", label: "Departments", icon: Network, end: false },
   { to: "/products", label: "Catalog", icon: Pill, end: false },
+  { to: "/suppliers", label: "Suppliers", icon: Truck, end: false },
 ];
 
 export function AppShell() {

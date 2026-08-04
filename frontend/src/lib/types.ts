@@ -132,6 +132,39 @@ export interface Manufacturer {
   created_at: string;
 }
 
+export interface Supplier {
+  id: number;
+  name: string;
+  tin: string;
+  email: string;
+  phone: string;
+  lead_time_days: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface ActiveIngredient {
+  id: number;
+  name: string;
+  atc_code: string;
+}
+
+export interface ProductIngredient {
+  id: number;
+  product: number;
+  ingredient: number;
+  ingredient_name: string;
+  amount: string;
+}
+
+export interface ProductBarcode {
+  id: number;
+  product: number;
+  barcode: string;
+  packaging_level: string;
+  units_per_level: number;
+}
+
 export interface InventoryBatch {
   id: number;
   organization: number;
