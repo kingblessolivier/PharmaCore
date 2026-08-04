@@ -5,12 +5,15 @@ from __future__ import annotations
 from typing import Any, cast
 
 from django.db.models import Q, QuerySet
+from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
+from rest_framework.views import APIView
 
 from apps.distribution.models import GoodsReceivedNote, InTransitStock, StockOrder
 from apps.distribution.serializers import (
@@ -28,6 +31,63 @@ from apps.distribution.services import (
 from apps.iam.audit import record_audit
 from apps.iam.models import User
 from apps.iam.scoping import organizations_visible_to
+
+
+def _age_bucket(due, today) -> str:  # type: ignore[no-untyped-def]
+    days = (today - due).days
+    if days <= 0:
+        return "current"
+    if days <= 30:
+        return "d30"
+    if days <= 60:
+        return "d60"
+    if days <= 90:
+        return "d90"
+    return "over90"
+
+
+class AgingView(APIView):
+    """Aged receivables (owed to you) and payables (you owe) across visible orgs,
+    bucketed by how overdue each unpaid order is, and grouped by trading partner."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        visible_ids = set(organizations_visible_to(user).values_list("id", flat=True))
+        today = timezone.now().date()
+        empty = {"current": 0.0, "d30": 0.0, "d60": 0.0, "d90": 0.0, "over90": 0.0}
+
+        def side(orders: QuerySet[StockOrder], partner_attr: str) -> dict[str, Any]:
+            buckets = dict(empty)
+            by_partner: dict[str, dict[str, Any]] = {}
+            total = 0.0
+            for o in (
+                orders.exclude(payment_status=StockOrder.PaymentStatus.PAID)
+                .select_related("depot", "retail")
+                .prefetch_related("items")
+            ):
+                due = o.amount_due
+                if due <= 0:
+                    continue
+                bucket = _age_bucket(o.payment_due_date or o.created_at.date(), today)
+                buckets[bucket] += due
+                total += due
+                partner = getattr(o, partner_attr)
+                row = by_partner.setdefault(
+                    partner.name, {"partner": partner.name, "total": 0.0, **dict(empty)}
+                )
+                row["total"] += due
+                row[bucket] += due
+            return {
+                "total": total,
+                "buckets": buckets,
+                "by_partner": sorted(by_partner.values(), key=lambda r: -r["total"]),
+            }
+
+        receivables = side(StockOrder.objects.filter(depot_id__in=visible_ids), "retail")
+        payables = side(StockOrder.objects.filter(retail_id__in=visible_ids), "depot")
+        return Response({"receivables": receivables, "payables": payables})
 
 
 class StockOrderViewSet(viewsets.ModelViewSet):

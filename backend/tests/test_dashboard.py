@@ -53,3 +53,24 @@ def test_dashboard_summarises_the_users_org() -> None:
     # Retail owes the wholesaler 10 × 100 = 1000 (unpaid).
     assert body["payable_due"] == 1000.0
     assert body["sales_today"]["count"] == 0
+
+
+@pytest.mark.django_db
+def test_aging_report_splits_receivable_and_payable() -> None:
+    depot = Organization.objects.create(name="Depot", type=Organization.OrgType.DEPOT)
+    retail = Organization.objects.create(name="Shop", type=Organization.OrgType.RETAIL)
+    product = Product.objects.create(generic_name="Amoxicillin", strength="500mg")
+    admin = User.objects.create_user(username="root2", password="x")
+    admin.roles.add(Role.objects.get(code="SYS_ADMIN"))
+
+    order = StockOrder.objects.create(
+        depot=depot, retail=retail, status=StockOrder.Status.DELIVERED
+    )
+    OrderItem.objects.create(order=order, product=product, quantity_ordered=10, price_per_unit=100)
+
+    body = _auth(admin).get("/api/distribution/aging/").json()
+    # Admin sees all: this order is both a receivable (for depot) and payable (for retail).
+    assert body["receivables"]["total"] == 1000.0
+    assert body["payables"]["total"] == 1000.0
+    assert body["receivables"]["by_partner"][0]["partner"] == "Shop"
+    assert body["payables"]["by_partner"][0]["partner"] == "Depot"

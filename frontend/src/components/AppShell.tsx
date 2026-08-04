@@ -13,6 +13,7 @@ import {
   ShoppingCart,
   Truck,
   Users,
+  Wallet,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
@@ -187,6 +188,7 @@ const NAV: NavItem[] = [
   { to: "/suppliers", label: "Suppliers", icon: Truck, end: false, roles: ["ORG_ADMIN"] },
   { to: "/orders", label: "Purchase orders", icon: ClipboardList, end: false, roles: ["ORG_ADMIN", "PHARMACIST"] },
   { to: "/pos", label: "Point of sale", icon: ShoppingCart, end: false, roles: "all" },
+  { to: "/finance", label: "Finance", icon: Wallet, end: false, roles: ["ORG_ADMIN"] },
   { to: "/documents", label: "Documents", icon: FileText, end: false, roles: "all" },
 ];
 
@@ -268,7 +270,7 @@ export function AppShell() {
             </NavLink>
           ))}
           <div className="mt-3 px-3 text-[11px] uppercase tracking-wide text-ink-500">More modules</div>
-          {["Insurance", "Finance", "HR & Payroll"].map((m) => (
+          {["Insurance", "HR & Payroll", "Reporting"].map((m) => (
             <div key={m} className="px-3 py-1.5 text-sm text-ink-500/60">
               {m} <span className="text-[10px]">soon</span>
             </div>
