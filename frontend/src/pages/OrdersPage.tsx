@@ -5,7 +5,7 @@ import { Button, Modal, PageHeader, SelectField, Spinner, TextField } from "../c
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { isAdmin } from "../lib/roles";
-import type { Me, Organization, OrderItem, Paginated, Product, StockOrder } from "../lib/types";
+import type { GRN, Me, Organization, OrderItem, Paginated, Product, StockOrder } from "../lib/types";
 
 const STATUS_TONE: Record<string, string> = {
   DRAFT: "bg-surface-100 text-ink-700",
@@ -132,6 +132,11 @@ function canDepotAct(user: Me | null, order: StockOrder): boolean {
   return isAdmin(user) || user.organization === order.depot;
 }
 
+function canRetailAct(user: Me | null, order: StockOrder): boolean {
+  if (!user) return false;
+  return isAdmin(user) || user.organization === order.retail;
+}
+
 function DispatchModal({ order, onClose }: { order: StockOrder; onClose: () => void }) {
   const qc = useQueryClient();
   const [driver, setDriver] = useState("");
@@ -183,11 +188,103 @@ function DispatchModal({ order, onClose }: { order: StockOrder; onClose: () => v
   );
 }
 
+function ReceiveModal({ grn, onClose }: { grn: GRN; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [edits, setEdits] = useState<Record<number, { received: number; damaged: number }>>(
+    Object.fromEntries(
+      grn.lines.map((l) => [l.id, { received: l.quantity_received, damaged: l.quantity_damaged }]),
+    ),
+  );
+  const [error, setError] = useState<string | null>(null);
+  const set = (id: number, key: "received" | "damaged", v: number) =>
+    setEdits((e) => ({ ...e, [id]: { ...e[id], [key]: v } }));
+
+  const finalize = useMutation({
+    mutationFn: () =>
+      api<GRN>(`/api/distribution/grns/${grn.id}/finalize/`, {
+        method: "POST",
+        body: JSON.stringify({
+          lines: grn.lines.map((l) => ({
+            id: l.id,
+            quantity_received: edits[l.id].received,
+            quantity_damaged: edits[l.id].damaged,
+          })),
+        }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["orders"] });
+      void qc.invalidateQueries({ queryKey: ["batches"] });
+      onClose();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not finalize."),
+  });
+
+  return (
+    <Modal title={`Receive ${grn.grn_number}`} onClose={onClose}>
+      <p className="mb-3 text-sm text-ink-500">
+        Count each batch against the manifest. Good stock (received − damaged) is added to your
+        inventory.
+      </p>
+      <div className="mb-4 overflow-hidden rounded-lg border border-line">
+        <table className="w-full text-sm">
+          <thead className="border-b border-line text-left text-xs uppercase text-ink-500">
+            <tr>
+              <th className="px-3 py-2">Medicine · batch</th>
+              <th className="px-3 py-2 text-right">Expected</th>
+              <th className="px-3 py-2 text-right">Received</th>
+              <th className="px-3 py-2 text-right">Damaged</th>
+            </tr>
+          </thead>
+          <tbody>
+            {grn.lines.map((l) => (
+              <tr key={l.id} className="border-b border-line last:border-0">
+                <td className="px-3 py-2">
+                  <div className="font-medium">{l.product_name}</div>
+                  <div className="font-mono text-xs text-ink-500">
+                    {l.batch_number} · exp {l.expiry_date}
+                  </div>
+                </td>
+                <td className="px-3 py-2 text-right font-mono">{l.quantity_expected}</td>
+                <td className="px-3 py-2 text-right">
+                  <input
+                    type="number"
+                    className="w-20 rounded-md border border-line px-2 py-1 text-right"
+                    value={edits[l.id].received}
+                    onChange={(e) => set(l.id, "received", Number(e.target.value))}
+                  />
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <input
+                    type="number"
+                    className="w-20 rounded-md border border-line px-2 py-1 text-right"
+                    value={edits[l.id].damaged}
+                    onChange={(e) => set(l.id, "damaged", Number(e.target.value))}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button onClick={() => finalize.mutate()} disabled={finalize.isPending}>
+          {finalize.isPending ? "Finalizing…" : "Finalize receipt"}
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
 export function OrdersPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [dispatching, setDispatching] = useState<StockOrder | null>(null);
+  const [receivingGrn, setReceivingGrn] = useState<GRN | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const { data, isLoading } = useQuery({ queryKey: ["orders"], queryFn: () => api<Paginated<StockOrder>>("/api/distribution/orders/") });
 
@@ -200,6 +297,17 @@ export function OrdersPage() {
     },
     onError: (err) =>
       setActionError(err instanceof ApiError ? err.message : "Action failed."),
+  });
+
+  const receive = useMutation({
+    mutationFn: (id: number) =>
+      api<GRN>(`/api/distribution/orders/${id}/receive/`, { method: "POST" }),
+    onSuccess: (grn) => {
+      setActionError(null);
+      setReceivingGrn(grn);
+    },
+    onError: (err) =>
+      setActionError(err instanceof ApiError ? err.message : "Could not open the GRN."),
   });
 
   return (
@@ -238,6 +346,9 @@ export function OrdersPage() {
                       {o.status === "PICKING" && canDepotAct(user, o) && (
                         <Button variant="secondary" onClick={() => setDispatching(o)}>Dispatch</Button>
                       )}
+                      {o.status === "IN_TRANSIT" && canRetailAct(user, o) && (
+                        <Button variant="secondary" onClick={() => receive.mutate(o.id)} disabled={receive.isPending}>Receive</Button>
+                      )}
                       {["DRAFT", "PENDING", "APPROVED", "PICKING"].includes(o.status) && (
                         <Button variant="ghost" onClick={() => act.mutate({ id: o.id, action: "cancel" })}>Cancel</Button>
                       )}
@@ -254,6 +365,7 @@ export function OrdersPage() {
       )}
       {creating && <NewOrderModal defaultRetail={user?.organization ?? null} onClose={() => setCreating(false)} />}
       {dispatching && <DispatchModal order={dispatching} onClose={() => setDispatching(null)} />}
+      {receivingGrn && <ReceiveModal grn={receivingGrn} onClose={() => setReceivingGrn(null)} />}
     </div>
   );
 }

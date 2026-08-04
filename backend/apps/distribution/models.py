@@ -94,6 +94,72 @@ class Shipment(models.Model):
         return f"Shipment for {self.order}"
 
 
+class ShipmentItem(models.Model):
+    """One batch line on a shipment's packing manifest (what physically went out)."""
+
+    shipment = models.ForeignKey(Shipment, on_delete=models.CASCADE, related_name="items")
+    order_item = models.ForeignKey(
+        OrderItem, on_delete=models.PROTECT, related_name="shipment_items"
+    )
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT)
+    batch_number = models.CharField(max_length=100)
+    expiry_date = models.DateField()
+    quantity = models.PositiveIntegerField()
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return f"{self.product} · {self.batch_number} ×{self.quantity}"
+
+
+class GoodsReceivedNote(models.Model):
+    """Reception record at the retail pharmacy — the stock write-event."""
+
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "Draft"
+        FINALIZED = "FINALIZED", "Finalized"
+
+    grn_number = models.CharField(max_length=30, unique=True, blank=True, default="")
+    order = models.ForeignKey(StockOrder, on_delete=models.CASCADE, related_name="grns")
+    shipment = models.ForeignKey(
+        Shipment, null=True, blank=True, on_delete=models.SET_NULL, related_name="grns"
+    )
+    retail = models.ForeignKey(
+        "iam.Organization", on_delete=models.PROTECT, related_name="received_notes"
+    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    has_discrepancy = models.BooleanField(default=False)
+    received_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-received_at"]
+
+    def __str__(self) -> str:
+        return self.grn_number or f"GRN#{self.pk}"
+
+
+class GRNLine(models.Model):
+    grn = models.ForeignKey(GoodsReceivedNote, on_delete=models.CASCADE, related_name="lines")
+    order_item = models.ForeignKey(OrderItem, on_delete=models.PROTECT, related_name="grn_lines")
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT)
+    batch_number = models.CharField(max_length=100)
+    expiry_date = models.DateField()
+    quantity_expected = models.PositiveIntegerField()
+    quantity_received = models.PositiveIntegerField(default=0)
+    quantity_damaged = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["id"]
+
+    @property
+    def has_discrepancy(self) -> bool:
+        return self.quantity_received != self.quantity_expected or self.quantity_damaged > 0
+
+
 class Reservation(models.Model):
     """A hold placed on a specific depot batch for an approved order line (FEFO).
 
