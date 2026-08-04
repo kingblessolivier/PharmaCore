@@ -6,7 +6,25 @@ from typing import Any
 
 from rest_framework import serializers
 
-from apps.iam.models import Department, Organization, Role, User
+from apps.iam.models import AuditLog, Department, Organization, Role, User
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    user = serializers.CharField(source="user.username", read_only=True, default=None)
+
+    class Meta:
+        model = AuditLog
+        fields = [
+            "id",
+            "action",
+            "entity_type",
+            "entity_id",
+            "user",
+            "organization",
+            "ip_address",
+            "changes",
+            "created_at",
+        ]
 
 
 class RoleSerializer(serializers.ModelSerializer):

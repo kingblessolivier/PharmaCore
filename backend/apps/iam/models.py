@@ -128,6 +128,13 @@ class AuditLog(models.Model):
         on_delete=models.SET_NULL,
         related_name="audit_entries",
     )
+    organization = models.ForeignKey(
+        "iam.Organization",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="audit_entries",
+    )
     action = models.CharField(max_length=100)
     entity_type = models.CharField(max_length=100, blank=True, default="")
     entity_id = models.CharField(max_length=64, blank=True, default="")
@@ -140,6 +147,7 @@ class AuditLog(models.Model):
         indexes = [
             models.Index(fields=["entity_type", "entity_id"]),
             models.Index(fields=["user", "created_at"]),
+            models.Index(fields=["organization", "created_at"]),
         ]
 
     def __str__(self) -> str:

@@ -73,6 +73,17 @@ export interface UserAdmin {
   date_joined: string;
 }
 
+export interface AuditLogEntry {
+  id: number;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  user: string | null;
+  organization: number | null;
+  ip_address: string | null;
+  created_at: string;
+}
+
 export type TaxClass = "A" | "B" | "C" | "D";
 
 export interface Product {
