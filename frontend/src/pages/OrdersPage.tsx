@@ -4,7 +4,8 @@ import { useState, type FormEvent } from "react";
 import { Button, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import type { Organization, OrderItem, Paginated, Product, StockOrder } from "../lib/types";
+import { isAdmin } from "../lib/roles";
+import type { Me, Organization, OrderItem, Paginated, Product, StockOrder } from "../lib/types";
 
 const STATUS_TONE: Record<string, string> = {
   DRAFT: "bg-surface-100 text-ink-700",
@@ -126,21 +127,33 @@ function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | nul
   );
 }
 
+function canApprove(user: Me | null, order: StockOrder): boolean {
+  if (!user) return false;
+  return isAdmin(user) || user.organization === order.depot;
+}
+
 export function OrdersPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [creating, setCreating] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const { data, isLoading } = useQuery({ queryKey: ["orders"], queryFn: () => api<Paginated<StockOrder>>("/api/distribution/orders/") });
 
   const act = useMutation({
-    mutationFn: (v: { id: number; action: "submit" | "cancel" }) =>
+    mutationFn: (v: { id: number; action: "submit" | "approve" | "cancel" }) =>
       api<StockOrder>(`/api/distribution/orders/${v.id}/${v.action}/`, { method: "POST" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["orders"] }),
+    onSuccess: () => {
+      setActionError(null);
+      void qc.invalidateQueries({ queryKey: ["orders"] });
+    },
+    onError: (err) =>
+      setActionError(err instanceof ApiError ? err.message : "Action failed."),
   });
 
   return (
     <div>
       <PageHeader title="Purchase orders" action={<Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New purchase order</Button>} />
+      {actionError && <p className="mb-3 text-sm text-red-600">{actionError}</p>}
       {isLoading && <div className="flex justify-center py-10"><Spinner /></div>}
       {data && (
         <div className="overflow-hidden rounded-lg border border-line bg-surface-0">
@@ -164,6 +177,9 @@ export function OrdersPage() {
                   <td className="px-4 py-2.5">
                     <div className="flex justify-end gap-1">
                       {o.status === "DRAFT" && <Button variant="secondary" onClick={() => act.mutate({ id: o.id, action: "submit" })}>Submit</Button>}
+                      {o.status === "PENDING" && canApprove(user, o) && (
+                        <Button variant="secondary" onClick={() => act.mutate({ id: o.id, action: "approve" })}>Approve</Button>
+                      )}
                       {["DRAFT", "PENDING", "APPROVED", "PICKING"].includes(o.status) && (
                         <Button variant="ghost" onClick={() => act.mutate({ id: o.id, action: "cancel" })}>Cancel</Button>
                       )}
