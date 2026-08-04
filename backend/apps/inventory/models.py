@@ -54,6 +54,8 @@ class InventoryBatch(models.Model):
     expiry_date = models.DateField()
     # Unsigned at the DB level → can never go negative.
     quantity_available = models.PositiveIntegerField(default=0)
+    # Held for approved orders (not yet dispatched). Free-to-allocate = available - reserved.
+    quantity_reserved = models.PositiveIntegerField(default=0)
     wholesale_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     storage_location = models.CharField(max_length=100, blank=True, default="")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)

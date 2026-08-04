@@ -74,3 +74,25 @@ class OrderItem(models.Model):
     @property
     def line_total(self) -> float:
         return float(self.price_per_unit) * self.quantity_ordered
+
+
+class Reservation(models.Model):
+    """A hold placed on a specific depot batch for an approved order line (FEFO).
+
+    Sum of a batch's reservations equals its ``quantity_reserved``. Released when the
+    order is cancelled; consumed when the shipment is dispatched (later slice).
+    """
+
+    order = models.ForeignKey(StockOrder, on_delete=models.CASCADE, related_name="reservations")
+    order_item = models.ForeignKey(OrderItem, on_delete=models.CASCADE, related_name="reservations")
+    batch = models.ForeignKey(
+        "inventory.InventoryBatch", on_delete=models.PROTECT, related_name="reservations"
+    )
+    quantity = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return f"{self.quantity} of {self.batch} for {self.order}"

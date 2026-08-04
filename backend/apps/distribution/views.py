@@ -14,6 +14,7 @@ from rest_framework.serializers import BaseSerializer
 
 from apps.distribution.models import StockOrder
 from apps.distribution.serializers import StockOrderSerializer
+from apps.distribution.services import approve_and_allocate, release_order_reservations
 from apps.iam.audit import record_audit
 from apps.iam.models import User
 from apps.iam.scoping import organizations_visible_to
@@ -85,6 +86,32 @@ class StockOrderViewSet(viewsets.ModelViewSet):
         return Response(StockOrderSerializer(order).data)
 
     @action(detail=True, methods=["post"])
+    def approve(self, request: Request, pk: str | None = None) -> Response:
+        """Depot approves a pending order and FEFO-reserves depot stock against it."""
+        order = self.get_object()
+        user = cast(User, request.user)
+        is_depot_admin = (
+            user.is_superuser
+            or user.has_role("SYS_ADMIN")
+            or (user.has_role("ORG_ADMIN") and user.organization_id == order.depot_id)
+        )
+        if not is_depot_admin:
+            raise PermissionDenied("Only the depot can approve this order.")
+        if order.status != StockOrder.Status.PENDING:
+            raise ValidationError("Only pending orders can be approved.")
+        approve_and_allocate(order=order, user=user)
+        record_audit(
+            action="APPROVE",
+            user=user,
+            organization=order.depot,
+            entity_type="stock_order",
+            entity_id=str(order.pk),
+            request=request,
+        )
+        order.refresh_from_db()
+        return Response(StockOrderSerializer(order).data)
+
+    @action(detail=True, methods=["post"])
     def cancel(self, request: Request, pk: str | None = None) -> Response:
         order = self.get_object()
         cancellable = {
@@ -95,6 +122,9 @@ class StockOrderViewSet(viewsets.ModelViewSet):
         }
         if order.status not in cancellable:
             raise ValidationError("This order can no longer be cancelled.")
+        # Release any depot stock this order was holding.
+        if order.reservations.exists():
+            release_order_reservations(order=order)
         order.status = StockOrder.Status.CANCELLED
         order.save(update_fields=["status", "updated_at"])
         record_audit(
