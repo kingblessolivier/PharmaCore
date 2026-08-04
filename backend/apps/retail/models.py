@@ -126,6 +126,26 @@ class SaleBatchAllocation(models.Model):
         return f"{self.quantity} of {self.batch}"
 
 
+class Dispensing(models.Model):
+    """Regulatory dispensing log for a sale containing prescription-only or
+    controlled items — who the pharmacist was, the patient, and the prescriber.
+    Required before such a sale can complete."""
+
+    sale = models.OneToOneField(Sale, on_delete=models.CASCADE, related_name="dispensing")
+    dispensed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    patient_name = models.CharField(max_length=150)
+    patient_id_number = models.CharField(max_length=50, blank=True, default="")  # national ID
+    prescriber_name = models.CharField(max_length=150)
+    prescriber_license = models.CharField(max_length=100, blank=True, default="")
+    prescription_reference = models.CharField(max_length=100, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"Dispensing for {self.sale} → {self.patient_name}"
+
+
 class Payment(models.Model):
     """A tender against a sale. Split payments = several rows (cash + momo + card)."""
 

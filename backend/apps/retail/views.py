@@ -22,7 +22,13 @@ from apps.iam.models import Organization, User
 from apps.iam.scoping import organizations_visible_to
 from apps.retail.models import Sale
 from apps.retail.serializers import SaleSerializer
-from apps.retail.services import InsufficientStock, complete_sale, void_sale
+from apps.retail.services import (
+    DispensingRequired,
+    InsufficientStock,
+    PharmacistRequired,
+    complete_sale,
+    void_sale,
+)
 
 
 def _is_admin(user: User) -> bool:
@@ -103,11 +109,13 @@ class SaleViewSet(viewsets.ModelViewSet):
     def _complete(
         self, sale: Sale, payments: list[dict[str, Any]], user: User, request: Request
     ) -> None:
+        raw = request.data.get("dispensing")
+        dispensing = raw if isinstance(raw, dict) else None
         try:
-            complete_sale(sale=sale, payments=payments, user=user)
-        except InsufficientStock as exc:
-            raise ValidationError(str(exc)) from exc
-        except ValueError as exc:
+            complete_sale(sale=sale, payments=payments, user=user, dispensing=dispensing)
+        except PharmacistRequired as exc:
+            raise PermissionDenied(str(exc)) from exc
+        except (InsufficientStock, DispensingRequired, ValueError) as exc:
             raise ValidationError(str(exc)) from exc
         record_audit(
             action="SALE_COMPLETE",

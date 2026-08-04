@@ -209,3 +209,95 @@ def test_cannot_sell_for_other_pharmacy(
         "/api/retail/sales/", _sale_payload(pharmacy, product, 1, "1000"), format="json"
     )
     assert resp.status_code == 403
+
+
+# --- Safety gate: expired stock + prescription/controlled dispensing ---
+
+
+@pytest.fixture
+def rx_product(db: None) -> Product:
+    return Product.objects.create(
+        generic_name="Diazepam",
+        strength="5mg",
+        tax_class="B",
+        requires_prescription=True,
+        is_controlled_substance=True,
+    )
+
+
+@pytest.fixture
+def rx_listing(pharmacy: Organization, rx_product: Product) -> PharmacyProduct:
+    return PharmacyProduct.objects.create(
+        organization=pharmacy, product=rx_product, retail_price="2000.00"
+    )
+
+
+@pytest.fixture
+def pharmacist(pharmacy: Organization) -> User:
+    u = User.objects.create_user(username="pharm", password="x", organization=pharmacy)
+    u.roles.add(Role.objects.get(code="PHARMACIST"))
+    return u
+
+
+@pytest.mark.django_db
+def test_expired_stock_is_not_sold(
+    cashier: User, pharmacy: Organization, product: Product, listing: PharmacyProduct
+) -> None:
+    InventoryBatch.objects.create(
+        organization=pharmacy,
+        product=product,
+        batch_number="OLD",
+        expiry_date=date.today() - timedelta(days=1),  # expired yesterday
+        quantity_available=10,
+    )
+    resp = _auth(cashier).post(
+        "/api/retail/sales/", _sale_payload(pharmacy, product, 1, "1000"), format="json"
+    )
+    assert resp.status_code == 400
+    assert "non-expired" in str(resp.content)
+
+
+@pytest.mark.django_db
+def test_rx_item_requires_a_pharmacist(
+    cashier: User, pharmacy: Organization, rx_product: Product, rx_listing: PharmacyProduct
+) -> None:
+    _batch(pharmacy, rx_product, 10, date.today() + timedelta(days=100))
+    resp = _auth(cashier).post(
+        "/api/retail/sales/", _sale_payload(pharmacy, rx_product, 1, "2000"), format="json"
+    )
+    assert resp.status_code == 403
+    assert "pharmacist" in str(resp.content).lower()
+
+
+@pytest.mark.django_db
+def test_rx_needs_prescription_details(
+    pharmacist: User, pharmacy: Organization, rx_product: Product, rx_listing: PharmacyProduct
+) -> None:
+    _batch(pharmacy, rx_product, 10, date.today() + timedelta(days=100))
+    resp = _auth(pharmacist).post(
+        "/api/retail/sales/", _sale_payload(pharmacy, rx_product, 1, "2000"), format="json"
+    )
+    assert resp.status_code == 400
+    assert "patient" in str(resp.content).lower()
+
+
+@pytest.mark.django_db
+def test_rx_dispensed_by_pharmacist_with_details(
+    pharmacist: User, pharmacy: Organization, rx_product: Product, rx_listing: PharmacyProduct
+) -> None:
+    from apps.retail.models import Dispensing
+
+    _batch(pharmacy, rx_product, 10, date.today() + timedelta(days=100))
+    body = _sale_payload(pharmacy, rx_product, 1, "2000")
+    body["dispensing"] = {
+        "patient_name": "Jean Uwase",
+        "patient_id_number": "1199...",
+        "prescriber_name": "Dr. Mugisha",
+        "prescriber_license": "MD-123",
+    }
+    resp = _auth(pharmacist).post("/api/retail/sales/", body, format="json")
+    assert resp.status_code == 201, resp.content
+    assert resp.json()["status"] == "COMPLETED"
+    d = Dispensing.objects.get(patient_name="Jean Uwase")
+    assert d.prescriber_name == "Dr. Mugisha"
+    assert d.dispensed_by_id == pharmacist.pk

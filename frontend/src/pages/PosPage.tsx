@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Minus, Plus, Receipt, Search, ShoppingCart, Trash2, X } from "lucide-react";
+import { Minus, Plus, Receipt, Search, ShieldAlert, ShoppingCart, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Button, PageHeader, SelectField, Spinner } from "../components/ui";
+import { Button, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type {
@@ -21,6 +21,16 @@ interface CartLine {
   tax_rate: number;
   quantity: number;
   in_stock: number;
+  requires_prescription: boolean;
+  is_controlled: boolean;
+}
+
+interface Dispensing {
+  patient_name: string;
+  patient_id_number: string;
+  prescriber_name: string;
+  prescriber_license: string;
+  prescription_reference: string;
 }
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
@@ -74,11 +84,13 @@ export function PosPage() {
     queryFn: () => api<Paginated<InventoryBatch>>(`/api/inventory/batches/?organization=${orgId}`),
   });
 
-  // On-hand per product (sum of active batch quantities).
+  // Sellable on-hand per product: active AND not expired. Expired batches are
+  // excluded so the counter can never ring up lapsed stock.
   const stockByProduct = useMemo(() => {
     const m = new Map<number, number>();
     for (const b of batches.data?.results ?? []) {
-      if (b.status === "ACTIVE") m.set(b.product, (m.get(b.product) ?? 0) + b.quantity_available);
+      if (b.status === "ACTIVE" && b.days_to_expiry >= 0)
+        m.set(b.product, (m.get(b.product) ?? 0) + b.quantity_available);
     }
     return m;
   }, [batches.data]);
@@ -119,6 +131,8 @@ export function PosPage() {
           tax_rate: 0,
           quantity: 1,
           in_stock: inStock,
+          requires_prescription: l.requires_prescription,
+          is_controlled: l.is_controlled,
         },
       ];
     });
@@ -136,14 +150,23 @@ export function PosPage() {
     );
   }
 
+  // A sale with any prescription-only or controlled item must be dispensed by a
+  // pharmacist and carry patient + prescriber details.
+  const needsRx = cart.some((l) => l.requires_prescription || l.is_controlled);
+  const isPharmacist =
+    !!user &&
+    (user.is_superuser || user.roles.includes("PHARMACIST") || user.roles.includes("SYS_ADMIN"));
+  const [dispensingOpen, setDispensingOpen] = useState(false);
+
   const complete = useMutation({
-    mutationFn: () =>
+    mutationFn: (dispensing?: Dispensing) =>
       api<Sale>("/api/retail/sales/", {
         method: "POST",
         body: JSON.stringify({
           organization: orgId,
           items: cart.map((l) => ({ product: l.product, quantity: l.quantity })),
           payments: [{ method, amount: String(tenderedNum) }],
+          ...(dispensing ? { dispensing } : {}),
         }),
       }),
     onSuccess: (sale) => {
@@ -151,6 +174,7 @@ export function PosPage() {
       setCart([]);
       setTendered("");
       setError(null);
+      setDispensingOpen(false);
       void qc.invalidateQueries({ queryKey: ["pos-batches", orgId] });
     },
     onError: (err) =>
@@ -162,7 +186,13 @@ export function PosPage() {
     if (cart.length === 0) return setError("Add at least one item.");
     if (method === "CASH" && tenderedNum < total)
       return setError("Cash tendered does not cover the total.");
-    complete.mutate();
+    if (needsRx) {
+      if (!isPharmacist)
+        return setError("This sale has prescription/controlled items — a pharmacist must complete it.");
+      setDispensingOpen(true); // capture prescription details before charging
+      return;
+    }
+    complete.mutate(undefined);
   }
 
   // For non-cash the exact amount is charged; keep the field in sync for clarity.
@@ -356,22 +386,99 @@ export function PosPage() {
                 </div>
               )}
 
+              {needsRx && (
+                <div
+                  className={`mt-3 flex items-start gap-2 rounded-md px-3 py-2 text-xs ${
+                    isPharmacist ? "bg-amber-50 text-amber-800" : "bg-red-50 text-red-700"
+                  }`}
+                >
+                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                  {isPharmacist
+                    ? "This sale has prescription/controlled items — you'll record the patient & prescriber before charging."
+                    : "This sale has prescription/controlled items — a pharmacist must complete it."}
+                </div>
+              )}
+
               {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
               <Button
                 className="mt-3 w-full"
                 onClick={submit}
-                disabled={complete.isPending || cart.length === 0}
+                disabled={complete.isPending || cart.length === 0 || (needsRx && !isPharmacist)}
               >
-                {complete.isPending ? "Completing…" : `Charge ${money(total)} RWF`}
+                {complete.isPending
+                  ? "Completing…"
+                  : needsRx
+                    ? `Dispense & charge ${money(total)} RWF`
+                    : `Charge ${money(total)} RWF`}
               </Button>
             </div>
           </div>
         </div>
       </div>
 
+      {dispensingOpen && (
+        <DispensingModal
+          pending={complete.isPending}
+          error={error}
+          onSubmit={(d) => complete.mutate(d)}
+          onClose={() => setDispensingOpen(false)}
+        />
+      )}
       {lastSale && <SaleReceiptModal sale={lastSale} onClose={() => setLastSale(null)} />}
     </div>
+  );
+}
+
+function DispensingModal({
+  pending,
+  error,
+  onSubmit,
+  onClose,
+}: {
+  pending: boolean;
+  error: string | null;
+  onSubmit: (d: Dispensing) => void;
+  onClose: () => void;
+}) {
+  const [d, setD] = useState<Dispensing>({
+    patient_name: "",
+    patient_id_number: "",
+    prescriber_name: "",
+    prescriber_license: "",
+    prescription_reference: "",
+  });
+  const set = <K extends keyof Dispensing>(k: K, v: string) => setD((p) => ({ ...p, [k]: v }));
+  const ready = d.patient_name.trim() && d.prescriber_name.trim();
+
+  return (
+    <Modal title="Dispense prescription / controlled items" onClose={onClose}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (ready) onSubmit(d);
+        }}
+        className="flex flex-col gap-4"
+      >
+        <p className="text-sm text-ink-500">
+          Recorded in the dispensing log with you as the dispensing pharmacist.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <TextField label="Patient name" value={d.patient_name} onChange={(e) => set("patient_name", e.target.value)} required autoFocus />
+          <TextField label="Patient ID / passport" value={d.patient_id_number} onChange={(e) => set("patient_id_number", e.target.value)} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <TextField label="Prescribing doctor" value={d.prescriber_name} onChange={(e) => set("prescriber_name", e.target.value)} required />
+          <TextField label="Doctor licence no." value={d.prescriber_license} onChange={(e) => set("prescriber_license", e.target.value)} />
+        </div>
+        <TextField label="Prescription reference" value={d.prescription_reference} onChange={(e) => set("prescription_reference", e.target.value)} />
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit" disabled={!ready || pending}>{pending ? "Dispensing…" : "Confirm & charge"}</Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

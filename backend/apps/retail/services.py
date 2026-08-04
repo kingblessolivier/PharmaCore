@@ -18,17 +18,28 @@ from apps.documents.models import DocType, Document
 from apps.documents.services import generate_document
 from apps.iam.models import User
 from apps.inventory.models import InventoryBatch, StockMovement
-from apps.retail.models import Payment, Sale, SaleBatchAllocation, SaleItem
+from apps.retail.models import Dispensing, Payment, Sale, SaleBatchAllocation, SaleItem
 
 
 class InsufficientStock(Exception):
-    """Raised when a sale line asks for more units than are on hand (oversell)."""
+    """Raised when a sale line asks for more sellable units than are on hand."""
 
     def __init__(self, product_label: str, requested: int, available: int) -> None:
         self.product_label = product_label
         self.requested = requested
         self.available = available
-        super().__init__(f"Only {available} of '{product_label}' in stock ({requested} requested).")
+        super().__init__(
+            f"Only {available} sellable (non-expired) of '{product_label}' "
+            f"in stock ({requested} requested)."
+        )
+
+
+class DispensingRequired(Exception):
+    """Raised when an Rx/controlled sale is missing pharmacist + prescription details."""
+
+
+class PharmacistRequired(Exception):
+    """Raised when a non-pharmacist tries to dispense an Rx/controlled item."""
 
 
 def _product_label(product: Any) -> str:
@@ -41,8 +52,11 @@ def _free(batch: InventoryBatch) -> int:
 
 
 def _fefo_consume(item: SaleItem, org_id: int, user: User | None) -> None:
-    """Draw ``item.quantity`` from the org's ACTIVE batches, soonest-expiring first,
-    recording allocations and appending one SALE movement per batch touched."""
+    """Draw ``item.quantity`` from the org's ACTIVE, non-expired batches, soonest-
+    expiring first, recording allocations and one SALE movement per batch touched.
+
+    Expired batches (expiry date already passed) are never sold — they are skipped
+    entirely, so a lot that lapsed yesterday cannot leave the counter."""
     remaining = item.quantity
     batches = (
         InventoryBatch.objects.select_for_update()
@@ -50,6 +64,7 @@ def _fefo_consume(item: SaleItem, org_id: int, user: User | None) -> None:
             organization_id=org_id,
             product=item.product,
             status=InventoryBatch.Status.ACTIVE,
+            expiry_date__gte=timezone.now().date(),  # never sell expired stock
         )
         .order_by("expiry_date", "batch_number")  # FEFO
     )
@@ -113,14 +128,51 @@ def _generate_receipt(sale: Sale, user: User | None) -> Document:
     )
 
 
+def _sale_needs_pharmacist(sale: Sale) -> bool:
+    """True if any line is prescription-only or a controlled substance."""
+    return any(
+        i.product.requires_prescription or i.product.is_controlled_substance
+        for i in sale.items.select_related("product")
+    )
+
+
+def _is_pharmacist(user: User | None) -> bool:
+    if user is None:
+        return False
+    return bool(user.is_superuser or user.has_role("PHARMACIST") or user.has_role("SYS_ADMIN"))
+
+
 @transaction.atomic
-def complete_sale(*, sale: Sale, payments: list[dict[str, Any]], user: User | None) -> Sale:
+def complete_sale(
+    *,
+    sale: Sale,
+    payments: list[dict[str, Any]],
+    user: User | None,
+    dispensing: dict[str, Any] | None = None,
+) -> Sale:
     """Take payment for an OPEN sale: FEFO-deduct stock, record tenders, issue the
-    receipt, and mark it COMPLETED. Raises on oversell or short payment (no writes)."""
+    receipt, and mark it COMPLETED. Raises on oversell or short payment (no writes).
+
+    If the sale contains prescription-only or controlled items, it may only be
+    completed by a pharmacist and must carry patient + prescriber details, which
+    are recorded in a Dispensing log."""
     if sale.status != Sale.Status.OPEN:
         raise ValueError("Only an open sale can be completed.")
     if not sale.items.exists():
         raise ValueError("Cannot complete an empty sale.")
+
+    needs_pharmacist = _sale_needs_pharmacist(sale)
+    if needs_pharmacist:
+        if not _is_pharmacist(user):
+            raise PharmacistRequired(
+                "A pharmacist must dispense prescription-only or controlled items."
+            )
+        patient = (dispensing or {}).get("patient_name", "").strip()
+        prescriber = (dispensing or {}).get("prescriber_name", "").strip()
+        if not patient or not prescriber:
+            raise DispensingRequired(
+                "This sale needs the patient name and prescribing doctor before dispensing."
+            )
 
     tendered = sum((Decimal(str(p["amount"])) for p in payments), Decimal("0"))
     total = sale.total
@@ -148,6 +200,17 @@ def complete_sale(*, sale: Sale, payments: list[dict[str, Any]], user: User | No
             "updated_at",
         ]
     )
+    if needs_pharmacist:
+        d = dispensing or {}
+        Dispensing.objects.create(
+            sale=sale,
+            dispensed_by=user,
+            patient_name=d.get("patient_name", "").strip(),
+            patient_id_number=d.get("patient_id_number", "").strip(),
+            prescriber_name=d.get("prescriber_name", "").strip(),
+            prescriber_license=d.get("prescriber_license", "").strip(),
+            prescription_reference=d.get("prescription_reference", "").strip(),
+        )
     _generate_receipt(sale, user)
     return sale
 
