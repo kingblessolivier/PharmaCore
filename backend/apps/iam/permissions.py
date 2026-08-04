@@ -31,11 +31,15 @@ class HasRole(BasePermission):
         return type(f"HasRole_{role_code}", (cls,), {"required_role": role_code})
 
 
-class CanManageOrg(BasePermission):
-    """Allow only SYS_ADMIN / ORG_ADMIN (or superuser) to create/modify org data."""
+class IsAdminRole(BasePermission):
+    """Reusable check: superuser, SYS_ADMIN, or ORG_ADMIN. Used to gate admin writes."""
 
     def has_permission(self, request: Request, view: APIView) -> bool:
         user = request.user
         if not user.is_authenticated or not isinstance(user, User):
             return False
         return user.is_superuser or user.has_role("SYS_ADMIN") or user.has_role("ORG_ADMIN")
+
+
+class CanManageOrg(IsAdminRole):
+    """Allow only SYS_ADMIN / ORG_ADMIN (or superuser) to create/modify org data."""

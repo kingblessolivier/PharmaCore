@@ -1,4 +1,4 @@
-import { Building2, LayoutDashboard, LogOut, Network, Users } from "lucide-react";
+import { Building2, LayoutDashboard, LogOut, Network, Pill, Users } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 
@@ -18,6 +18,7 @@ const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/organizations", label: "Organizations", icon: Building2, end: false },
   { to: "/departments", label: "Departments", icon: Network, end: false },
+  { to: "/products", label: "Catalog", icon: Pill, end: false },
 ];
 
 export function AppShell() {
@@ -77,7 +78,7 @@ export function AppShell() {
           <div className="mt-3 px-3 text-[11px] uppercase tracking-wide text-ink-500">
             More modules
           </div>
-          {["Catalog", "Inventory", "Distribution", "Retail", "Finance"].map((m) => (
+          {["Inventory", "Distribution", "Retail", "Finance"].map((m) => (
             <div key={m} className="px-3 py-1.5 text-sm text-ink-500/60">
               {m} <span className="text-[10px]">soon</span>
             </div>

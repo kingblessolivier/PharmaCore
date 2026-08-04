@@ -7,6 +7,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { DepartmentsPage } from "./pages/DepartmentsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OrganizationsPage } from "./pages/OrganizationsPage";
+import { ProductsPage } from "./pages/ProductsPage";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
@@ -35,6 +36,7 @@ function App() {
               <Route path="/" element={<DashboardPage />} />
               <Route path="/organizations" element={<OrganizationsPage />} />
               <Route path="/departments" element={<DepartmentsPage />} />
+              <Route path="/products" element={<ProductsPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

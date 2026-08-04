@@ -51,3 +51,35 @@ export interface Paginated<T> {
   previous: string | null;
   results: T[];
 }
+
+export type TaxClass = "A" | "B" | "C" | "D";
+
+export interface Product {
+  id: number;
+  generic_name: string;
+  brand_name: string;
+  manufacturer: number | null;
+  manufacturer_name: string | null;
+  dosage_form: string;
+  strength: string;
+  pack_size: string;
+  unit_of_measure: string;
+  atc_code: string;
+  gtin: string;
+  tax_class: TaxClass;
+  requires_prescription: boolean;
+  is_controlled_substance: boolean;
+  storage_condition: string;
+  reorder_level: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Manufacturer {
+  id: number;
+  name: string;
+  country: string;
+  is_active: boolean;
+  created_at: string;
+}
