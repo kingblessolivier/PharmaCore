@@ -8,13 +8,14 @@ releases the holds.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 
 from django.db import transaction
 
-from apps.distribution.models import OrderItem, Reservation, StockOrder
+from apps.distribution.models import OrderItem, Reservation, Shipment, StockOrder
 from apps.iam.models import User
-from apps.inventory.models import InventoryBatch
+from apps.inventory.models import InventoryBatch, StockMovement
 
 
 @dataclass
@@ -79,3 +80,45 @@ def release_order_reservations(*, order: StockOrder) -> None:
         batch.quantity_reserved = max(0, batch.quantity_reserved - res.quantity)
         batch.save(update_fields=["quantity_reserved", "updated_at"])
         res.delete()
+
+
+@transaction.atomic
+def dispatch_order(
+    *, order: StockOrder, driver_name: str, vehicle_registration: str, user: User | None
+) -> Shipment:
+    """Dispatch a picked order: consume its reservations, deduct depot stock via
+    TRANSFER_OUT ledger movements, record shipped quantities, and create a shipment."""
+    shipped: dict[int, int] = defaultdict(int)
+    for res in order.reservations.select_related("batch", "order_item").select_for_update():
+        batch = res.batch
+        # Reserved stock physically leaves the depot: reduce both counters.
+        batch.quantity_available -= res.quantity
+        batch.quantity_reserved = max(0, batch.quantity_reserved - res.quantity)
+        batch.save(update_fields=["quantity_available", "quantity_reserved", "updated_at"])
+        StockMovement.objects.create(
+            organization=order.depot,
+            product=res.order_item.product,
+            batch=batch,
+            batch_number=batch.batch_number,
+            movement_type=StockMovement.Type.TRANSFER_OUT,
+            quantity_delta=-res.quantity,
+            reference_type="shipment",
+            reference_id=str(order.pk),
+            created_by=user,
+        )
+        shipped[res.order_item_id] += res.quantity
+        res.delete()
+
+    for item in order.items.all():
+        item.quantity_shipped = shipped.get(item.pk, 0)
+        item.save(update_fields=["quantity_shipped"])
+
+    shipment = Shipment.objects.create(
+        order=order,
+        driver_name=driver_name,
+        vehicle_registration=vehicle_registration,
+        dispatched_by=user,
+    )
+    order.status = StockOrder.Status.IN_TRANSIT
+    order.save(update_fields=["status", "updated_at"])
+    return shipment

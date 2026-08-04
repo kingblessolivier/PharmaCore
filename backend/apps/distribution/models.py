@@ -76,6 +76,24 @@ class OrderItem(models.Model):
         return float(self.price_per_unit) * self.quantity_ordered
 
 
+class Shipment(models.Model):
+    """A dispatch of an order's goods from the depot (single-drop for now)."""
+
+    order = models.ForeignKey(StockOrder, on_delete=models.CASCADE, related_name="shipments")
+    driver_name = models.CharField(max_length=150, blank=True, default="")
+    vehicle_registration = models.CharField(max_length=50, blank=True, default="")
+    dispatched_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    dispatched_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-dispatched_at"]
+
+    def __str__(self) -> str:
+        return f"Shipment for {self.order}"
+
+
 class Reservation(models.Model):
     """A hold placed on a specific depot batch for an approved order line (FEFO).
 

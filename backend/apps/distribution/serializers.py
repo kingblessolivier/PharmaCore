@@ -4,7 +4,14 @@ from typing import Any
 
 from rest_framework import serializers
 
-from apps.distribution.models import OrderItem, StockOrder
+from apps.distribution.models import OrderItem, Shipment, StockOrder
+
+
+class ShipmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Shipment
+        fields = ["id", "driver_name", "vehicle_registration", "dispatched_at"]
+        read_only_fields = fields
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -42,6 +49,7 @@ class StockOrderSerializer(serializers.ModelSerializer):
     depot_name = serializers.CharField(source="depot.name", read_only=True)
     retail_name = serializers.CharField(source="retail.name", read_only=True)
     total_amount = serializers.FloatField(read_only=True)
+    shipments = ShipmentSerializer(many=True, read_only=True)
 
     class Meta:
         model = StockOrder
@@ -57,6 +65,7 @@ class StockOrderSerializer(serializers.ModelSerializer):
             "notes",
             "total_amount",
             "items",
+            "shipments",
             "created_at",
         ]
         read_only_fields = ["id", "order_number", "status", "total_amount", "created_at"]

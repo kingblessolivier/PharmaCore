@@ -127,20 +127,72 @@ function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | nul
   );
 }
 
-function canApprove(user: Me | null, order: StockOrder): boolean {
+function canDepotAct(user: Me | null, order: StockOrder): boolean {
   if (!user) return false;
   return isAdmin(user) || user.organization === order.depot;
+}
+
+function DispatchModal({ order, onClose }: { order: StockOrder; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [driver, setDriver] = useState("");
+  const [vehicle, setVehicle] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const mut = useMutation({
+    mutationFn: () =>
+      api<StockOrder>(`/api/distribution/orders/${order.id}/dispatch/`, {
+        method: "POST",
+        body: JSON.stringify({ driver_name: driver, vehicle_registration: vehicle }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["orders"] });
+      onClose();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Dispatch failed."),
+  });
+  return (
+    <Modal title={`Dispatch ${order.order_number}`} onClose={onClose}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          setError(null);
+          mut.mutate();
+        }}
+        className="flex flex-col gap-4"
+      >
+        <p className="text-sm text-ink-500">
+          Dispatching removes the reserved stock from {order.depot_name} and marks the order in
+          transit.
+        </p>
+        <TextField label="Driver name" value={driver} onChange={(e) => setDriver(e.target.value)} />
+        <TextField
+          label="Vehicle registration"
+          value={vehicle}
+          onChange={(e) => setVehicle(e.target.value)}
+        />
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={mut.isPending}>
+            {mut.isPending ? "Dispatching…" : "Dispatch"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
 }
 
 export function OrdersPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [creating, setCreating] = useState(false);
+  const [dispatching, setDispatching] = useState<StockOrder | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const { data, isLoading } = useQuery({ queryKey: ["orders"], queryFn: () => api<Paginated<StockOrder>>("/api/distribution/orders/") });
 
   const act = useMutation({
-    mutationFn: (v: { id: number; action: "submit" | "approve" | "cancel" }) =>
+    mutationFn: (v: { id: number; action: "submit" | "approve" | "pick" | "cancel" }) =>
       api<StockOrder>(`/api/distribution/orders/${v.id}/${v.action}/`, { method: "POST" }),
     onSuccess: () => {
       setActionError(null);
@@ -177,8 +229,14 @@ export function OrdersPage() {
                   <td className="px-4 py-2.5">
                     <div className="flex justify-end gap-1">
                       {o.status === "DRAFT" && <Button variant="secondary" onClick={() => act.mutate({ id: o.id, action: "submit" })}>Submit</Button>}
-                      {o.status === "PENDING" && canApprove(user, o) && (
+                      {o.status === "PENDING" && canDepotAct(user, o) && (
                         <Button variant="secondary" onClick={() => act.mutate({ id: o.id, action: "approve" })}>Approve</Button>
+                      )}
+                      {o.status === "APPROVED" && canDepotAct(user, o) && (
+                        <Button variant="secondary" onClick={() => act.mutate({ id: o.id, action: "pick" })}>Pick</Button>
+                      )}
+                      {o.status === "PICKING" && canDepotAct(user, o) && (
+                        <Button variant="secondary" onClick={() => setDispatching(o)}>Dispatch</Button>
                       )}
                       {["DRAFT", "PENDING", "APPROVED", "PICKING"].includes(o.status) && (
                         <Button variant="ghost" onClick={() => act.mutate({ id: o.id, action: "cancel" })}>Cancel</Button>
@@ -195,6 +253,7 @@ export function OrdersPage() {
         </div>
       )}
       {creating && <NewOrderModal defaultRetail={user?.organization ?? null} onClose={() => setCreating(false)} />}
+      {dispatching && <DispatchModal order={dispatching} onClose={() => setDispatching(null)} />}
     </div>
   );
 }
