@@ -3,6 +3,7 @@ import {
   Building2,
   ChevronDown,
   ClipboardList,
+  FileText,
   LayoutDashboard,
   LogOut,
   Network,
@@ -91,6 +92,7 @@ const nav = [
   { to: "/products", label: "Catalog", icon: Pill, end: false },
   { to: "/suppliers", label: "Suppliers", icon: Truck, end: false },
   { to: "/orders", label: "Purchase orders", icon: ClipboardList, end: false },
+  { to: "/documents", label: "Documents", icon: FileText, end: false },
 ];
 
 export function AppShell() {

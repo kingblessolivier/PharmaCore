@@ -1,0 +1,21 @@
+{% extends "documents/base.html" %}
+{% block content %}
+<table class="parties">
+  <tr>
+    <td style="width:50%"><div class="plabel">Received by (pharmacy)</div>{{ retail_name }}</td>
+    <td style="width:50%"><div class="plabel">From (depot)</div>{{ depot_name }}</td>
+  </tr>
+</table>
+<table>
+  <tr><th>#</th><th>Product</th><th>Batch</th><th>Expiry</th><th class="right">Expected</th><th class="right">Received</th><th class="right">Damaged</th></tr>
+  {% for l in lines %}
+  <tr>
+    <td>{{ forloop.counter }}</td><td>{{ l.name }}</td><td>{{ l.batch }}</td><td>{{ l.expiry }}</td>
+    <td class="right">{{ l.expected }}</td><td class="right">{{ l.received }}</td>
+    <td class="right {% if l.damaged %}warn{% endif %}">{{ l.damaged }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% if has_discrepancy %}<p class="warn">Discrepancy recorded — received quantities differ from the shipment manifest.</p>{% endif %}
+<p class="muted">Records exactly what arrived. Retained for Good Distribution Practice traceability.</p>
+{% endblock %}

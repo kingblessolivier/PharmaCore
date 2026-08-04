@@ -23,9 +23,115 @@ from apps.distribution.models import (
     ShipmentItem,
     StockOrder,
 )
+from apps.documents.models import DocType, Document
+from apps.documents.services import generate_document
 from apps.iam.models import User
 from apps.inventory.models import InventoryBatch, StockMovement
 from apps.inventory.services import receive_intake
+
+
+def _product_label(product: object) -> str:
+    return f"{product.generic_name} {product.strength}".strip()  # type: ignore[attr-defined]
+
+
+def generate_po_document(*, order: StockOrder, user: User | None) -> Document:
+    lines = [
+        {
+            "name": _product_label(i.product),
+            "qty": i.quantity_ordered,
+            "price": i.price_per_unit,
+            "total": i.line_total,
+        }
+        for i in order.items.select_related("product").all()
+    ]
+    return generate_document(
+        organization=order.retail,
+        doc_type=DocType.PURCHASE_ORDER,
+        context={
+            "buyer_name": order.retail.name,
+            "seller_name": order.depot.name,
+            "lines": lines,
+            "total": order.total_amount,
+        },
+        reference_type="stock_order",
+        reference_id=str(order.pk),
+        user=user,
+    )
+
+
+def _generate_delivery_note(order: StockOrder, shipment: Shipment, user: User | None) -> None:
+    lines = [
+        {
+            "name": _product_label(si.product),
+            "batch": si.batch_number,
+            "expiry": si.expiry_date,
+            "qty": si.quantity,
+        }
+        for si in shipment.items.select_related("product").all()
+    ]
+    generate_document(
+        organization=order.depot,
+        doc_type=DocType.DELIVERY_NOTE,
+        context={
+            "from_name": order.depot.name,
+            "to_name": order.retail.name,
+            "driver": shipment.driver_name,
+            "vehicle": shipment.vehicle_registration,
+            "lines": lines,
+        },
+        reference_type="stock_order",
+        reference_id=str(order.pk),
+        user=user,
+    )
+
+
+def _generate_grn_and_invoice(grn: GoodsReceivedNote, user: User | None) -> None:
+    order = grn.order
+    generate_document(
+        organization=grn.retail,
+        doc_type=DocType.GRN,
+        context={
+            "retail_name": grn.retail.name,
+            "depot_name": order.depot.name,
+            "has_discrepancy": grn.has_discrepancy,
+            "lines": [
+                {
+                    "name": _product_label(line.product),
+                    "batch": line.batch_number,
+                    "expiry": line.expiry_date,
+                    "expected": line.quantity_expected,
+                    "received": line.quantity_received,
+                    "damaged": line.quantity_damaged,
+                }
+                for line in grn.lines.select_related("product").all()
+            ],
+        },
+        reference_type="grn",
+        reference_id=str(grn.pk),
+        user=user,
+    )
+    generate_document(
+        organization=order.depot,
+        doc_type=DocType.TAX_INVOICE,
+        context={
+            "seller_name": order.depot.name,
+            "buyer_name": order.retail.name,
+            "total": order.total_amount,
+            "lines": [
+                {
+                    "name": _product_label(i.product),
+                    "tax_class": i.product.tax_class,
+                    "qty": i.quantity_shipped or i.quantity_ordered,
+                    "price": i.price_per_unit,
+                    "total": i.line_total,
+                }
+                for i in order.items.select_related("product").all()
+            ],
+        },
+        reference_type="stock_order",
+        reference_id=str(order.pk),
+        user=user,
+    )
 
 
 @dataclass
@@ -139,6 +245,7 @@ def dispatch_order(
 
     order.status = StockOrder.Status.IN_TRANSIT
     order.save(update_fields=["status", "updated_at"])
+    _generate_delivery_note(order, shipment, user)
     return shipment
 
 
@@ -211,4 +318,5 @@ def finalize_grn(
     grn.status = GoodsReceivedNote.Status.FINALIZED
     grn.has_discrepancy = any_discrepancy
     grn.save(update_fields=["status", "has_discrepancy"])
+    _generate_grn_and_invoice(grn, user)
     return grn

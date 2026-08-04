@@ -18,6 +18,7 @@ from apps.distribution.services import (
     approve_and_allocate,
     dispatch_order,
     finalize_grn,
+    generate_po_document,
     open_grn,
     release_order_reservations,
 )
@@ -81,6 +82,7 @@ class StockOrderViewSet(viewsets.ModelViewSet):
             raise ValidationError("Only draft orders can be submitted.")
         order.status = StockOrder.Status.PENDING
         order.save(update_fields=["status", "updated_at"])
+        generate_po_document(order=order, user=cast(User, request.user))
         record_audit(
             action="SUBMIT",
             user=cast(User, request.user),

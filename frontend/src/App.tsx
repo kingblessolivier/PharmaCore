@@ -5,6 +5,7 @@ import { Spinner } from "./components/ui";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DepartmentsPage } from "./pages/DepartmentsPage";
+import { DocumentsPage } from "./pages/DocumentsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OrganizationDetailPage } from "./pages/OrganizationDetailPage";
 import { OrdersPage } from "./pages/OrdersPage";
@@ -45,6 +46,7 @@ function App() {
               <Route path="/products/:id" element={<ProductDetailPage />} />
               <Route path="/suppliers" element={<SuppliersPage />} />
               <Route path="/orders" element={<OrdersPage />} />
+              <Route path="/documents" element={<DocumentsPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

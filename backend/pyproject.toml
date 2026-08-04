@@ -29,6 +29,10 @@ exclude = ['migrations/']
 module = ["*.migrations.*"]
 ignore_errors = true
 
+[[tool.mypy.overrides]]
+module = ["xhtml2pdf.*", "segno.*"]
+ignore_missing_imports = true
+
 [tool.django-stubs]
 django_settings_module = "config.settings"
 

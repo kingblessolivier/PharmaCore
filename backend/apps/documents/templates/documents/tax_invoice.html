@@ -1,0 +1,17 @@
+{% extends "documents/base.html" %}
+{% block content %}
+<table class="parties">
+  <tr>
+    <td style="width:50%"><div class="plabel">Seller (depot)</div>{{ seller_name }}</td>
+    <td style="width:50%"><div class="plabel">Bill to (pharmacy)</div>{{ buyer_name }}</td>
+  </tr>
+</table>
+<table>
+  <tr><th>#</th><th>Product</th><th>Tax</th><th class="right">Qty</th><th class="right">Unit price</th><th class="right">Line total</th></tr>
+  {% for l in lines %}
+  <tr><td>{{ forloop.counter }}</td><td>{{ l.name }}</td><td>{{ l.tax_class }}</td><td class="right">{{ l.qty }}</td><td class="right">{{ l.price }}</td><td class="right">{{ l.total }}</td></tr>
+  {% endfor %}
+  <tr><td colspan="5" class="right"><b>Total (RWF)</b></td><td class="right"><b>{{ total }}</b></td></tr>
+</table>
+<p class="muted">Tax class per RRA: A exempt &middot; B 18% VAT &middot; C zero-rated. Final EBM fiscalization applies at retail.</p>
+{% endblock %}

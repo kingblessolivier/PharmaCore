@@ -1,0 +1,17 @@
+{% extends "documents/base.html" %}
+{% block content %}
+<table class="parties">
+  <tr>
+    <td style="width:34%"><div class="plabel">From (depot)</div>{{ from_name }}</td>
+    <td style="width:34%"><div class="plabel">To (pharmacy)</div>{{ to_name }}</td>
+    <td style="width:32%"><div class="plabel">Transport</div>Driver: {{ driver|default:"—" }}<br>Vehicle: {{ vehicle|default:"—" }}</td>
+  </tr>
+</table>
+<table>
+  <tr><th>#</th><th>Product</th><th>Batch</th><th>Expiry</th><th class="right">Qty</th></tr>
+  {% for l in lines %}
+  <tr><td>{{ forloop.counter }}</td><td>{{ l.name }}</td><td>{{ l.batch }}</td><td>{{ l.expiry }}</td><td class="right">{{ l.qty }}</td></tr>
+  {% endfor %}
+</table>
+<p class="muted">Accompanies the shipment in transit. Proof of cargo for transport regulators.</p>
+{% endblock %}

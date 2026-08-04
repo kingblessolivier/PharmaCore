@@ -40,8 +40,16 @@ INSTALLED_APPS = [
     "apps.catalog",
     "apps.inventory",
     "apps.distribution",
+    "apps.documents",
     "apps.core",
 ]
+
+# --- Media (generated document vault) ---
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
+DOCUMENT_VERIFY_BASE_URL = os.environ.get(
+    "DOCUMENT_VERIFY_BASE_URL", "https://pharmacore.local/verify"
+)
 
 AUTH_USER_MODEL = "iam.User"
 
