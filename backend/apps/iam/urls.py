@@ -9,11 +9,15 @@ from apps.iam.views import (
     LoginView,
     MeView,
     OrganizationViewSet,
+    RoleViewSet,
+    UserViewSet,
 )
 
 router = DefaultRouter()
 router.register("organizations", OrganizationViewSet, basename="organization")
 router.register("departments", DepartmentViewSet, basename="department")
+router.register("users", UserViewSet, basename="user")
+router.register("roles", RoleViewSet, basename="role")
 
 urlpatterns = [
     path("auth/login", LoginView.as_view(), name="login"),

@@ -15,12 +15,14 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from apps.iam.audit import record_audit
-from apps.iam.models import Department, Organization, User
-from apps.iam.permissions import CanManageOrg
+from apps.iam.models import Department, Organization, Role, User
+from apps.iam.permissions import CanManageOrg, IsAdminRole
 from apps.iam.scoping import organizations_visible_to
 from apps.iam.serializers import (
     DepartmentSerializer,
     OrganizationSerializer,
+    RoleSerializer,
+    UserAdminSerializer,
     UserSerializer,
 )
 
@@ -140,6 +142,77 @@ class DepartmentViewSet(viewsets.ModelViewSet):
             action="DELETE",
             user=cast(User, self.request.user),
             entity_type="department",
+            entity_id=str(instance.pk),
+            request=self.request,
+        )
+        instance.delete()
+
+
+class RoleViewSet(viewsets.ReadOnlyModelViewSet):
+    """Read-only list of assignable roles (for the role picker)."""
+
+    serializer_class = RoleSerializer
+    queryset = Role.objects.all()
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+
+
+class UserViewSet(viewsets.ModelViewSet):
+    """Admin management of users, org-scoped. Admins only; every write audited.
+
+    Filter by ``?organization=<id>`` (used by the pharmacy Manage view).
+    """
+
+    serializer_class = UserAdminSerializer
+    queryset = User.objects.all().order_by("username")
+    permission_classes = [IsAuthenticated, IsAdminRole]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_queryset(self) -> QuerySet[User]:
+        actor = cast(User, self.request.user)
+        qs = User.objects.all().order_by("username")
+        if not (actor.is_superuser or actor.has_role("SYS_ADMIN")):
+            # ORG_ADMIN: only users in their own organization (deny if none).
+            org_id = actor.organization_id
+            qs = qs.filter(organization_id=org_id) if org_id else qs.none()
+        org = self.request.query_params.get("organization")
+        if org:
+            qs = qs.filter(organization_id=org)
+        return qs
+
+    def _guard_org(self, serializer: BaseSerializer[Any]) -> None:
+        actor = cast(User, self.request.user)
+        org = serializer.validated_data.get("organization")
+        if org and not organizations_visible_to(actor).filter(pk=org.pk).exists():
+            raise PermissionDenied("You cannot manage users in that organization.")
+
+    def perform_create(self, serializer: BaseSerializer[Any]) -> None:
+        self._guard_org(serializer)
+        obj = serializer.save()
+        record_audit(
+            action="CREATE",
+            user=cast(User, self.request.user),
+            entity_type="user",
+            entity_id=str(obj.pk),
+            request=self.request,
+        )
+
+    def perform_update(self, serializer: BaseSerializer[Any]) -> None:
+        self._guard_org(serializer)
+        obj = serializer.save()
+        record_audit(
+            action="UPDATE",
+            user=cast(User, self.request.user),
+            entity_type="user",
+            entity_id=str(obj.pk),
+            request=self.request,
+        )
+
+    def perform_destroy(self, instance: User) -> None:
+        record_audit(
+            action="DELETE",
+            user=cast(User, self.request.user),
+            entity_type="user",
             entity_id=str(instance.pk),
             request=self.request,
         )
