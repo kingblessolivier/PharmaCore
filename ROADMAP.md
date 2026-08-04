@@ -69,20 +69,26 @@ verifiable documents, and moves stock into the retail FEFO ledger.
 > (Multi-stop shipments, packing slip/waybill/credit-note templates, and email/SMS notification
 > channels are folded forward — the depot→retail cycle + core documents are done.)
 
-## Phase 3 — Retail POS + Offline + Desktop app  ⬜
+## Phase 3 — Retail POS + Offline + Desktop app  🚧
 The counter, built offline-first (ADR-001). The hardest phase.
 **Backend**
-- [ ] Sale state machine (`payment_status`), cash-drawer sessions, prescriptions + dispensing gate
-- [ ] Retail pricing; **sync API** (outbox push, delta pull, oversell reconciliation/conflicts)
+- [x] Sale state machine (OPEN → COMPLETED → VOIDED), split-tender payments, FEFO stock
+      consumption (immutable `SALE` ledger), void reversal (`RETURN`), fiscal **receipt** doc
+- [x] Retail pricing pulled from the pharmacy's own listing (server-authoritative)
+- [ ] Cash-drawer sessions, prescriptions + dispensing gate
+- [ ] **Sync API** (outbox push, delta pull, oversell reconciliation/conflicts)
 **Frontend / UI**
-- [ ] POS single-page workflow: manual search → FEFO batch pick → cart → split payment
-- [ ] Drawer open/close & reconciliation, prescription attach/verify, dispensing labels
+- [x] POS single-page workflow: manual search → FEFO auto-pick → cart → payment → change → receipt
+- [ ] Split-payment UI, drawer open/close & reconciliation, prescription attach/verify, dispensing labels
 **Desktop (Tauri)**
 - [ ] Tauri shell wrapping the React app + **encrypted local SQLite**, offline sync engine,
       thermal-printer support, signed auto-update
 **Tools**
 - [ ] POS calculators: pricing/markup, VAT (tax class), cash & change
 **Exit:** a sale completes with the internet off and reconciles correctly on reconnect — in the desktop POS.
+> **Slice P3.1 done** (online POS sale core): ring up → FEFO deduct → pay → receipt + void,
+> 9 tests. 91 backend tests green; frontend green. Offline/Tauri, drawer, and prescriptions
+> are the remaining slices.
 
 ## Phase 4 — Insurance & EBM + Notification pipeline  ⬜
 Multi-insurer claims (ADR-002) + fiscalization (ADR-003).

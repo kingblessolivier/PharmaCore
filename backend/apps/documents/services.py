@@ -21,6 +21,7 @@ _TEMPLATES = {
     "DELIVERY_NOTE": "documents/delivery_note.html",
     "GRN": "documents/grn.html",
     "TAX_INVOICE": "documents/tax_invoice.html",
+    "RECEIPT": "documents/receipt.html",
 }
 
 

@@ -1,0 +1,21 @@
+{% extends "documents/base.html" %}
+{% block content %}
+<table class="parties">
+  <tr>
+    <td style="width:60%"><div class="plabel">Pharmacy</div>{{ seller_name }}</td>
+    <td style="width:40%"><div class="plabel">Sale</div>{{ sale_number }}{% if cashier %}<br><span class="muted">Served by {{ cashier }}</span>{% endif %}</td>
+  </tr>
+</table>
+<table>
+  <tr><th>#</th><th>Item</th><th>Tax</th><th class="right">Qty</th><th class="right">Unit price</th><th class="right">Line total</th></tr>
+  {% for l in lines %}
+  <tr><td>{{ forloop.counter }}</td><td>{{ l.name }}</td><td>{{ l.tax_class }}</td><td class="right">{{ l.qty }}</td><td class="right">{{ l.price }}</td><td class="right">{{ l.total }}</td></tr>
+  {% endfor %}
+  <tr><td colspan="5" class="right">Subtotal (excl. VAT)</td><td class="right">{{ subtotal }}</td></tr>
+  <tr><td colspan="5" class="right">VAT (18% where applicable)</td><td class="right">{{ tax_total }}</td></tr>
+  <tr><td colspan="5" class="right"><b>Total (RWF)</b></td><td class="right"><b>{{ total }}</b></td></tr>
+  <tr><td colspan="5" class="right">Tendered</td><td class="right">{{ tendered }}</td></tr>
+  <tr><td colspan="5" class="right">Change</td><td class="right">{{ change }}</td></tr>
+</table>
+<p class="muted">Prices are VAT-inclusive. Tax class per RRA: A exempt &middot; B 18% VAT &middot; C zero-rated. EBM fiscalization is applied at retail.</p>
+{% endblock %}

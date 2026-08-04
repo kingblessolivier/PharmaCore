@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "apps.inventory",
     "apps.distribution",
     "apps.documents",
+    "apps.retail",
     "apps.workspace",
     "apps.core",
 ]

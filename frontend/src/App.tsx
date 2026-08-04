@@ -10,6 +10,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { OrganizationDetailPage } from "./pages/OrganizationDetailPage";
 import { OrdersPage } from "./pages/OrdersPage";
 import { OrganizationsPage } from "./pages/OrganizationsPage";
+import { PosPage } from "./pages/PosPage";
 import { ProductDetailPage } from "./pages/ProductDetailPage";
 import { ProductsPage } from "./pages/ProductsPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
@@ -46,6 +47,7 @@ function App() {
               <Route path="/products/:id" element={<ProductDetailPage />} />
               <Route path="/suppliers" element={<SuppliersPage />} />
               <Route path="/orders" element={<OrdersPage />} />
+              <Route path="/pos" element={<PosPage />} />
               <Route path="/documents" element={<DocumentsPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

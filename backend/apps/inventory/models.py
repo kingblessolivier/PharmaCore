@@ -89,6 +89,7 @@ class StockMovement(models.Model):
         TRANSFER_IN = "TRANSFER_IN", "Transfer in"
         TRANSFER_OUT = "TRANSFER_OUT", "Transfer out"
         SALE = "SALE", "Sale"
+        RETURN = "RETURN", "Customer return / sale void"
         WASTAGE = "WASTAGE", "Wastage"
         ADJUSTMENT = "ADJUSTMENT", "Adjustment"
         RECALL = "RECALL", "Recall"
