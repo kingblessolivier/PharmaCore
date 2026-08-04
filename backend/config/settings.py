@@ -155,3 +155,6 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = [
     o for o in os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",") if o
 ]
+# In development the Vite port can vary (5173/5174/…); allow any local origin.
+# Production (DEBUG=False) still uses the explicit allow-list above.
+CORS_ALLOW_ALL_ORIGINS = DEBUG
