@@ -12,8 +12,12 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 
-from apps.distribution.models import GoodsReceivedNote, StockOrder
-from apps.distribution.serializers import GRNSerializer, StockOrderSerializer
+from apps.distribution.models import GoodsReceivedNote, InTransitStock, StockOrder
+from apps.distribution.serializers import (
+    GRNSerializer,
+    InTransitStockSerializer,
+    StockOrderSerializer,
+)
 from apps.distribution.services import (
     approve_and_ship,
     generate_po_document,
@@ -34,12 +38,16 @@ class StockOrderViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = StockOrderSerializer
-    queryset = StockOrder.objects.select_related("depot", "retail").prefetch_related("items")
+    queryset = StockOrder.objects.select_related("depot", "retail").prefetch_related(
+        "items", "shipments", "order_payments", "in_transit"
+    )
     http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self) -> QuerySet[StockOrder]:
         user = cast(User, self.request.user)
-        qs = StockOrder.objects.select_related("depot", "retail").prefetch_related("items")
+        qs = StockOrder.objects.select_related("depot", "retail").prefetch_related(
+            "items", "shipments", "order_payments", "in_transit"
+        )
         if user.is_superuser or user.has_role("SYS_ADMIN"):
             pass
         else:
@@ -220,6 +228,35 @@ class StockOrderViewSet(viewsets.ModelViewSet):
             request=request,
         )
         return Response(StockOrderSerializer(order).data)
+
+
+class InTransitStockViewSet(viewsets.ReadOnlyModelViewSet):
+    """Live view of stock on trucks — units dispatched but not yet received.
+
+    Scoped to orgs the user can see; filter with ?destination=<org> ('what's coming
+    to me') or ?source=<org> ('what I've sent out').
+    """
+
+    serializer_class = InTransitStockSerializer
+    queryset = InTransitStock.objects.select_related(
+        "order", "source_org", "destination_org", "product"
+    )
+
+    def get_queryset(self) -> QuerySet[InTransitStock]:
+        user = cast(User, self.request.user)
+        qs = InTransitStock.objects.select_related(
+            "order", "source_org", "destination_org", "product"
+        )
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(Q(source_org__in=visible) | Q(destination_org__in=visible))
+        dest = self.request.query_params.get("destination")
+        if dest and dest.isdigit():
+            qs = qs.filter(destination_org_id=int(dest))
+        src = self.request.query_params.get("source")
+        if src and src.isdigit():
+            qs = qs.filter(source_org_id=int(src))
+        return qs
 
 
 class GRNViewSet(viewsets.ReadOnlyModelViewSet):

@@ -347,7 +347,14 @@ export function OrdersPage() {
                 <tr key={o.id} className="border-b border-line last:border-0 hover:bg-surface-100">
                   <td className="px-4 py-2.5 font-mono font-medium">{o.order_number}</td>
                   <td className="px-4 py-2.5 text-ink-700">{o.retail_name} → {o.depot_name}</td>
-                  <td className="px-4 py-2.5"><StatusBadge status={o.status} /></td>
+                  <td className="px-4 py-2.5">
+                    <StatusBadge status={o.status} />
+                    {o.status === "IN_TRANSIT" && o.in_transit.length > 0 && (
+                      <div className="mt-0.5 text-xs text-blue-700">
+                        {o.in_transit.reduce((s, t) => s + t.quantity, 0).toLocaleString()} units on the way
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-2.5 text-right font-mono">{o.total_amount.toLocaleString()}</td>
                   <td className="px-4 py-2.5">
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${PAY_TONE[o.payment_status] ?? ""}`}>
