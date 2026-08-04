@@ -22,6 +22,37 @@ class Manufacturer(models.Model):
         return self.name
 
 
+class Supplier(models.Model):
+    """A supplier the depot buys from (importer/manufacturer/distributor)."""
+
+    name = models.CharField(max_length=255, unique=True)
+    tin = models.CharField(max_length=20, blank=True, default="")
+    email = models.EmailField(blank=True, default="")
+    phone = models.CharField(max_length=20, blank=True, default="")
+    lead_time_days = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class ActiveIngredient(models.Model):
+    """An active pharmaceutical substance (for interaction/duplication checks)."""
+
+    name = models.CharField(max_length=255, unique=True)
+    atc_code = models.CharField(max_length=10, blank=True, default="")
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Product(models.Model):
     """A medicine in the master catalog."""
 
@@ -76,3 +107,47 @@ class Product(models.Model):
 
     def __str__(self) -> str:
         return f"{self.generic_name} {self.strength}".strip()
+
+
+class ProductIngredient(models.Model):
+    """An active ingredient in a product, with its amount."""
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="ingredients")
+    ingredient = models.ForeignKey(
+        ActiveIngredient, on_delete=models.PROTECT, related_name="in_products"
+    )
+    amount = models.CharField(max_length=50, blank=True, default="")  # e.g. "500mg"
+
+    class Meta:
+        ordering = ["ingredient__name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "ingredient"], name="uniq_product_ingredient"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.product} · {self.ingredient}"
+
+
+class ProductBarcode(models.Model):
+    """A scan code for a product at a packaging level."""
+
+    class Level(models.TextChoices):
+        EACH = "EACH", "Each"
+        BOX = "BOX", "Box"
+        CASE = "CASE", "Case"
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="barcodes")
+    barcode = models.CharField(max_length=64)
+    packaging_level = models.CharField(max_length=20, choices=Level.choices, default=Level.EACH)
+    units_per_level = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ["packaging_level"]
+        constraints = [
+            models.UniqueConstraint(fields=["product", "barcode"], name="uniq_product_barcode")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.barcode} ({self.packaging_level})"

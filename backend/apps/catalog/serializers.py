@@ -4,7 +4,53 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from apps.catalog.models import Manufacturer, Product
+from apps.catalog.models import (
+    ActiveIngredient,
+    Manufacturer,
+    Product,
+    ProductBarcode,
+    ProductIngredient,
+    Supplier,
+)
+
+
+class SupplierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Supplier
+        fields = [
+            "id",
+            "name",
+            "tin",
+            "email",
+            "phone",
+            "lead_time_days",
+            "is_active",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+
+class ActiveIngredientSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ActiveIngredient
+        fields = ["id", "name", "atc_code"]
+        read_only_fields = ["id"]
+
+
+class ProductIngredientSerializer(serializers.ModelSerializer):
+    ingredient_name = serializers.CharField(source="ingredient.name", read_only=True)
+
+    class Meta:
+        model = ProductIngredient
+        fields = ["id", "product", "ingredient", "ingredient_name", "amount"]
+        read_only_fields = ["id", "ingredient_name"]
+
+
+class ProductBarcodeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductBarcode
+        fields = ["id", "product", "barcode", "packaging_level", "units_per_level"]
+        read_only_fields = ["id"]
 
 
 class ManufacturerSerializer(serializers.ModelSerializer):

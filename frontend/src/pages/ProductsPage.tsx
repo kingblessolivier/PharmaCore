@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import {
   Badge,
   Button,
@@ -247,7 +248,9 @@ export function ProductsPage() {
               {data.results.map((p) => (
                 <tr key={p.id} className="border-b border-line last:border-0 hover:bg-surface-100">
                   <td className="px-4 py-2.5">
-                    <div className="font-medium">{p.generic_name}</div>
+                    <Link to={`/products/${p.id}`} className="font-medium text-ink-900 hover:text-brand-700 hover:underline">
+                      {p.generic_name}
+                    </Link>
                     {p.brand_name && <div className="text-xs text-ink-500">{p.brand_name}</div>}
                   </td>
                   <td className="px-4 py-2.5 text-ink-700">{p.dosage_form}</td>
