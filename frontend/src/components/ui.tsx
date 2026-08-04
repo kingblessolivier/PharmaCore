@@ -127,6 +127,41 @@ export function Modal({
   );
 }
 
+export function ConfirmModal({
+  title,
+  message,
+  confirmLabel = "Delete",
+  busy = false,
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  busy?: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal title={title} onClose={onClose}>
+      <p className="mb-5 text-sm text-ink-700">{message}</p>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onClose}>
+          Cancel
+        </Button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={busy}
+          className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-40"
+        >
+          {busy ? "Working…" : confirmLabel}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 export function PageHeader({ title, action }: { title: string; action?: ReactNode }) {
   return (
     <div className="mb-4 flex items-center justify-between">

@@ -80,6 +80,26 @@ def test_department_unique_per_org(sys_admin: User, retail: Organization) -> Non
 
 
 @pytest.mark.django_db
-def test_no_hard_delete_of_org(sys_admin: User, retail: Organization) -> None:
+def test_admin_can_update_org(sys_admin: User, retail: Organization) -> None:
+    resp = _auth(sys_admin).patch(
+        f"/api/organizations/{retail.pk}/", {"tin": "999888777"}, format="json"
+    )
+    assert resp.status_code == 200
+    retail.refresh_from_db()
+    assert retail.tin == "999888777"
+    assert AuditLog.objects.filter(action="UPDATE", entity_type="organization").exists()
+
+
+@pytest.mark.django_db
+def test_admin_can_delete_org(sys_admin: User, retail: Organization) -> None:
     resp = _auth(sys_admin).delete(f"/api/organizations/{retail.pk}/")
-    assert resp.status_code == 405  # method not allowed — deactivate via PATCH instead
+    assert resp.status_code == 204
+    assert not Organization.objects.filter(pk=retail.pk).exists()
+    assert AuditLog.objects.filter(action="DELETE", entity_type="organization").exists()
+
+
+@pytest.mark.django_db
+def test_non_admin_cannot_delete_org(branch_user: User, retail: Organization) -> None:
+    resp = _auth(branch_user).delete(f"/api/organizations/{retail.pk}/")
+    assert resp.status_code == 403
+    assert Organization.objects.filter(pk=retail.pk).exists()
