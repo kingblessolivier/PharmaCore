@@ -347,6 +347,23 @@ export interface PharmacyProduct {
   created_at: string;
 }
 
+export interface DashboardSummary {
+  sales_today: { count: number; total: number };
+  low_stock: {
+    count: number;
+    items: { product: string; organization: string; on_hand: number; min: number }[];
+  };
+  expiring_soon: { count: number; units: number };
+  expired: { count: number; units: number };
+  pending_approvals: number;
+  awaiting_receipt: number;
+  in_transit_units: number;
+  receivable_due: number;
+  payable_due: number;
+  licences_expiring: number;
+  org_count: number;
+}
+
 export type PaymentMethod = "CASH" | "MOBILE_MONEY" | "CARD";
 export type SaleStatus = "OPEN" | "COMPLETED" | "VOIDED";
 
