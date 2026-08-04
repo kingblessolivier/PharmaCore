@@ -340,6 +340,7 @@ export interface PharmacyProduct {
   requires_prescription: boolean;
   is_controlled: boolean;
   on_hand: number;
+  avg_cost: string | null;
   retail_price: string | null;
   wholesale_price: string | null;
   min_stock_level: number;

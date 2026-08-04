@@ -58,9 +58,12 @@ function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | nul
     queryFn: () =>
       api<Paginated<PharmacyProduct>>(`/api/inventory/pharmacy-products/?organization=${depot}`),
   });
-  const depots = (orgs.data?.results ?? []).filter((o) => o.type === "DEPOT");
-  const retails = (orgs.data?.results ?? []).filter((o) => o.type === "RETAIL");
-  // Only sellable listings: active with a wholesale price set.
+  // Any active branch can supply (source) or receive (destination) — this covers
+  // depot→retail and branch↔branch transfers alike. A branch can't ship to itself.
+  const allOrgs = (orgs.data?.results ?? []).filter((o) => o.is_active);
+  const depots = allOrgs;
+  const retails = allOrgs.filter((o) => String(o.id) !== depot);
+  // Only sellable listings: active with a wholesale (transfer) price set.
   const offered = (listings.data?.results ?? []).filter(
     (l) => l.is_active && l.wholesale_price !== null,
   );
@@ -135,13 +138,13 @@ function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | nul
     <Modal title="New purchase order" onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
-          <SelectField label="From depot" value={depot} onChange={(e) => changeDepot(e.target.value)}>
+          <SelectField label="From (supplying branch)" value={depot} onChange={(e) => changeDepot(e.target.value)}>
             <option value="">— select —</option>
-            {depots.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            {depots.map((d) => <option key={d.id} value={d.id}>{d.name} · {d.type}</option>)}
           </SelectField>
-          <SelectField label="For pharmacy" value={retail} onChange={(e) => setRetail(e.target.value)}>
+          <SelectField label="To (receiving branch)" value={retail} onChange={(e) => setRetail(e.target.value)}>
             <option value="">— select —</option>
-            {retails.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            {retails.map((r) => <option key={r.id} value={r.id}>{r.name} · {r.type}</option>)}
           </SelectField>
         </div>
 
@@ -335,7 +338,7 @@ export function OrdersPage() {
             <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
               <tr>
                 <th className="px-4 py-2.5">Order</th>
-                <th className="px-4 py-2.5">Pharmacy → Depot</th>
+                <th className="px-4 py-2.5">From → To</th>
                 <th className="px-4 py-2.5">Status</th>
                 <th className="px-4 py-2.5 text-right">Total (RWF)</th>
                 <th className="px-4 py-2.5">Payment</th>
@@ -346,7 +349,7 @@ export function OrdersPage() {
               {data.results.map((o) => (
                 <tr key={o.id} className="border-b border-line last:border-0 hover:bg-surface-100">
                   <td className="px-4 py-2.5 font-mono font-medium">{o.order_number}</td>
-                  <td className="px-4 py-2.5 text-ink-700">{o.retail_name} → {o.depot_name}</td>
+                  <td className="px-4 py-2.5 text-ink-700">{o.depot_name} → {o.retail_name}</td>
                   <td className="px-4 py-2.5">
                     <StatusBadge status={o.status} />
                     {o.status === "IN_TRANSIT" && o.in_transit.length > 0 && (

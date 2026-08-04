@@ -147,3 +147,27 @@ def test_depot_sees_incoming_order(depot, retail, product, retail_user, offered)
     depot_user.roles.add(Role.objects.get(code="ORG_ADMIN"))
     resp = _auth(depot_user).get("/api/distribution/orders/")
     assert resp.json()["count"] == 1  # depot sees the incoming order
+
+
+@pytest.mark.django_db
+def test_inter_branch_transfer_between_two_retails(product) -> None:
+    """A branch can source from another branch, not just a depot."""
+    from apps.inventory.models import PharmacyProduct
+
+    source = Organization.objects.create(name="Branch A", type=Organization.OrgType.RETAIL)
+    dest = Organization.objects.create(name="Branch B", type=Organization.OrgType.RETAIL)
+    PharmacyProduct.objects.create(organization=source, product=product, wholesale_price="12.00")
+    buyer = User.objects.create_user(username="bmgr", password="x", organization=dest)
+    buyer.roles.add(Role.objects.get(code="ORG_ADMIN"))
+
+    resp = _auth(buyer).post(
+        "/api/distribution/orders/",
+        {
+            "depot": source.pk,
+            "retail": dest.pk,
+            "items": [{"product": product.pk, "quantity_ordered": 5}],
+        },
+        format="json",
+    )
+    assert resp.status_code == 201, resp.content
+    assert resp.json()["total_amount"] == 60.0
