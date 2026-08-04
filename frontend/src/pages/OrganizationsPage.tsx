@@ -1,85 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2 } from "lucide-react";
-import { useState, type FormEvent } from "react";
-import {
-  Badge,
-  Button,
-  ConfirmModal,
-  Modal,
-  PageHeader,
-  SelectField,
-  Spinner,
-  TextField,
-} from "../components/ui";
-import { api, ApiError } from "../lib/api";
+import { Plus, Settings2, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { OrganizationForm } from "../components/OrganizationForm";
+import { Badge, Button, ConfirmModal, Modal, PageHeader, Spinner } from "../components/ui";
+import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { isAdmin } from "../lib/roles";
-import type { Organization, OrgType, Paginated } from "../lib/types";
-
-function OrgFormModal({ org, onClose }: { org?: Organization; onClose: () => void }) {
-  const qc = useQueryClient();
-  const editing = Boolean(org);
-  const [name, setName] = useState(org?.name ?? "");
-  const [type, setType] = useState<OrgType>(org?.type ?? "RETAIL");
-  const [tin, setTin] = useState(org?.tin ?? "");
-  const [phone, setPhone] = useState(org?.phone ?? "");
-  const [error, setError] = useState<string | null>(null);
-
-  const mutation = useMutation({
-    mutationFn: () =>
-      api<Organization>(editing ? `/api/organizations/${org!.id}/` : "/api/organizations/", {
-        method: editing ? "PATCH" : "POST",
-        body: JSON.stringify({ name, type, tin, phone }),
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["organizations"] });
-      onClose();
-    },
-    onError: (err) => {
-      setError(
-        err instanceof ApiError && err.status === 403
-          ? "You don't have permission to do that."
-          : "Could not save the organization.",
-      );
-    },
-  });
-
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    mutation.mutate();
-  }
-
-  return (
-    <Modal title={editing ? "Edit organization" : "New organization"} onClose={onClose}>
-      <form onSubmit={submit} className="flex flex-col gap-4">
-        <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
-        <SelectField label="Type" value={type} onChange={(e) => setType(e.target.value as OrgType)}>
-          <option value="DEPOT">Depot</option>
-          <option value="RETAIL">Retail</option>
-          <option value="HQ">HQ</option>
-        </SelectField>
-        <TextField label="TIN" value={tin} onChange={(e) => setTin(e.target.value)} />
-        <TextField label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={mutation.isPending}>
-            {mutation.isPending ? "Saving…" : editing ? "Save changes" : "Create"}
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
+import type { Organization, Paginated } from "../lib/types";
 
 export function OrganizationsPage() {
   const { user } = useAuth();
   const admin = isAdmin(user);
   const qc = useQueryClient();
-  const [editing, setEditing] = useState<Organization | null>(null);
+  const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Organization | null>(null);
 
@@ -103,7 +37,7 @@ export function OrganizationsPage() {
         action={
           admin && (
             <Button onClick={() => setCreating(true)}>
-              <Plus className="h-4 w-4" /> New organization
+              <Plus className="h-4 w-4" /> Register organization
             </Button>
           )
         }
@@ -124,8 +58,9 @@ export function OrganizationsPage() {
                 <th className="px-4 py-2.5">Name</th>
                 <th className="px-4 py-2.5">Type</th>
                 <th className="px-4 py-2.5">TIN</th>
+                <th className="px-4 py-2.5">District</th>
                 <th className="px-4 py-2.5">Status</th>
-                {admin && <th className="px-4 py-2.5 text-right">Actions</th>}
+                <th className="px-4 py-2.5 text-right">Manage</th>
               </tr>
             </thead>
             <tbody>
@@ -136,6 +71,7 @@ export function OrganizationsPage() {
                     <Badge tone={o.type === "DEPOT" ? "depot" : "retail"}>{o.type}</Badge>
                   </td>
                   <td className="px-4 py-2.5 font-mono text-ink-700">{o.tin || "—"}</td>
+                  <td className="px-4 py-2.5 text-ink-700">{o.district || "—"}</td>
                   <td className="px-4 py-2.5">
                     {o.is_active ? (
                       <span className="text-green-700">Active</span>
@@ -143,16 +79,12 @@ export function OrganizationsPage() {
                       <span className="text-ink-500">Inactive</span>
                     )}
                   </td>
-                  {admin && (
-                    <td className="px-4 py-2.5">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          onClick={() => setEditing(o)}
-                          className="rounded-md p-1.5 text-ink-500 hover:bg-surface-100 hover:text-ink-900"
-                          aria-label={`Edit ${o.name}`}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
+                  <td className="px-4 py-2.5">
+                    <div className="flex justify-end gap-1">
+                      <Button variant="secondary" onClick={() => navigate(`/organizations/${o.id}`)}>
+                        <Settings2 className="h-4 w-4" /> Manage
+                      </Button>
+                      {admin && (
                         <button
                           onClick={() => setDeleting(o)}
                           className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
@@ -160,14 +92,14 @@ export function OrganizationsPage() {
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
-                      </div>
-                    </td>
-                  )}
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
               {data.results.length === 0 && (
                 <tr>
-                  <td colSpan={admin ? 5 : 4} className="px-4 py-8 text-center text-ink-500">
+                  <td colSpan={6} className="px-4 py-8 text-center text-ink-500">
                     No organizations yet.
                   </td>
                 </tr>
@@ -177,8 +109,17 @@ export function OrganizationsPage() {
         </div>
       )}
 
-      {creating && <OrgFormModal onClose={() => setCreating(false)} />}
-      {editing && <OrgFormModal org={editing} onClose={() => setEditing(null)} />}
+      {creating && (
+        <Modal title="Register organization" onClose={() => setCreating(false)}>
+          <OrganizationForm
+            onDone={(o) => {
+              setCreating(false);
+              navigate(`/organizations/${o.id}`);
+            }}
+            onCancel={() => setCreating(false)}
+          />
+        </Modal>
+      )}
       {deleting && (
         <ConfirmModal
           title="Delete organization"

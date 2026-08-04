@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "./lib/auth";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DepartmentsPage } from "./pages/DepartmentsPage";
 import { LoginPage } from "./pages/LoginPage";
+import { OrganizationDetailPage } from "./pages/OrganizationDetailPage";
 import { OrganizationsPage } from "./pages/OrganizationsPage";
 import { ProductsPage } from "./pages/ProductsPage";
 
@@ -35,6 +36,7 @@ function App() {
             <Route element={<Protected />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/organizations" element={<OrganizationsPage />} />
+              <Route path="/organizations/:id" element={<OrganizationDetailPage />} />
               <Route path="/departments" element={<DepartmentsPage />} />
               <Route path="/products" element={<ProductsPage />} />
             </Route>
