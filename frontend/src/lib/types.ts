@@ -162,6 +162,35 @@ export interface DocumentRecord {
   download_url: string;
 }
 
+export interface Comment {
+  id: number;
+  organization: number | null;
+  entity_type: string;
+  entity_id: string;
+  parent: number | null;
+  author_name: string | null;
+  body: string;
+  is_edited: boolean;
+  is_struck: boolean;
+  created_at: string;
+}
+
+export interface AppNotification {
+  id: number;
+  type: string;
+  title: string;
+  body: string;
+  link_entity_type: string;
+  link_entity_id: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface MentionableUser {
+  id: number;
+  username: string;
+}
+
 export type TaxClass = "A" | "B" | "C" | "D";
 
 export interface Product {

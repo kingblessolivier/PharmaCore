@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Bell,
   Building2,
   ChevronDown,
   ClipboardList,
@@ -16,7 +17,7 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import type { Organization, Paginated } from "../lib/types";
+import type { AppNotification, Organization, Paginated } from "../lib/types";
 import { CommandPalette } from "./CommandPalette";
 
 function BrandMark() {
@@ -85,6 +86,89 @@ function OrgSwitcher() {
   );
 }
 
+function NotificationsBell() {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const unread = useQuery({
+    queryKey: ["notif-unread"],
+    queryFn: () => api<{ count: number }>("/api/workspace/notifications/unread-count/"),
+    refetchInterval: 30000,
+  });
+  const list = useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => api<Paginated<AppNotification>>("/api/workspace/notifications/"),
+    enabled: open,
+  });
+  const markAll = useMutation({
+    mutationFn: () => api<void>("/api/workspace/notifications/mark-all-read/", { method: "POST" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["notif-unread"] });
+      void qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  const count = unread.data?.count ?? 0;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="relative rounded-md p-1.5 text-ink-600 hover:bg-surface-100"
+        aria-label="Notifications"
+      >
+        <Bell className="h-4.5 w-4.5" />
+        {count > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
+            {count}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-10 z-50 w-80 overflow-hidden rounded-lg border border-line bg-surface-0 shadow-lg">
+          <div className="flex items-center justify-between border-b border-line px-3 py-2">
+            <span className="text-sm font-semibold">Notifications</span>
+            {count > 0 && (
+              <button onClick={() => markAll.mutate()} className="text-xs text-brand-700 hover:underline">
+                Mark all read
+              </button>
+            )}
+          </div>
+          <ul className="max-h-80 overflow-y-auto">
+            {(list.data?.results ?? []).map((n) => (
+              <li key={n.id}>
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                    if (n.link_entity_type === "stock_order") navigate("/orders");
+                  }}
+                  className={`flex w-full flex-col items-start gap-0.5 border-b border-line px-3 py-2 text-left hover:bg-surface-100 ${n.is_read ? "" : "bg-brand-50/40"}`}
+                >
+                  <span className="text-sm font-medium text-ink-900">{n.title}</span>
+                  {n.body && <span className="line-clamp-2 text-xs text-ink-500">{n.body}</span>}
+                </button>
+              </li>
+            ))}
+            {list.data?.results.length === 0 && (
+              <li className="px-3 py-6 text-center text-sm text-ink-500">No notifications.</li>
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/organizations", label: "Organizations", icon: Building2, end: false },
@@ -126,6 +210,7 @@ export function AppShell() {
           <kbd className="rounded border border-line px-1 font-mono text-[10px]">⌘K</kbd>
         </button>
         <div className="ml-auto flex items-center gap-3">
+          <NotificationsBell />
           <div className="flex items-center gap-2 text-sm">
             <Users className="h-4 w-4 text-ink-500" />
             <span className="font-medium">{user?.username}</span>
