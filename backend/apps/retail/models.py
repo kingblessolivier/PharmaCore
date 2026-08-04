@@ -84,6 +84,7 @@ class SaleItem(models.Model):
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField()
+    returned_quantity = models.PositiveIntegerField(default=0)  # units given back by the customer
     unit_price = models.DecimalField(max_digits=14, decimal_places=2)  # VAT-inclusive snapshot
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # e.g. 18.00
 
@@ -92,6 +93,10 @@ class SaleItem(models.Model):
 
     def __str__(self) -> str:
         return f"{self.product} ×{self.quantity}"
+
+    @property
+    def returnable(self) -> int:
+        return self.quantity - self.returned_quantity
 
     @property
     def line_total(self) -> Decimal:
@@ -124,6 +129,41 @@ class SaleBatchAllocation(models.Model):
 
     def __str__(self) -> str:
         return f"{self.quantity} of {self.batch}"
+
+
+class SaleReturn(models.Model):
+    """A customer return against a completed sale — some or all items come back.
+
+    Stock goes back onto the shelf (a RETURN ledger movement) and the customer is
+    refunded; a credit note is issued. A sale can have several partial returns."""
+
+    return_number = models.CharField(max_length=30, unique=True, blank=True, default="")
+    sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="returns")
+    reason = models.CharField(max_length=255, blank=True, default="")
+    refund_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return self.return_number or f"RET#{self.pk}"
+
+
+class SaleReturnItem(models.Model):
+    sale_return = models.ForeignKey(SaleReturn, on_delete=models.CASCADE, related_name="items")
+    sale_item = models.ForeignKey(SaleItem, on_delete=models.PROTECT, related_name="return_items")
+    quantity = models.PositiveIntegerField()
+    refund_amount = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return f"{self.quantity}× {self.sale_item.product}"
 
 
 class Dispensing(models.Model):

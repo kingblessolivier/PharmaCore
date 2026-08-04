@@ -400,6 +400,7 @@ export interface SaleItem {
   product: number;
   product_name?: string;
   quantity: number;
+  returned_quantity?: number;
   unit_price?: string;
   tax_rate?: string;
   line_total?: string;

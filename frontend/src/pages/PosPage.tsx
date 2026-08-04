@@ -1,5 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Minus, Plus, Receipt, Search, ShieldAlert, ShoppingCart, Trash2, X } from "lucide-react";
+import {
+  Minus,
+  Plus,
+  Receipt,
+  RotateCcw,
+  Search,
+  ShieldAlert,
+  ShoppingCart,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
@@ -71,6 +81,8 @@ export function PosPage() {
   const [tendered, setTendered] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [lastSale, setLastSale] = useState<Sale | null>(null);
+  const [salesOpen, setSalesOpen] = useState(false);
+  const [returning, setReturning] = useState<Sale | null>(null);
 
   const listings = useQuery({
     queryKey: ["pos-listings", orgId],
@@ -214,7 +226,14 @@ export function PosPage() {
 
   return (
     <div>
-      <PageHeader title="Point of sale" />
+      <PageHeader
+        title="Point of sale"
+        action={
+          <Button variant="secondary" onClick={() => setSalesOpen(true)}>
+            <RotateCcw className="h-4 w-4" /> Sales &amp; returns
+          </Button>
+        }
+      />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px]">
         {/* Catalog */}
         <div>
@@ -425,8 +444,156 @@ export function PosPage() {
           onClose={() => setDispensingOpen(false)}
         />
       )}
-      {lastSale && <SaleReceiptModal sale={lastSale} onClose={() => setLastSale(null)} />}
+      {lastSale && (
+        <SaleReceiptModal
+          sale={lastSale}
+          onClose={() => setLastSale(null)}
+          onReturn={() => {
+            setReturning(lastSale);
+            setLastSale(null);
+          }}
+        />
+      )}
+      {salesOpen && orgId && (
+        <RecentSalesModal
+          orgId={orgId}
+          onReturn={(s) => {
+            setSalesOpen(false);
+            setReturning(s);
+          }}
+          onClose={() => setSalesOpen(false)}
+        />
+      )}
+      {returning && <ReturnModal sale={returning} onClose={() => setReturning(null)} />}
     </div>
+  );
+}
+
+function RecentSalesModal({
+  orgId,
+  onReturn,
+  onClose,
+}: {
+  orgId: number;
+  onReturn: (s: Sale) => void;
+  onClose: () => void;
+}) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["recent-sales", orgId],
+    queryFn: () =>
+      api<Paginated<Sale>>(`/api/retail/sales/?organization=${orgId}&status=COMPLETED`),
+  });
+  return (
+    <Modal title="Recent sales" onClose={onClose}>
+      {isLoading && (
+        <div className="flex justify-center py-6">
+          <Spinner />
+        </div>
+      )}
+      <div className="max-h-[60vh] overflow-y-auto">
+        {(data?.results ?? []).map((s) => (
+          <div
+            key={s.id}
+            className="flex items-center justify-between border-b border-line py-2 last:border-0"
+          >
+            <div>
+              <div className="font-mono text-sm">{s.sale_number}</div>
+              <div className="text-xs text-ink-500">
+                {new Date(s.created_at).toLocaleString()} · {money(Number(s.total))} RWF
+              </div>
+            </div>
+            <Button variant="secondary" onClick={() => onReturn(s)}>
+              <RotateCcw className="h-4 w-4" /> Return
+            </Button>
+          </div>
+        ))}
+        {data?.results.length === 0 && (
+          <p className="py-6 text-center text-sm text-ink-500">No completed sales yet.</p>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function ReturnModal({ sale, onClose }: { sale: Sale; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [qty, setQty] = useState<Record<number, number>>({});
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const returnable = sale.items.filter((it) => (it.quantity - (it.returned_quantity ?? 0)) > 0);
+
+  const refund = returnable.reduce(
+    (s, it) => s + (qty[it.id!] ?? 0) * Number(it.unit_price ?? 0),
+    0,
+  );
+
+  const doReturn = useMutation({
+    mutationFn: () =>
+      api<Sale>(`/api/retail/sales/${sale.id}/return/`, {
+        method: "POST",
+        body: JSON.stringify({
+          reason,
+          lines: returnable
+            .filter((it) => (qty[it.id!] ?? 0) > 0)
+            .map((it) => ({ sale_item: it.id, quantity: qty[it.id!] })),
+        }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["pos-batches", sale.organization] });
+      void qc.invalidateQueries({ queryKey: ["recent-sales", sale.organization] });
+      onClose();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not process return."),
+  });
+
+  return (
+    <Modal title={`Return · ${sale.sale_number}`} onClose={onClose}>
+      <div className="flex flex-col gap-4">
+        {returnable.length === 0 && (
+          <p className="text-sm text-ink-500">Everything on this sale has been returned.</p>
+        )}
+        {returnable.map((it) => {
+          const max = it.quantity - (it.returned_quantity ?? 0);
+          return (
+            <div key={it.id} className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">{it.product_name}</div>
+                <div className="text-xs text-ink-500">
+                  {max} returnable · {money(Number(it.unit_price))} each
+                </div>
+              </div>
+              <input
+                type="number"
+                min={0}
+                max={max}
+                value={qty[it.id!] ?? 0}
+                onChange={(e) =>
+                  setQty((q) => ({
+                    ...q,
+                    [it.id!]: Math.max(0, Math.min(max, Number(e.target.value))),
+                  }))
+                }
+                className="w-20 rounded-md border border-line bg-surface-0 px-2 py-1 text-right text-sm outline-none focus:border-brand-600"
+              />
+            </div>
+          );
+        })}
+        <TextField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. wrong item, damaged" />
+        <div className="flex items-baseline justify-between border-t border-line pt-2 text-sm">
+          <span className="text-ink-600">Refund</span>
+          <span className="font-mono text-lg font-semibold">{money(refund)} RWF</span>
+        </div>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={() => doReturn.mutate()} disabled={refund <= 0 || doReturn.isPending}>
+            {doReturn.isPending ? "Processing…" : `Refund ${money(refund)} RWF`}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -482,7 +649,15 @@ function DispensingModal({
   );
 }
 
-function SaleReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => void }) {
+function SaleReceiptModal({
+  sale,
+  onClose,
+  onReturn,
+}: {
+  sale: Sale;
+  onClose: () => void;
+  onReturn: () => void;
+}) {
   const qc = useQueryClient();
   const [voiding, setVoiding] = useState(false);
   const [reason, setReason] = useState("");
@@ -567,13 +742,16 @@ function SaleReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => void }
               </div>
             </div>
           ) : (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Link
                 to="/documents"
                 className="flex flex-1 items-center justify-center gap-2 rounded-md border border-line bg-surface-0 px-3 py-2 text-sm font-semibold text-ink-900 hover:bg-surface-100"
               >
                 <Receipt className="h-4 w-4" /> Receipt
               </Link>
+              <Button variant="secondary" className="flex-1" onClick={onReturn}>
+                <RotateCcw className="h-4 w-4" /> Return
+              </Button>
               <Button variant="secondary" className="flex-1" onClick={() => setVoiding(true)}>
                 Void sale
               </Button>

@@ -27,6 +27,7 @@ from apps.retail.services import (
     InsufficientStock,
     PharmacistRequired,
     complete_sale,
+    return_sale_items,
     void_sale,
 )
 
@@ -138,6 +139,40 @@ class SaleViewSet(viewsets.ModelViewSet):
         if not payments:
             raise ValidationError("Provide at least one payment.")
         self._complete(sale, payments, user, request)
+        sale.refresh_from_db()
+        return Response(SaleSerializer(sale).data)
+
+    @action(detail=True, methods=["post"], url_path="return")
+    def return_items(self, request: Request, pk: str | None = None) -> Response:
+        """Return some items from a completed sale — stock back, refund, credit note."""
+        sale = self.get_object()
+        user = cast(User, request.user)
+        _require_org_member(user, sale.organization)
+        raw = request.data.get("lines", [])
+        lines = [
+            {"sale_item": r["sale_item"], "quantity": r.get("quantity", 0)}
+            for r in raw
+            if isinstance(r, dict) and "sale_item" in r
+        ]
+        if not lines:
+            raise ValidationError("Select at least one item to return.")
+        try:
+            return_sale_items(
+                sale=sale,
+                lines=lines,
+                reason=str(request.data.get("reason", "")).strip(),
+                user=user,
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        record_audit(
+            action="SALE_RETURN",
+            user=user,
+            organization=sale.organization,
+            entity_type="sale",
+            entity_id=str(sale.pk),
+            request=request,
+        )
         sale.refresh_from_db()
         return Response(SaleSerializer(sale).data)
 
