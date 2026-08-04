@@ -42,6 +42,11 @@ The data foundation every module reads from, **and** the reusable UI it's render
       supplier intake, FEFO/expiry forecast, adjustments, wastage)
 **Design**
 - [ ] Finalize tokens in code (light/dark), iconography set, accessibility baseline (focus, contrast, keyboard)
+**Security (foundational — not deferred)**
+- [ ] Rate limiting (login/refresh + API throttles), security headers + HSTS + CSP,
+      CORS lockdown, `manage.py check --deploy` clean in CI
+- [ ] Expand logging to **security events** (login failures, permission denials, exports);
+      **field-level encryption** for national IDs + integration credentials (KMS)
 **Exit:** stock can be received, counted, and viewed at batch level with FEFO **in the UI**.
 
 ## Phase 2 — Distribution & Documents (B2B)  ⬜
@@ -127,8 +132,11 @@ Multi-insurer claims (ADR-002) + fiscalization (ADR-003).
 - **Design system:** apply & extend [docs/design](docs/design/README.md); no hardcoded colours/spacing.
 - **Testing:** unit→integration→e2e; coverage gate; compliance tests (immutability/audit) where relevant.
 - **Accessibility:** keyboard operable, visible focus, contrast ≥ 4.5:1, `prefers-reduced-motion`.
+- **Security:** activity & access logging (every action), deny-by-default RBAC, rate
+  limiting, encryption (transit/at-rest/field-level/device), hardening — every phase, per
+  [docs/08](docs/08-security-and-compliance.md).
 - **Compliance:** GDP immutability/audit, RRA rules, Rwanda FDA license tracking.
-- **CI/CD:** keep CI green; make `lint`/`test`/`build`/`migrations` **required** on merge once the runner is unblocked.
+- **CI/CD:** keep CI green; make `lint`/`test`/`build`/`migrations` + **dependency/SAST scans** **required** on merge once the runner is unblocked.
 - **Docs:** keep architecture, API, data model, design, and this roadmap current.
 
 ## Modules → phases

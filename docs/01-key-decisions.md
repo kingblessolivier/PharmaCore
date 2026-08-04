@@ -169,6 +169,36 @@ style). Only `notifications` (table) + the nav bell were captured; comms, notifi
 - Open items: chat depth, drug-interaction dataset, real-time transport (Channels vs SSE),
   SMS scope.
 
+## ADR-008 — Security & data-protection posture
+
+**Decision:** Security is a **cross-cutting property of every module**, not a late phase.
+We commit to: comprehensive **activity + access logging**, **rate limiting**, **deny-by-default
+RBAC** with tenant + object scoping, **encryption in transit (TLS 1.3) and at rest
+(AES-256)** plus **application-level field encryption** for the crown jewels (credentials,
+national IDs, sensitive patient data) with keys in a **KMS**, an **encrypted device DB**
+(SQLCipher), and platform hardening.
+
+**Status:** Accepted (2026-08-03)
+
+**Context:** The system handles medicine, money, patient data, and tax records — a breach
+or unauthorized entry is unacceptable. A stakeholder asked specifically for full activity
+logging, rate limiting, strong authN/authZ, data security, hardening, and "end-to-end
+encryption."
+
+**Key clarification — encryption:** true **zero-knowledge end-to-end encryption** (server
+cannot read the data) is **incompatible with an ERP**: the server must search inventory,
+adjudicate insurance, compute payroll, and report — it cannot operate on data it cannot
+decrypt. We therefore **do not claim zero-knowledge E2E**. Instead we encrypt on **every
+hop and at rest**, add **field-level encryption** for the most sensitive data, encrypt the
+offline device DB, hold keys in a KMS, and pair this with strict access control + full
+logging. This is the honest, achievable, correct posture.
+
+**Consequences:**
+- Foundational controls (rate limiting, security headers, security-event logging,
+  field-level encryption) land in **Phase 1**, not Phase 7 (roadmap updated).
+- Full detail + a hardening/go-live checklist: [08-security-and-compliance.md](08-security-and-compliance.md).
+- Dependency/SAST scans become **required** CI checks once the runner is unblocked.
+
 ## Still open (deferred, not yet decided)
 
 - Drug-interaction dataset: license clinical data vs. basic duplication check.
