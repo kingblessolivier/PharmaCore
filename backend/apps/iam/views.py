@@ -15,12 +15,13 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from apps.iam.audit import record_audit
-from apps.iam.models import AuditLog, Department, Organization, Role, User
+from apps.iam.models import AuditLog, Department, License, Organization, Role, User
 from apps.iam.permissions import CanManageOrg, IsAdminRole
 from apps.iam.scoping import organizations_visible_to
 from apps.iam.serializers import (
     AuditLogSerializer,
     DepartmentSerializer,
+    LicenseSerializer,
     OrganizationSerializer,
     RoleSerializer,
     UserAdminSerializer,
@@ -168,6 +169,57 @@ class RoleViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Role.objects.all()
     permission_classes = [IsAuthenticated]
     pagination_class = None
+
+
+class LicenseViewSet(viewsets.ModelViewSet):
+    """Org + staff licences, org-scoped; admin-gated writes, audited."""
+
+    serializer_class = LicenseSerializer
+    queryset = License.objects.select_related("user", "organization").all()
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_permissions(self) -> list[BasePermission]:
+        if self.action in {"create", "update", "partial_update", "destroy"}:
+            return [IsAuthenticated(), CanManageOrg()]
+        return [IsAuthenticated()]
+
+    def get_queryset(self) -> QuerySet[License]:
+        user = cast(User, self.request.user)
+        qs = License.objects.select_related("user").filter(
+            organization__in=organizations_visible_to(user)
+        )
+        org = self.request.query_params.get("organization")
+        if org:
+            qs = qs.filter(organization_id=org)
+        return qs
+
+    def _guard(self, serializer: BaseSerializer[Any]) -> None:
+        user = cast(User, self.request.user)
+        org = serializer.validated_data.get("organization")
+        if org and not organizations_visible_to(user).filter(pk=org.pk).exists():
+            raise PermissionDenied("You cannot manage licences for that organization.")
+
+    def _audit(self, action: str, obj: License) -> None:
+        record_audit(
+            action=action,
+            user=cast(User, self.request.user),
+            organization=obj.organization,
+            entity_type="license",
+            entity_id=str(obj.pk),
+            request=self.request,
+        )
+
+    def perform_create(self, serializer: BaseSerializer[Any]) -> None:
+        self._guard(serializer)
+        self._audit("CREATE", serializer.save())
+
+    def perform_update(self, serializer: BaseSerializer[Any]) -> None:
+        self._guard(serializer)
+        self._audit("UPDATE", serializer.save())
+
+    def perform_destroy(self, instance: License) -> None:
+        self._audit("DELETE", instance)
+        instance.delete()
 
 
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
