@@ -129,9 +129,9 @@ export function Modal({
   children: ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <Card className="w-full max-w-md shadow-xl">
-        <div className="flex items-center justify-between border-b border-line px-5 py-3">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4 sm:items-center">
+      <Card className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden shadow-xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3">
           <h2 className="text-base font-semibold text-ink-900">{title}</h2>
           <button
             onClick={onClose}
@@ -141,7 +141,7 @@ export function Modal({
             ✕
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="overflow-y-auto p-5">{children}</div>
       </Card>
     </div>
   );
