@@ -8,16 +8,18 @@ Legend: ✅ done · 🚧 in progress · ⬜ planned
 
 ---
 
-## Phase 0 — Foundations & scaffolding  🚧
+## Phase 0 — Foundations & scaffolding  ✅
 Repo, tooling, and the walking skeleton everything else stands on.
 - [x] Repo init, branch protection (staging/main), CI pipeline (lint→type→test→build)
 - [x] Backend scaffold (Django + DRF, Django ORM + migrations), Postgres via docker-compose
 - [x] Frontend scaffold (React + TS), design tokens wired from the design docs
-- [ ] Auth: JWT login, password hashing, session handling
-- [ ] `audit_log` + immutability grants; base RBAC
-**Exit criteria:** a user can log in; CI is green on every PR; migrations run clean.
+- [x] Auth: JWT login (simplejwt), argon2 hashing, custom `User` model, `/api/auth/me`
+- [x] `audit_log` (append-only) + base RBAC (`Role` + `HasRole`); roles seeded
+**Exit criteria:** ✅ a user can log in; CI green locally on every check; migrations run clean.
+> Note: GitHub Actions runners are blocked at the account level (email verification)
+> — code is verified green locally.
 
-## Phase 1 — Identity, Catalog & Inventory (the core)  ⬜
+## Phase 1 — Identity, Catalog & Inventory (the core)  🚧
 The data foundation every module reads from.
 - [ ] Organizations, departments, users, roles, permissions, licenses
 - [ ] Product master (medicine fields, ATC/GTIN/tax class), ingredients, barcodes

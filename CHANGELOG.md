@@ -35,6 +35,10 @@ Maintenance rules:
   health endpoint, tests, ruff/black/mypy/pytest-django, docker-compose, Django
   migrations); React + TypeScript + Vite frontend wired to the design tokens (Tailwind);
   GitHub Actions CI running backend and frontend checks.
+- **Phase 0 auth/audit/RBAC (`iam` app):** custom `User` model, JWT login via
+  djangorestframework-simplejwt (`/api/auth/login`, `/refresh`, `/me`), argon2 hashing; base RBAC
+  (`Role` + `HasRole` permission, roles seeded); append-only `AuditLog` with
+  model-level immutability. **Phase 0 complete.**
 
 ### Changed
 - UI scope set to **English only** (ADR-004); removed the bilingual/Kinyarwanda plan.

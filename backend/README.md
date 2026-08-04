@@ -15,6 +15,15 @@ python manage.py runserver         # http://127.0.0.1:8000/health
 ```
 API docs (Swagger UI): http://127.0.0.1:8000/api/docs/ · schema: `/api/schema/`.
 
+### Auth (JWT)
+```
+POST /api/auth/login     {username, password} -> {access, refresh}
+POST /api/auth/refresh   {refresh}             -> {access}
+GET  /api/auth/me        (Bearer access token) -> current user
+```
+Create a user: `python manage.py createsuperuser`. Base roles (SYS_ADMIN, PHARMACIST,
+CASHIER, …) are seeded by migration. Every login writes an append-only `AuditLog` row.
+
 For Postgres:
 ```bash
 docker compose up -d db redis
