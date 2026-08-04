@@ -22,13 +22,19 @@ export interface Organization {
   name: string;
   type: OrgType;
   tin: string;
+  registration_number: string;
   rwanda_fda_license_no: string;
   license_expiry_date: string | null;
+  contact_person: string;
   phone: string;
   email: string;
+  logo_url: string;
+  currency: string;
+  province: string;
   district: string;
   sector: string;
   cell: string;
+  village: string;
   address_line: string;
   latitude: string | null;
   longitude: string | null;
@@ -112,6 +118,21 @@ export interface OrderItem {
   line_total?: number;
 }
 
+export type OrderPaymentMethod =
+  | "CASH"
+  | "BANK_TRANSFER"
+  | "MOBILE_MONEY"
+  | "CHEQUE"
+  | "CREDIT";
+
+export interface OrderPayment {
+  id: number;
+  amount: string;
+  method: OrderPaymentMethod;
+  reference: string;
+  paid_at: string;
+}
+
 export interface StockOrder {
   id: number;
   order_number: string;
@@ -123,6 +144,11 @@ export interface StockOrder {
   expected_delivery: string | null;
   notes: string;
   total_amount: number;
+  payment_status: "UNPAID" | "PARTIAL" | "PAID";
+  amount_paid: string;
+  amount_due: number;
+  payment_due_date: string | null;
+  order_payments: OrderPayment[];
   items: OrderItem[];
   created_at: string;
 }
@@ -203,13 +229,18 @@ export interface Product {
   strength: string;
   pack_size: string;
   unit_of_measure: string;
+  units_per_pack: number;
+  route_of_administration: string;
   atc_code: string;
   gtin: string;
+  fda_registration_number: string;
   tax_class: TaxClass;
   requires_prescription: boolean;
   is_controlled_substance: boolean;
+  controlled_schedule: string;
   storage_condition: string;
   reorder_level: number;
+  reorder_quantity: number;
   rra_item_code: string;
   image_url: string;
   leaflet_url: string;
@@ -274,6 +305,9 @@ export interface InventoryBatch {
   wholesale_cost: string | null;
   storage_location: string;
   status: string;
+  source_supplier: number | null;
+  source_org: number | null;
+  source_name: string | null;
   created_at: string;
 }
 

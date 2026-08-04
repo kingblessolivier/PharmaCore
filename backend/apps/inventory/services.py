@@ -28,9 +28,14 @@ def receive_intake(
     movement_type: str = StockMovement.Type.INTAKE,
     reference_type: str = "intake",
     reference_id: str = "",
+    source_supplier: object | None = None,
+    source_org: object | None = None,
 ) -> InventoryBatch:
     """Receive stock into an org: create/find the batch, add quantity, and append a
-    movement (INTAKE by default; TRANSFER_IN for a GRN). One transaction."""
+    movement (INTAKE by default; TRANSFER_IN for a GRN). One transaction.
+
+    ``source_supplier`` / ``source_org`` record where the lot came from (recall
+    traceability); they are set when the batch is first created."""
     batch, created = InventoryBatch.objects.select_for_update().get_or_create(
         organization=organization,
         product=product,
@@ -40,6 +45,8 @@ def receive_intake(
             "manufacture_date": manufacture_date,
             "wholesale_cost": wholesale_cost,
             "storage_location": storage_location,
+            "source_supplier": source_supplier,
+            "source_org": source_org,
         },
     )
     batch.quantity_available += quantity

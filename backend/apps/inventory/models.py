@@ -61,6 +61,22 @@ class InventoryBatch(models.Model):
     wholesale_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     storage_location = models.CharField(max_length=100, blank=True, default="")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+    # Where this lot came from — for recall traceability. A supplier (depot intake)
+    # or another organization (a depot it was transferred from).
+    source_supplier = models.ForeignKey(
+        "catalog.Supplier",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="supplied_batches",
+    )
+    source_org = models.ForeignKey(
+        "iam.Organization",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

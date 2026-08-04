@@ -43,13 +43,22 @@ class Organization(models.Model):
     name = models.CharField(max_length=255)
     type = models.CharField(max_length=20, choices=OrgType.choices)
     tin = models.CharField(max_length=20, blank=True, default="")  # RRA taxpayer id
+    registration_number = models.CharField(
+        max_length=100, blank=True, default=""
+    )  # RDB company reg
     rwanda_fda_license_no = models.CharField(max_length=100, blank=True, default="")
     license_expiry_date = models.DateField(null=True, blank=True)
+    contact_person = models.CharField(max_length=150, blank=True, default="")
     phone = models.CharField(max_length=20, blank=True, default="")
     email = models.EmailField(blank=True, default="")
+    logo_url = models.URLField(blank=True, default="")
+    currency = models.CharField(max_length=3, default="RWF")
+    # Rwanda administrative hierarchy: Province › District › Sector › Cell › Village.
+    province = models.CharField(max_length=100, blank=True, default="")
     district = models.CharField(max_length=100, blank=True, default="")
     sector = models.CharField(max_length=100, blank=True, default="")
     cell = models.CharField(max_length=100, blank=True, default="")
+    village = models.CharField(max_length=100, blank=True, default="")
     address_line = models.TextField(blank=True, default="")
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)

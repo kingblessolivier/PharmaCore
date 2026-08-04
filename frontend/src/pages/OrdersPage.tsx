@@ -10,6 +10,7 @@ import type {
   Me,
   Organization,
   OrderItem,
+  OrderPaymentMethod,
   Paginated,
   PharmacyProduct,
   StockOrder,
@@ -220,11 +221,94 @@ function canRetailAct(user: Me | null, order: StockOrder): boolean {
   return isAdmin(user) || user.organization === order.retail;
 }
 
+function isParty(user: Me | null, order: StockOrder): boolean {
+  if (!user) return false;
+  return isAdmin(user) || user.organization === order.depot || user.organization === order.retail;
+}
+
+const PAY_TONE: Record<string, string> = {
+  UNPAID: "bg-red-50 text-red-700",
+  PARTIAL: "bg-amber-50 text-amber-700",
+  PAID: "bg-green-50 text-green-700",
+};
+
+const PAY_METHODS: { value: OrderPaymentMethod; label: string }[] = [
+  { value: "BANK_TRANSFER", label: "Bank transfer" },
+  { value: "MOBILE_MONEY", label: "Mobile money" },
+  { value: "CASH", label: "Cash" },
+  { value: "CHEQUE", label: "Cheque" },
+  { value: "CREDIT", label: "On credit" },
+];
+
+function PaymentModal({ order, onClose }: { order: StockOrder; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [amount, setAmount] = useState(String(order.amount_due));
+  const [method, setMethod] = useState<OrderPaymentMethod>("BANK_TRANSFER");
+  const [reference, setReference] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const pay = useMutation({
+    mutationFn: () =>
+      api<StockOrder>(`/api/distribution/orders/${order.id}/record-payment/`, {
+        method: "POST",
+        body: JSON.stringify({ amount, method, reference }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["orders"] });
+      onClose();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not record payment."),
+  });
+
+  return (
+    <Modal title={`Record payment · ${order.order_number}`} onClose={onClose}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          setError(null);
+          pay.mutate();
+        }}
+        className="flex flex-col gap-4"
+      >
+        <div className="rounded-md bg-surface-100 p-3 text-sm">
+          <div className="flex justify-between">
+            <span className="text-ink-500">Order total</span>
+            <span className="font-mono">{order.total_amount.toLocaleString()} RWF</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-ink-500">Already paid</span>
+            <span className="font-mono">{Number(order.amount_paid).toLocaleString()} RWF</span>
+          </div>
+          <div className="flex justify-between font-semibold">
+            <span>Amount due</span>
+            <span className="font-mono">{order.amount_due.toLocaleString()} RWF</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <TextField label="Amount (RWF)" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+          <SelectField label="Method" value={method} onChange={(e) => setMethod(e.target.value as OrderPaymentMethod)}>
+            {PAY_METHODS.map((m) => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </SelectField>
+        </div>
+        <TextField label="Reference (txn / cheque no.)" value={reference} onChange={(e) => setReference(e.target.value)} />
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit" disabled={pay.isPending}>{pay.isPending ? "Saving…" : "Record payment"}</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 export function OrdersPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [discussing, setDiscussing] = useState<StockOrder | null>(null);
+  const [paying, setPaying] = useState<StockOrder | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const { data, isLoading } = useQuery({ queryKey: ["orders"], queryFn: () => api<Paginated<StockOrder>>("/api/distribution/orders/") });
 
@@ -254,6 +338,7 @@ export function OrdersPage() {
                 <th className="px-4 py-2.5">Pharmacy → Depot</th>
                 <th className="px-4 py-2.5">Status</th>
                 <th className="px-4 py-2.5 text-right">Total (RWF)</th>
+                <th className="px-4 py-2.5">Payment</th>
                 <th className="px-4 py-2.5 text-right">Actions</th>
               </tr>
             </thead>
@@ -265,12 +350,23 @@ export function OrdersPage() {
                   <td className="px-4 py-2.5"><StatusBadge status={o.status} /></td>
                   <td className="px-4 py-2.5 text-right font-mono">{o.total_amount.toLocaleString()}</td>
                   <td className="px-4 py-2.5">
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${PAY_TONE[o.payment_status] ?? ""}`}>
+                      {o.payment_status === "PAID" ? "Paid" : o.payment_status === "PARTIAL" ? "Partial" : "Unpaid"}
+                    </span>
+                    {o.amount_due > 0 && (
+                      <div className="mt-0.5 font-mono text-xs text-ink-500">{o.amount_due.toLocaleString()} due</div>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5">
                     <div className="flex justify-end gap-1">
                       {o.status === "PENDING" && canDepotAct(user, o) && (
                         <Button variant="secondary" onClick={() => act.mutate({ id: o.id, action: "approve" })} disabled={act.isPending}>Approve &amp; send</Button>
                       )}
                       {o.status === "IN_TRANSIT" && canRetailAct(user, o) && (
                         <Button variant="secondary" onClick={() => act.mutate({ id: o.id, action: "receive" })} disabled={act.isPending}>Receive</Button>
+                      )}
+                      {o.payment_status !== "PAID" && o.status !== "CANCELLED" && o.status !== "DRAFT" && isParty(user, o) && (
+                        <Button variant="secondary" onClick={() => setPaying(o)}>Record payment</Button>
                       )}
                       {["DRAFT", "PENDING"].includes(o.status) && (
                         <Button variant="ghost" onClick={() => act.mutate({ id: o.id, action: "cancel" })}>Cancel</Button>
@@ -283,13 +379,14 @@ export function OrdersPage() {
                 </tr>
               ))}
               {data.results.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-ink-500">No orders yet.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-ink-500">No orders yet.</td></tr>
               )}
             </tbody>
           </table>
         </div>
       )}
       {creating && <NewOrderModal defaultRetail={user?.organization ?? null} onClose={() => setCreating(false)} />}
+      {paying && <PaymentModal order={paying} onClose={() => setPaying(null)} />}
       {discussing && (
         <Modal title={`Discuss ${discussing.order_number}`} onClose={() => setDiscussing(null)}>
           <Comments entityType="stock_order" entityId={discussing.id} organization={discussing.retail} />

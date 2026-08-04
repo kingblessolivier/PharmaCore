@@ -193,6 +193,7 @@ class IntakeView(APIView):
             wholesale_cost=data.get("wholesale_cost"),
             storage_location=data.get("storage_location", ""),
             user=actor,
+            source_supplier=data.get("supplier"),
         )
         record_audit(
             action="INTAKE",

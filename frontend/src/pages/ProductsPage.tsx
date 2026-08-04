@@ -41,16 +41,36 @@ interface ProductForm {
   dosage_form: string;
   strength: string;
   pack_size: string;
+  units_per_pack: number;
+  route_of_administration: string;
+  fda_registration_number: string;
   tax_class: TaxClass;
   storage_condition: string;
   requires_prescription: boolean;
+  is_controlled_substance: boolean;
+  controlled_schedule: string;
   reorder_level: number;
+  reorder_quantity: number;
   rra_item_code: string;
   image_url: string;
   leaflet_url: string;
   min_temp_c: string;
   max_temp_c: string;
 }
+
+const ROUTES = [
+  "",
+  "ORAL",
+  "IV",
+  "IM",
+  "SUBCUTANEOUS",
+  "TOPICAL",
+  "INHALATION",
+  "OPHTHALMIC",
+  "NASAL",
+  "RECTAL",
+  "OTHER",
+];
 
 function ProductFormModal({ product, onClose }: { product?: Product; onClose: () => void }) {
   const qc = useQueryClient();
@@ -61,10 +81,16 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
     dosage_form: product?.dosage_form ?? "TABLET",
     strength: product?.strength ?? "",
     pack_size: product?.pack_size ?? "",
+    units_per_pack: product?.units_per_pack ?? 1,
+    route_of_administration: product?.route_of_administration ?? "",
+    fda_registration_number: product?.fda_registration_number ?? "",
     tax_class: product?.tax_class ?? "B",
     storage_condition: product?.storage_condition ?? "AMBIENT",
     requires_prescription: product?.requires_prescription ?? false,
+    is_controlled_substance: product?.is_controlled_substance ?? false,
+    controlled_schedule: product?.controlled_schedule ?? "",
     reorder_level: product?.reorder_level ?? 0,
+    reorder_quantity: product?.reorder_quantity ?? 0,
     rra_item_code: product?.rra_item_code ?? "",
     image_url: product?.image_url ?? "",
     leaflet_url: product?.leaflet_url ?? "",
@@ -168,13 +194,45 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
             ))}
           </SelectField>
         </div>
-        <div className="grid grid-cols-2 items-end gap-3">
+        <div className="grid grid-cols-2 gap-3">
+          <SelectField
+            label="Route of administration"
+            value={form.route_of_administration}
+            onChange={(e) => set("route_of_administration", e.target.value)}
+          >
+            {ROUTES.map((r) => (
+              <option key={r} value={r}>
+                {r || "—"}
+              </option>
+            ))}
+          </SelectField>
+          <TextField
+            label="Units per pack"
+            type="number"
+            value={String(form.units_per_pack)}
+            onChange={(e) => set("units_per_pack", Number(e.target.value))}
+          />
+        </div>
+        <TextField
+          label="Rwanda FDA registration no."
+          value={form.fda_registration_number}
+          onChange={(e) => set("fda_registration_number", e.target.value)}
+        />
+        <div className="grid grid-cols-2 gap-3">
           <TextField
             label="Reorder level"
             type="number"
             value={String(form.reorder_level)}
             onChange={(e) => set("reorder_level", Number(e.target.value))}
           />
+          <TextField
+            label="Reorder quantity"
+            type="number"
+            value={String(form.reorder_quantity)}
+            onChange={(e) => set("reorder_quantity", Number(e.target.value))}
+          />
+        </div>
+        <div className="grid grid-cols-2 items-center gap-3">
           <label className="flex items-center gap-2 py-2 text-sm text-ink-700">
             <input
               type="checkbox"
@@ -183,7 +241,23 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
             />
             Prescription required
           </label>
+          <label className="flex items-center gap-2 py-2 text-sm text-ink-700">
+            <input
+              type="checkbox"
+              checked={form.is_controlled_substance}
+              onChange={(e) => set("is_controlled_substance", e.target.checked)}
+            />
+            Controlled substance
+          </label>
         </div>
+        {form.is_controlled_substance && (
+          <TextField
+            label="Controlled schedule"
+            value={form.controlled_schedule}
+            onChange={(e) => set("controlled_schedule", e.target.value)}
+            placeholder="e.g. Schedule 2"
+          />
+        )}
         <div className="grid grid-cols-2 gap-3">
           <TextField
             label="Pack size"

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any
 
 from django.db import transaction
@@ -18,6 +19,7 @@ from apps.distribution.models import (
     GoodsReceivedNote,
     GRNLine,
     OrderItem,
+    OrderPayment,
     Reservation,
     Shipment,
     ShipmentItem,
@@ -250,6 +252,28 @@ def dispatch_order(
 
 
 @transaction.atomic
+def record_order_payment(
+    *, order: StockOrder, amount: Any, method: str, reference: str, user: User | None
+) -> StockOrder:
+    """Record a payment the pharmacy made to the wholesaler and roll up the order's
+    settlement status (UNPAID → PARTIAL → PAID)."""
+    amt = Decimal(str(amount))
+    if amt <= 0:
+        raise ValueError("Payment amount must be positive.")
+    OrderPayment.objects.create(
+        order=order, amount=amt, method=method, reference=reference, recorded_by=user
+    )
+    order.amount_paid = order.amount_paid + amt
+    total = Decimal(str(order.total_amount))
+    if order.amount_paid >= total:
+        order.payment_status = StockOrder.PaymentStatus.PAID
+    elif order.amount_paid > 0:
+        order.payment_status = StockOrder.PaymentStatus.PARTIAL
+    order.save(update_fields=["amount_paid", "payment_status", "updated_at"])
+    return order
+
+
+@transaction.atomic
 def approve_and_ship(*, order: StockOrder, user: User | None) -> StockOrder:
     """Lean approval: the depot approves and the stock leaves in one step.
 
@@ -326,6 +350,7 @@ def finalize_grn(
                 movement_type=StockMovement.Type.TRANSFER_IN,
                 reference_type="grn",
                 reference_id=str(grn.pk),
+                source_org=grn.order.depot,  # recall traceability: which depot it came from
             )
         received_per_item[line.order_item_id] += line.quantity_received
         any_discrepancy = any_discrepancy or line.has_discrepancy

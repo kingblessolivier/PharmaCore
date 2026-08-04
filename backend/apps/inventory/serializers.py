@@ -4,7 +4,7 @@ from datetime import date
 
 from rest_framework import serializers
 
-from apps.catalog.models import Product
+from apps.catalog.models import Product, Supplier
 from apps.iam.models import Organization
 from apps.inventory.models import InventoryBatch, PharmacyProduct, StockMovement
 
@@ -72,6 +72,7 @@ class PharmacyProductSerializer(serializers.ModelSerializer):
 class InventoryBatchSerializer(serializers.ModelSerializer):
     product_name = serializers.SerializerMethodField()
     days_to_expiry = serializers.SerializerMethodField()
+    source_name = serializers.SerializerMethodField()
 
     class Meta:
         model = InventoryBatch
@@ -88,8 +89,20 @@ class InventoryBatchSerializer(serializers.ModelSerializer):
             "wholesale_cost",
             "storage_location",
             "status",
+            "source_supplier",
+            "source_org",
+            "source_name",
             "created_at",
         ]
+
+    def get_source_name(self, obj: InventoryBatch) -> str | None:
+        supplier = obj.source_supplier
+        if supplier is not None:
+            return supplier.name
+        org = obj.source_org
+        if org is not None:
+            return org.name
+        return None
 
     def get_product_name(self, obj: InventoryBatch) -> str:
         return f"{obj.product.generic_name} {obj.product.strength}".strip()
@@ -101,6 +114,9 @@ class InventoryBatchSerializer(serializers.ModelSerializer):
 class IntakeSerializer(serializers.Serializer):
     organization = serializers.PrimaryKeyRelatedField(queryset=Organization.objects.all())
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    supplier = serializers.PrimaryKeyRelatedField(
+        queryset=Supplier.objects.all(), required=False, allow_null=True
+    )
     batch_number = serializers.CharField(max_length=100)
     expiry_date = serializers.DateField()
     manufacture_date = serializers.DateField(required=False, allow_null=True)

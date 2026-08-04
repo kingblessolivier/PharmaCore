@@ -18,6 +18,7 @@ from apps.distribution.services import (
     approve_and_ship,
     generate_po_document,
     receive_all,
+    record_order_payment,
     release_order_reservations,
 )
 from apps.iam.audit import record_audit
@@ -155,6 +156,44 @@ class StockOrderViewSet(viewsets.ModelViewSet):
             organization=order.retail,
             entity_type="stock_order",
             entity_id=str(order.pk),
+            request=request,
+        )
+        order.refresh_from_db()
+        return Response(StockOrderSerializer(order).data)
+
+    @action(detail=True, methods=["post"], url_path="record-payment")
+    def record_payment(self, request: Request, pk: str | None = None) -> Response:
+        """Record a payment the pharmacy made to the wholesaler for this order.
+
+        Either party (buyer or seller) may record it; the order's settlement status
+        rolls up to UNPAID / PARTIAL / PAID.
+        """
+        order = self.get_object()
+        user = cast(User, request.user)
+        is_party = (
+            user.is_superuser
+            or user.has_role("SYS_ADMIN")
+            or user.organization_id in (order.depot_id, order.retail_id)
+        )
+        if not is_party:
+            raise PermissionDenied("Only the buyer or the wholesaler can record a payment.")
+        try:
+            record_order_payment(
+                order=order,
+                amount=request.data.get("amount", 0),
+                method=str(request.data.get("method", "BANK_TRANSFER")),
+                reference=str(request.data.get("reference", "")),
+                user=user,
+            )
+        except (ValueError, ArithmeticError) as exc:
+            raise ValidationError(str(exc)) from exc
+        record_audit(
+            action="PAYMENT",
+            user=user,
+            organization=order.retail,
+            entity_type="stock_order",
+            entity_id=str(order.pk),
+            changes={"amount": str(request.data.get("amount", 0))},
             request=request,
         )
         order.refresh_from_db()

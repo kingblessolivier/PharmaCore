@@ -109,6 +109,34 @@ def test_submit_and_cancel_flow(retail_user: User, depot, retail, product, offer
 
 
 @pytest.mark.django_db
+def test_record_payment_rolls_up_settlement(retail_user, depot, retail, product, offered) -> None:
+    client = _auth(retail_user)
+    order_id = client.post(
+        "/api/distribution/orders/", _payload(depot, retail, product), format="json"
+    ).json()["id"]  # 100 × 12.00 = 1200 total
+
+    # Part payment → PARTIAL.
+    r1 = client.post(
+        f"/api/distribution/orders/{order_id}/record-payment/",
+        {"amount": "500", "method": "MOBILE_MONEY"},
+        format="json",
+    )
+    assert r1.status_code == 200
+    assert r1.json()["payment_status"] == "PARTIAL"
+    assert r1.json()["amount_due"] == 700.0
+
+    # Balance → PAID.
+    r2 = client.post(
+        f"/api/distribution/orders/{order_id}/record-payment/",
+        {"amount": "700", "method": "BANK_TRANSFER", "reference": "TXN-9"},
+        format="json",
+    )
+    assert r2.json()["payment_status"] == "PAID"
+    assert r2.json()["amount_due"] == 0.0
+    assert len(r2.json()["order_payments"]) == 2
+
+
+@pytest.mark.django_db
 def test_depot_sees_incoming_order(depot, retail, product, retail_user, offered) -> None:
     _auth(retail_user).post(
         "/api/distribution/orders/", _payload(depot, retail, product), format="json"
