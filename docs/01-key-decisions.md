@@ -143,6 +143,32 @@ had to contain "Pharma".
 - Docs updated across the repo to Django/DRF (stack, architecture, coding standards,
   CI, onboarding, etc.). See [09-technology-stack.md](09-technology-stack.md).
 
+## ADR-007 — Include a Collaboration, Notifications & Tools layer (`workspace`)
+
+**Decision:** PharmaCore includes a first-class **workspace layer**: internal
+communication (contextual comments, messaging, announcements, tasks, shift notes), a
+full **notification pipeline** (events → rules → recipients → channels + preferences +
+real-time), and **utility tools/calculators** (dosage, pricing/VAT, co-pay, conversions,
+reorder, payroll). Delivered **incrementally** alongside the modules that feed it.
+
+**Status:** Accepted (2026-08-03)
+
+**Context:** Early discussion raised a productivity/collaboration layer ("Google-apps"
+style). Only `notifications` (table) + the nav bell were captured; comms, notification
+*handling*, and tools were not designed. They're needed for real daily operations.
+
+**Consequences:**
+- New module **`workspace`** (module 11) + design doc
+  [10-collaboration-notifications-and-tools.md](10-collaboration-notifications-and-tools.md)
+  + data-model tables (comments, conversations/messages, announcements, tasks, shift
+  notes, notification preferences/deliveries, knowledge articles).
+- Roadmap updated: **comments** land in Phase 2, the **notification pipeline** in Phase 4,
+  the **full collaboration + tools** in Phase 6 — so Phase 1 scope is unchanged.
+- Tools **reuse** authoritative engines (co-pay/PAYE/pricing/FEFO), never reimplement,
+  so a calculator can't disagree with a real transaction.
+- Open items: chat depth, drug-interaction dataset, real-time transport (Channels vs SSE),
+  SMS scope.
+
 ## Still open (deferred, not yet decided)
 
 - Drug-interaction dataset: license clinical data vs. basic duplication check.

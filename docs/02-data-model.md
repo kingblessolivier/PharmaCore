@@ -487,6 +487,42 @@ Multiple packaging levels / scan codes.
 
 ---
 
+## 13. Collaboration, Notifications & Tools (`workspace`)
+See [10-collaboration-notifications-and-tools.md](10-collaboration-notifications-and-tools.md).
+The `notifications` table (in §11) stays as the in-app record; these add the rest.
+
+### Communication
+- **`comments`** — threaded, attach to any record: `id, organization_id, entity_type,
+  entity_id, parent_id (thread), author_id, body, is_edited, is_struck, created_at`.
+- **`comment_mentions`** — `id, comment_id, mentioned_user_id, notified_at`.
+- **`conversations`** — `id, organization_id, type (DIRECT/GROUP/DEPARTMENT), title,
+  department_id (nullable), created_by, created_at`.
+- **`conversation_members`** — `id, conversation_id, user_id, last_read_at, muted`.
+- **`messages`** — `id, conversation_id, sender_id, body, created_at` (+ sync fields for POS).
+- **`message_receipts`** — `id, message_id, user_id, delivered_at, read_at`.
+- **`announcements`** — `id, organization_id, audience (ORG/BRANCH/ROLE), audience_ref,
+  title, body, requires_ack, created_by, created_at`; **`announcement_reads`**
+  `id, announcement_id, user_id, read_at, acknowledged_at`.
+- **`tasks`** — `id, organization_id, title, description, assignee_user_id,
+  assignee_role, reference_type, reference_id, due_date, status (OPEN/DONE/CANCELLED),
+  created_by, created_at`.
+- **`shift_notes`** — `id, organization_id, business_date, body, author_id, created_at` (append-only).
+
+### Notifications (handling)
+- **`notification_preferences`** — `id, user_id, notification_type, channel
+  (IN_APP/EMAIL/SMS/PUSH), enabled` (mandatory types can't be disabled).
+- **`notification_deliveries`** — `id, notification_id, channel, status
+  (QUEUED/SENT/FAILED), provider_ref, sent_at, error`.
+
+### Tools (mostly stateless — few tables)
+Calculators reuse core engines (co-pay, PAYE, pricing, FEFO) and store nothing.
+Optional persisted pieces:
+- **`knowledge_articles`** — `id, organization_id, title, body, category, is_published,
+  author_id, updated_at` (SOP/wiki).
+- (Scratchpad notes can be a single `user_notes` row per user, or client-local.)
+
+---
+
 ## Entity map (how the big pieces connect)
 
 ```
@@ -516,8 +552,9 @@ audit_log  ← writes for every state change
 
 ## Table count summary
 
-~55 tables across 12 modules. Foundation (iam + catalog + inventory) is ~20 of
-them and is what everything else references — which is why we build it first.
+~70 tables across 13 modules (incl. the `workspace` collaboration/notifications/tools
+layer). Foundation (iam + catalog + inventory) is ~20 of them and is what everything
+else references — which is why we build it first.
 
 ## Sources
 - GS1/GTIN & drug master data: https://www.tracktracerx.com/gtins/ · SPHN drug concepts: https://sphn-semantic-framework.readthedocs.io/en/latest/concepts_guidelines/drug_guidelines.html · USAID GHSC master-data template: https://www.ghsupplychain.org/

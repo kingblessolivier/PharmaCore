@@ -31,6 +31,7 @@ one database, one system.
 | 8 | RRA EBM fiscal receipts (async queue) | `ebm` | retail | ⬜ planned |
 | 9 | HR / payroll (employees, attendance, salary, licenses) | `hr` | iam | ⬜ planned |
 | 10 | Reporting & dashboards (EOD closeout, snapshots) | `reporting` | all | ⬜ planned |
+| 11 | Collaboration, Notifications & Tools (comments, messaging, notification pipeline, calculators) | `workspace` | iam | ⬜ planned |
 
 Architecture note: modules are **vertical slices** — one **Django app per module**
 over one PostgreSQL database (single source of truth). Each app owns its models,
