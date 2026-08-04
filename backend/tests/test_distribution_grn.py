@@ -1,4 +1,9 @@
-"""GRN reception: order → dispatch → receive → finalize creates retail stock."""
+"""Lean reception: order → approve (ships) → receive lands the stock at retail.
+
+Receiving is one click — no per-item counting. Stock accumulates onto any
+existing batch (no duplicate), and the product is auto-listed in the retail
+catalog with all its characteristics.
+"""
 
 from __future__ import annotations
 
@@ -6,9 +11,9 @@ from datetime import date, timedelta
 
 import pytest
 from apps.catalog.models import Product
-from apps.distribution.models import GoodsReceivedNote, OrderItem, StockOrder
+from apps.distribution.models import OrderItem, StockOrder
 from apps.iam.models import Organization, Role, User
-from apps.inventory.models import InventoryBatch, StockMovement
+from apps.inventory.models import InventoryBatch, PharmacyProduct, StockMovement
 from rest_framework.test import APIClient
 
 BASE = "/api/distribution"
@@ -42,74 +47,66 @@ def sysadmin(db: None) -> User:
     return u
 
 
-def _dispatched_order(depot, retail, product, admin) -> StockOrder:
+def _in_transit_order(depot, retail, product, admin, order_qty=40, batch_qty=100) -> StockOrder:
     InventoryBatch.objects.create(
         organization=depot,
         product=product,
         batch_number="AMX-2311",
         expiry_date=date.today() + timedelta(days=120),
-        quantity_available=100,
+        quantity_available=batch_qty,
     )
     order = StockOrder.objects.create(depot=depot, retail=retail, status=StockOrder.Status.PENDING)
-    OrderItem.objects.create(order=order, product=product, quantity_ordered=40, price_per_unit=10)
-    c = _auth(admin)
-    c.post(f"{BASE}/orders/{order.pk}/approve/")
-    c.post(f"{BASE}/orders/{order.pk}/pick/")
-    c.post(f"{BASE}/orders/{order.pk}/dispatch/", {"driver_name": "J"}, format="json")
+    OrderItem.objects.create(
+        order=order, product=product, quantity_ordered=order_qty, price_per_unit=10
+    )
+    _auth(admin).post(f"{BASE}/orders/{order.pk}/approve/")  # approve = ship
     order.refresh_from_db()
+    assert order.status == StockOrder.Status.IN_TRANSIT
     return order
 
 
 @pytest.mark.django_db
-def test_receive_and_finalize_creates_retail_stock(sysadmin, depot, retail, product) -> None:
-    order = _dispatched_order(depot, retail, product, sysadmin)
-    assert order.status == StockOrder.Status.IN_TRANSIT
-    client = _auth(sysadmin)
-
-    # Open GRN — pre-filled from the shipment manifest (batch AMX-2311 × 40).
-    opened = client.post(f"{BASE}/orders/{order.pk}/receive/")
-    assert opened.status_code == 201
-    grn_id = opened.json()["id"]
-    lines = opened.json()["lines"]
-    assert lines[0]["batch_number"] == "AMX-2311"
-    assert lines[0]["quantity_expected"] == 40
-
-    # Finalize with a shortfall: only 35 received, 2 damaged.
-    resp = client.post(
-        f"{BASE}/grns/{grn_id}/finalize/",
-        {"lines": [{"id": lines[0]["id"], "quantity_received": 35, "quantity_damaged": 2}]},
-        format="json",
-    )
+def test_receive_lands_stock_and_auto_lists(sysadmin, depot, retail, product) -> None:
+    order = _in_transit_order(depot, retail, product, sysadmin, order_qty=40)
+    resp = _auth(sysadmin).post(f"{BASE}/orders/{order.pk}/receive/")
     assert resp.status_code == 200
-    assert resp.json()["status"] == "FINALIZED"
-    assert resp.json()["has_discrepancy"] is True
+    assert resp.json()["status"] == "DELIVERED"
 
-    # Retail now holds the good stock (35 received − 2 damaged = 33) as a TRANSFER_IN.
+    # Retail now holds the full 40 as a TRANSFER_IN, on the same batch/expiry.
     rbatch = InventoryBatch.objects.get(organization=retail, batch_number="AMX-2311")
-    assert rbatch.quantity_available == 33
+    assert rbatch.quantity_available == 40
     assert StockMovement.objects.filter(
         organization=retail, movement_type=StockMovement.Type.TRANSFER_IN
     ).exists()
-
-    order.refresh_from_db()
-    assert order.status == StockOrder.Status.PARTIALLY_RECEIVED  # 35 < 40 shipped
-    assert order.items.first().quantity_received == 35
+    # Auto-listed in the retail catalog (no re-adding), price left blank.
+    listing = PharmacyProduct.objects.get(organization=retail, product=product)
+    assert listing.retail_price is None
+    assert order.items.first().quantity_received == 40
 
 
 @pytest.mark.django_db
-def test_cannot_receive_before_dispatch(sysadmin, depot, retail, product) -> None:
+def test_receive_accumulates_onto_existing_stock(sysadmin, depot, retail, product) -> None:
+    # Retail already has 2 of this exact batch on hand.
+    InventoryBatch.objects.create(
+        organization=retail,
+        product=product,
+        batch_number="AMX-2311",
+        expiry_date=date.today() + timedelta(days=120),
+        quantity_available=2,
+    )
+    order = _in_transit_order(depot, retail, product, sysadmin, order_qty=12)
+    _auth(sysadmin).post(f"{BASE}/orders/{order.pk}/receive/")
+    # 2 existing + 12 received = 14 on one batch — never a duplicate.
+    batches = InventoryBatch.objects.filter(
+        organization=retail, product=product, batch_number="AMX-2311"
+    )
+    assert batches.count() == 1
+    assert batches.first().quantity_available == 14
+
+
+@pytest.mark.django_db
+def test_cannot_receive_before_approval(sysadmin, depot, retail, product) -> None:
     order = StockOrder.objects.create(depot=depot, retail=retail, status=StockOrder.Status.PENDING)
     OrderItem.objects.create(order=order, product=product, quantity_ordered=5, price_per_unit=1)
     resp = _auth(sysadmin).post(f"{BASE}/orders/{order.pk}/receive/")
     assert resp.status_code == 400
-
-
-@pytest.mark.django_db
-def test_full_receipt_marks_delivered(sysadmin, depot, retail, product) -> None:
-    order = _dispatched_order(depot, retail, product, sysadmin)
-    client = _auth(sysadmin)
-    opened = client.post(f"{BASE}/orders/{order.pk}/receive/").json()
-    client.post(f"{BASE}/grns/{opened['id']}/finalize/", {"lines": []}, format="json")
-    order.refresh_from_db()
-    assert order.status == StockOrder.Status.DELIVERED  # defaults received = expected (40)
-    assert GoodsReceivedNote.objects.get(pk=opened["id"]).has_discrepancy is False

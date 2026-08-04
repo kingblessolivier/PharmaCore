@@ -1,4 +1,4 @@
-"""Depot approval + FEFO allocation (reservation) for purchase orders."""
+"""Lean approval: the depot approves and the stock ships in one step (FEFO)."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ from datetime import date, timedelta
 
 import pytest
 from apps.catalog.models import Product
-from apps.distribution.models import OrderItem, Reservation, StockOrder
+from apps.distribution.models import OrderItem, StockOrder
 from apps.iam.models import Organization, Role, User
-from apps.inventory.models import InventoryBatch
+from apps.inventory.models import InventoryBatch, StockMovement
 from rest_framework.test import APIClient
 
 
@@ -59,33 +59,38 @@ def _pending_order(
 
 
 @pytest.mark.django_db
-def test_approve_reserves_fefo(depot_admin, depot, retail, product) -> None:
-    b1 = _batch(depot, product, "B1", 30, 60)  # expires sooner
+def test_approve_ships_fefo_and_deducts_depot_stock(depot_admin, depot, retail, product) -> None:
+    b1 = _batch(depot, product, "B1", 30, 60)  # expires sooner → shipped first
     b2 = _batch(depot, product, "B2", 300, 80)  # expires later
     order = _pending_order(depot, retail, product, 100)
 
     resp = _auth(depot_admin).post(f"/api/distribution/orders/{order.pk}/approve/")
     assert resp.status_code == 200
-    assert resp.json()["status"] == "APPROVED"
+    # Approve = approve + ship in one step → straight to in transit.
+    assert resp.json()["status"] == "IN_TRANSIT"
 
     b1.refresh_from_db()
     b2.refresh_from_db()
-    # FEFO: soonest-expiring batch fully reserved first, then the next.
-    assert b1.quantity_reserved == 60
-    assert b2.quantity_reserved == 40
-    assert order.items.first().quantity_approved == 100
-    assert Reservation.objects.filter(order=order).count() == 2
+    # FEFO: soonest-expiring batch fully drawn first (60), then 40 from the next.
+    assert b1.quantity_available == 0
+    assert b2.quantity_available == 40
+    assert order.items.first().quantity_shipped == 100
+    # Two TRANSFER_OUT ledger movements (one per batch), stock left the depot.
+    outs = StockMovement.objects.filter(
+        organization=depot, movement_type=StockMovement.Type.TRANSFER_OUT
+    )
+    assert sorted(m.quantity_delta for m in outs) == [-60, -40]
 
 
 @pytest.mark.django_db
-def test_partial_reservation_when_short(depot_admin, depot, retail, product) -> None:
+def test_approve_ships_what_it_has_when_short(depot_admin, depot, retail, product) -> None:
     _batch(depot, product, "B1", 30, 40)
     order = _pending_order(depot, retail, product, 100)
     resp = _auth(depot_admin).post(f"/api/distribution/orders/{order.pk}/approve/")
     assert resp.status_code == 200
-    # Approved fully, but only 40 could be reserved.
-    assert order.items.first().quantity_approved == 100
-    assert sum(r.quantity for r in Reservation.objects.filter(order=order)) == 40
+    assert resp.json()["status"] == "IN_TRANSIT"
+    # Only 40 available → 40 shipped.
+    assert order.items.first().quantity_shipped == 40
 
 
 @pytest.mark.django_db
@@ -99,15 +104,9 @@ def test_non_depot_user_cannot_approve(retail, depot, product) -> None:
 
 
 @pytest.mark.django_db
-def test_cancel_releases_reservations(depot_admin, depot, retail, product) -> None:
-    b1 = _batch(depot, product, "B1", 30, 100)
+def test_cancel_pending_order(depot_admin, depot, retail, product) -> None:
     order = _pending_order(depot, retail, product, 50)
-    _auth(depot_admin).post(f"/api/distribution/orders/{order.pk}/approve/")
-    b1.refresh_from_db()
-    assert b1.quantity_reserved == 50
-
     resp = _auth(depot_admin).post(f"/api/distribution/orders/{order.pk}/cancel/")
     assert resp.status_code == 200
-    b1.refresh_from_db()
-    assert b1.quantity_reserved == 0
-    assert Reservation.objects.filter(order=order).count() == 0
+    order.refresh_from_db()
+    assert order.status == StockOrder.Status.CANCELLED

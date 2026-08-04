@@ -205,6 +205,7 @@ export function OrgCatalogTab({
                 <th className="px-4 py-2.5">Form</th>
                 <th className="px-4 py-2.5">Tax</th>
                 <th className="px-4 py-2.5">Rx</th>
+                <th className="px-4 py-2.5">In stock</th>
                 <th className="px-4 py-2.5">{p.label}</th>
                 <th className="px-4 py-2.5">Min stock</th>
                 <th className="px-4 py-2.5 text-right">Actions</th>
@@ -222,6 +223,7 @@ export function OrgCatalogTab({
                   <td className="px-4 py-2.5 text-ink-700">{it.product_form}</td>
                   <td className="px-4 py-2.5 font-mono text-ink-700">{it.product_tax_class}</td>
                   <td className="px-4 py-2.5">{it.requires_prescription && <Badge>Rx</Badge>}</td>
+                  <td className="px-4 py-2.5 font-mono text-ink-700">{it.on_hand}</td>
                   <td className="px-4 py-2.5">
                     <input
                       type="number"
@@ -250,7 +252,7 @@ export function OrgCatalogTab({
               ))}
               {items.data.results.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-ink-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-ink-500">
                     This pharmacy carries no products yet. Add from the catalog, or order/receive
                     stock and it will appear here.
                   </td>

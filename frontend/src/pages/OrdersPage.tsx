@@ -7,7 +7,6 @@ import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { isAdmin } from "../lib/roles";
 import type {
-  GRN,
   Me,
   Organization,
   OrderItem,
@@ -19,16 +18,24 @@ import type {
 const STATUS_TONE: Record<string, string> = {
   DRAFT: "bg-surface-100 text-ink-700",
   PENDING: "bg-amber-50 text-amber-700",
-  APPROVED: "bg-blue-50 text-blue-700",
   IN_TRANSIT: "bg-blue-50 text-blue-700",
   DELIVERED: "bg-green-50 text-green-700",
   CANCELLED: "bg-red-50 text-red-700",
 };
 
+// Friendlier labels for the lean lifecycle.
+const STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Draft",
+  PENDING: "Awaiting approval",
+  IN_TRANSIT: "In transit",
+  DELIVERED: "Received",
+  CANCELLED: "Cancelled",
+};
+
 function StatusBadge({ status }: { status: string }) {
   return (
     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_TONE[status] ?? "bg-surface-100 text-ink-700"}`}>
-      {status.replace("_", " ")}
+      {STATUS_LABEL[status] ?? status.replace("_", " ")}
     </span>
   );
 }
@@ -59,8 +66,10 @@ function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | nul
   const picked = offered.find((l) => String(l.product) === pickProduct);
 
   const create = useMutation({
-    mutationFn: () =>
-      api<StockOrder>("/api/distribution/orders/", {
+    // Place the order and submit it in one step — it lands awaiting the depot's
+    // approval, no separate "submit" click.
+    mutationFn: async () => {
+      const order = await api<StockOrder>("/api/distribution/orders/", {
         method: "POST",
         // Price is intentionally omitted — the server pulls the depot's wholesale price.
         body: JSON.stringify({
@@ -71,12 +80,14 @@ function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | nul
             quantity_ordered: it.quantity_ordered,
           })),
         }),
-      }),
+      });
+      return api<StockOrder>(`/api/distribution/orders/${order.id}/submit/`, { method: "POST" });
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["orders"] });
       onClose();
     },
-    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not create the order."),
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not place the order."),
   });
 
   function addItem() {
@@ -192,7 +203,7 @@ function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | nul
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={create.isPending}>{create.isPending ? "Creating…" : "Create order"}</Button>
+          <Button type="submit" disabled={create.isPending}>{create.isPending ? "Placing…" : "Place order"}</Button>
         </div>
       </form>
     </Modal>
@@ -209,178 +220,24 @@ function canRetailAct(user: Me | null, order: StockOrder): boolean {
   return isAdmin(user) || user.organization === order.retail;
 }
 
-function DispatchModal({ order, onClose }: { order: StockOrder; onClose: () => void }) {
-  const qc = useQueryClient();
-  const [driver, setDriver] = useState("");
-  const [vehicle, setVehicle] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const mut = useMutation({
-    mutationFn: () =>
-      api<StockOrder>(`/api/distribution/orders/${order.id}/dispatch/`, {
-        method: "POST",
-        body: JSON.stringify({ driver_name: driver, vehicle_registration: vehicle }),
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["orders"] });
-      onClose();
-    },
-    onError: (err) => setError(err instanceof ApiError ? err.message : "Dispatch failed."),
-  });
-  return (
-    <Modal title={`Dispatch ${order.order_number}`} onClose={onClose}>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          setError(null);
-          mut.mutate();
-        }}
-        className="flex flex-col gap-4"
-      >
-        <p className="text-sm text-ink-500">
-          Dispatching removes the reserved stock from {order.depot_name} and marks the order in
-          transit.
-        </p>
-        <TextField label="Driver name" value={driver} onChange={(e) => setDriver(e.target.value)} />
-        <TextField
-          label="Vehicle registration"
-          value={vehicle}
-          onChange={(e) => setVehicle(e.target.value)}
-        />
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={mut.isPending}>
-            {mut.isPending ? "Dispatching…" : "Dispatch"}
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function ReceiveModal({ grn, onClose }: { grn: GRN; onClose: () => void }) {
-  const qc = useQueryClient();
-  const [edits, setEdits] = useState<Record<number, { received: number; damaged: number }>>(
-    Object.fromEntries(
-      grn.lines.map((l) => [l.id, { received: l.quantity_received, damaged: l.quantity_damaged }]),
-    ),
-  );
-  const [error, setError] = useState<string | null>(null);
-  const set = (id: number, key: "received" | "damaged", v: number) =>
-    setEdits((e) => ({ ...e, [id]: { ...e[id], [key]: v } }));
-
-  const finalize = useMutation({
-    mutationFn: () =>
-      api<GRN>(`/api/distribution/grns/${grn.id}/finalize/`, {
-        method: "POST",
-        body: JSON.stringify({
-          lines: grn.lines.map((l) => ({
-            id: l.id,
-            quantity_received: edits[l.id].received,
-            quantity_damaged: edits[l.id].damaged,
-          })),
-        }),
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["orders"] });
-      void qc.invalidateQueries({ queryKey: ["batches"] });
-      onClose();
-    },
-    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not finalize."),
-  });
-
-  return (
-    <Modal title={`Receive ${grn.grn_number}`} onClose={onClose}>
-      <p className="mb-3 text-sm text-ink-500">
-        Count each batch against the manifest. Good stock (received − damaged) is added to your
-        inventory.
-      </p>
-      <div className="mb-4 overflow-hidden rounded-lg border border-line">
-        <table className="w-full text-sm">
-          <thead className="border-b border-line text-left text-xs uppercase text-ink-500">
-            <tr>
-              <th className="px-3 py-2">Medicine · batch</th>
-              <th className="px-3 py-2 text-right">Expected</th>
-              <th className="px-3 py-2 text-right">Received</th>
-              <th className="px-3 py-2 text-right">Damaged</th>
-            </tr>
-          </thead>
-          <tbody>
-            {grn.lines.map((l) => (
-              <tr key={l.id} className="border-b border-line last:border-0">
-                <td className="px-3 py-2">
-                  <div className="font-medium">{l.product_name}</div>
-                  <div className="font-mono text-xs text-ink-500">
-                    {l.batch_number} · exp {l.expiry_date}
-                  </div>
-                </td>
-                <td className="px-3 py-2 text-right font-mono">{l.quantity_expected}</td>
-                <td className="px-3 py-2 text-right">
-                  <input
-                    type="number"
-                    className="w-20 rounded-md border border-line px-2 py-1 text-right"
-                    value={edits[l.id].received}
-                    onChange={(e) => set(l.id, "received", Number(e.target.value))}
-                  />
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <input
-                    type="number"
-                    className="w-20 rounded-md border border-line px-2 py-1 text-right"
-                    value={edits[l.id].damaged}
-                    onChange={(e) => set(l.id, "damaged", Number(e.target.value))}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="secondary" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button onClick={() => finalize.mutate()} disabled={finalize.isPending}>
-          {finalize.isPending ? "Finalizing…" : "Finalize receipt"}
-        </Button>
-      </div>
-    </Modal>
-  );
-}
-
 export function OrdersPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [creating, setCreating] = useState(false);
-  const [dispatching, setDispatching] = useState<StockOrder | null>(null);
   const [discussing, setDiscussing] = useState<StockOrder | null>(null);
-  const [receivingGrn, setReceivingGrn] = useState<GRN | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const { data, isLoading } = useQuery({ queryKey: ["orders"], queryFn: () => api<Paginated<StockOrder>>("/api/distribution/orders/") });
 
   const act = useMutation({
-    mutationFn: (v: { id: number; action: "submit" | "approve" | "pick" | "cancel" }) =>
+    mutationFn: (v: { id: number; action: "approve" | "receive" | "cancel" }) =>
       api<StockOrder>(`/api/distribution/orders/${v.id}/${v.action}/`, { method: "POST" }),
     onSuccess: () => {
       setActionError(null);
       void qc.invalidateQueries({ queryKey: ["orders"] });
+      void qc.invalidateQueries({ queryKey: ["pharmacy-products"] });
     },
     onError: (err) =>
       setActionError(err instanceof ApiError ? err.message : "Action failed."),
-  });
-
-  const receive = useMutation({
-    mutationFn: (id: number) =>
-      api<GRN>(`/api/distribution/orders/${id}/receive/`, { method: "POST" }),
-    onSuccess: (grn) => {
-      setActionError(null);
-      setReceivingGrn(grn);
-    },
-    onError: (err) =>
-      setActionError(err instanceof ApiError ? err.message : "Could not open the GRN."),
   });
 
   return (
@@ -409,20 +266,13 @@ export function OrdersPage() {
                   <td className="px-4 py-2.5 text-right font-mono">{o.total_amount.toLocaleString()}</td>
                   <td className="px-4 py-2.5">
                     <div className="flex justify-end gap-1">
-                      {o.status === "DRAFT" && <Button variant="secondary" onClick={() => act.mutate({ id: o.id, action: "submit" })}>Submit</Button>}
                       {o.status === "PENDING" && canDepotAct(user, o) && (
-                        <Button variant="secondary" onClick={() => act.mutate({ id: o.id, action: "approve" })}>Approve</Button>
-                      )}
-                      {o.status === "APPROVED" && canDepotAct(user, o) && (
-                        <Button variant="secondary" onClick={() => act.mutate({ id: o.id, action: "pick" })}>Pick</Button>
-                      )}
-                      {o.status === "PICKING" && canDepotAct(user, o) && (
-                        <Button variant="secondary" onClick={() => setDispatching(o)}>Dispatch</Button>
+                        <Button variant="secondary" onClick={() => act.mutate({ id: o.id, action: "approve" })} disabled={act.isPending}>Approve &amp; send</Button>
                       )}
                       {o.status === "IN_TRANSIT" && canRetailAct(user, o) && (
-                        <Button variant="secondary" onClick={() => receive.mutate(o.id)} disabled={receive.isPending}>Receive</Button>
+                        <Button variant="secondary" onClick={() => act.mutate({ id: o.id, action: "receive" })} disabled={act.isPending}>Receive</Button>
                       )}
-                      {["DRAFT", "PENDING", "APPROVED", "PICKING"].includes(o.status) && (
+                      {["DRAFT", "PENDING"].includes(o.status) && (
                         <Button variant="ghost" onClick={() => act.mutate({ id: o.id, action: "cancel" })}>Cancel</Button>
                       )}
                       <Button variant="ghost" onClick={() => setDiscussing(o)}>
@@ -440,8 +290,6 @@ export function OrdersPage() {
         </div>
       )}
       {creating && <NewOrderModal defaultRetail={user?.organization ?? null} onClose={() => setCreating(false)} />}
-      {dispatching && <DispatchModal order={dispatching} onClose={() => setDispatching(null)} />}
-      {receivingGrn && <ReceiveModal grn={receivingGrn} onClose={() => setReceivingGrn(null)} />}
       {discussing && (
         <Modal title={`Discuss ${discussing.order_number}`} onClose={() => setDiscussing(null)}>
           <Comments entityType="stock_order" entityId={discussing.id} organization={discussing.retail} />

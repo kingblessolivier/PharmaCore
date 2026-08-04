@@ -90,11 +90,8 @@ def test_full_flow_generates_all_documents(sysadmin, depot, retail, product) -> 
     OrderItem.objects.create(order=order, product=product, quantity_ordered=20, price_per_unit=10)
     c = _auth(sysadmin)
     c.post(f"{BASE}/orders/{order.pk}/submit/")  # PO
-    c.post(f"{BASE}/orders/{order.pk}/approve/")
-    c.post(f"{BASE}/orders/{order.pk}/pick/")
-    c.post(f"{BASE}/orders/{order.pk}/dispatch/", {"driver_name": "J"}, format="json")  # DN
-    grn = c.post(f"{BASE}/orders/{order.pk}/receive/").json()
-    c.post(f"{BASE}/grns/{grn['id']}/finalize/", {"lines": []}, format="json")  # GRN + INV
+    c.post(f"{BASE}/orders/{order.pk}/approve/")  # approve + ship → Delivery note
+    c.post(f"{BASE}/orders/{order.pk}/receive/")  # land stock → GRN + Tax invoice
 
     types = set(Document.objects.values_list("doc_type", flat=True))
     assert {"PURCHASE_ORDER", "DELIVERY_NOTE", "GRN", "TAX_INVOICE"} <= types
