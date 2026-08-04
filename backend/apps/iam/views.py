@@ -54,10 +54,10 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
     serializer_class = OrganizationSerializer
     queryset = Organization.objects.all()
-    http_method_names = ["get", "post", "patch", "head", "options"]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_permissions(self) -> list[BasePermission]:
-        if self.action in {"create", "update", "partial_update"}:
+        if self.action in {"create", "update", "partial_update", "destroy"}:
             return [IsAuthenticated(), CanManageOrg()]
         return [IsAuthenticated()]
 
@@ -84,16 +84,26 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             request=self.request,
         )
 
+    def perform_destroy(self, instance: Organization) -> None:
+        record_audit(
+            action="DELETE",
+            user=cast(User, self.request.user),
+            entity_type="organization",
+            entity_id=str(instance.pk),
+            request=self.request,
+        )
+        instance.delete()
+
 
 class DepartmentViewSet(viewsets.ModelViewSet):
     """Departments within visible organizations. Writes need ORG/SYS admin."""
 
     serializer_class = DepartmentSerializer
     queryset = Department.objects.all()
-    http_method_names = ["get", "post", "patch", "head", "options"]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_permissions(self) -> list[BasePermission]:
-        if self.action in {"create", "update", "partial_update"}:
+        if self.action in {"create", "update", "partial_update", "destroy"}:
             return [IsAuthenticated(), CanManageOrg()]
         return [IsAuthenticated()]
 
@@ -114,3 +124,23 @@ class DepartmentViewSet(viewsets.ModelViewSet):
             entity_id=str(obj.pk),
             request=self.request,
         )
+
+    def perform_update(self, serializer: BaseSerializer[Any]) -> None:
+        obj = serializer.save()
+        record_audit(
+            action="UPDATE",
+            user=cast(User, self.request.user),
+            entity_type="department",
+            entity_id=str(obj.pk),
+            request=self.request,
+        )
+
+    def perform_destroy(self, instance: Department) -> None:
+        record_audit(
+            action="DELETE",
+            user=cast(User, self.request.user),
+            entity_type="department",
+            entity_id=str(instance.pk),
+            request=self.request,
+        )
+        instance.delete()

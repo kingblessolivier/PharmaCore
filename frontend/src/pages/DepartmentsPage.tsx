@@ -1,8 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { Button, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
+import {
+  Button,
+  ConfirmModal,
+  Modal,
+  PageHeader,
+  SelectField,
+  Spinner,
+  TextField,
+} from "../components/ui";
 import { api, ApiError } from "../lib/api";
+import { useAuth } from "../lib/auth";
+import { isAdmin } from "../lib/roles";
 import type { Department, Organization, Paginated } from "../lib/types";
 
 const DEPT_CODES = [
@@ -99,7 +109,12 @@ function CreateDeptModal({
 }
 
 export function DepartmentsPage() {
+  const { user } = useAuth();
+  const admin = isAdmin(user);
+  const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
+  const [deleting, setDeleting] = useState<Department | null>(null);
+
   const depts = useQuery({
     queryKey: ["departments"],
     queryFn: () => api<Paginated<Department>>("/api/departments/"),
@@ -109,6 +124,14 @@ export function DepartmentsPage() {
     queryFn: () => api<Paginated<Organization>>("/api/organizations/"),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api<void>(`/api/departments/${id}/`, { method: "DELETE" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["departments"] });
+      setDeleting(null);
+    },
+  });
+
   const orgName = (id: number) => orgs.data?.results.find((o) => o.id === id)?.name ?? `#${id}`;
 
   return (
@@ -116,12 +139,14 @@ export function DepartmentsPage() {
       <PageHeader
         title="Departments"
         action={
-          <Button
-            onClick={() => setShowCreate(true)}
-            disabled={!orgs.data || orgs.data.results.length === 0}
-          >
-            <Plus className="h-4 w-4" /> New department
-          </Button>
+          admin && (
+            <Button
+              onClick={() => setShowCreate(true)}
+              disabled={!orgs.data || orgs.data.results.length === 0}
+            >
+              <Plus className="h-4 w-4" /> New department
+            </Button>
+          )
         }
       />
 
@@ -140,6 +165,7 @@ export function DepartmentsPage() {
                 <th className="px-4 py-2.5">Organization</th>
                 <th className="px-4 py-2.5">Code</th>
                 <th className="px-4 py-2.5">Name</th>
+                {admin && <th className="px-4 py-2.5 text-right">Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -148,11 +174,24 @@ export function DepartmentsPage() {
                   <td className="px-4 py-2.5">{orgName(d.organization)}</td>
                   <td className="px-4 py-2.5 font-mono text-ink-700">{d.code}</td>
                   <td className="px-4 py-2.5 font-medium">{d.name}</td>
+                  {admin && (
+                    <td className="px-4 py-2.5">
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => setDeleting(d)}
+                          className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
+                          aria-label={`Delete ${d.name}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
               {depts.data.results.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-ink-500">
+                  <td colSpan={admin ? 4 : 3} className="px-4 py-8 text-center text-ink-500">
                     No departments yet.
                   </td>
                 </tr>
@@ -164,6 +203,15 @@ export function DepartmentsPage() {
 
       {showCreate && orgs.data && (
         <CreateDeptModal organizations={orgs.data.results} onClose={() => setShowCreate(false)} />
+      )}
+      {deleting && (
+        <ConfirmModal
+          title="Delete department"
+          message={`Delete "${deleting.name}"? This is recorded in the audit log.`}
+          busy={deleteMutation.isPending}
+          onConfirm={() => deleteMutation.mutate(deleting.id)}
+          onClose={() => setDeleting(null)}
+        />
       )}
     </div>
   );
