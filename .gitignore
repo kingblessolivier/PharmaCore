@@ -40,6 +40,9 @@ release/
 *.db
 pgdata/
 
+# --- Generated document vault (dev media) ---
+backend/media/
+
 # --- Editors / OS ---
 .idea/
 .vscode/*

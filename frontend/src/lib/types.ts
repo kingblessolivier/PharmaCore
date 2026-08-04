@@ -150,6 +150,18 @@ export interface GRN {
   lines: GRNLine[];
 }
 
+export interface DocumentRecord {
+  id: number;
+  doc_type: string;
+  doc_number: string;
+  reference_type: string;
+  reference_id: string;
+  content_hash: string;
+  qr_token: string;
+  generated_at: string;
+  download_url: string;
+}
+
 export type TaxClass = "A" | "B" | "C" | "D";
 
 export interface Product {
