@@ -20,6 +20,7 @@ class PharmacyProductSerializer(serializers.ModelSerializer):
     requires_prescription = serializers.BooleanField(
         source="product.requires_prescription", read_only=True
     )
+    on_hand = serializers.SerializerMethodField()
 
     class Meta:
         model = PharmacyProduct
@@ -33,6 +34,7 @@ class PharmacyProductSerializer(serializers.ModelSerializer):
             "product_image",
             "product_tax_class",
             "requires_prescription",
+            "on_hand",
             "retail_price",
             "wholesale_price",
             "min_stock_level",
@@ -47,11 +49,24 @@ class PharmacyProductSerializer(serializers.ModelSerializer):
             "product_image",
             "product_tax_class",
             "requires_prescription",
+            "on_hand",
             "created_at",
         ]
 
     def get_product_name(self, obj: PharmacyProduct) -> str:
         return f"{obj.product.generic_name} {obj.product.strength}".strip()
+
+    def get_on_hand(self, obj: PharmacyProduct) -> int:
+        # Total units on hand across all this org's active batches of the product —
+        # received stock accumulates here, never as a duplicate listing.
+        from django.db.models import Sum
+
+        total = InventoryBatch.objects.filter(
+            organization=obj.organization,
+            product=obj.product,
+            status=InventoryBatch.Status.ACTIVE,
+        ).aggregate(total=Sum("quantity_available"))["total"]
+        return int(total or 0)
 
 
 class InventoryBatchSerializer(serializers.ModelSerializer):

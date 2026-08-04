@@ -68,6 +68,11 @@ verifiable documents, and moves stock into the retail FEFO ledger.
 > **Phase 2 complete.** 81 backend tests green; frontend green. PRs #22–#27.
 > (Multi-stop shipments, packing slip/waybill/credit-note templates, and email/SMS notification
 > channels are folded forward — the depot→retail cycle + core documents are done.)
+> **Flow streamlined (post-Phase 2):** the buyer places an order (one step), the depot
+> **approves** (stock ships in the same action), and the pharmacy **receives** in one click —
+> which lands the stock *and auto-lists the product in its catalog* (no re-adding). The separate
+> picking / driver-capture / per-item-count steps were removed as unnecessary ceremony. Delivery
+> note, GRN, and tax invoice are still generated automatically underneath.
 
 ## Phase 3 — Retail POS + Offline + Desktop app  🚧
 The counter, built offline-first (ADR-001). The hardest phase.

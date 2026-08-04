@@ -250,6 +250,34 @@ def dispatch_order(
 
 
 @transaction.atomic
+def approve_and_ship(*, order: StockOrder, user: User | None) -> StockOrder:
+    """Lean approval: the depot approves and the stock leaves in one step.
+
+    FEFO-reserves the depot's batches then immediately dispatches them (deducting
+    depot stock via TRANSFER_OUT and recording the batch manifest), so the order
+    goes straight from PENDING to IN_TRANSIT. No separate picking/driver step.
+    """
+    approve_and_allocate(order=order, user=user)
+    dispatch_order(order=order, driver_name="", vehicle_registration="", user=user)
+    order.refresh_from_db()
+    return order
+
+
+@transaction.atomic
+def receive_all(*, order: StockOrder, user: User | None) -> StockOrder:
+    """Lean reception: the pharmacy confirms the goods arrived in one click.
+
+    Opens a GRN pre-filled from the manifest and finalizes it as fully received —
+    landing the stock in the pharmacy's inventory (TRANSFER_IN, which also lists
+    the product in its catalog). No per-item counting.
+    """
+    grn = open_grn(order=order, user=user)
+    finalize_grn(grn=grn, lines_data={}, user=user)
+    order.refresh_from_db()
+    return order
+
+
+@transaction.atomic
 def open_grn(*, order: StockOrder, user: User | None) -> GoodsReceivedNote:
     """Open a GRN for an in-transit order, pre-filled from the shipment manifest."""
     shipment = order.shipments.order_by("-dispatched_at").first()
