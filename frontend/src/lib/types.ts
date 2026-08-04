@@ -392,6 +392,27 @@ export interface DispensingRecord {
   created_at: string;
 }
 
+export interface AgingBuckets {
+  current: number;
+  d30: number;
+  d60: number;
+  d90: number;
+  over90: number;
+}
+export interface AgingPartner extends AgingBuckets {
+  partner: string;
+  total: number;
+}
+export interface AgingSide {
+  total: number;
+  buckets: AgingBuckets;
+  by_partner: AgingPartner[];
+}
+export interface AgingReport {
+  receivables: AgingSide;
+  payables: AgingSide;
+}
+
 export type PaymentMethod = "CASH" | "MOBILE_MONEY" | "CARD";
 export type SaleStatus = "OPEN" | "COMPLETED" | "VOIDED";
 
