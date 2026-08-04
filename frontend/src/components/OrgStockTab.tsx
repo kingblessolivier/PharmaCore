@@ -1,9 +1,91 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PackagePlus } from "lucide-react";
+import { PackagePlus, Scale, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { api, ApiError } from "../lib/api";
 import type { InventoryBatch, Paginated, Product } from "../lib/types";
 import { Button, Modal, SelectField, Spinner, TextField } from "./ui";
+
+function AdjustModal({ batch, onClose }: { batch: InventoryBatch; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [counted, setCounted] = useState(String(batch.quantity_available));
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const mutation = useMutation({
+    mutationFn: () =>
+      api<InventoryBatch>(`/api/inventory/batches/${batch.id}/adjust/`, {
+        method: "POST",
+        body: JSON.stringify({ counted_quantity: Number(counted), reason }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["batches", batch.organization] });
+      onClose();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Failed."),
+  });
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    mutation.mutate();
+  }
+  return (
+    <Modal title={`Adjust ${batch.batch_number}`} onClose={onClose}>
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        <p className="text-sm text-ink-500">On record: {batch.quantity_available}. Enter the counted quantity.</p>
+        <TextField label="Counted quantity" type="number" value={counted} onChange={(e) => setCounted(e.target.value)} required autoFocus />
+        <TextField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : "Adjust"}</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function WasteModal({ batch, onClose }: { batch: InventoryBatch; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [quantity, setQuantity] = useState("");
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const mutation = useMutation({
+    mutationFn: () =>
+      api<InventoryBatch>(`/api/inventory/batches/${batch.id}/waste/`, {
+        method: "POST",
+        body: JSON.stringify({ quantity: Number(quantity), reason }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["batches", batch.organization] });
+      onClose();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Failed."),
+  });
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    mutation.mutate();
+  }
+  return (
+    <Modal title={`Log wastage — ${batch.batch_number}`} onClose={onClose}>
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        <p className="text-sm text-ink-500">On hand: {batch.quantity_available}. Remove expired/damaged units.</p>
+        <TextField label="Quantity to waste" type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} required autoFocus />
+        <SelectField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)}>
+          <option value="">— select —</option>
+          <option value="EXPIRED">Expired</option>
+          <option value="DAMAGED">Damaged</option>
+          <option value="CONTAMINATED">Contaminated</option>
+          <option value="RECALL">Recall</option>
+        </SelectField>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : "Log wastage"}</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
 
 function ExpiryCell({ date, days }: { date: string; days: number }) {
   const cls =
@@ -111,6 +193,8 @@ function IntakeModal({ organizationId, onClose }: { organizationId: number; onCl
 
 export function OrgStockTab({ organizationId }: { organizationId: number }) {
   const [intake, setIntake] = useState(false);
+  const [adjusting, setAdjusting] = useState<InventoryBatch | null>(null);
+  const [wasting, setWasting] = useState<InventoryBatch | null>(null);
   const { data, isLoading, isError } = useQuery({
     queryKey: ["batches", organizationId],
     queryFn: () => api<Paginated<InventoryBatch>>(`/api/inventory/batches/?organization=${organizationId}`),
@@ -146,6 +230,7 @@ export function OrgStockTab({ organizationId }: { organizationId: number }) {
                 <th className="px-4 py-2.5 text-right">Qty</th>
                 <th className="px-4 py-2.5 text-right">Cost</th>
                 <th className="px-4 py-2.5">Location</th>
+                <th className="px-4 py-2.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -159,11 +244,27 @@ export function OrgStockTab({ organizationId }: { organizationId: number }) {
                   <td className="px-4 py-2.5 text-right font-mono">{b.quantity_available}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-ink-700">{b.wholesale_cost ?? "—"}</td>
                   <td className="px-4 py-2.5 text-ink-700">{b.storage_location || "—"}</td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex justify-end gap-1">
+                      <button
+                        onClick={() => setAdjusting(b)}
+                        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ink-600 hover:bg-surface-100"
+                      >
+                        <Scale className="h-3.5 w-3.5" /> Adjust
+                      </button>
+                      <button
+                        onClick={() => setWasting(b)}
+                        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ink-600 hover:bg-red-50 hover:text-red-600"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Waste
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {data.results.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-ink-500">
+                  <td colSpan={7} className="px-4 py-8 text-center text-ink-500">
                     No stock yet. Receive an intake to add batches.
                   </td>
                 </tr>
@@ -174,6 +275,8 @@ export function OrgStockTab({ organizationId }: { organizationId: number }) {
       )}
 
       {intake && <IntakeModal organizationId={organizationId} onClose={() => setIntake(false)} />}
+      {adjusting && <AdjustModal batch={adjusting} onClose={() => setAdjusting(null)} />}
+      {wasting && <WasteModal batch={wasting} onClose={() => setWasting(null)} />}
     </div>
   );
 }

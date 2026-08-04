@@ -55,3 +55,48 @@ def receive_intake(
         created_by=user,
     )
     return batch
+
+
+def _movement(
+    batch: InventoryBatch, mtype: str, delta: int, reason: str, user: User | None
+) -> None:
+    StockMovement.objects.create(
+        organization=batch.organization,
+        product=batch.product,
+        batch=batch,
+        batch_number=batch.batch_number,
+        movement_type=mtype,
+        quantity_delta=delta,
+        reference_type=mtype.lower(),
+        reason=reason,
+        created_by=user,
+    )
+
+
+@transaction.atomic
+def adjust_stock(
+    *, batch: InventoryBatch, counted_quantity: int, reason: str = "", user: User | None = None
+) -> InventoryBatch:
+    """Correct a batch to a physically-counted quantity, logging the signed delta."""
+    if counted_quantity < 0:
+        raise ValueError("Counted quantity cannot be negative.")
+    delta = counted_quantity - batch.quantity_available
+    batch.quantity_available = counted_quantity
+    batch.save(update_fields=["quantity_available", "updated_at"])
+    _movement(batch, StockMovement.Type.ADJUSTMENT, delta, reason, user)
+    return batch
+
+
+@transaction.atomic
+def log_wastage(
+    *, batch: InventoryBatch, quantity: int, reason: str = "", user: User | None = None
+) -> InventoryBatch:
+    """Remove expired/damaged stock from a batch (never below zero)."""
+    if quantity <= 0:
+        raise ValueError("Wastage quantity must be positive.")
+    if quantity > batch.quantity_available:
+        raise ValueError("Cannot waste more than is on hand.")
+    batch.quantity_available -= quantity
+    batch.save(update_fields=["quantity_available", "updated_at"])
+    _movement(batch, StockMovement.Type.WASTAGE, -quantity, reason, user)
+    return batch
