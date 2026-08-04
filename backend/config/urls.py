@@ -5,6 +5,7 @@ Module routers (iam, catalog, inventory, …) are included here as they are buil
 
 from __future__ import annotations
 
+from apps.core.views import DashboardView
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
@@ -13,6 +14,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api/dashboard/", DashboardView.as_view(), name="dashboard"),
     path("", include("apps.core.urls")),
     path("api/", include("apps.iam.urls")),
     path("api/catalog/", include("apps.catalog.urls")),

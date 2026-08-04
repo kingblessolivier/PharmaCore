@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { isAdmin } from "../lib/roles";
 import type { AppNotification, Organization, Paginated } from "../lib/types";
 import { CommandPalette } from "./CommandPalette";
 
@@ -170,20 +171,36 @@ function NotificationsBell() {
   );
 }
 
-const nav = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/organizations", label: "Organizations", icon: Building2, end: false },
-  { to: "/departments", label: "Departments", icon: Network, end: false },
-  { to: "/products", label: "Catalog", icon: Pill, end: false },
-  { to: "/suppliers", label: "Suppliers", icon: Truck, end: false },
-  { to: "/orders", label: "Purchase orders", icon: ClipboardList, end: false },
-  { to: "/pos", label: "Point of sale", icon: ShoppingCart, end: false },
-  { to: "/documents", label: "Documents", icon: FileText, end: false },
+interface NavItem {
+  to: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  end: boolean;
+  roles: "all" | string[]; // "all" = everyone; else visible to admins + these roles
+}
+
+const NAV: NavItem[] = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, roles: "all" },
+  { to: "/organizations", label: "Organizations", icon: Building2, end: false, roles: ["ORG_ADMIN"] },
+  { to: "/departments", label: "Departments", icon: Network, end: false, roles: ["ORG_ADMIN"] },
+  { to: "/products", label: "Catalog", icon: Pill, end: false, roles: ["ORG_ADMIN", "PHARMACIST"] },
+  { to: "/suppliers", label: "Suppliers", icon: Truck, end: false, roles: ["ORG_ADMIN"] },
+  { to: "/orders", label: "Purchase orders", icon: ClipboardList, end: false, roles: ["ORG_ADMIN", "PHARMACIST"] },
+  { to: "/pos", label: "Point of sale", icon: ShoppingCart, end: false, roles: "all" },
+  { to: "/documents", label: "Documents", icon: FileText, end: false, roles: "all" },
 ];
 
 export function AppShell() {
   const { user, logout } = useAuth();
   const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Tailor the nav to the signed-in role — a cashier sees the till, not the
+  // whole admin console. Admins see everything.
+  const admin = isAdmin(user);
+  const userRoles = user?.roles ?? [];
+  const nav = NAV.filter(
+    (n) => n.roles === "all" || admin || n.roles.some((r) => userRoles.includes(r)),
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
