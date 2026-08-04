@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -71,6 +71,135 @@ const ROUTES = [
   "RECTAL",
   "OTHER",
 ];
+
+// Minimal CSV parse: first row = headers, rest = values. Handles quoted fields.
+function parseCsv(text: string): Record<string, string>[] {
+  const rows: string[][] = [];
+  let field = "";
+  let row: string[] = [];
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"' && text[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else if (c === '"') inQuotes = false;
+      else field += c;
+    } else if (c === '"') inQuotes = true;
+    else if (c === ",") {
+      row.push(field);
+      field = "";
+    } else if (c === "\n" || c === "\r") {
+      if (field !== "" || row.length) {
+        row.push(field);
+        rows.push(row);
+        row = [];
+        field = "";
+      }
+      if (c === "\r" && text[i + 1] === "\n") i++;
+    } else field += c;
+  }
+  if (field !== "" || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+  if (rows.length < 2) return [];
+  const headers = rows[0].map((h) => h.trim());
+  return rows.slice(1).map((r) => {
+    const o: Record<string, string> = {};
+    headers.forEach((h, idx) => (o[h] = (r[idx] ?? "").trim()));
+    return o;
+  });
+}
+
+interface ImportResult {
+  created: number;
+  updated: number;
+  errors: { row: number; error: string }[];
+}
+
+function ImportModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const [text, setText] = useState("");
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const rows = parseCsv(text);
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      api<ImportResult>("/api/catalog/products/import/", {
+        method: "POST",
+        body: JSON.stringify({ rows }),
+      }),
+    onSuccess: (r) => {
+      setResult(r);
+      void qc.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (err) =>
+      setError(err instanceof ApiError ? err.message : "Import failed."),
+  });
+
+  return (
+    <Modal title="Import medicines from CSV" onClose={onClose}>
+      <div className="flex flex-col gap-3">
+        <p className="text-xs text-ink-500">
+          First row = column headers. Recognised columns: <code>generic_name</code> (required),
+          brand_name, strength, dosage_form, pack_size, units_per_pack, gtin, atc_code, tax_class,
+          requires_prescription, is_controlled_substance, storage_condition,
+          fda_registration_number, reorder_level. Existing products (matched by GTIN or
+          name+strength) are updated.
+        </p>
+        <input
+          type="file"
+          accept=".csv,text/csv"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void f.text().then(setText);
+          }}
+          className="text-sm"
+        />
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={8}
+          placeholder="generic_name,strength,dosage_form,tax_class,requires_prescription&#10;Paracetamol,500mg,TABLET,B,false"
+          className="rounded-md border border-line bg-surface-0 px-3 py-2 font-mono text-xs outline-none focus:border-brand-600"
+        />
+        <div className="text-xs text-ink-500">{rows.length} row(s) parsed.</div>
+
+        {result && (
+          <div className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
+            Imported: <b>{result.created}</b> created, <b>{result.updated}</b> updated
+            {result.errors.length > 0 && (
+              <div className="mt-1 text-red-700">
+                {result.errors.length} row(s) skipped:
+                <ul className="list-inside list-disc">
+                  {result.errors.slice(0, 5).map((e, i) => (
+                    <li key={i}>
+                      Row {e.row}: {e.error}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+        {error && <p className="text-sm text-red-600">{error}</p>}
+
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            {result ? "Done" : "Cancel"}
+          </Button>
+          <Button onClick={() => mutation.mutate()} disabled={rows.length === 0 || mutation.isPending}>
+            {mutation.isPending ? "Importing…" : `Import ${rows.length} row(s)`}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
 
 function ProductFormModal({ product, onClose }: { product?: Product; onClose: () => void }) {
   const qc = useQueryClient();
@@ -330,6 +459,7 @@ export function ProductsPage() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState<Product | null>(null);
 
@@ -353,9 +483,14 @@ export function ProductsPage() {
         title="Catalog"
         action={
           admin && (
-            <Button onClick={() => setCreating(true)}>
-              <Plus className="h-4 w-4" /> New medicine
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => setImporting(true)}>
+                <Upload className="h-4 w-4" /> Import CSV
+              </Button>
+              <Button onClick={() => setCreating(true)}>
+                <Plus className="h-4 w-4" /> New medicine
+              </Button>
+            </div>
           )
         }
       />
@@ -458,6 +593,7 @@ export function ProductsPage() {
         </div>
       )}
 
+      {importing && <ImportModal onClose={() => setImporting(false)} />}
       {creating && <ProductFormModal onClose={() => setCreating(false)} />}
       {editing && <ProductFormModal product={editing} onClose={() => setEditing(null)} />}
       {deleting && (
