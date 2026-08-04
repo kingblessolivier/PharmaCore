@@ -215,9 +215,22 @@ export function PosPage() {
                     disabled={out}
                     className="flex flex-col items-start rounded-lg border border-line bg-surface-0 p-3 text-left transition-colors hover:border-brand-600 hover:bg-brand-50/40 disabled:cursor-not-allowed disabled:opacity-50"
                   >
+                    {l.product_image ? (
+                      <img
+                        src={l.product_image}
+                        alt=""
+                        className="mb-2 h-16 w-full rounded-md border border-line object-contain"
+                        onError={(e) => (e.currentTarget.style.display = "none")}
+                      />
+                    ) : null}
                     <span className="line-clamp-2 text-sm font-medium text-ink-900">
                       {l.product_name}
                     </span>
+                    {l.requires_prescription && (
+                      <span className="mt-0.5 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                        Rx
+                      </span>
+                    )}
                     <span className="mt-1 font-mono text-sm text-brand-700">
                       {money(Number(l.retail_price))} RWF
                     </span>
