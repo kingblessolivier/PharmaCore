@@ -34,7 +34,7 @@ Target mix ≈ **70% unit / 25% integration / 5% e2e**. Push logic down to fast 
   audit row **fails**; every mutation writes an `audit_log` row.
 - **Stock invariants:** transfer and sale keep `Σ movements = on-hand`; reservations
   release on cancel.
-- **Alembic migrations:** `upgrade` then `downgrade` on a scratch DB.
+- **Django migrations:** `makemigrations --check` (in sync) + `migrate` on a scratch DB.
 - Document generation worker produces a hashed, numbered PDF record.
 
 ### End-to-end (critical journeys)
@@ -54,9 +54,9 @@ Target mix ≈ **70% unit / 25% integration / 5% e2e**. Push logic down to fast 
 - Offline: no sale is ever lost; sync is idempotent by `(device_id, event_id)`.
 
 ## 4. Tooling & conventions
-- **Backend:** `pytest` + `pytest-asyncio`; `testcontainers`/docker Postgres for
-  integration; `factory_boy`/fixtures for data; `freezegun` for time; `respx`/mocks
-  for external HTTP. Coverage via `coverage.py`.
+- **Backend:** `pytest` + `pytest-django`; docker Postgres for integration;
+  `factory_boy`/fixtures for data; `freezegun` for time; `respx`/mocks for external
+  HTTP. Coverage via `coverage.py`.
 - **Frontend:** `vitest` + Testing Library (unit/component); **Playwright** for e2e.
 - **Determinism:** no real network, no sleeps; seed randomness; UTC time in tests.
 - Test data uses **fake** patient/insurer data — never real PII.

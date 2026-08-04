@@ -71,7 +71,7 @@
   role. Data-subject handling and retention policy documented before go-live.
 
 ## 6. Application-security practices
-- Input validation via Pydantic schemas; parameterized queries (no string SQL).
+- Input validation via DRF serializers; ORM / parameterized queries (no string SQL).
 - Output encoding / CSP on web app; no secrets in the frontend bundle.
 - Rate limiting and idempotency keys on sensitive mutations.
 - Dependency scanning + SAST in CI; least-privilege DB roles (app role lacks

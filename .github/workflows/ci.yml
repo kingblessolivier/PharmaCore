@@ -31,7 +31,11 @@ jobs:
       - name: Format check (black)
         run: black --check .
       - name: Type check (mypy)
-        run: mypy app
+        run: mypy config apps
+      - name: Django system check
+        run: python manage.py check
+      - name: Migrations in sync
+        run: python manage.py makemigrations --check --dry-run
       - name: Test (pytest)
         run: pytest
 

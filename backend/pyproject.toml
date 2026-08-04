@@ -1,11 +1,12 @@
-# Tooling configuration for the PharmaCore backend.
+# Tooling configuration for the PharmaCore backend (Django).
 # Dependencies live in requirements*.txt; this file configures the toolchain
 # per docs/development/coding-standards.md.
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["app", "tests"]
+src = ["config", "apps", "tests"]
+extend-exclude = ["**/migrations/*"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "C4", "SIM"]
@@ -14,22 +15,31 @@ ignore = []
 [tool.black]
 line-length = 100
 target-version = ["py312"]
+extend-exclude = "migrations"
 
 [tool.mypy]
 python_version = "3.12"
-strict = true
-warn_unused_ignores = true
-warn_redundant_casts = true
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
 disallow_untyped_defs = true
-plugins = ["pydantic.mypy"]
-exclude = ["alembic/"]
+warn_redundant_casts = true
+warn_unused_ignores = true
+exclude = ['migrations/']
+
+[[tool.mypy.overrides]]
+module = ["*.migrations.*"]
+ignore_errors = true
+
+[tool.django-stubs]
+django_settings_module = "config.settings"
 
 [tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
 pythonpath = ["."]
 testpaths = ["tests"]
+python_files = ["test_*.py"]
 addopts = "-q"
-asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
-source = ["app"]
+source = ["apps", "config"]
 branch = true
+omit = ["*/migrations/*"]

@@ -26,7 +26,7 @@ Closes #
 
 ## Schema changes
 - [ ] N/A
-- [ ] Alembic migration included; `upgrade` + `downgrade` tested; expand-only
+- [ ] Django migration included; `makemigrations --check` clean; expand-only
 
 ## Compliance impact (stock / money / documents / EBM / audit / auth)
 - [ ] None

@@ -15,7 +15,7 @@ HR/finance). Read in order; each builds on the last.
 | 06 | [Workflows & state machines](06-workflows-state-machines.md) | The behavioural rules: stock, sale, insurance, EBM, payroll, sync |
 | 07 | [API design](07-api-design.md) | REST surface per module + the offline sync API |
 | 08 | [Security & compliance](08-security-and-compliance.md) | AuthN/Z, encryption, audit/immutability, RRA/GDP compliance |
-| 09 | [Technology stack](09-technology-stack.md) | Every technology per layer — React, Tauri desktop, FastAPI, Postgres, infra — with rationale |
+| 09 | [Technology stack](09-technology-stack.md) | Every technology per layer — React, Tauri desktop, Django + DRF, Postgres, infra — with rationale |
 
 ## Companion documentation sets
 - **Design system** → [design/](design/README.md) — brand, tokens, navigation,

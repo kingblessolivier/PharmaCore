@@ -11,7 +11,7 @@ Legend: ✅ done · 🚧 in progress · ⬜ planned
 ## Phase 0 — Foundations & scaffolding  🚧
 Repo, tooling, and the walking skeleton everything else stands on.
 - [x] Repo init, branch protection (staging/main), CI pipeline (lint→type→test→build)
-- [x] Backend scaffold (FastAPI, SQLAlchemy, Alembic), Postgres via docker-compose
+- [x] Backend scaffold (Django + DRF, Django ORM + migrations), Postgres via docker-compose
 - [x] Frontend scaffold (React + TS), design tokens wired from the design docs
 - [ ] Auth: JWT login, password hashing, session handling
 - [ ] `audit_log` + immutability grants; base RBAC

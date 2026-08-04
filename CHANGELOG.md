@@ -31,14 +31,15 @@ Maintenance rules:
   process, environments, definition of done, onboarding, ADR process; ROADMAP,
   CONTRIBUTING, SECURITY, CODE_OF_CONDUCT.
 
-- **Phase 0 scaffolding:** FastAPI backend skeleton (config, DB session, health
-  endpoint, tests, ruff/black/mypy/pytest, docker-compose, Alembic); React + TypeScript
-  + Vite frontend wired to the design tokens (Tailwind); GitHub Actions CI running
-  backend and frontend checks.
+- **Phase 0 scaffolding:** Django + Django REST Framework backend skeleton (settings,
+  health endpoint, tests, ruff/black/mypy/pytest-django, docker-compose, Django
+  migrations); React + TypeScript + Vite frontend wired to the design tokens (Tailwind);
+  GitHub Actions CI running backend and frontend checks.
 
 ### Changed
 - UI scope set to **English only** (ADR-004); removed the bilingual/Kinyarwanda plan.
 - Project renamed: **PharmaCore** (platform) by **Medlink** (company) — ADR-005.
+- Backend framework changed from FastAPI to **Django + Django REST Framework** — ADR-006.
 
 ### Notes
 - No application code yet — the project is in the design/documentation phase by

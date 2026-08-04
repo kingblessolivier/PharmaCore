@@ -75,7 +75,7 @@ The depot(s) and retail pharmacies (and the parent company).
 | username | VARCHAR(100) UNIQUE | |
 | email | VARCHAR(255) UNIQUE | |
 | phone | VARCHAR(20) | |
-| password_hash | TEXT | bcrypt/argon2 |
+| password_hash | TEXT | argon2 (Django hasher) |
 | full_name | VARCHAR(200) | |
 | status | VARCHAR(20) | `ACTIVE`\|`SUSPENDED`\|`DISABLED` |
 | last_login_at | TIMESTAMPTZ | |

@@ -17,13 +17,12 @@ entry point; deeper rules live in [docs/development/](docs/development/README.md
 # backend
 cd backend
 python -m venv .venv && source .venv/Scripts/activate   # Windows Git Bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 cp .env.example .env
-docker compose up -d db          # local Postgres
-alembic upgrade head
-uvicorn app.main:app --reload
+python manage.py migrate          # SQLite default (or docker compose up -d db for Postgres)
+python manage.py runserver
 
-# frontend (once it exists)
+# frontend
 cd frontend && npm install && npm run dev
 ```
 Full detail: [onboarding guide](docs/development/onboarding.md) and

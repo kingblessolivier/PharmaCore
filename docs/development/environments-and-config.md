@@ -74,8 +74,8 @@ SENTRY_DSN=
 ## Local quick start
 ```bash
 cp .env.example .env
-docker compose up -d db redis
-alembic upgrade head
-uvicorn app.main:app --reload
+docker compose up -d db redis      # optional — SQLite is the default
+python manage.py migrate
+python manage.py runserver
 ```
 See [onboarding](onboarding.md) for the full path.
