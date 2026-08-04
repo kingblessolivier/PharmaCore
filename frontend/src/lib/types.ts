@@ -338,6 +338,7 @@ export interface PharmacyProduct {
   product_image: string;
   product_tax_class: string;
   requires_prescription: boolean;
+  is_controlled: boolean;
   on_hand: number;
   retail_price: string | null;
   wholesale_price: string | null;
