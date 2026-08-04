@@ -46,6 +46,21 @@ def _batch(retail: Organization, product: Product, qty: int = 100, exp: str = "2
 
 
 @pytest.mark.django_db
+def test_receiving_stock_auto_lists_product_in_catalog(
+    retail: Organization, product: Product
+) -> None:
+    """Received stock lists the product in the org's catalog (no re-adding) with
+    prices left blank for staff to set."""
+    from apps.inventory.models import PharmacyProduct
+
+    assert not PharmacyProduct.objects.filter(organization=retail, product=product).exists()
+    _batch(retail, product, 50)
+    listing = PharmacyProduct.objects.get(organization=retail, product=product)
+    assert listing.retail_price is None  # staff set it
+    assert listing.is_active
+
+
+@pytest.mark.django_db
 def test_adjust_updates_qty_and_logs_delta(
     admin: User, retail: Organization, product: Product
 ) -> None:

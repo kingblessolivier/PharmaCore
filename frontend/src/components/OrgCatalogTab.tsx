@@ -2,15 +2,50 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { api, ApiError } from "../lib/api";
-import type { Paginated, PharmacyProduct, Product } from "../lib/types";
+import type { OrgType, Paginated, PharmacyProduct, Product } from "../lib/types";
 import { Badge, Button, ConfirmModal, Modal, SelectField, Spinner, TextField } from "./ui";
 
-function AddModal({ organizationId, onClose }: { organizationId: number; onClose: () => void }) {
+// A depot/wholesale pharmacy sells to retailers; a retail pharmacy sells to
+// customers. Each only ever sets its own one price.
+function pricing(orgType: OrgType) {
+  const wholesale = orgType === "DEPOT";
+  return {
+    wholesale,
+    field: (wholesale ? "wholesale_price" : "retail_price") as "wholesale_price" | "retail_price",
+    label: wholesale ? "Price to retailers (RWF)" : "Retail price (RWF)",
+    hint: wholesale
+      ? "This is what retail pharmacies pay when they order — pulled into their purchase orders automatically."
+      : "This is what your customers pay at the counter. The wholesale price you paid is handled automatically.",
+  };
+}
+
+function ProductThumb({ src }: { src: string }) {
+  if (src)
+    return (
+      <img
+        src={src}
+        alt=""
+        className="h-9 w-9 shrink-0 rounded-md border border-line object-contain"
+        onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+      />
+    );
+  return <div className="h-9 w-9 shrink-0 rounded-md border border-line bg-surface-100" />;
+}
+
+function AddModal({
+  organizationId,
+  orgType,
+  onClose,
+}: {
+  organizationId: number;
+  orgType: OrgType;
+  onClose: () => void;
+}) {
   const qc = useQueryClient();
+  const p = pricing(orgType);
   const [search, setSearch] = useState("");
   const [productId, setProductId] = useState("");
   const [price, setPrice] = useState("");
-  const [wholesale, setWholesale] = useState("");
   const [minStock, setMinStock] = useState("0");
   const [error, setError] = useState<string | null>(null);
 
@@ -27,8 +62,7 @@ function AddModal({ organizationId, onClose }: { organizationId: number; onClose
         body: JSON.stringify({
           organization: organizationId,
           product: Number(productId),
-          retail_price: price || null,
-          wholesale_price: wholesale || null,
+          [p.field]: price || null,
           min_stock_level: Number(minStock),
         }),
       }),
@@ -66,36 +100,27 @@ function AddModal({ organizationId, onClose }: { organizationId: number; onClose
         />
         <SelectField label="Product" value={productId} onChange={(e) => setProductId(e.target.value)}>
           <option value="">— select —</option>
-          {(products.data?.results ?? []).map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.generic_name} {p.strength} ({p.dosage_form})
+          {(products.data?.results ?? []).map((pr) => (
+            <option key={pr.id} value={pr.id}>
+              {pr.generic_name} {pr.strength} ({pr.dosage_form})
             </option>
           ))}
         </SelectField>
         <div className="grid grid-cols-2 gap-3">
           <TextField
-            label="Retail price (RWF)"
+            label={p.label}
             type="number"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
           />
           <TextField
-            label="Wholesale price (RWF)"
+            label="Min stock level"
             type="number"
-            value={wholesale}
-            onChange={(e) => setWholesale(e.target.value)}
+            value={minStock}
+            onChange={(e) => setMinStock(e.target.value)}
           />
         </div>
-        <p className="-mt-2 text-xs text-ink-500">
-          Wholesale price is what retailers pay when they order this product from you — it is pulled
-          into their purchase orders automatically.
-        </p>
-        <TextField
-          label="Min stock level"
-          type="number"
-          value={minStock}
-          onChange={(e) => setMinStock(e.target.value)}
-        />
+        <p className="-mt-2 text-xs text-ink-500">{p.hint}</p>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>
@@ -110,8 +135,15 @@ function AddModal({ organizationId, onClose }: { organizationId: number; onClose
   );
 }
 
-export function OrgCatalogTab({ organizationId }: { organizationId: number }) {
+export function OrgCatalogTab({
+  organizationId,
+  orgType,
+}: {
+  organizationId: number;
+  orgType: OrgType;
+}) {
   const qc = useQueryClient();
+  const p = pricing(orgType);
   const [adding, setAdding] = useState(false);
   const [deleting, setDeleting] = useState<PharmacyProduct | null>(null);
 
@@ -124,10 +156,10 @@ export function OrgCatalogTab({ organizationId }: { organizationId: number }) {
   });
 
   const priceMutation = useMutation({
-    mutationFn: (v: { id: number; field: "retail_price" | "wholesale_price"; value: string }) =>
+    mutationFn: (v: { id: number; value: string }) =>
       api<PharmacyProduct>(`/api/inventory/pharmacy-products/${v.id}/`, {
         method: "PATCH",
-        body: JSON.stringify({ [v.field]: v.value || null }),
+        body: JSON.stringify({ [p.field]: v.value || null }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["pharmacy-products", organizationId] }),
   });
@@ -141,10 +173,19 @@ export function OrgCatalogTab({ organizationId }: { organizationId: number }) {
     },
   });
 
+  const priceOf = (it: PharmacyProduct) => (p.wholesale ? it.wholesale_price : it.retail_price);
+
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-ink-900">Catalog &amp; pricing</h2>
+        <div>
+          <h2 className="text-sm font-semibold text-ink-900">Catalog &amp; pricing</h2>
+          <p className="text-xs text-ink-500">
+            {p.wholesale
+              ? "Products this depot offers to retail pharmacies, and the price they pay."
+              : "Products this pharmacy carries, and the price customers pay. Transferred stock appears here automatically — just set the price."}
+          </p>
+        </div>
         <Button onClick={() => setAdding(true)}>
           <Plus className="h-4 w-4" /> Add product
         </Button>
@@ -162,9 +203,9 @@ export function OrgCatalogTab({ organizationId }: { organizationId: number }) {
               <tr>
                 <th className="px-4 py-2.5">Medicine</th>
                 <th className="px-4 py-2.5">Form</th>
+                <th className="px-4 py-2.5">Tax</th>
                 <th className="px-4 py-2.5">Rx</th>
-                <th className="px-4 py-2.5">Retail price (RWF)</th>
-                <th className="px-4 py-2.5">Wholesale price (RWF)</th>
+                <th className="px-4 py-2.5">{p.label}</th>
                 <th className="px-4 py-2.5">Min stock</th>
                 <th className="px-4 py-2.5 text-right">Actions</th>
               </tr>
@@ -172,37 +213,25 @@ export function OrgCatalogTab({ organizationId }: { organizationId: number }) {
             <tbody>
               {items.data.results.map((it) => (
                 <tr key={it.id} className="border-b border-line last:border-0 hover:bg-surface-100">
-                  <td className="px-4 py-2.5 font-medium">{it.product_name}</td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-3">
+                      <ProductThumb src={it.product_image} />
+                      <span className="font-medium text-ink-900">{it.product_name}</span>
+                    </div>
+                  </td>
                   <td className="px-4 py-2.5 text-ink-700">{it.product_form}</td>
+                  <td className="px-4 py-2.5 font-mono text-ink-700">{it.product_tax_class}</td>
                   <td className="px-4 py-2.5">{it.requires_prescription && <Badge>Rx</Badge>}</td>
                   <td className="px-4 py-2.5">
                     <input
                       type="number"
-                      defaultValue={it.retail_price ?? ""}
+                      defaultValue={priceOf(it) ?? ""}
                       onBlur={(e) => {
-                        if (e.target.value !== (it.retail_price ?? ""))
-                          priceMutation.mutate({
-                            id: it.id,
-                            field: "retail_price",
-                            value: e.target.value,
-                          });
+                        if (e.target.value !== (priceOf(it) ?? ""))
+                          priceMutation.mutate({ id: it.id, value: e.target.value });
                       }}
-                      className="w-28 rounded-md border border-line bg-surface-0 px-2 py-1 text-right font-mono text-sm outline-none focus:border-brand-600"
-                    />
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <input
-                      type="number"
-                      defaultValue={it.wholesale_price ?? ""}
-                      onBlur={(e) => {
-                        if (e.target.value !== (it.wholesale_price ?? ""))
-                          priceMutation.mutate({
-                            id: it.id,
-                            field: "wholesale_price",
-                            value: e.target.value,
-                          });
-                      }}
-                      className="w-28 rounded-md border border-line bg-surface-0 px-2 py-1 text-right font-mono text-sm outline-none focus:border-brand-600"
+                      placeholder="—"
+                      className="w-32 rounded-md border border-line bg-surface-0 px-2 py-1 text-right font-mono text-sm outline-none focus:border-brand-600"
                     />
                   </td>
                   <td className="px-4 py-2.5 font-mono text-ink-700">{it.min_stock_level}</td>
@@ -222,7 +251,8 @@ export function OrgCatalogTab({ organizationId }: { organizationId: number }) {
               {items.data.results.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-4 py-8 text-center text-ink-500">
-                    This pharmacy carries no products yet. Add from the catalog.
+                    This pharmacy carries no products yet. Add from the catalog, or order/receive
+                    stock and it will appear here.
                   </td>
                 </tr>
               )}
@@ -231,7 +261,13 @@ export function OrgCatalogTab({ organizationId }: { organizationId: number }) {
         </div>
       )}
 
-      {adding && <AddModal organizationId={organizationId} onClose={() => setAdding(false)} />}
+      {adding && (
+        <AddModal
+          organizationId={organizationId}
+          orgType={orgType}
+          onClose={() => setAdding(false)}
+        />
+      )}
       {deleting && (
         <ConfirmModal
           title="Remove product"

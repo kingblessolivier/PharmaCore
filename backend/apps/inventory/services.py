@@ -10,7 +10,7 @@ from django.db import transaction
 
 from apps.catalog.models import Product
 from apps.iam.models import Organization, User
-from apps.inventory.models import InventoryBatch, StockMovement
+from apps.inventory.models import InventoryBatch, PharmacyProduct, StockMovement
 
 
 @transaction.atomic
@@ -46,6 +46,13 @@ def receive_intake(
     if wholesale_cost is not None:
         batch.wholesale_cost = wholesale_cost
     batch.save(update_fields=["quantity_available", "wholesale_cost", "updated_at"])
+
+    # Any stock received into an org lists the product in that org's catalog (prices
+    # left blank for staff to set). This is why a retail pharmacy never re-adds
+    # transferred stock — it appears in their catalog ready to price.
+    PharmacyProduct.objects.get_or_create(
+        organization=organization, product=product, defaults={"is_active": True}
+    )
 
     StockMovement.objects.create(
         organization=organization,

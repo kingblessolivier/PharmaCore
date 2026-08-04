@@ -10,8 +10,13 @@ from apps.inventory.models import InventoryBatch, PharmacyProduct, StockMovement
 
 
 class PharmacyProductSerializer(serializers.ModelSerializer):
+    # The product is a global master, so a listing inherits every characteristic —
+    # these read-only mirrors let the catalog/POS show the full product.
     product_name = serializers.SerializerMethodField()
     product_form = serializers.CharField(source="product.dosage_form", read_only=True)
+    product_strength = serializers.CharField(source="product.strength", read_only=True)
+    product_image = serializers.CharField(source="product.image_url", read_only=True)
+    product_tax_class = serializers.CharField(source="product.tax_class", read_only=True)
     requires_prescription = serializers.BooleanField(
         source="product.requires_prescription", read_only=True
     )
@@ -24,6 +29,9 @@ class PharmacyProductSerializer(serializers.ModelSerializer):
             "product",
             "product_name",
             "product_form",
+            "product_strength",
+            "product_image",
+            "product_tax_class",
             "requires_prescription",
             "retail_price",
             "wholesale_price",
@@ -35,6 +43,9 @@ class PharmacyProductSerializer(serializers.ModelSerializer):
             "id",
             "product_name",
             "product_form",
+            "product_strength",
+            "product_image",
+            "product_tax_class",
             "requires_prescription",
             "created_at",
         ]
