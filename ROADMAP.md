@@ -1,89 +1,157 @@
 # PharmaCore — Roadmap
 
-Phased, dependency-ordered delivery. We build **foundation-first**: every phase
-ships something usable and is a prerequisite for the next. Dates are relative
-(no hard commitments here) — the *order* is the commitment.
+Phased, dependency-ordered delivery. We build **foundation-first**: every phase ships
+something usable end-to-end and is a prerequisite for the next. Dates are relative —
+the *order* is the commitment.
 
-Legend: ✅ done · 🚧 in progress · ⬜ planned
+**A phase is ✅ only when it is complete across all layers** — **backend + frontend/UI +
+design + tests + docs** — per the [Definition of Done](docs/development/definition-of-done.md).
+"Done" never means "backend done, UI later." If a checkbox below is unticked, the phase
+is not complete.
+
+Legend: ✅ done · 🚧 in progress · ⬜ planned · every phase implicitly includes tests
+(unit→integration→e2e) and doc updates.
 
 ---
 
 ## Phase 0 — Foundations & scaffolding  ✅
 Repo, tooling, and the walking skeleton everything else stands on.
-- [x] Repo init, branch protection (staging/main), CI pipeline (lint→type→test→build)
-- [x] Backend scaffold (Django + DRF, Django ORM + migrations), Postgres via docker-compose
-- [x] Frontend scaffold (React + TS), design tokens wired from the design docs
-- [x] Auth: JWT login (simplejwt), argon2 hashing, custom `User` model, `/api/auth/me`
+- [x] Repo init, branch protection (staging/main), GitHub Actions CI (lint→type→test→build)
+- [x] **Backend** scaffold (Django + DRF, ORM + migrations), docker-compose (Postgres/Redis/MinIO)
+- [x] **Frontend** scaffold (React + TS + Vite), **design tokens wired into Tailwind**
+- [x] Auth: JWT login (simplejwt), argon2 hashing, custom `User`, `/api/auth/me`
 - [x] `audit_log` (append-only) + base RBAC (`Role` + `HasRole`); roles seeded
-**Exit criteria:** ✅ a user can log in; CI green locally on every check; migrations run clean.
-> Note: GitHub Actions runners are blocked at the account level (email verification)
-> — code is verified green locally.
+**Exit:** ✅ a user can log in; CI green locally; migrations run clean.
+> Note: GitHub Actions runners are blocked at the account level (email verification) —
+> code is verified green locally. Making CI checks *required* on merge is pending that fix.
 
-## Phase 1 — Identity, Catalog & Inventory (the core)  🚧
-The data foundation every module reads from.
-- [ ] Organizations, departments, users, roles, permissions, licenses
-- [ ] Product master (medicine fields, ATC/GTIN/tax class), ingredients, barcodes
-- [ ] Batch inventory, `stock_movements` (immutable), FEFO queries
-- [ ] Supplier intake, adjustments, wastage, expiry alerts
-**Exit criteria:** stock can be received, counted, and viewed at batch level with FEFO.
+## Phase 1 — Core data + Design-system implementation  🚧
+The data foundation every module reads from, **and** the reusable UI it's rendered with.
+**Backend**
+- [ ] Identity: organizations (depot/retail/HQ), departments, user↔org/department scoping,
+      full permissions + role-permissions, licenses
+- [ ] Catalog: product master (ATC/GTIN/tax class), ingredients, manufacturers, suppliers, barcodes
+- [ ] Inventory: batch inventory, `stock_movements` (immutable ledger), FEFO queries
+- [ ] Supplier intake, stock adjustments, wastage, expiry alerts; DRF endpoints + OpenAPI
+**Frontend / UI**
+- [ ] **App shell**: top nav, side nav, org/branch switcher, **command palette (⌘K)** (design 04/05)
+- [ ] **Component library** (shadcn/ui + tokens): buttons, inputs/forms, tables, cards, badges,
+      tabs, overlays (modal/drawer/popover), toasts, empty/loading/error states (design 06/07)
+- [ ] Auth screens (login, profile); Admin: organizations, users & roles, departments, licenses
+- [ ] Catalog UI (product list/detail, ingredients, barcodes); Inventory UI (batch stock-on-hand,
+      supplier intake, FEFO/expiry forecast, adjustments, wastage)
+**Design**
+- [ ] Finalize tokens in code (light/dark), iconography set, accessibility baseline (focus, contrast, keyboard)
+**Exit:** stock can be received, counted, and viewed at batch level with FEFO **in the UI**.
 
 ## Phase 2 — Distribution & Documents (B2B)  ⬜
 Depot→retail transfer with the paperwork.
-- [ ] Purchase orders → depot approval/allocation → shipment/dispatch
+**Backend**
+- [ ] Purchase orders → depot approval/allocation (batch reserve) → shipment/dispatch (multi-stop)
 - [ ] GRN intake (the stock write-event) + discrepancy claims
-- [ ] Document engine (PDF worker, sequences, hashing, vault, QR)
-- [ ] PO / packing slip / delivery note / GRN / invoice generation
-**Exit criteria:** a full order → transfer → reception cycle produces immutable, verifiable documents.
+- [ ] Document engine: PDF worker (WeasyPrint), gapless sequences, SHA-256 hashing, vault, QR
+- [ ] Templates: PO, packing slip, delivery note/waybill, GRN, tax invoice, credit note
+**Frontend / UI**
+- [ ] Depot catalog (FEFO), PO create/cart, approvals & allocation queue, dispatch board
+- [ ] GRN intake checklist (counts vs manifest), discrepancy resolver, **document vault + viewer**
+**Workspace (first slice)**
+- [ ] Contextual **comments** on orders/GRN/discrepancies + **@mention notifications**
+**Exit:** a full order → transfer → reception cycle in the UI produces immutable, verifiable documents.
 
-## Phase 3 — Retail POS + Offline sync (the hard one)  ⬜
-The counter, built offline-first (ADR-001).
-- [ ] Desktop POS shell (Tauri/Electron) + local datastore
-- [ ] Manual search, FEFO batch pick, cart, split payments
-- [ ] Sale state machine (payment_status), cash drawer sessions
-- [ ] Sync engine: outbox, UUID minting, pull deltas, oversell reconciliation/conflicts
-- [ ] Prescriptions + dispensing (licensed-user gate), dispensing labels
-**Exit criteria:** a sale completes with internet off and reconciles correctly on reconnect.
+## Phase 3 — Retail POS + Offline + Desktop app  ⬜
+The counter, built offline-first (ADR-001). The hardest phase.
+**Backend**
+- [ ] Sale state machine (`payment_status`), cash-drawer sessions, prescriptions + dispensing gate
+- [ ] Retail pricing; **sync API** (outbox push, delta pull, oversell reconciliation/conflicts)
+**Frontend / UI**
+- [ ] POS single-page workflow: manual search → FEFO batch pick → cart → split payment
+- [ ] Drawer open/close & reconciliation, prescription attach/verify, dispensing labels
+**Desktop (Tauri)**
+- [ ] Tauri shell wrapping the React app + **encrypted local SQLite**, offline sync engine,
+      thermal-printer support, signed auto-update
+**Tools**
+- [ ] POS calculators: pricing/markup, VAT (tax class), cash & change
+**Exit:** a sale completes with the internet off and reconciles correctly on reconnect — in the desktop POS.
 
-## Phase 4 — Insurance & EBM (compliance)  ⬜
+## Phase 4 — Insurance & EBM + Notification pipeline  ⬜
 Multi-insurer claims (ADR-002) + fiscalization (ADR-003).
-- [ ] Insurance schemes, agreements, formulary; co-pay computation
+**Backend**
+- [ ] Insurance schemes, org agreements, formulary; co-pay computation
 - [ ] Claims queue, adjudication, manifests, receivables aging
-- [ ] `EbmProvider` abstraction + MockEbmProvider; async fiscalization + retry
-- [ ] EBM receipts (SDC id, signature, QR, tax by class), purchase registration
-**Exit criteria:** an insured, fiscalized sale flows end-to-end against the mock provider; EBM errors surface for retry.
+- [ ] `EbmProvider` abstraction + MockEbmProvider; async fiscalization + retry; EBM receipts; purchase registration
+**Frontend / UI**
+- [ ] "Route via insurance" at POS; claims queue + adjudication; manifests; receivables aging; EBM error/retry queue
+**Workspace**
+- [ ] **Notification pipeline** (events→rules→recipients→channels), **preferences**, **in-app real-time bell**
+- [ ] Co-pay calculator (reuses the sale engine)
+**Exit:** an insured, fiscalized sale flows end-to-end vs the mock provider in the UI; EBM errors surface for retry; notifications fire.
 
 ## Phase 5 — People / HR & Payroll  ⬜
+**Backend**
 - [ ] Employees, licenses (dispensing-rights link), attendance, shifts, leave
-- [ ] `statutory_rates` config (PAYE/RSSB), payroll runs, payslips, remittance file
-**Exit criteria:** a monthly payroll run computes correct net pay with current Rwanda rates and generates payslips.
+- [ ] `statutory_rates` config (PAYE/RSSB), payroll runs/records, payslips, bank/momo remittance file
+**Frontend / UI**
+- [ ] Employees, attendance & shifts, leave approvals, **payroll run wizard**, payslips, license-expiry compliance
+**Tools**
+- [ ] Payroll / PAYE-RSSB what-if calculator
+**Exit:** a monthly payroll run computes correct net pay with current Rwanda rates and generates payslips — in the UI.
 
-## Phase 6 — Finance & Reporting  ⬜
-- [ ] Chart of accounts, balanced immutable journals, auto-posting from ops
-- [ ] Fiscal periods, receivables, expenses
-- [ ] Dashboards (per-role), operational reports, EOD closeout + daily snapshots
-- [ ] Notifications (low stock, expiry, license, EBM error, claims)
-**Exit criteria:** EOD closeout locks an immutable snapshot; role dashboards render live KPIs.
+## Phase 6 — Finance, Reporting & Collaboration  ⬜
+**Backend**
+- [ ] Chart of accounts, balanced immutable journals + auto-posting from ops, fiscal periods, receivables, expenses
+- [ ] `daily_snapshots`, operational report queries; email/SMS notification channels wired
+**Frontend / UI**
+- [ ] Accounting screens; **role dashboards** (KPI cards + charts, validated palette — design 09);
+      operational reports; **EOD closeout wizard**; **notification center + preferences screen**
+**Workspace (full)**
+- [ ] Direct/department **messaging**, **announcements**, **tasks**, **shift notes**, **knowledge base/SOPs**
+- [ ] Remaining **tools/calculators** (dosage, conversions, reorder/EOQ, aging); email/SMS/desktop channels
+**Exit:** EOD closeout locks an immutable snapshot; role dashboards render live KPIs; collaboration + notifications fully working.
 
-## Phase 7 — Hardening, Certification & Pilot  ⬜
-- [ ] Real EBM adapter (OSDC/VSDC) + **RRA CIS certification**
-- [ ] Real insurer integrations; SMS/momo adapters
-- [ ] Security review, load/perf, backup/restore drill, a11y audit
+## Phase 7 — Hardening, Certification & Launch  ⬜
+**Integrations & infra**
+- [ ] Real EBM adapter (OSDC/VSDC) + **RRA CIS certification**; real insurer integrations; SMS/momo adapters
+- [ ] Observability (Sentry/OTel/Grafana), backups + restore drill, secrets management, deploy pipeline to prod
+**Frontend polish**
+- [ ] Responsive/tablet (GRN scanning), performance, **a11y audit (axe + manual keyboard)**,
+      every screen has designed empty/loading/error states
+**QA & launch**
+- [ ] Security review, load/perf tests, e2e critical journeys, backup/restore drill
 - [ ] Pilot at one depot + one retail branch; feedback loop
-**Exit criteria:** certified fiscalization live; pilot running on real transactions; go-live checklist ([08](docs/08-security-and-compliance.md#8-compliance-checklist-go-live-gates)) green.
+**Exit:** certified fiscalization live; pilot running on real transactions; go-live checklist
+([08](docs/08-security-and-compliance.md#8-compliance-checklist-go-live-gates)) green.
 
 ---
 
-## Cross-cutting workstreams (continuous, every phase)
+## Cross-cutting workstreams (continuous, every phase — part of each phase's "done")
+- **Design system:** apply & extend [docs/design](docs/design/README.md); no hardcoded colours/spacing.
+- **Testing:** unit→integration→e2e; coverage gate; compliance tests (immutability/audit) where relevant.
+- **Accessibility:** keyboard operable, visible focus, contrast ≥ 4.5:1, `prefers-reduced-motion`.
 - **Compliance:** GDP immutability/audit, RRA rules, Rwanda FDA license tracking.
-- **Design:** apply the design system ([docs/design](docs/design/README.md)) as UIs are built.
-- **Testing:** unit→integration→e2e coverage grows with each module.
-- **Docs:** keep architecture, API, and this roadmap current as scope evolves.
+- **CI/CD:** keep CI green; make `lint`/`test`/`build`/`migrations` **required** on merge once the runner is unblocked.
+- **Docs:** keep architecture, API, data model, design, and this roadmap current.
+
+## Modules → phases
+| Module | Slug | Phase |
+|---|---|---|
+| Identity & Access | `iam` | 0 (auth) → 1 (full) |
+| Design system (implementation) | — | 1 (+ upkeep) |
+| Catalog | `catalog` | 1 |
+| Inventory | `inventory` | 1 |
+| Distribution | `distribution` | 2 |
+| Documents | `documents` | 2 |
+| Retail POS + Desktop | `retail` | 3 |
+| Insurance | `insurance` | 4 |
+| EBM / Fiscalization | `ebm` | 4 |
+| **Collaboration, Notifications & Tools** | `workspace` | 2 (comments) → 4 (notifications) → 6 (full) |
+| People / HR | `hr` | 5 |
+| Finance | `finance` | 6 |
+| Reporting & dashboards | `reporting` | 6 |
+| Hardening / certification / launch | — | 7 |
+
+See the module detail in [docs/](docs/README.md) and the collaboration/tools design in
+[docs/10-collaboration-notifications-and-tools.md](docs/10-collaboration-notifications-and-tools.md).
 
 ## Explicitly out of scope (v1)
-Patient-facing e-commerce/app, manufacturing/production, courier GPS hardware,
-AI clinical decision support beyond basic interaction/duplication checks.
-
-## How this maps to the modules
-See the module table in the root [README](README.md) and the technical design in
-[docs/](docs/README.md). Each phase = one or more modules brought to "done" per the
-[Definition of Done](docs/development/definition-of-done.md).
+Patient-facing e-commerce/app, manufacturing/production, courier GPS hardware, external
+chat federation, and AI clinical decision support beyond basic interaction/duplication checks.

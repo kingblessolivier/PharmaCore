@@ -16,6 +16,7 @@ HR/finance). Read in order; each builds on the last.
 | 07 | [API design](07-api-design.md) | REST surface per module + the offline sync API |
 | 08 | [Security & compliance](08-security-and-compliance.md) | AuthN/Z, encryption, audit/immutability, RRA/GDP compliance |
 | 09 | [Technology stack](09-technology-stack.md) | Every technology per layer — React, Tauri desktop, Django + DRF, Postgres, infra — with rationale |
+| 10 | [Collaboration, notifications & tools](10-collaboration-notifications-and-tools.md) | Internal comms, the notification pipeline, and utility tools/calculators |
 
 ## Companion documentation sets
 - **Design system** → [design/](design/README.md) — brand, tokens, navigation,
