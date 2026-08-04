@@ -29,14 +29,85 @@ class Role(models.Model):
         return self.code
 
 
+class Organization(models.Model):
+    """A depot, retail pharmacy, or HQ — the multi-tenant root everything scopes by."""
+
+    class OrgType(models.TextChoices):
+        DEPOT = "DEPOT", "Depot"
+        RETAIL = "RETAIL", "Retail"
+        HQ = "HQ", "HQ"
+
+    parent = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="children"
+    )
+    name = models.CharField(max_length=255)
+    type = models.CharField(max_length=20, choices=OrgType.choices)
+    tin = models.CharField(max_length=20, blank=True, default="")  # RRA taxpayer id
+    rwanda_fda_license_no = models.CharField(max_length=100, blank=True, default="")
+    license_expiry_date = models.DateField(null=True, blank=True)
+    phone = models.CharField(max_length=20, blank=True, default="")
+    email = models.EmailField(blank=True, default="")
+    district = models.CharField(max_length=100, blank=True, default="")
+    sector = models.CharField(max_length=100, blank=True, default="")
+    cell = models.CharField(max_length=100, blank=True, default="")
+    address_line = models.TextField(blank=True, default="")
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class Department(models.Model):
+    """An operational department within an organization (dispensing, cashier, …)."""
+
+    class DeptCode(models.TextChoices):
+        WAREHOUSE = "WAREHOUSE", "Warehouse"
+        DISPATCH = "DISPATCH", "Dispatch"
+        PURCHASING = "PURCHASING", "Purchasing"
+        DISPENSING = "DISPENSING", "Dispensing"
+        CASHIER = "CASHIER", "Cashier"
+        INSURANCE = "INSURANCE", "Insurance"
+        FINANCE = "FINANCE", "Finance"
+        HR = "HR", "Human Resources"
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="departments"
+    )
+    code = models.CharField(max_length=30, choices=DeptCode.choices)
+    name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["organization", "code"]
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "code"], name="uniq_department_per_org")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.organization.name} · {self.code}"
+
+
 class User(AbstractUser):
     """Custom user model (set as AUTH_USER_MODEL before the first migration).
 
-    Extends Django's AbstractUser (username/email/password/flags) and adds a phone
-    and role membership. Passwords are hashed with argon2 (see settings).
+    Extends Django's AbstractUser (username/email/password/flags) and adds a phone,
+    org/department scoping, and role membership. Passwords are hashed with argon2.
     """
 
     phone = models.CharField(max_length=20, blank=True, default="")
+    organization = models.ForeignKey(
+        Organization, null=True, blank=True, on_delete=models.SET_NULL, related_name="users"
+    )
+    department = models.ForeignKey(
+        Department, null=True, blank=True, on_delete=models.SET_NULL, related_name="users"
+    )
     roles = models.ManyToManyField(Role, related_name="users", blank=True)
 
     def has_role(self, code: str) -> bool:

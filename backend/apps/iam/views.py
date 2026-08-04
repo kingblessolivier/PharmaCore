@@ -4,16 +4,25 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from django.db.models import QuerySet
+from rest_framework import status, viewsets
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from apps.iam.audit import record_audit
-from apps.iam.models import User
-from apps.iam.serializers import UserSerializer
+from apps.iam.models import Department, Organization, User
+from apps.iam.permissions import CanManageOrg
+from apps.iam.scoping import organizations_visible_to
+from apps.iam.serializers import (
+    DepartmentSerializer,
+    OrganizationSerializer,
+    UserSerializer,
+)
 
 
 class LoginView(TokenObtainPairView):
@@ -35,3 +44,73 @@ class MeView(APIView):
 
     def get(self, request: Request) -> Response:
         return Response(UserSerializer(cast(User, request.user)).data)
+
+
+class OrganizationViewSet(viewsets.ModelViewSet):
+    """Organizations, tenant-scoped. Read for any authed user; writes need ORG/SYS admin.
+
+    No hard delete (compliance) — deactivate via PATCH ``is_active``.
+    """
+
+    serializer_class = OrganizationSerializer
+    queryset = Organization.objects.all()
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    def get_permissions(self) -> list[BasePermission]:
+        if self.action in {"create", "update", "partial_update"}:
+            return [IsAuthenticated(), CanManageOrg()]
+        return [IsAuthenticated()]
+
+    def get_queryset(self) -> QuerySet[Organization]:
+        return organizations_visible_to(cast(User, self.request.user))
+
+    def perform_create(self, serializer: BaseSerializer[Any]) -> None:
+        obj = serializer.save()
+        record_audit(
+            action="CREATE",
+            user=cast(User, self.request.user),
+            entity_type="organization",
+            entity_id=str(obj.pk),
+            request=self.request,
+        )
+
+    def perform_update(self, serializer: BaseSerializer[Any]) -> None:
+        obj = serializer.save()
+        record_audit(
+            action="UPDATE",
+            user=cast(User, self.request.user),
+            entity_type="organization",
+            entity_id=str(obj.pk),
+            request=self.request,
+        )
+
+
+class DepartmentViewSet(viewsets.ModelViewSet):
+    """Departments within visible organizations. Writes need ORG/SYS admin."""
+
+    serializer_class = DepartmentSerializer
+    queryset = Department.objects.all()
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    def get_permissions(self) -> list[BasePermission]:
+        if self.action in {"create", "update", "partial_update"}:
+            return [IsAuthenticated(), CanManageOrg()]
+        return [IsAuthenticated()]
+
+    def get_queryset(self) -> QuerySet[Department]:
+        user = cast(User, self.request.user)
+        return Department.objects.filter(organization__in=organizations_visible_to(user))
+
+    def perform_create(self, serializer: BaseSerializer[Any]) -> None:
+        user = cast(User, self.request.user)
+        org = serializer.validated_data["organization"]
+        if not organizations_visible_to(user).filter(pk=org.pk).exists():
+            raise PermissionDenied("You cannot add a department to that organization.")
+        obj = serializer.save()
+        record_audit(
+            action="CREATE",
+            user=user,
+            entity_type="department",
+            entity_id=str(obj.pk),
+            request=self.request,
+        )
