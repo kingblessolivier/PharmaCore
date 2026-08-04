@@ -52,6 +52,27 @@ export interface Paginated<T> {
   results: T[];
 }
 
+export interface Role {
+  id: number;
+  code: string;
+  name: string;
+  description: string;
+}
+
+export interface UserAdmin {
+  id: number;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  organization: number | null;
+  department: number | null;
+  roles: string[];
+  is_active: boolean;
+  date_joined: string;
+}
+
 export type TaxClass = "A" | "B" | "C" | "D";
 
 export interface Product {

@@ -3,11 +3,14 @@ import { ArrowLeft, Pencil } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { OrganizationForm } from "../components/OrganizationForm";
+import { OrgUsersTab } from "../components/OrgUsersTab";
 import { Badge, Button, Card, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { isAdmin } from "../lib/roles";
 import type { Organization } from "../lib/types";
+
+type Tab = "details" | "users";
 
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
@@ -24,6 +27,7 @@ export function OrganizationDetailPage() {
   const { user } = useAuth();
   const admin = isAdmin(user);
   const [editing, setEditing] = useState(false);
+  const [tab, setTab] = useState<Tab>("details");
 
   const { data: org, isLoading, isError } = useQuery({
     queryKey: ["organization", Number(id)],
@@ -41,8 +45,13 @@ export function OrganizationDetailPage() {
     return <p className="text-sm text-red-600">Organization not found or not accessible.</p>;
   }
 
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "details", label: "Details" },
+    { id: "users", label: "Users & roles" },
+  ];
+
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-4xl">
       <button
         onClick={() => navigate("/organizations")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -50,7 +59,7 @@ export function OrganizationDetailPage() {
         <ArrowLeft className="h-4 w-4" /> Organizations
       </button>
 
-      <div className="mb-5 flex items-start justify-between">
+      <div className="mb-4 flex items-start justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold tracking-tight text-ink-900">{org.name}</h1>
           <Badge tone={org.type === "DEPOT" ? "depot" : "retail"}>{org.type}</Badge>
@@ -60,37 +69,57 @@ export function OrganizationDetailPage() {
             <span className="text-sm text-ink-500">Inactive</span>
           )}
         </div>
-        {admin && !editing && (
+        {admin && !editing && tab === "details" && (
           <Button variant="secondary" onClick={() => setEditing(true)}>
             <Pencil className="h-4 w-4" /> Edit details
           </Button>
         )}
       </div>
 
-      <Card className="p-6">
-        <h2 className="mb-4 text-sm font-semibold text-ink-900">Pharmacy details</h2>
-        {editing ? (
-          <OrganizationForm org={org} onDone={() => setEditing(false)} onCancel={() => setEditing(false)} />
-        ) : (
-          <div className="grid grid-cols-2 gap-5 sm:grid-cols-3">
-            <Field label="Type" value={org.type} />
-            <Field label="Status" value={org.is_active ? "Active" : "Inactive"} />
-            <Field label="TIN (RRA)" value={org.tin} />
-            <Field label="Rwanda FDA licence" value={org.rwanda_fda_license_no} />
-            <Field label="Licence expiry" value={org.license_expiry_date} />
-            <Field label="Phone" value={org.phone} />
-            <Field label="Email" value={org.email} />
-            <Field label="District" value={org.district} />
-            <Field label="Sector" value={org.sector} />
-            <Field label="Cell" value={org.cell} />
-            <Field label="Latitude" value={org.latitude} />
-            <Field label="Longitude" value={org.longitude} />
-            <div className="col-span-2 sm:col-span-3">
-              <Field label="Address" value={org.address_line} />
+      <div className="mb-5 flex gap-1 border-b border-line">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+              tab === t.id
+                ? "border-brand-600 text-brand-700"
+                : "border-transparent text-ink-500 hover:text-ink-900"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "details" && (
+        <Card className="p-6">
+          <h2 className="mb-4 text-sm font-semibold text-ink-900">Pharmacy details</h2>
+          {editing ? (
+            <OrganizationForm org={org} onDone={() => setEditing(false)} onCancel={() => setEditing(false)} />
+          ) : (
+            <div className="grid grid-cols-2 gap-5 sm:grid-cols-3">
+              <Field label="Type" value={org.type} />
+              <Field label="Status" value={org.is_active ? "Active" : "Inactive"} />
+              <Field label="TIN (RRA)" value={org.tin} />
+              <Field label="Rwanda FDA licence" value={org.rwanda_fda_license_no} />
+              <Field label="Licence expiry" value={org.license_expiry_date} />
+              <Field label="Phone" value={org.phone} />
+              <Field label="Email" value={org.email} />
+              <Field label="District" value={org.district} />
+              <Field label="Sector" value={org.sector} />
+              <Field label="Cell" value={org.cell} />
+              <Field label="Latitude" value={org.latitude} />
+              <Field label="Longitude" value={org.longitude} />
+              <div className="col-span-2 sm:col-span-3">
+                <Field label="Address" value={org.address_line} />
+              </div>
             </div>
-          </div>
-        )}
-      </Card>
+          )}
+        </Card>
+      )}
+
+      {tab === "users" && <OrgUsersTab organizationId={org.id} />}
     </div>
   );
 }
