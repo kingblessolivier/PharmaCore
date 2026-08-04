@@ -4,13 +4,61 @@ from typing import Any
 
 from rest_framework import serializers
 
-from apps.distribution.models import OrderItem, Shipment, StockOrder
+from apps.distribution.models import (
+    GoodsReceivedNote,
+    GRNLine,
+    OrderItem,
+    Shipment,
+    StockOrder,
+)
 
 
 class ShipmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Shipment
         fields = ["id", "driver_name", "vehicle_registration", "dispatched_at"]
+        read_only_fields = fields
+
+
+class GRNLineSerializer(serializers.ModelSerializer):
+    product_name = serializers.SerializerMethodField()
+    has_discrepancy = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = GRNLine
+        fields = [
+            "id",
+            "product",
+            "product_name",
+            "batch_number",
+            "expiry_date",
+            "quantity_expected",
+            "quantity_received",
+            "quantity_damaged",
+            "has_discrepancy",
+        ]
+        read_only_fields = fields
+
+    def get_product_name(self, obj: GRNLine) -> str:
+        return f"{obj.product.generic_name} {obj.product.strength}".strip()
+
+
+class GRNSerializer(serializers.ModelSerializer):
+    lines = GRNLineSerializer(many=True, read_only=True)
+    order_number = serializers.CharField(source="order.order_number", read_only=True)
+
+    class Meta:
+        model = GoodsReceivedNote
+        fields = [
+            "id",
+            "grn_number",
+            "order",
+            "order_number",
+            "status",
+            "has_discrepancy",
+            "received_at",
+            "lines",
+        ]
         read_only_fields = fields
 
 

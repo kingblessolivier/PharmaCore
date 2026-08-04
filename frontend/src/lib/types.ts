@@ -127,6 +127,29 @@ export interface StockOrder {
   created_at: string;
 }
 
+export interface GRNLine {
+  id: number;
+  product: number;
+  product_name: string;
+  batch_number: string;
+  expiry_date: string;
+  quantity_expected: number;
+  quantity_received: number;
+  quantity_damaged: number;
+  has_discrepancy: boolean;
+}
+
+export interface GRN {
+  id: number;
+  grn_number: string;
+  order: number;
+  order_number: string;
+  status: string;
+  has_discrepancy: boolean;
+  received_at: string;
+  lines: GRNLine[];
+}
+
 export type TaxClass = "A" | "B" | "C" | "D";
 
 export interface Product {

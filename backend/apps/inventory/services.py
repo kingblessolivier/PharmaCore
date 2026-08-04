@@ -25,9 +25,12 @@ def receive_intake(
     wholesale_cost: Decimal | None = None,
     storage_location: str = "",
     user: User | None = None,
+    movement_type: str = StockMovement.Type.INTAKE,
+    reference_type: str = "intake",
+    reference_id: str = "",
 ) -> InventoryBatch:
-    """Receive stock: create/find the batch, add quantity, and append an INTAKE
-    movement. Batch + ledger stay consistent within one transaction."""
+    """Receive stock into an org: create/find the batch, add quantity, and append a
+    movement (INTAKE by default; TRANSFER_IN for a GRN). One transaction."""
     batch, created = InventoryBatch.objects.select_for_update().get_or_create(
         organization=organization,
         product=product,
@@ -49,9 +52,10 @@ def receive_intake(
         product=product,
         batch=batch,
         batch_number=batch_number,
-        movement_type=StockMovement.Type.INTAKE,
+        movement_type=movement_type,
         quantity_delta=quantity,
-        reference_type="intake",
+        reference_type=reference_type,
+        reference_id=reference_id,
         created_by=user,
     )
     return batch
