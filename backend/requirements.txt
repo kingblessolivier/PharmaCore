@@ -10,6 +10,9 @@ gunicorn==23.0.0
 argon2-cffi==23.1.0
 httpx==0.28.1
 structlog==24.4.0
+# In-process scheduler for periodic jobs (run as a dedicated process:
+# `python manage.py run_scheduler`). See apps/workspace/management/commands.
+APScheduler==3.11.3
 # Documents: pure-Python HTML→PDF (Windows/CI-safe) + QR. WeasyPrint is the
 # higher-fidelity prod swap behind the same renderer interface (needs native libs).
 xhtml2pdf==0.2.16

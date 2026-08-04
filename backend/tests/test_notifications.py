@@ -6,7 +6,6 @@ from datetime import date, timedelta
 
 import pytest
 from apps.catalog.models import Product
-from apps.distribution.models import OrderItem, StockOrder
 from apps.iam.models import Organization, Role, User
 from apps.inventory.models import InventoryBatch, PharmacyProduct
 from apps.workspace.models import Notification
@@ -35,7 +34,11 @@ def test_submit_notifies_supplying_branch_admins() -> None:
     client = _auth(buyer)
     oid = client.post(
         "/api/distribution/orders/",
-        {"depot": depot.pk, "retail": retail.pk, "items": [{"product": product.pk, "quantity_ordered": 3}]},
+        {
+            "depot": depot.pk,
+            "retail": retail.pk,
+            "items": [{"product": product.pk, "quantity_ordered": 3}],
+        },
         format="json",
     ).json()["id"]
     client.post(f"/api/distribution/orders/{oid}/submit/")
@@ -74,3 +77,11 @@ def test_alerts_command_flags_low_stock_and_expiry() -> None:
     before = Notification.objects.filter(recipient=admin).count()
     call_command("notify_alerts")
     assert Notification.objects.filter(recipient=admin).count() == before
+
+
+@pytest.mark.django_db
+def test_run_scheduler_dry_run_registers_job(capsys) -> None:
+    # --dry-run builds the schedule and exits without blocking.
+    call_command("run_scheduler", "--dry-run", "--hour", "2", "--minute", "30")
+    out = capsys.readouterr().out
+    assert "notify_alerts" in out and "02:30" in out

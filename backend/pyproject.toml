@@ -30,7 +30,7 @@ module = ["*.migrations.*"]
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = ["xhtml2pdf.*", "segno.*"]
+module = ["xhtml2pdf.*", "segno.*", "apscheduler.*"]
 ignore_missing_imports = true
 
 [tool.django-stubs]
