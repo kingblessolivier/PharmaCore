@@ -79,3 +79,24 @@ python manage.py migrate
 python manage.py runserver
 ```
 See [onboarding](onboarding.md) for the full path.
+
+## Scheduled jobs
+
+Periodic alerts (overdue payables, expiring/expired stock, low stock) are raised by
+the `notify_alerts` management command. Run it once a day, one of two ways:
+
+- **Dedicated scheduler process** (recommended — cross-platform, single job owner):
+  ```bash
+  python manage.py run_scheduler          # daily at 06:00 (server TZ)
+  ```
+  Deploy this as its **own** long-running process/container — never inside gunicorn,
+  or it would fire once per web worker. `--hour/--minute` change the time;
+  `--dry-run` prints the schedule and exits.
+- **Host cron / systemd timer / Windows Task Scheduler** — skip the process and call
+  the command directly, e.g. a daily crontab entry:
+  ```
+  0 6 * * *  cd /app/backend && python manage.py notify_alerts
+  ```
+
+Order-lifecycle and payment notifications are event-driven (fired inline by the API),
+so they need no scheduler.
