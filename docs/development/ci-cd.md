@@ -16,7 +16,7 @@ pass** — they are the required status checks in branch protection.
 | 2 | **format check** | black / Prettier diffs |
 | 3 | **type-check** | mypy / tsc errors |
 | 4 | **test** | any unit/integration test fails or coverage drops below gate |
-| 5 | **migrations** | Alembic `upgrade`+`downgrade` fails on scratch DB |
+| 5 | **migrations** | Django `makemigrations --check` (out of sync) or `migrate` fails |
 | 6 | **build** | backend image / frontend bundle fails to build |
 | 7 | **security-scan** | dependency audit or SAST finds a known-critical issue |
 

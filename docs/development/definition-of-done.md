@@ -23,7 +23,7 @@ machine" is not done. Use this as the PR self-check.
 - [ ] Matches the [design system](../design/README.md) (nav, overlays, states).
 
 ## If it changes the schema
-- [ ] Alembic migration included; `upgrade` **and** `downgrade` tested.
+- [ ] Django migration included; `makemigrations --check` clean; `migrate` applies.
 - [ ] Expand-only for the release (destructive steps deferred).
 - [ ] Immutable tables keep deny-UPDATE/DELETE grants.
 

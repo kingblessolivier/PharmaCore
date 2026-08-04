@@ -20,14 +20,11 @@ git clone <repo> medlink && cd medlink
 # backend
 cd backend
 python -m venv .venv && source .venv/Scripts/activate    # Windows Git Bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 cp .env.example .env
-docker compose up -d db redis
-alembic upgrade head
-uvicorn app.main:app --reload      # http://127.0.0.1:8000/docs
-
-# seed demo data
-python -m app.seed
+docker compose up -d db redis      # optional — SQLite is the default
+python manage.py migrate
+python manage.py runserver         # http://127.0.0.1:8000/health · /api/docs/
 
 # frontend (once it exists)
 cd ../frontend && npm install && npm run dev

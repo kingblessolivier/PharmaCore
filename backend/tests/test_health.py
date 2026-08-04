@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from app.main import app
-from fastapi.testclient import TestClient
-
-client = TestClient(app)
+import pytest
+from django.test import Client
 
 
-def test_health_ok() -> None:
+@pytest.mark.django_db
+def test_health_ok(client: Client) -> None:
     resp = client.get("/health")
     assert resp.status_code == 200
     body = resp.json()
@@ -18,7 +17,8 @@ def test_health_ok() -> None:
     assert "environment" in body
 
 
-def test_root_banner() -> None:
+@pytest.mark.django_db
+def test_root_banner(client: Client) -> None:
     resp = client.get("/")
     assert resp.status_code == 200
-    assert resp.json()["docs"] == "/docs"
+    assert resp.json()["docs"] == "/api/docs/"

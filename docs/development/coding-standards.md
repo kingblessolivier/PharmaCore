@@ -13,33 +13,33 @@ possible (formatters, linters, type-checkers in CI) so reviews focus on logic, n
 - Immutable records (finalized documents, posted journals, audit rows, daily
   snapshots) are **append-only** — no update/delete paths.
 
-## 2. Python (backend — FastAPI)
+## 2. Python (backend — Django + DRF)
 - **Version:** Python 3.12. **Format:** `black`. **Lint/imports:** `ruff`. **Types:**
-  `mypy` (strict on new code). All three run in CI and block merge.
-- **Typing:** full type hints on public functions; Pydantic v2 models for all
-  request/response schemas.
-- **Structure:** module packages (`iam, catalog, …`); within each: `models.py`,
-  `schemas.py`, `service.py` (business logic), `router.py` (HTTP). Routers stay thin;
-  logic lives in services. Cross-module access goes through service interfaces, not
-  direct table reads.
+  `mypy` with **django-stubs** + **djangorestframework-stubs**. All run in CI and block merge.
+- **Typing:** full type hints on functions; DRF **serializers** for request/response;
+  **drf-spectacular** produces the OpenAPI schema that generates the frontend client.
+- **Structure:** one Django **app per module** (`apps/iam`, `apps/catalog`, …); within
+  each: `models.py`, `serializers.py`, `services.py` (business logic), `views.py` +
+  `urls.py`. Views stay thin; logic lives in services. Cross-module access goes through
+  service interfaces, not direct queries into another app's tables.
 - **Naming:** `snake_case` funcs/vars, `PascalCase` classes, `UPPER_SNAKE` constants;
   singular model names (`Product`, not `Products`).
-- **DB:** SQLAlchemy 2.0 typed models; **parameterized queries only** (never string
-  SQL). Money is `Numeric(14,2)`. Wrap multi-write invariants (stock transfer, journal
-  posting) in a transaction.
-- **Errors:** raise typed exceptions mapped to RFC-7807 problem+json (see
-  [API design](../07-api-design.md)); never leak stack traces to clients.
-- **Async:** use `async def` for IO-bound endpoints; offload CPU/blocking work (PDF,
-  EBM) to workers, never the request thread.
+- **DB:** Django ORM models; **never** raw string SQL (use the ORM / parameterized
+  queries). Money is `DecimalField(max_digits=14, decimal_places=2)`. Wrap multi-write
+  invariants (stock transfer, journal posting) in `transaction.atomic()`.
+- **Errors:** DRF exception handling → consistent JSON error bodies; never leak stack
+  traces to clients (see [API design](../07-api-design.md)).
+- **Async:** offload CPU/blocking work (PDF, EBM) to Celery workers, never the request
+  thread; use Django async views / Channels only where a request is genuinely IO-bound.
 - **Logging:** structured (JSON) logs with request id; never log secrets or full
   patient PII.
 
-## 3. Database migrations (Alembic)
-- Every schema change ships an Alembic migration in the same PR; **never edit a
-  merged migration** — add a new one.
-- Migrations are **reviewed for reversibility and safety**: no destructive change
-  (drop column/table) without a documented, staged plan (expand → migrate → contract).
-- Test migrations `upgrade` **and** `downgrade` in CI against a scratch DB.
+## 3. Database migrations (Django)
+- Every schema change ships a **Django migration** (`makemigrations`) in the same PR;
+  **never edit a merged/applied migration** — add a new one.
+- Migrations are **reviewed for safety**: no destructive change (drop column/table)
+  without a documented, staged plan (expand → migrate → contract).
+- CI runs `makemigrations --check --dry-run` (schema in sync) and applies migrations.
 - Immutable tables get DB-level grants that deny UPDATE/DELETE to the app role.
 
 ## 4. TypeScript / React (frontend)
@@ -63,7 +63,7 @@ versioning (additive within a version). Server derives tenant (`organization_id`
 from the token — never trust a client-supplied org id.
 
 ## 6. Security in code
-- Validate all input (Pydantic); encode all output; rate-limit sensitive endpoints.
+- Validate all input (DRF serializers); encode all output; rate-limit sensitive endpoints.
 - Least-privilege DB roles; encrypt credentials at rest via secret manager.
 - Dependency + SAST scanning in CI; no known-critical vulns merged.
 - Full detail: [08-security-and-compliance.md](../08-security-and-compliance.md).
@@ -78,5 +78,5 @@ from the token — never trust a client-supplied org id.
 - Reference code as `path:line` in reviews and issues.
 
 ## 9. Tooling config (lives in repo)
-`pyproject.toml` (black/ruff/mypy/pytest) · `.eslintrc` / `.prettierrc` · `alembic.ini`
+`pyproject.toml` (black/ruff/mypy/pytest-django) · `config/settings.py` · `.eslintrc` / `.prettierrc`
 · `.editorconfig` · `pre-commit` hooks running format+lint before commit.

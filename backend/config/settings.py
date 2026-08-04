@@ -1,0 +1,120 @@
+"""Django settings for PharmaCore (by Medlink).
+
+12-factor: configuration comes from environment variables. Business rules
+(statutory rates, insurance schemes, tax classes) live in the database, not here.
+See docs/development/environments-and-config.md.
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+import dj_database_url
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# --- Core ---
+SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-change-me-in-production")
+MEDLINK_ENV = os.environ.get("MEDLINK_ENV", "dev")
+DEBUG = os.environ.get("DEBUG", "true").lower() == "true"
+VERSION = "0.0.0"
+
+ALLOWED_HOSTS = [h for h in os.environ.get("ALLOWED_HOSTS", "*").split(",") if h]
+
+# --- Applications ---
+INSTALLED_APPS = [
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    # Third-party
+    "rest_framework",
+    "drf_spectacular",
+    "corsheaders",
+    # Local apps (modules added per phase: iam, catalog, inventory, …)
+    "apps.core",
+]
+
+MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+ROOT_URLCONF = "config.urls"
+WSGI_APPLICATION = "config.wsgi.application"
+ASGI_APPLICATION = "config.asgi.application"
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ],
+        },
+    },
+]
+
+# --- Database ---
+# SQLite default keeps the app bootable with no services; staging/production
+# override DATABASE_URL with PostgreSQL.
+DATABASES = {
+    "default": dj_database_url.config(
+        default=os.environ.get("DATABASE_URL", f"sqlite:///{BASE_DIR / 'pharmacore_dev.sqlite3'}"),
+        conn_max_age=600,
+    )
+}
+
+# --- Password hashing (argon2 first, per security design) ---
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+]
+
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+]
+
+# --- i18n / tz (English-only UI per ADR-004; Rwanda locale conventions) ---
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "Africa/Kigali"
+USE_I18N = True
+USE_TZ = True
+
+STATIC_URL = "static/"
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# --- Django REST Framework ---
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "PharmaCore API",
+    "DESCRIPTION": "PharmaCore — pharmaceutical ERP for Rwanda, by Medlink.",
+    "VERSION": VERSION,
+    "SERVE_INCLUDE_SCHEMA": False,
+}
+
+# --- CORS (React SPA) ---
+CORS_ALLOWED_ORIGINS = [
+    o for o in os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",") if o
+]

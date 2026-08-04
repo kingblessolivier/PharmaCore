@@ -6,7 +6,7 @@ agreements for the engineering team.
 | Doc | Covers |
 |---|---|
 | [Git workflow](git-workflow.md) | Branching model, **feature → staging → main**, branch protection, commits, hotfixes |
-| [Coding standards](coding-standards.md) | Python/FastAPI, TypeScript/React, SQL/migrations, API, logging |
+| [Coding standards](coding-standards.md) | Python/Django, TypeScript/React, ORM/migrations, API, logging |
 | [Testing strategy](testing-strategy.md) | Test pyramid, coverage gates, fixtures, offline-sync & compliance tests |
 | [CI/CD](ci-cd.md) | Pipeline stages, environments, deploys, rollback |
 | [Release process](release-process.md) | SemVer, promoting staging→main, tagging, changelog, migrations |

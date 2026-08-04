@@ -32,19 +32,21 @@ one database, one system.
 | 9 | HR / payroll (employees, attendance, salary, licenses) | `hr` | iam | ⬜ planned |
 | 10 | Reporting & dashboards (EOD closeout, snapshots) | `reporting` | all | ⬜ planned |
 
-Architecture note: modules are **vertical slices** inside one FastAPI app and one
-PostgreSQL database (single source of truth). Each slice owns its models,
-schemas, and routes but shares the identity/catalog/inventory core.
+Architecture note: modules are **vertical slices** — one **Django app per module**
+over one PostgreSQL database (single source of truth). Each app owns its models,
+serializers, and views but shares the identity/catalog/inventory core.
 
 ---
 
 ## Tech stack
 
-- **Backend:** Python 3.12, FastAPI, SQLAlchemy 2.0, Alembic (migrations), Pydantic v2
+- **Backend:** Python 3.12, **Django 5 + Django REST Framework**, Django ORM + migrations
 - **Database:** PostgreSQL 16 (production). SQLite works for quick local boots.
-- **Auth:** JWT (OAuth2 password flow), bcrypt password hashing, role-based access
+- **Auth:** JWT (djangorestframework-simplejwt), argon2 password hashing, role-based access
 - **Docs generation (later):** HTML → PDF (WeasyPrint) via background workers
-- **Frontend (later):** web app; packaged for desktop (Tauri/Electron) for the POS counter
+- **Frontend:** React 18 + TypeScript + Vite; packaged for desktop (Tauri) for the POS counter
+
+See [docs/09-technology-stack.md](docs/09-technology-stack.md) for the full stack and rationale.
 
 ---
 
@@ -55,24 +57,18 @@ cd backend
 python -m venv .venv
 # Windows PowerShell:  .venv\Scripts\Activate.ps1
 # Git Bash:            source .venv/Scripts/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 cp .env.example .env          # then edit DATABASE_URL / SECRET_KEY
-alembic upgrade head          # create tables (Postgres) — or use SQLite default
-uvicorn app.main:app --reload
+python manage.py migrate      # SQLite default — or point DATABASE_URL at Postgres
+python manage.py runserver
 ```
 
-Open http://127.0.0.1:8000/docs for the interactive API.
+Open http://127.0.0.1:8000/health (API) and http://127.0.0.1:8000/api/docs/ (Swagger).
 
 To run PostgreSQL locally without installing it:
 
 ```bash
 docker compose up -d db
-```
-
-### Seed a first admin + demo data
-
-```bash
-python -m app.seed
 ```
 
 ---
@@ -81,17 +77,12 @@ python -m app.seed
 
 ```
 backend/
-  app/
-    core/        # config, database session, security (JWT/hashing)
-    models/      # SQLAlchemy ORM models (one file per domain area)
-    schemas/     # Pydantic request/response models
-    api/
-      deps.py    # shared dependencies (current user, role guards)
-      routes/    # one router per module
-      router.py  # aggregates all routers
-    main.py      # FastAPI app entrypoint
-    seed.py      # dev seed data
-  alembic/       # database migrations
+  config/        # Django project: settings.py, urls.py, wsgi.py, asgi.py
+  apps/
+    core/        # health/root views  (+ one app per module: iam, catalog, …)
+  manage.py
+  tests/         # pytest (+ pytest-django)
   requirements.txt
   docker-compose.yml
+frontend/        # React 18 + TypeScript + Vite (design tokens via Tailwind)
 ```

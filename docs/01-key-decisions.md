@@ -112,6 +112,37 @@ had to contain "Pharma".
 - Docs are being updated to distinguish company (Medlink) from product (PharmaCore);
   where older docs say "Medlink" as the *system*, read it as *PharmaCore*.
 
+## ADR-006 — Backend framework: Django + Django REST Framework
+
+**Decision:** The backend is **Django + Django REST Framework (DRF)**, with the
+**Django ORM + Django migrations**. This supersedes the initial FastAPI + SQLAlchemy
++ Alembic scaffolding (which existed only as a Phase 0 health-endpoint skeleton).
+
+**Status:** Accepted (2026-08-03) · supersedes the implicit FastAPI choice
+
+**Context:** PharmaCore is a CRUD-heavy ERP with strong compliance requirements
+(RBAC, immutable audit, license-gated actions). We evaluated FastAPI vs Django.
+
+**Options considered:**
+- **FastAPI** — async-first, Pydantic, minimal, auto-OpenAPI. Excellent for an
+  API-first SPA backend; but we'd hand-build the ORM, migrations, admin, and auth.
+- **Django + DRF (chosen)** — batteries-included **ORM, migrations, auth, and admin**;
+  DRF for the JSON API our React SPA consumes; **drf-spectacular** gives the OpenAPI
+  schema that still generates the typed frontend client.
+
+**Consequences:**
+- We get an integrated ORM/migrations and a built-in **admin** (useful for an ERP's
+  back-office) without extra wiring.
+- Auth via **djangorestframework-simplejwt** (JWT) + Django's permission framework as
+  the base for our custom RBAC; **argon2** password hashing.
+- API contract via **drf-spectacular** → typed React client (unchanged goal).
+- Trade-off: less async-native than FastAPI (fine at our scale; heavy IO work already
+  runs in Celery workers). Our compliance rules (immutability, append-only audit) are
+  custom regardless of framework, so Django's editable admin/auth is customized, not
+  taken as-is.
+- Docs updated across the repo to Django/DRF (stack, architecture, coding standards,
+  CI, onboarding, etc.). See [09-technology-stack.md](09-technology-stack.md).
+
 ## Still open (deferred, not yet decided)
 
 - Drug-interaction dataset: license clinical data vs. basic duplication check.
