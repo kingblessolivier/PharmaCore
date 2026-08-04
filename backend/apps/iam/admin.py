@@ -7,16 +7,30 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.db.models import Model
 from django.http import HttpRequest
 
-from apps.iam.models import AuditLog, Role, User
+from apps.iam.models import AuditLog, Department, Organization, Role, User
 
 
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
     fieldsets = (
         *DjangoUserAdmin.fieldsets,  # type: ignore[misc]
-        ("PharmaCore", {"fields": ("phone", "roles")}),
+        ("PharmaCore", {"fields": ("phone", "organization", "department", "roles")}),
     )
     filter_horizontal = ("roles", "groups", "user_permissions")
+
+
+@admin.register(Organization)
+class OrganizationAdmin(admin.ModelAdmin):
+    list_display = ("name", "type", "tin", "is_active")
+    list_filter = ("type", "is_active")
+    search_fields = ("name", "tin", "rwanda_fda_license_no")
+
+
+@admin.register(Department)
+class DepartmentAdmin(admin.ModelAdmin):
+    list_display = ("organization", "code", "name")
+    list_filter = ("code", "organization")
+    search_fields = ("name",)
 
 
 @admin.register(Role)
