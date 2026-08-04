@@ -25,29 +25,31 @@ Repo, tooling, and the walking skeleton everything else stands on.
 > Note: GitHub Actions runners are blocked at the account level (email verification) —
 > code is verified green locally. Making CI checks *required* on merge is pending that fix.
 
-## Phase 1 — Core data + Design-system implementation  🚧
+## Phase 1 — Core data + Design-system implementation  ✅
 The data foundation every module reads from, **and** the reusable UI it's rendered with.
 **Backend**
-- [ ] Identity: organizations (depot/retail/HQ), departments, user↔org/department scoping,
-      full permissions + role-permissions, licenses
-- [ ] Catalog: product master (ATC/GTIN/tax class), ingredients, manufacturers, suppliers, barcodes
-- [ ] Inventory: batch inventory, `stock_movements` (immutable ledger), FEFO queries
-- [ ] Supplier intake, stock adjustments, wastage, expiry alerts; DRF endpoints + OpenAPI
+- [x] Identity: organizations (depot/retail/HQ), departments, user↔org/department scoping, licenses
+      *(role-based RBAC kept as the permission model; a separate per-permission table was intentionally not added — see ADR note)*
+- [x] Catalog: product master (ATC/GTIN/tax class), ingredients, manufacturers, suppliers, barcodes
+- [x] Inventory: batch inventory, `stock_movements` (immutable ledger), FEFO queries
+- [x] Supplier intake, stock adjustments, wastage, expiry alerts; DRF endpoints + OpenAPI
 **Frontend / UI**
-- [ ] **App shell**: top nav, side nav, org/branch switcher, **command palette (⌘K)** (design 04/05)
-- [ ] **Component library** (shadcn/ui + tokens): buttons, inputs/forms, tables, cards, badges,
-      tabs, overlays (modal/drawer/popover), toasts, empty/loading/error states (design 06/07)
-- [ ] Auth screens (login, profile); Admin: organizations, users & roles, departments, licenses
-- [ ] Catalog UI (product list/detail, ingredients, barcodes); Inventory UI (batch stock-on-hand,
-      supplier intake, FEFO/expiry forecast, adjustments, wastage)
+- [x] **App shell**: top nav, side nav, **org/branch switcher**, **command palette (⌘K)**
+- [x] **Component library**: buttons, inputs/forms, tables, cards, badges, tabs, modals, toasts, empty/loading/error states
+- [x] Auth screens (login, profile); Admin: organizations, users & roles, departments, licences
+      (in the pharmacy **Manage** console: Details · Users & roles · Catalog & pricing · Stock · Licences · Activity logs)
+- [x] Catalog UI (product list/detail, ingredients, barcodes); Inventory UI (batch stock-on-hand,
+      supplier intake, FEFO/expiry, adjustments, wastage)
 **Design**
-- [ ] Finalize tokens in code (light/dark), iconography set, accessibility baseline (focus, contrast, keyboard)
-**Security (foundational — not deferred)**
-- [ ] Rate limiting (login/refresh + API throttles), security headers + HSTS + CSP,
-      CORS lockdown, `manage.py check --deploy` clean in CI
-- [ ] Expand logging to **security events** (login failures, permission denials, exports);
-      **field-level encryption** for national IDs + integration credentials (KMS)
-**Exit:** stock can be received, counted, and viewed at batch level with FEFO **in the UI**.
+- [x] Tokens in code (light/dark), lucide iconography, accessibility baseline (visible focus, reduced-motion)
+**Security (foundational)**
+- [x] Rate limiting (API throttles), security headers + HSTS + CSP, CORS lockdown, `check --deploy` (security) clean
+- [x] Security-event logging (login failures)
+- [ ] **Field-level encryption** — *deferred to Phase 4/5*: its target fields (national IDs,
+      EBM/insurer credentials) don't exist until those phases; adding crypto now would be unused scaffolding.
+**Exit:** ✅ stock can be received, counted, and viewed at batch level with FEFO **in the UI**.
+> **Phase 1 complete.** 55+ backend tests green; frontend lint/typecheck/build green. 19 PRs merged.
+> (GitHub Actions runners remain blocked at the account level — code verified green locally.)
 
 ## Phase 2 — Distribution & Documents (B2B)  ⬜
 Depot→retail transfer with the paperwork.

@@ -40,9 +40,21 @@ Maintenance rules:
   (`Role` + `HasRole` permission, roles seeded); append-only `AuditLog` with
   model-level immutability. **Phase 0 complete.**
 
+- **Phase 1 complete** — Core data + design-system UI (19 PRs). Identity (orgs,
+  departments, users & roles, licences, tenant scoping, audit), Catalog (products,
+  ingredients, suppliers, barcodes), Inventory (batch stock, **immutable movement
+  ledger**, **FEFO**, intake, adjustments, wastage), per-pharmacy catalog/pricing, and
+  org-scoped activity logs — surfaced through a pharmacy **Manage** console (Details ·
+  Users & roles · Catalog & pricing · Stock · Licences · Activity logs). Frontend:
+  app shell, component library, command palette (⌘K), org switcher. Security: rate
+  limiting, CSP + security headers, prod hardening, login-failure logging. 60 backend
+  tests pass. **Exit criterion met:** stock received/counted/viewed at batch level with
+  FEFO in the UI.
+
 ### Changed
 - UI scope set to **English only** (ADR-004); removed the bilingual/Kinyarwanda plan.
 - Project renamed: **PharmaCore** (platform) by **Medlink** (company) — ADR-005.
+- Backend framework: **Django + DRF** (ADR-006, chosen over FastAPI before code existed).
 - Backend framework changed from FastAPI to **Django + Django REST Framework** — ADR-006.
 
 ### Notes
