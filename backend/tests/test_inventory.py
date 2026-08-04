@@ -19,8 +19,8 @@ def _auth(user: User) -> APIClient:
 
 
 @pytest.fixture
-def retail(db: None) -> Organization:
-    return Organization.objects.create(name="Kigali Central", type=Organization.OrgType.RETAIL)
+def depot(db: None) -> Organization:
+    return Organization.objects.create(name="Kigali Depot", type=Organization.OrgType.DEPOT)
 
 
 @pytest.fixture
@@ -37,12 +37,12 @@ def admin(db: None) -> User:
 
 @pytest.mark.django_db
 def test_intake_creates_batch_and_movement(
-    admin: User, retail: Organization, product: Product
+    admin: User, depot: Organization, product: Product
 ) -> None:
     resp = _auth(admin).post(
         "/api/inventory/intake",
         {
-            "organization": retail.pk,
+            "organization": depot.pk,
             "product": product.pk,
             "batch_number": "AMX-2311",
             "expiry_date": "2027-02-01",
@@ -52,7 +52,7 @@ def test_intake_creates_batch_and_movement(
         format="json",
     )
     assert resp.status_code == 201, resp.content
-    batch = InventoryBatch.objects.get(organization=retail, batch_number="AMX-2311")
+    batch = InventoryBatch.objects.get(organization=depot, batch_number="AMX-2311")
     assert batch.quantity_available == 240
     mv = StockMovement.objects.get(batch=batch)
     assert mv.movement_type == "INTAKE" and mv.quantity_delta == 240
@@ -60,10 +60,10 @@ def test_intake_creates_batch_and_movement(
 
 
 @pytest.mark.django_db
-def test_intake_adds_to_existing_batch(admin: User, retail: Organization, product: Product) -> None:
+def test_intake_adds_to_existing_batch(admin: User, depot: Organization, product: Product) -> None:
     client = _auth(admin)
     body = {
-        "organization": retail.pk,
+        "organization": depot.pk,
         "product": product.pk,
         "batch_number": "B1",
         "expiry_date": "2027-01-01",
@@ -77,12 +77,12 @@ def test_intake_adds_to_existing_batch(admin: User, retail: Organization, produc
 
 
 @pytest.mark.django_db
-def test_non_admin_cannot_receive_intake(retail: Organization, product: Product) -> None:
-    plain = User.objects.create_user(username="p", password="x", organization=retail)
+def test_non_admin_cannot_receive_intake(depot: Organization, product: Product) -> None:
+    plain = User.objects.create_user(username="p", password="x", organization=depot)
     resp = _auth(plain).post(
         "/api/inventory/intake",
         {
-            "organization": retail.pk,
+            "organization": depot.pk,
             "product": product.pk,
             "batch_number": "X",
             "expiry_date": "2027-01-01",
@@ -94,30 +94,49 @@ def test_non_admin_cannot_receive_intake(retail: Organization, product: Product)
 
 
 @pytest.mark.django_db
-def test_batches_listed_fefo(admin: User, retail: Organization, product: Product) -> None:
+def test_retail_org_cannot_receive_manual_intake(admin: User, product: Product) -> None:
+    # Retail branches get stock via transfers, never hand-keyed intake.
+    retail = Organization.objects.create(name="Shop", type=Organization.OrgType.RETAIL)
+    resp = _auth(admin).post(
+        "/api/inventory/intake",
+        {
+            "organization": retail.pk,
+            "product": product.pk,
+            "batch_number": "X",
+            "expiry_date": "2027-01-01",
+            "quantity": 5,
+        },
+        format="json",
+    )
+    assert resp.status_code == 403
+    assert "transfers" in str(resp.content)
+
+
+@pytest.mark.django_db
+def test_batches_listed_fefo(admin: User, depot: Organization, product: Product) -> None:
     receive_intake(
-        organization=retail,
+        organization=depot,
         product=product,
         batch_number="LATE",
         expiry_date=datetime.date(2028, 1, 1),
         quantity=10,
     )
     receive_intake(
-        organization=retail,
+        organization=depot,
         product=product,
         batch_number="SOON",
         expiry_date=datetime.date(2026, 3, 1),
         quantity=10,
     )
-    resp = _auth(admin).get(f"/api/inventory/batches/?organization={retail.pk}")
+    resp = _auth(admin).get(f"/api/inventory/batches/?organization={depot.pk}")
     order = [b["batch_number"] for b in resp.json()["results"]]
     assert order == ["SOON", "LATE"]  # soonest-expiring first (FEFO)
 
 
 @pytest.mark.django_db
-def test_stock_movement_is_append_only(retail: Organization, product: Product) -> None:
+def test_stock_movement_is_append_only(depot: Organization, product: Product) -> None:
     batch = receive_intake(
-        organization=retail,
+        organization=depot,
         product=product,
         batch_number="B",
         expiry_date=datetime.date(2027, 1, 1),

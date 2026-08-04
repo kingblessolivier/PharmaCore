@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PackagePlus, Scale, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { api, ApiError } from "../lib/api";
-import type { InventoryBatch, Paginated, Product } from "../lib/types";
+import type { InventoryBatch, OrgType, Paginated, Product } from "../lib/types";
 import { Button, Modal, SelectField, Spinner, TextField } from "./ui";
 
 function AdjustModal({ batch, onClose }: { batch: InventoryBatch; onClose: () => void }) {
@@ -191,7 +191,16 @@ function IntakeModal({ organizationId, onClose }: { organizationId: number; onCl
   );
 }
 
-export function OrgStockTab({ organizationId }: { organizationId: number }) {
+export function OrgStockTab({
+  organizationId,
+  orgType,
+}: {
+  organizationId: number;
+  orgType: OrgType;
+}) {
+  // Manual intake is a depot action (importing from suppliers). Retail branches
+  // receive stock through transfers, so they never re-key it.
+  const canIntake = orgType === "DEPOT";
   const [intake, setIntake] = useState(false);
   const [adjusting, setAdjusting] = useState<InventoryBatch | null>(null);
   const [wasting, setWasting] = useState<InventoryBatch | null>(null);
@@ -205,11 +214,17 @@ export function OrgStockTab({ organizationId }: { organizationId: number }) {
       <div className="mb-3 flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-ink-900">Stock on hand</h2>
-          <p className="text-xs text-ink-500">Batch level, sorted first-expired-first-out (FEFO).</p>
+          <p className="text-xs text-ink-500">
+            {canIntake
+              ? "Batch level, sorted first-expired-first-out (FEFO)."
+              : "Batch level, FEFO. Stock arrives here automatically when you receive transfers."}
+          </p>
         </div>
-        <Button onClick={() => setIntake(true)}>
-          <PackagePlus className="h-4 w-4" /> Receive stock
-        </Button>
+        {canIntake && (
+          <Button onClick={() => setIntake(true)}>
+            <PackagePlus className="h-4 w-4" /> Receive stock
+          </Button>
+        )}
       </div>
 
       {isLoading && (
