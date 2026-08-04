@@ -8,6 +8,7 @@ See docs/development/environments-and-config.md.
 from __future__ import annotations
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
@@ -34,9 +35,12 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     "corsheaders",
-    # Local apps (modules added per phase: iam, catalog, inventory, …)
+    # Local apps (modules added per phase: catalog, inventory, …)
+    "apps.iam",
     "apps.core",
 ]
+
+AUTH_USER_MODEL = "iam.User"
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
@@ -112,6 +116,12 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "PharmaCore — pharmaceutical ERP for Rwanda, by Medlink.",
     "VERSION": VERSION,
     "SERVE_INCLUDE_SCHEMA": False,
+}
+
+# --- JWT (djangorestframework-simplejwt) ---
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=int(os.environ.get("JWT_ACCESS_TTL_MINUTES", "30"))),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=int(os.environ.get("JWT_REFRESH_TTL_DAYS", "14"))),
 }
 
 # --- CORS (React SPA) ---
