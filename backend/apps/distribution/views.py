@@ -31,6 +31,7 @@ from apps.distribution.services import (
 from apps.iam.audit import record_audit
 from apps.iam.models import User
 from apps.iam.scoping import organizations_visible_to
+from apps.workspace.notify import notify_org_admins
 
 
 def _age_bucket(due, today) -> str:  # type: ignore[no-untyped-def]
@@ -150,6 +151,13 @@ class StockOrderViewSet(viewsets.ModelViewSet):
         order.status = StockOrder.Status.PENDING
         order.save(update_fields=["status", "updated_at"])
         generate_po_document(order=order, user=cast(User, request.user))
+        notify_org_admins(
+            organization=order.depot,
+            title=f"New order {order.order_number} from {order.retail.name}",
+            body="Awaiting your approval.",
+            link_entity_type="stock_order",
+            link_entity_id=str(order.pk),
+        )
         record_audit(
             action="SUBMIT",
             user=cast(User, request.user),
@@ -194,6 +202,13 @@ class StockOrderViewSet(viewsets.ModelViewSet):
         if order.status != StockOrder.Status.PENDING:
             raise ValidationError("Only pending orders can be approved.")
         approve_and_ship(order=order, user=user)
+        notify_org_admins(
+            organization=order.retail,
+            title=f"Order {order.order_number} approved & shipped",
+            body=f"On the way from {order.depot.name}.",
+            link_entity_type="stock_order",
+            link_entity_id=str(order.pk),
+        )
         record_audit(
             action="APPROVE",
             user=user,
@@ -218,6 +233,12 @@ class StockOrderViewSet(viewsets.ModelViewSet):
         if order.status != StockOrder.Status.IN_TRANSIT:
             raise ValidationError("Only in-transit orders can be received.")
         receive_all(order=order, user=user)
+        notify_org_admins(
+            organization=order.depot,
+            title=f"Order {order.order_number} received by {order.retail.name}",
+            link_entity_type="stock_order",
+            link_entity_id=str(order.pk),
+        )
         record_audit(
             action="RECEIVE",
             user=user,
@@ -255,6 +276,16 @@ class StockOrderViewSet(viewsets.ModelViewSet):
             )
         except (ValueError, ArithmeticError) as exc:
             raise ValidationError(str(exc)) from exc
+        # Notify the other party (the one who didn't record it).
+        counterpart = order.depot if user.organization_id == order.retail_id else order.retail
+        notify_org_admins(
+            organization=counterpart,
+            title=f"Payment recorded on {order.order_number}",
+            body=f"Amount due is now {order.amount_due:,.0f}.",
+            link_entity_type="stock_order",
+            link_entity_id=str(order.pk),
+            exclude_user_id=user.pk,
+        )
         record_audit(
             action="PAYMENT",
             user=user,

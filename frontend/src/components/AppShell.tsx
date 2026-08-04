@@ -153,7 +153,13 @@ function NotificationsBell() {
                 <button
                   onClick={() => {
                     setOpen(false);
-                    if (n.link_entity_type === "stock_order") navigate("/orders");
+                    const dest: Record<string, string> = {
+                      stock_order: "/orders",
+                      orders: "/orders",
+                      dashboard: "/",
+                    };
+                    const to = dest[n.link_entity_type];
+                    if (to) navigate(to);
                   }}
                   className={`flex w-full flex-col items-start gap-0.5 border-b border-line px-3 py-2 text-left hover:bg-surface-100 ${n.is_read ? "" : "bg-brand-50/40"}`}
                 >
