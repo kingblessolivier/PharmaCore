@@ -19,6 +19,8 @@ class PharmacyProduct(models.Model):
         "catalog.Product", on_delete=models.PROTECT, related_name="pharmacy_listings"
     )
     retail_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    # For a depot: the price it charges retailers (pulled into their purchase orders).
+    wholesale_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     min_stock_level = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

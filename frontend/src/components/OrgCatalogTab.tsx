@@ -10,6 +10,7 @@ function AddModal({ organizationId, onClose }: { organizationId: number; onClose
   const [search, setSearch] = useState("");
   const [productId, setProductId] = useState("");
   const [price, setPrice] = useState("");
+  const [wholesale, setWholesale] = useState("");
   const [minStock, setMinStock] = useState("0");
   const [error, setError] = useState<string | null>(null);
 
@@ -27,6 +28,7 @@ function AddModal({ organizationId, onClose }: { organizationId: number; onClose
           organization: organizationId,
           product: Number(productId),
           retail_price: price || null,
+          wholesale_price: wholesale || null,
           min_stock_level: Number(minStock),
         }),
       }),
@@ -78,12 +80,22 @@ function AddModal({ organizationId, onClose }: { organizationId: number; onClose
             onChange={(e) => setPrice(e.target.value)}
           />
           <TextField
-            label="Min stock level"
+            label="Wholesale price (RWF)"
             type="number"
-            value={minStock}
-            onChange={(e) => setMinStock(e.target.value)}
+            value={wholesale}
+            onChange={(e) => setWholesale(e.target.value)}
           />
         </div>
+        <p className="-mt-2 text-xs text-ink-500">
+          Wholesale price is what retailers pay when they order this product from you — it is pulled
+          into their purchase orders automatically.
+        </p>
+        <TextField
+          label="Min stock level"
+          type="number"
+          value={minStock}
+          onChange={(e) => setMinStock(e.target.value)}
+        />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>
@@ -112,10 +124,10 @@ export function OrgCatalogTab({ organizationId }: { organizationId: number }) {
   });
 
   const priceMutation = useMutation({
-    mutationFn: (v: { id: number; retail_price: string }) =>
+    mutationFn: (v: { id: number; field: "retail_price" | "wholesale_price"; value: string }) =>
       api<PharmacyProduct>(`/api/inventory/pharmacy-products/${v.id}/`, {
         method: "PATCH",
-        body: JSON.stringify({ retail_price: v.retail_price || null }),
+        body: JSON.stringify({ [v.field]: v.value || null }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["pharmacy-products", organizationId] }),
   });
@@ -152,6 +164,7 @@ export function OrgCatalogTab({ organizationId }: { organizationId: number }) {
                 <th className="px-4 py-2.5">Form</th>
                 <th className="px-4 py-2.5">Rx</th>
                 <th className="px-4 py-2.5">Retail price (RWF)</th>
+                <th className="px-4 py-2.5">Wholesale price (RWF)</th>
                 <th className="px-4 py-2.5">Min stock</th>
                 <th className="px-4 py-2.5 text-right">Actions</th>
               </tr>
@@ -168,7 +181,26 @@ export function OrgCatalogTab({ organizationId }: { organizationId: number }) {
                       defaultValue={it.retail_price ?? ""}
                       onBlur={(e) => {
                         if (e.target.value !== (it.retail_price ?? ""))
-                          priceMutation.mutate({ id: it.id, retail_price: e.target.value });
+                          priceMutation.mutate({
+                            id: it.id,
+                            field: "retail_price",
+                            value: e.target.value,
+                          });
+                      }}
+                      className="w-28 rounded-md border border-line bg-surface-0 px-2 py-1 text-right font-mono text-sm outline-none focus:border-brand-600"
+                    />
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <input
+                      type="number"
+                      defaultValue={it.wholesale_price ?? ""}
+                      onBlur={(e) => {
+                        if (e.target.value !== (it.wholesale_price ?? ""))
+                          priceMutation.mutate({
+                            id: it.id,
+                            field: "wholesale_price",
+                            value: e.target.value,
+                          });
                       }}
                       className="w-28 rounded-md border border-line bg-surface-0 px-2 py-1 text-right font-mono text-sm outline-none focus:border-brand-600"
                     />
@@ -189,7 +221,7 @@ export function OrgCatalogTab({ organizationId }: { organizationId: number }) {
               ))}
               {items.data.results.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-ink-500">
+                  <td colSpan={7} className="px-4 py-8 text-center text-ink-500">
                     This pharmacy carries no products yet. Add from the catalog.
                   </td>
                 </tr>
