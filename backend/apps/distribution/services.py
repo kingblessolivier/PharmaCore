@@ -18,6 +18,7 @@ from django.db import transaction
 from apps.distribution.models import (
     GoodsReceivedNote,
     GRNLine,
+    InTransitStock,
     OrderItem,
     OrderPayment,
     Reservation,
@@ -238,6 +239,18 @@ def dispatch_order(
             expiry_date=batch.expiry_date,
             quantity=res.quantity,
         )
+        # Hold the units in the in-transit ledger until the pharmacy receives them.
+        InTransitStock.objects.create(
+            order=order,
+            source_org=order.depot,
+            destination_org=order.retail,
+            product=res.order_item.product,
+            batch_number=batch.batch_number,
+            expiry_date=batch.expiry_date,
+            quantity=res.quantity,
+            driver_name=driver_name,
+            vehicle_plate=vehicle_registration,
+        )
         shipped[res.order_item_id] += res.quantity
         res.delete()
 
@@ -371,5 +384,7 @@ def finalize_grn(
     grn.status = GoodsReceivedNote.Status.FINALIZED
     grn.has_discrepancy = any_discrepancy
     grn.save(update_fields=["status", "has_discrepancy"])
+    # The goods have arrived — clear them from the in-transit ledger.
+    order.in_transit.all().delete()
     _generate_grn_and_invoice(grn, user)
     return grn

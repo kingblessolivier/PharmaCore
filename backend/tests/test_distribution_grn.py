@@ -107,6 +107,30 @@ def test_receive_accumulates_onto_existing_stock(sysadmin, depot, retail, produc
 
 
 @pytest.mark.django_db
+def test_in_transit_ledger_holds_then_clears(sysadmin, depot, retail, product) -> None:
+    from apps.distribution.models import InTransitStock
+
+    order = _in_transit_order(depot, retail, product, sysadmin, order_qty=40)
+    # After dispatch: the 40 units are held in the in-transit ledger (counted, not lost).
+    it = InTransitStock.objects.filter(order=order)
+    assert it.count() == 1
+    assert sum(r.quantity for r in it) == 40
+    assert it.first().source_org_id == depot.pk
+    assert it.first().destination_org_id == retail.pk
+    dbatch = InventoryBatch.objects.get(organization=depot, batch_number="AMX-2311")
+    # Conservation: depot has 60 left, 40 in transit, 0 at retail = 100 total.
+    assert dbatch.quantity_available == 60
+
+    _auth(sysadmin).post(f"{BASE}/orders/{order.pk}/receive/")
+    # After receipt: ledger cleared, retail holds the 40.
+    assert InTransitStock.objects.filter(order=order).count() == 0
+    assert (
+        InventoryBatch.objects.get(organization=retail, batch_number="AMX-2311").quantity_available
+        == 40
+    )
+
+
+@pytest.mark.django_db
 def test_cannot_receive_before_approval(sysadmin, depot, retail, product) -> None:
     order = StockOrder.objects.create(depot=depot, retail=retail, status=StockOrder.Status.PENDING)
     OrderItem.objects.create(order=order, product=product, quantity_ordered=5, price_per_unit=1)

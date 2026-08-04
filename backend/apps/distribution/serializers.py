@@ -7,6 +7,7 @@ from rest_framework import serializers
 from apps.distribution.models import (
     GoodsReceivedNote,
     GRNLine,
+    InTransitStock,
     OrderItem,
     OrderPayment,
     Shipment,
@@ -19,6 +20,35 @@ class OrderPaymentSerializer(serializers.ModelSerializer):
         model = OrderPayment
         fields = ["id", "amount", "method", "reference", "paid_at"]
         read_only_fields = ["id", "paid_at"]
+
+
+class InTransitStockSerializer(serializers.ModelSerializer):
+    product_name = serializers.SerializerMethodField()
+    source_name = serializers.CharField(source="source_org.name", read_only=True)
+    destination_name = serializers.CharField(source="destination_org.name", read_only=True)
+    order_number = serializers.CharField(source="order.order_number", read_only=True)
+
+    class Meta:
+        model = InTransitStock
+        fields = [
+            "id",
+            "order",
+            "order_number",
+            "source_org",
+            "source_name",
+            "destination_org",
+            "destination_name",
+            "product",
+            "product_name",
+            "batch_number",
+            "expiry_date",
+            "quantity",
+            "dispatched_at",
+        ]
+        read_only_fields = fields
+
+    def get_product_name(self, obj: InTransitStock) -> str:
+        return f"{obj.product.generic_name} {obj.product.strength}".strip()
 
 
 class ShipmentSerializer(serializers.ModelSerializer):
@@ -110,6 +140,7 @@ class StockOrderSerializer(serializers.ModelSerializer):
     amount_due = serializers.FloatField(read_only=True)
     shipments = ShipmentSerializer(many=True, read_only=True)
     order_payments = OrderPaymentSerializer(many=True, read_only=True)
+    in_transit = InTransitStockSerializer(many=True, read_only=True)
 
     class Meta:
         model = StockOrder
@@ -129,6 +160,7 @@ class StockOrderSerializer(serializers.ModelSerializer):
             "amount_due",
             "payment_due_date",
             "order_payments",
+            "in_transit",
             "items",
             "shipments",
             "created_at",

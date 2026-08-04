@@ -133,6 +133,22 @@ export interface OrderPayment {
   paid_at: string;
 }
 
+export interface InTransitStock {
+  id: number;
+  order: number;
+  order_number: string;
+  source_org: number;
+  source_name: string;
+  destination_org: number;
+  destination_name: string;
+  product: number;
+  product_name: string;
+  batch_number: string;
+  expiry_date: string;
+  quantity: number;
+  dispatched_at: string;
+}
+
 export interface StockOrder {
   id: number;
   order_number: string;
@@ -149,6 +165,7 @@ export interface StockOrder {
   amount_due: number;
   payment_due_date: string | null;
   order_payments: OrderPayment[];
+  in_transit: InTransitStock[];
   items: OrderItem[];
   created_at: string;
 }

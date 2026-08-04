@@ -128,6 +128,40 @@ class ShipmentItem(models.Model):
         return f"{self.product} · {self.batch_number} ×{self.quantity}"
 
 
+class InTransitStock(models.Model):
+    """Stock that has left the source but not yet been received at the destination.
+
+    Held here so every unit is counted *somewhere* at all times: dispatch moves it
+    from the depot's on-hand into this ledger; receiving clears it and adds it to the
+    retail on-hand. No 'ghost stock' visible at two places, none vanished in between.
+    """
+
+    order = models.ForeignKey(StockOrder, on_delete=models.CASCADE, related_name="in_transit")
+    source_org = models.ForeignKey(
+        "iam.Organization", on_delete=models.PROTECT, related_name="outbound_in_transit"
+    )
+    destination_org = models.ForeignKey(
+        "iam.Organization", on_delete=models.PROTECT, related_name="inbound_in_transit"
+    )
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT)
+    batch_number = models.CharField(max_length=100)
+    expiry_date = models.DateField()
+    quantity = models.PositiveIntegerField()
+    driver_name = models.CharField(max_length=150, blank=True, default="")
+    vehicle_plate = models.CharField(max_length=50, blank=True, default="")
+    dispatched_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+        indexes = [
+            models.Index(fields=["destination_org"]),
+            models.Index(fields=["source_org"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.quantity}× {self.product} in transit → {self.destination_org}"
+
+
 class GoodsReceivedNote(models.Model):
     """Reception record at the retail pharmacy — the stock write-event."""
 
