@@ -11,9 +11,10 @@ one database, one system.
 > [brand system](docs/design/02-brand-and-logo-system.md). (The repository folder is
 > still named `Medlink`; that's just the directory, not the product.)
 
-> Status: **early foundation**. The core domain (organizations, users/roles,
-> products, batch inventory) is being built first because every other module
-> reads from it. See the roadmap below for how the rest is sequenced.
+> Status: **Phase 1 complete** ✅ — Identity, Catalog, and Inventory (batch stock with
+> an immutable movement ledger + FEFO) are built end-to-end (backend + UI), plus a
+> pharmacy **Manage** console. Next: Phase 2 (Distribution & Documents). See the
+> [ROADMAP](ROADMAP.md).
 
 ---
 
@@ -21,9 +22,9 @@ one database, one system.
 
 | # | Module | Slug | Depends on | Status |
 |---|--------|------|-----------|--------|
-| 1 | Identity & Access (orgs, departments, users, roles, JWT) | `iam` | — | 🚧 in progress |
-| 2 | Catalog (medicine master data) | `catalog` | iam | 🚧 in progress |
-| 3 | Inventory (batches, expiry, FEFO, per-department stock) | `inventory` | catalog | 🚧 in progress |
+| 1 | Identity & Access (orgs, departments, users, roles, licences, JWT, audit) | `iam` | — | ✅ Phase 1 |
+| 2 | Catalog (medicine master, ingredients, suppliers, barcodes) | `catalog` | iam | ✅ Phase 1 |
+| 3 | Inventory (batches, expiry, FEFO, immutable movements, intake/adjust/wastage) | `inventory` | catalog | ✅ Phase 1 |
 | 4 | Wholesale / B2B distribution (PO → approval → transfer → GRN) | `distribution` | inventory | ⬜ planned |
 | 5 | Documents engine (PO, packing slip, delivery note, GRN, invoices) | `documents` | distribution | ⬜ planned |
 | 6 | Retail POS & dispensing (manual entry, batch pick, sale states) | `retail` | inventory | ⬜ planned |
