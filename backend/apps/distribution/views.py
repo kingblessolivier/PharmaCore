@@ -14,7 +14,11 @@ from rest_framework.serializers import BaseSerializer
 
 from apps.distribution.models import StockOrder
 from apps.distribution.serializers import StockOrderSerializer
-from apps.distribution.services import approve_and_allocate, release_order_reservations
+from apps.distribution.services import (
+    approve_and_allocate,
+    dispatch_order,
+    release_order_reservations,
+)
 from apps.iam.audit import record_audit
 from apps.iam.models import User
 from apps.iam.scoping import organizations_visible_to
@@ -85,10 +89,7 @@ class StockOrderViewSet(viewsets.ModelViewSet):
         )
         return Response(StockOrderSerializer(order).data)
 
-    @action(detail=True, methods=["post"])
-    def approve(self, request: Request, pk: str | None = None) -> Response:
-        """Depot approves a pending order and FEFO-reserves depot stock against it."""
-        order = self.get_object()
+    def _require_depot_admin(self, request: Request, order: StockOrder) -> User:
         user = cast(User, request.user)
         is_depot_admin = (
             user.is_superuser
@@ -96,12 +97,62 @@ class StockOrderViewSet(viewsets.ModelViewSet):
             or (user.has_role("ORG_ADMIN") and user.organization_id == order.depot_id)
         )
         if not is_depot_admin:
-            raise PermissionDenied("Only the depot can approve this order.")
+            raise PermissionDenied("Only the depot can perform this action.")
+        return user
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request: Request, pk: str | None = None) -> Response:
+        """Depot approves a pending order and FEFO-reserves depot stock against it."""
+        order = self.get_object()
+        user = self._require_depot_admin(request, order)
         if order.status != StockOrder.Status.PENDING:
             raise ValidationError("Only pending orders can be approved.")
         approve_and_allocate(order=order, user=user)
         record_audit(
             action="APPROVE",
+            user=user,
+            organization=order.depot,
+            entity_type="stock_order",
+            entity_id=str(order.pk),
+            request=request,
+        )
+        order.refresh_from_db()
+        return Response(StockOrderSerializer(order).data)
+
+    @action(detail=True, methods=["post"])
+    def pick(self, request: Request, pk: str | None = None) -> Response:
+        """Depot begins picking an approved order (APPROVED → PICKING)."""
+        order = self.get_object()
+        user = self._require_depot_admin(request, order)
+        if order.status != StockOrder.Status.APPROVED:
+            raise ValidationError("Only approved orders can be picked.")
+        order.status = StockOrder.Status.PICKING
+        order.save(update_fields=["status", "updated_at"])
+        record_audit(
+            action="PICK",
+            user=user,
+            organization=order.depot,
+            entity_type="stock_order",
+            entity_id=str(order.pk),
+            request=request,
+        )
+        return Response(StockOrderSerializer(order).data)
+
+    @action(detail=True, methods=["post"], url_path="dispatch")
+    def ship(self, request: Request, pk: str | None = None) -> Response:
+        """Depot dispatches a picked order (PICKING → IN_TRANSIT): stock leaves the depot."""
+        order = self.get_object()
+        user = self._require_depot_admin(request, order)
+        if order.status != StockOrder.Status.PICKING:
+            raise ValidationError("Only orders being picked can be dispatched.")
+        dispatch_order(
+            order=order,
+            driver_name=str(request.data.get("driver_name", "")),
+            vehicle_registration=str(request.data.get("vehicle_registration", "")),
+            user=user,
+        )
+        record_audit(
+            action="DISPATCH",
             user=user,
             organization=order.depot,
             entity_type="stock_order",

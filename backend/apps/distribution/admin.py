@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.contrib import admin
 
-from apps.distribution.models import OrderItem, StockOrder
+from apps.distribution.models import OrderItem, Reservation, Shipment, StockOrder
 
 
 class OrderItemInline(admin.TabularInline):
@@ -16,3 +16,14 @@ class StockOrderAdmin(admin.ModelAdmin):
     list_filter = ("status",)
     search_fields = ("order_number",)
     inlines = [OrderItemInline]
+
+
+@admin.register(Shipment)
+class ShipmentAdmin(admin.ModelAdmin):
+    list_display = ("order", "driver_name", "vehicle_registration", "dispatched_at")
+    search_fields = ("order__order_number", "driver_name", "vehicle_registration")
+
+
+@admin.register(Reservation)
+class ReservationAdmin(admin.ModelAdmin):
+    list_display = ("order", "batch", "quantity", "created_at")
