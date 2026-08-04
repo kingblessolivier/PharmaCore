@@ -115,3 +115,16 @@ export interface Manufacturer {
   is_active: boolean;
   created_at: string;
 }
+
+export interface PharmacyProduct {
+  id: number;
+  organization: number;
+  product: number;
+  product_name: string;
+  product_form: string;
+  requires_prescription: boolean;
+  retail_price: string | null;
+  min_stock_level: number;
+  is_active: boolean;
+  created_at: string;
+}
