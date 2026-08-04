@@ -113,7 +113,9 @@ def test_record_payment_rolls_up_settlement(retail_user, depot, retail, product,
     client = _auth(retail_user)
     order_id = client.post(
         "/api/distribution/orders/", _payload(depot, retail, product), format="json"
-    ).json()["id"]  # 100 × 12.00 = 1200 total
+    ).json()[
+        "id"
+    ]  # 100 × 12.00 = 1200 total
 
     # Part payment → PARTIAL.
     r1 = client.post(

@@ -183,6 +183,12 @@ class IntakeView(APIView):
         actor = cast(User, request.user)
         if not organizations_visible_to(actor).filter(pk=data["organization"].pk).exists():
             raise PermissionDenied("You cannot receive stock for that organization.")
+        # Manual intake is for depots importing from suppliers. Retail pharmacies
+        # must receive stock through transfers, so they never re-key (or double-count) it.
+        if data["organization"].type != "DEPOT":
+            raise PermissionDenied(
+                "Only depots receive supplier intake. Retail branches get stock via transfers."
+            )
         batch = receive_intake(
             organization=data["organization"],
             product=data["product"],

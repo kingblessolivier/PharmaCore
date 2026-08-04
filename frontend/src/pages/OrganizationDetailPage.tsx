@@ -129,7 +129,7 @@ export function OrganizationDetailPage() {
 
       {tab === "users" && <OrgUsersTab organizationId={org.id} />}
       {tab === "catalog" && <OrgCatalogTab organizationId={org.id} orgType={org.type} />}
-      {tab === "stock" && <OrgStockTab organizationId={org.id} />}
+      {tab === "stock" && <OrgStockTab organizationId={org.id} orgType={org.type} />}
       {tab === "licences" && <OrgLicensesTab organizationId={org.id} />}
       {tab === "logs" && <OrgLogsTab organizationId={org.id} />}
     </div>
