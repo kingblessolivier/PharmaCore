@@ -116,6 +116,22 @@ export interface Manufacturer {
   created_at: string;
 }
 
+export interface InventoryBatch {
+  id: number;
+  organization: number;
+  product: number;
+  product_name: string;
+  batch_number: string;
+  manufacture_date: string | null;
+  expiry_date: string;
+  days_to_expiry: number;
+  quantity_available: number;
+  wholesale_cost: string | null;
+  storage_location: string;
+  status: string;
+  created_at: string;
+}
+
 export interface PharmacyProduct {
   id: number;
   organization: number;
