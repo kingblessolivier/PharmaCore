@@ -37,17 +37,28 @@ def retail_user(retail: Organization) -> User:
     return u
 
 
+@pytest.fixture
+def offered(depot: Organization, product: Product):
+    """The depot lists the product with a wholesale price (what a PO pulls)."""
+    from apps.inventory.models import PharmacyProduct
+
+    return PharmacyProduct.objects.create(
+        organization=depot, product=product, wholesale_price="12.00"
+    )
+
+
 def _payload(depot: Organization, retail: Organization, product: Product) -> dict:
+    # No price — it comes from the depot's wholesale price.
     return {
         "depot": depot.pk,
         "retail": retail.pk,
-        "items": [{"product": product.pk, "quantity_ordered": 100, "price_per_unit": "12.00"}],
+        "items": [{"product": product.pk, "quantity_ordered": 100}],
     }
 
 
 @pytest.mark.django_db
-def test_create_order_generates_number_and_audits(
-    retail_user: User, depot, retail, product
+def test_create_order_pulls_wholesale_price(
+    retail_user: User, depot, retail, product, offered
 ) -> None:
     resp = _auth(retail_user).post(
         "/api/distribution/orders/", _payload(depot, retail, product), format="json"
@@ -56,8 +67,22 @@ def test_create_order_generates_number_and_audits(
     body = resp.json()
     assert body["order_number"].startswith("PO-")
     assert body["status"] == "DRAFT"
+    # 100 × depot wholesale price (12.00) — pulled automatically, not typed.
     assert body["total_amount"] == 1200.0
+    assert body["items"][0]["price_per_unit"] == "12.00"
     assert AuditLog.objects.filter(action="CREATE", entity_type="stock_order").exists()
+
+
+@pytest.mark.django_db
+def test_order_rejected_if_depot_does_not_offer_product(
+    retail_user: User, depot, retail, product
+) -> None:
+    # No PharmacyProduct listing → depot doesn't offer it → 400.
+    resp = _auth(retail_user).post(
+        "/api/distribution/orders/", _payload(depot, retail, product), format="json"
+    )
+    assert resp.status_code == 400
+    assert "not offered" in str(resp.content)
 
 
 @pytest.mark.django_db
@@ -71,7 +96,7 @@ def test_cannot_order_for_other_org(depot, retail, product) -> None:
 
 
 @pytest.mark.django_db
-def test_submit_and_cancel_flow(retail_user: User, depot, retail, product) -> None:
+def test_submit_and_cancel_flow(retail_user: User, depot, retail, product, offered) -> None:
     client = _auth(retail_user)
     order_id = client.post(
         "/api/distribution/orders/", _payload(depot, retail, product), format="json"
@@ -84,7 +109,7 @@ def test_submit_and_cancel_flow(retail_user: User, depot, retail, product) -> No
 
 
 @pytest.mark.django_db
-def test_depot_sees_incoming_order(depot, retail, product, retail_user) -> None:
+def test_depot_sees_incoming_order(depot, retail, product, retail_user, offered) -> None:
     _auth(retail_user).post(
         "/api/distribution/orders/", _payload(depot, retail, product), format="json"
     )

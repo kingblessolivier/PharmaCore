@@ -97,6 +97,12 @@ class Product(models.Model):
         max_length=20, choices=Storage.choices, default=Storage.AMBIENT
     )
     reorder_level = models.PositiveIntegerField(default=0)
+    rra_item_code = models.CharField(max_length=50, blank=True, default="")  # RRA EBM item code
+    image_url = models.URLField(blank=True, default="")
+    leaflet_url = models.URLField(blank=True, default="")  # patient information leaflet
+    # Cold-chain range (used when storage_condition is COLD_CHAIN / FROZEN)
+    min_temp_c = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    max_temp_c = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

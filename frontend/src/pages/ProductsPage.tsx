@@ -45,6 +45,11 @@ interface ProductForm {
   storage_condition: string;
   requires_prescription: boolean;
   reorder_level: number;
+  rra_item_code: string;
+  image_url: string;
+  leaflet_url: string;
+  min_temp_c: string;
+  max_temp_c: string;
 }
 
 function ProductFormModal({ product, onClose }: { product?: Product; onClose: () => void }) {
@@ -60,6 +65,11 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
     storage_condition: product?.storage_condition ?? "AMBIENT",
     requires_prescription: product?.requires_prescription ?? false,
     reorder_level: product?.reorder_level ?? 0,
+    rra_item_code: product?.rra_item_code ?? "",
+    image_url: product?.image_url ?? "",
+    leaflet_url: product?.leaflet_url ?? "",
+    min_temp_c: product?.min_temp_c ?? "",
+    max_temp_c: product?.max_temp_c ?? "",
   });
   const [error, setError] = useState<string | null>(null);
 
@@ -67,11 +77,21 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
     setForm((f) => ({ ...f, [k]: v }));
 
   const mutation = useMutation({
-    mutationFn: () =>
-      api<Product>(editing ? `/api/catalog/products/${product!.id}/` : "/api/catalog/products/", {
-        method: editing ? "PATCH" : "POST",
-        body: JSON.stringify(form),
-      }),
+    mutationFn: () => {
+      // Empty temps → null (the field is nullable); everything else passes through.
+      const payload = {
+        ...form,
+        min_temp_c: form.min_temp_c === "" ? null : form.min_temp_c,
+        max_temp_c: form.max_temp_c === "" ? null : form.max_temp_c,
+      };
+      return api<Product>(
+        editing ? `/api/catalog/products/${product!.id}/` : "/api/catalog/products/",
+        {
+          method: editing ? "PATCH" : "POST",
+          body: JSON.stringify(payload),
+        },
+      );
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["products"] });
       onClose();
@@ -164,6 +184,58 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
             Prescription required
           </label>
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <TextField
+            label="Pack size"
+            value={form.pack_size}
+            onChange={(e) => set("pack_size", e.target.value)}
+            placeholder="e.g. 10×10 tablets"
+          />
+          <TextField
+            label="RRA (EBM) item code"
+            value={form.rra_item_code}
+            onChange={(e) => set("rra_item_code", e.target.value)}
+          />
+        </div>
+        {form.storage_condition !== "AMBIENT" && (
+          <div className="grid grid-cols-2 gap-3">
+            <TextField
+              label="Min temp (°C)"
+              type="number"
+              value={form.min_temp_c}
+              onChange={(e) => set("min_temp_c", e.target.value)}
+              placeholder="e.g. 2"
+            />
+            <TextField
+              label="Max temp (°C)"
+              type="number"
+              value={form.max_temp_c}
+              onChange={(e) => set("max_temp_c", e.target.value)}
+              placeholder="e.g. 8"
+            />
+          </div>
+        )}
+        <TextField
+          label="Image URL"
+          value={form.image_url}
+          onChange={(e) => set("image_url", e.target.value)}
+          placeholder="https://…"
+        />
+        {form.image_url && (
+          <img
+            src={form.image_url}
+            alt="Product preview"
+            className="h-24 w-24 rounded-md border border-line object-contain"
+            onError={(e) => (e.currentTarget.style.display = "none")}
+            onLoad={(e) => (e.currentTarget.style.display = "block")}
+          />
+        )}
+        <TextField
+          label="Patient leaflet URL"
+          value={form.leaflet_url}
+          onChange={(e) => set("leaflet_url", e.target.value)}
+          placeholder="https://…"
+        />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>
@@ -248,10 +320,29 @@ export function ProductsPage() {
               {data.results.map((p) => (
                 <tr key={p.id} className="border-b border-line last:border-0 hover:bg-surface-100">
                   <td className="px-4 py-2.5">
-                    <Link to={`/products/${p.id}`} className="font-medium text-ink-900 hover:text-brand-700 hover:underline">
-                      {p.generic_name}
-                    </Link>
-                    {p.brand_name && <div className="text-xs text-ink-500">{p.brand_name}</div>}
+                    <div className="flex items-center gap-3">
+                      {p.image_url ? (
+                        <img
+                          src={p.image_url}
+                          alt=""
+                          className="h-9 w-9 shrink-0 rounded-md border border-line object-contain"
+                          onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+                        />
+                      ) : (
+                        <div className="h-9 w-9 shrink-0 rounded-md border border-line bg-surface-100" />
+                      )}
+                      <div>
+                        <Link
+                          to={`/products/${p.id}`}
+                          className="font-medium text-ink-900 hover:text-brand-700 hover:underline"
+                        >
+                          {p.generic_name}
+                        </Link>
+                        {p.brand_name && (
+                          <div className="text-xs text-ink-500">{p.brand_name}</div>
+                        )}
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-2.5 text-ink-700">{p.dosage_form}</td>
                   <td className="px-4 py-2.5 font-mono text-ink-700">{p.strength || "—"}</td>

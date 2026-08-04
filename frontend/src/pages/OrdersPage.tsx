@@ -6,7 +6,15 @@ import { Button, Modal, PageHeader, SelectField, Spinner, TextField } from "../c
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { isAdmin } from "../lib/roles";
-import type { GRN, Me, Organization, OrderItem, Paginated, Product, StockOrder } from "../lib/types";
+import type {
+  GRN,
+  Me,
+  Organization,
+  OrderItem,
+  Paginated,
+  PharmacyProduct,
+  StockOrder,
+} from "../lib/types";
 
 const STATUS_TONE: Record<string, string> = {
   DRAFT: "bg-surface-100 text-ink-700",
@@ -29,30 +37,40 @@ function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | nul
   const qc = useQueryClient();
   const [depot, setDepot] = useState("");
   const [retail, setRetail] = useState(defaultRetail ? String(defaultRetail) : "");
-  const [search, setSearch] = useState("");
   const [items, setItems] = useState<OrderItem[]>([]);
   const [pickProduct, setPickProduct] = useState("");
   const [qty, setQty] = useState("");
-  const [price, setPrice] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const orgs = useQuery({ queryKey: ["organizations"], queryFn: () => api<Paginated<Organization>>("/api/organizations/") });
-  const products = useQuery({
-    queryKey: ["catalog-search", search],
-    queryFn: () => api<Paginated<Product>>(`/api/catalog/products/?search=${encodeURIComponent(search)}`),
+  // The depot's catalog — only what it actually offers, with the wholesale price it set.
+  const listings = useQuery({
+    queryKey: ["depot-catalog", depot],
+    enabled: Boolean(depot),
+    queryFn: () =>
+      api<Paginated<PharmacyProduct>>(`/api/inventory/pharmacy-products/?organization=${depot}`),
   });
   const depots = (orgs.data?.results ?? []).filter((o) => o.type === "DEPOT");
   const retails = (orgs.data?.results ?? []).filter((o) => o.type === "RETAIL");
-  const productName = (id: number) => {
-    const p = products.data?.results.find((x) => x.id === id);
-    return p ? `${p.generic_name} ${p.strength}` : `#${id}`;
-  };
+  // Only sellable listings: active with a wholesale price set.
+  const offered = (listings.data?.results ?? []).filter(
+    (l) => l.is_active && l.wholesale_price !== null,
+  );
+  const picked = offered.find((l) => String(l.product) === pickProduct);
 
   const create = useMutation({
     mutationFn: () =>
       api<StockOrder>("/api/distribution/orders/", {
         method: "POST",
-        body: JSON.stringify({ depot: Number(depot), retail: Number(retail), items }),
+        // Price is intentionally omitted — the server pulls the depot's wholesale price.
+        body: JSON.stringify({
+          depot: Number(depot),
+          retail: Number(retail),
+          items: items.map((it) => ({
+            product: it.product,
+            quantity_ordered: it.quantity_ordered,
+          })),
+        }),
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["orders"] });
@@ -62,12 +80,36 @@ function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | nul
   });
 
   function addItem() {
-    if (!pickProduct || !qty) return;
-    setItems((it) => [...it, { product: Number(pickProduct), quantity_ordered: Number(qty), price_per_unit: price || "0" }]);
+    if (!picked || !qty) return;
+    if (items.some((it) => it.product === picked.product)) {
+      setError("That product is already on this order.");
+      return;
+    }
+    setItems((it) => [
+      ...it,
+      {
+        product: picked.product,
+        product_name: picked.product_name,
+        quantity_ordered: Number(qty),
+        price_per_unit: picked.wholesale_price ?? "0",
+      },
+    ]);
     setPickProduct("");
     setQty("");
-    setPrice("");
+    setError(null);
   }
+
+  // When the depot changes, any items picked from the old depot's catalog are void.
+  function changeDepot(value: string) {
+    setDepot(value);
+    setItems([]);
+    setPickProduct("");
+  }
+
+  const orderTotal = items.reduce(
+    (sum, it) => sum + Number(it.price_per_unit) * it.quantity_ordered,
+    0,
+  );
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -81,7 +123,7 @@ function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | nul
     <Modal title="New purchase order" onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
-          <SelectField label="From depot" value={depot} onChange={(e) => setDepot(e.target.value)}>
+          <SelectField label="From depot" value={depot} onChange={(e) => changeDepot(e.target.value)}>
             <option value="">— select —</option>
             {depots.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </SelectField>
@@ -95,26 +137,55 @@ function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | nul
           <div className="mb-2 text-xs font-semibold uppercase text-ink-500">Items</div>
           {items.map((it, i) => (
             <div key={i} className="flex items-center justify-between border-b border-line py-1 text-sm last:border-0">
-              <span>{it.product_name ?? productName(it.product)}</span>
-              <span className="font-mono text-ink-700">×{it.quantity_ordered} @ {it.price_per_unit}</span>
+              <span>{it.product_name}</span>
+              <span className="font-mono text-ink-700">
+                ×{it.quantity_ordered} @ {Number(it.price_per_unit).toLocaleString()} ={" "}
+                {(Number(it.price_per_unit) * it.quantity_ordered).toLocaleString()}
+              </span>
               <button type="button" onClick={() => setItems((s) => s.filter((_, x) => x !== i))} className="text-ink-500 hover:text-red-600">
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
           ))}
-          <div className="mt-2 flex flex-col gap-2">
-            <TextField label="Search catalog" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="e.g. amoxicillin" />
-            <div className="grid grid-cols-4 items-end gap-2">
-              <div className="col-span-2">
-                <SelectField label="Product" value={pickProduct} onChange={(e) => setPickProduct(e.target.value)}>
-                  <option value="">— select —</option>
-                  {(products.data?.results ?? []).map((p) => <option key={p.id} value={p.id}>{p.generic_name} {p.strength}</option>)}
-                </SelectField>
-              </div>
-              <TextField label="Qty" type="number" value={qty} onChange={(e) => setQty(e.target.value)} />
-              <TextField label="Price" type="number" value={price} onChange={(e) => setPrice(e.target.value)} />
+          {items.length > 0 && (
+            <div className="flex justify-between border-t border-line pt-2 text-sm font-semibold">
+              <span>Total (RWF)</span>
+              <span className="font-mono">{orderTotal.toLocaleString()}</span>
             </div>
-            <Button type="button" variant="secondary" onClick={addItem}><Plus className="h-4 w-4" /> Add item</Button>
+          )}
+          <div className="mt-3 flex flex-col gap-2">
+            {!depot ? (
+              <p className="text-sm text-ink-500">Select a depot to see the products it offers.</p>
+            ) : listings.isLoading ? (
+              <div className="flex justify-center py-2"><Spinner /></div>
+            ) : offered.length === 0 ? (
+              <p className="text-sm text-ink-500">
+                This depot has no priced products in its catalog yet.
+              </p>
+            ) : (
+              <>
+                <div className="grid grid-cols-4 items-end gap-2">
+                  <div className="col-span-2">
+                    <SelectField label="Product" value={pickProduct} onChange={(e) => setPickProduct(e.target.value)}>
+                      <option value="">— select —</option>
+                      {offered.map((l) => (
+                        <option key={l.id} value={l.product}>{l.product_name}</option>
+                      ))}
+                    </SelectField>
+                  </div>
+                  <TextField label="Qty" type="number" value={qty} onChange={(e) => setQty(e.target.value)} />
+                  <TextField
+                    label="Unit price"
+                    value={picked ? Number(picked.wholesale_price).toLocaleString() : "—"}
+                    readOnly
+                    disabled
+                  />
+                </div>
+                <Button type="button" variant="secondary" onClick={addItem} disabled={!picked || !qty}>
+                  <Plus className="h-4 w-4" /> Add item
+                </Button>
+              </>
+            )}
           </div>
         </div>
 

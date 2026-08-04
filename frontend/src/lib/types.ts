@@ -210,6 +210,11 @@ export interface Product {
   is_controlled_substance: boolean;
   storage_condition: string;
   reorder_level: number;
+  rra_item_code: string;
+  image_url: string;
+  leaflet_url: string;
+  min_temp_c: string | null;
+  max_temp_c: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -280,6 +285,7 @@ export interface PharmacyProduct {
   product_form: string;
   requires_prescription: boolean;
   retail_price: string | null;
+  wholesale_price: string | null;
   min_stock_level: number;
   is_active: boolean;
   created_at: string;

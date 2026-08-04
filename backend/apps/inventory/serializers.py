@@ -26,6 +26,7 @@ class PharmacyProductSerializer(serializers.ModelSerializer):
             "product_form",
             "requires_prescription",
             "retail_price",
+            "wholesale_price",
             "min_stock_level",
             "is_active",
             "created_at",

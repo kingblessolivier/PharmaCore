@@ -85,6 +85,8 @@ class OrderItemSerializer(serializers.ModelSerializer):
             "quantity_approved",
             "quantity_shipped",
             "quantity_received",
+            # Price is NOT set by the buyer — it is pulled from the depot's wholesale price.
+            "price_per_unit",
             "line_total",
         ]
 
@@ -119,8 +121,19 @@ class StockOrderSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "order_number", "status", "total_amount", "created_at"]
 
     def create(self, validated_data: dict[str, Any]) -> StockOrder:
+        from apps.inventory.models import PharmacyProduct
+
         items = validated_data.pop("items", [])
         order = StockOrder.objects.create(**validated_data)
         for item in items:
-            OrderItem.objects.create(order=order, **item)
+            product = item["product"]
+            listing = PharmacyProduct.objects.filter(
+                organization=order.depot, product=product, is_active=True
+            ).first()
+            if listing is None or listing.wholesale_price is None:
+                raise serializers.ValidationError(
+                    f"'{product}' is not offered by {order.depot.name} (no wholesale price set)."
+                )
+            # Authoritative: the depot's wholesale price, never the buyer's input.
+            OrderItem.objects.create(order=order, price_per_unit=listing.wholesale_price, **item)
         return order
