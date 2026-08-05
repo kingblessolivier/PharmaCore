@@ -116,6 +116,18 @@ class Organization(models.Model):
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    # Onboarding lifecycle: a new pharmacy is DRAFT while its licences/documents are
+    # captured, PENDING_REVIEW once submitted, ACTIVE once verified (the activation
+    # gate), or SUSPENDED. Existing orgs default to ACTIVE.
+    class OnboardingStatus(models.TextChoices):
+        DRAFT = "DRAFT", "Draft"
+        PENDING_REVIEW = "PENDING_REVIEW", "Pending review"
+        ACTIVE = "ACTIVE", "Active"
+        SUSPENDED = "SUSPENDED", "Suspended"
+
+    onboarding_status = models.CharField(
+        max_length=20, choices=OnboardingStatus.choices, default=OnboardingStatus.ACTIVE
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -124,6 +136,43 @@ class Organization(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class OrganizationDocument(models.Model):
+    """A registration / compliance document for an organization (the paperwork that
+    must be on file before it can trade): RDB certificate, RRA/VAT, Rwanda FDA
+    premises licence, NPC, tax clearance, etc. Captured and verified during onboarding.
+    """
+
+    class DocType(models.TextChoices):
+        RWANDA_FDA_LICENCE = "RWANDA_FDA_LICENCE", "Rwanda FDA premises licence"
+        NPC_LICENCE = "NPC_LICENCE", "NPC pharmacist licence"
+        RDB_CERTIFICATE = "RDB_CERTIFICATE", "RDB registration certificate"
+        RRA_VAT = "RRA_VAT", "RRA / VAT certificate"
+        TAX_CLEARANCE = "TAX_CLEARANCE", "Tax clearance"
+        OTHER = "OTHER", "Other"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="onboarding_documents"
+    )
+    doc_type = models.CharField(max_length=30, choices=DocType.choices)
+    document_number = models.CharField(max_length=100, blank=True, default="")
+    document_url = models.URLField(blank=True, default="")
+    issue_date = models.DateField(null=True, blank=True)
+    expiry_date = models.DateField(null=True, blank=True)
+    is_verified = models.BooleanField(default=False)
+    verified_by = models.ForeignKey(
+        "iam.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    notes = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["organization", "doc_type"])]
+
+    def __str__(self) -> str:
+        return f"{self.doc_type} · {self.organization_id}"
 
 
 class Department(models.Model):

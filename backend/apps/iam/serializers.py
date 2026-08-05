@@ -13,11 +13,35 @@ from apps.iam.models import (
     Department,
     License,
     Organization,
+    OrganizationDocument,
     Permission,
     Role,
     User,
     UserDocument,
 )
+
+
+class OrganizationDocumentSerializer(serializers.ModelSerializer):
+    verified_by_name = serializers.CharField(
+        source="verified_by.username", read_only=True, default=None
+    )
+
+    class Meta:
+        model = OrganizationDocument
+        fields = [
+            "id",
+            "organization",
+            "doc_type",
+            "document_number",
+            "document_url",
+            "issue_date",
+            "expiry_date",
+            "is_verified",
+            "verified_by_name",
+            "notes",
+            "created_at",
+        ]
+        read_only_fields = ["id", "is_verified", "verified_by_name", "created_at"]
 
 
 class UserDocumentSerializer(serializers.ModelSerializer):
@@ -156,10 +180,11 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "latitude",
             "longitude",
             "is_active",
+            "onboarding_status",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "onboarding_status", "created_at", "updated_at"]
 
 
 class DepartmentSerializer(serializers.ModelSerializer):

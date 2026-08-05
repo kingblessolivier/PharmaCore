@@ -18,6 +18,11 @@ Maintenance rules:
 ## [Unreleased]
 
 ### Added
+- **Organisation onboarding & activation gate (Admin).** Capture and **verify** an
+  org's compliance documents (Rwanda FDA / NPC / RDB / RRA / tax clearance), an
+  onboarding **status** (draft → pending → active → suspended) with **activate / suspend**
+  actions that gate whether the pharmacy can trade — admin-gated, org-scoped, audited,
+  with an **Onboarding** modal on the Organizations page.
 - **User identity documents (Admin).** Capture and **verify** identity documents on a
   user account (`UserDocument`: national ID, passport, professional licence, contract) —
   admin-gated, org-scoped, audited, with a **Documents** modal on the Users page (add /

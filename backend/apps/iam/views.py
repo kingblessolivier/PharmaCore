@@ -26,6 +26,7 @@ from apps.iam.models import (
     ImpersonationSession,
     License,
     Organization,
+    OrganizationDocument,
     Permission,
     Role,
     User,
@@ -38,6 +39,7 @@ from apps.iam.serializers import (
     CompanySerializer,
     DepartmentSerializer,
     LicenseSerializer,
+    OrganizationDocumentSerializer,
     OrganizationSerializer,
     PermissionSerializer,
     RoleSerializer,
@@ -263,6 +265,90 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             request=self.request,
         )
         instance.delete()
+
+    def _set_status(self, request: Request, status_value: str, action_name: str) -> Response:
+        org = self.get_object()
+        user = cast(User, request.user)
+        is_admin = user.is_superuser or user.has_role("SYS_ADMIN")
+        if not is_admin and not organizations_visible_to(user).filter(pk=org.pk).exists():
+            raise PermissionDenied("You cannot manage that organization.")
+        org.onboarding_status = status_value
+        org.is_active = status_value == Organization.OnboardingStatus.ACTIVE
+        org.save(update_fields=["onboarding_status", "is_active", "updated_at"])
+        record_audit(
+            action=action_name,
+            user=user,
+            organization=org,
+            entity_type="organization",
+            entity_id=str(org.pk),
+            changes={"onboarding_status": status_value},
+            request=request,
+        )
+        return Response(OrganizationSerializer(org).data)
+
+    @action(detail=True, methods=["post"])
+    def activate(self, request: Request, pk: str | None = None) -> Response:
+        """Pass the activation gate — the organization may now trade."""
+        return self._set_status(request, Organization.OnboardingStatus.ACTIVE, "ORG_ACTIVATE")
+
+    @action(detail=True, methods=["post"])
+    def suspend(self, request: Request, pk: str | None = None) -> Response:
+        """Suspend an organization (stops it trading) — reversible via activate."""
+        return self._set_status(request, Organization.OnboardingStatus.SUSPENDED, "ORG_SUSPEND")
+
+
+class OrganizationDocumentViewSet(viewsets.ModelViewSet):
+    """Registration / compliance documents for organizations. Admin-gated, org-scoped;
+    filter with ``?organization=<id>``. Verifiable; every write is audited."""
+
+    serializer_class = OrganizationDocumentSerializer
+    permission_classes = [IsAuthenticated, IsAdminRole]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+    queryset = OrganizationDocument.objects.select_related("organization", "verified_by")
+
+    def get_queryset(self) -> QuerySet[OrganizationDocument]:
+        user = cast(User, self.request.user)
+        qs = OrganizationDocument.objects.select_related("organization", "verified_by").filter(
+            organization__in=organizations_visible_to(user)
+        )
+        org = self.request.query_params.get("organization")
+        if org and org.isdigit():
+            qs = qs.filter(organization_id=int(org))
+        return qs
+
+    def _guard(self, serializer: BaseSerializer[Any]) -> None:
+        user = cast(User, self.request.user)
+        org = serializer.validated_data.get("organization")
+        if org and not organizations_visible_to(user).filter(pk=org.pk).exists():
+            raise PermissionDenied("That organization is outside your scope.")
+
+    def _audit(self, action: str, obj: OrganizationDocument) -> None:
+        record_audit(
+            action=action,
+            user=cast(User, self.request.user),
+            organization=obj.organization,
+            entity_type="organization_document",
+            entity_id=str(obj.pk),
+            changes={"doc_type": obj.doc_type},
+            request=self.request,
+        )
+
+    def perform_create(self, serializer: BaseSerializer[Any]) -> None:
+        self._guard(serializer)
+        self._audit("CREATE", serializer.save())
+
+    def perform_destroy(self, instance: OrganizationDocument) -> None:
+        self._audit("DELETE", instance)
+        instance.delete()
+
+    @action(detail=True, methods=["post"])
+    def verify(self, request: Request, pk: str | None = None) -> Response:
+        doc = self.get_object()
+        doc.is_verified = True
+        doc.verified_by = cast(User, request.user)
+        doc.save(update_fields=["is_verified", "verified_by"])
+        self._audit("VERIFY", doc)
+        return Response(OrganizationDocumentSerializer(doc).data)
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):
