@@ -46,11 +46,11 @@ subsystem below.
 | 2 | **Receive & QA** | Inbound check, batch/expiry capture, cold‑chain verification, **quarantine hold** → QC → release/reject | Accepting damaged/temperature‑abused/counterfeit stock |
 | 3 | **Warehouse** | Put‑away by storage condition; **zones** (ambient/2–8 °C/−20 °C/controlled), **bins/aisles**, temperature monitoring + excursion alerts, cycle counts | Spoilage, mis‑storage, lost/ghost stock |
 | 4 | **Catalog & price** | Medicine master (FDA reg, ATC/INN, GTIN), **interactions/contraindications**, formulary, price lists (wholesale/retail), controlled/Rx flags | Selling unlisted/mis‑priced/unsafe items |
-| 5 | **Distribute (B2B)** | Retail orders from depot / branch↔branch transfers; approve → ship (**FEFO**) → **in‑transit** → receive; B2B **online ordering**; settlement | "Ghost stock", re‑keying, oversell, unpaid B2B debt |
+| 5 | **Distribute (B2B)** | Depot **chooses what/how much to offer** (offered ≠ on‑hand), price schemes/tiers/bonus; retail orders / branch↔branch transfers; approve → ship (**FEFO**) → **in‑transit** → receive; B2B **online ordering**; settlement | "Ghost stock", re‑keying, oversell, unpaid B2B debt, exposing true inventory |
 | 6 | **Dispense (retail)** | OTC + prescription; pharmacist verification, **interaction/allergy check**, **controlled‑drug register**, cash drawer, receipts, **offline** at the counter | Selling expired/Rx without a pharmacist, unsafe combos, till chaos |
 | 7 | **Sell online** | Patient storefront, prescription upload, click‑&‑collect / delivery, teleconsult hand‑off | Missed demand, manual phone orders |
 | 8 | **Insurance & fiscal** | Eligibility, co‑pay split, claims queue + adjudication + reconciliation, **EBM** fiscal receipts (RRA) | Rejected claims, non‑compliant receipts |
-| 9 | **Returns & recalls** | Customer returns (credit note), return‑to‑supplier, **batch recall** traceability, disposal/destruction | Unrecoverable losses, unsafe stock on shelf |
+| 9 | **Returns, recalls & disputes** | Customer returns (credit note), return‑to‑supplier, **batch recall** traceability, disposal/destruction; **receiving claims/deductions**, **defect/complaint & ADR reporting**, dispute resolution | Unrecoverable losses, unsafe stock on shelf, unresolved claims |
 | 10 | **Finance** | AP (suppliers) / AR (buyers, insurers), ledgers, **aging**, EOD closeout, banking/MoMo, tax, **consolidated HQ** books | Cash leakage, blind margins, unpaid debts |
 | 11 | **People & training** | Recruit → onboard → licences & dispensing rights → attendance/shifts/leave → **payroll (PAYE/RSSB)** → **SOP + competency** → performance → offboard | Unlicensed dispensing, untrained staff |
 | 12 | **Communicate & warn** | Messaging, announcements, tasks, shift notes; **operational alerts** (expiry, low‑stock, licence, temperature, overdue, controlled thresholds) | Things falling through the cracks |
@@ -109,9 +109,11 @@ what's shipped. Status marks each line.
 
 ### 5. Distribution (B2B)
 - ✅ Lean transfer flow (place → **approve = ship** → **receive = land**), FEFO allocation, **in‑transit ledger** (no ghost stock), auto‑list on receipt (no re‑keying), **branch↔branch** transfers, wholesale price auto‑pulled, **B2B settlement** (record‑payment, status roll‑up), documents (PO/DN/GRN/invoice), GRN records.
-- ⬜ **B2B online ordering portal** — retailers browse depot catalog + live stock + their price, place orders, track status, reorder.
-- ⬜ **Credit control** — **party‑wise credit & bill limits**, terms, holds on overdue; backorders & allocation on short stock.
-- ⬜ **Pricing schemes** — multiple price lists, trade/quantity schemes & discounts, contract/customer‑specific pricing, expiry/near‑expiry sale prompts at billing.
+- ⬜ **Offered ≠ on‑hand (the depot decides what to expose).** A depot with 10 boxes may **list only 5**. `offered_qty` is a **published listing** per product, *separate from* physical `on_hand` — the retailer‑facing catalog shows **offered**, never raw stock. Depot can hold back stock (price is rising, reserve for contract customers, hedge), publish in tranches, and set per‑listing price. **Receiving stock does *not* auto‑publish it** — it lands in on‑hand; the depot chooses whether/how much to offer. *(This supersedes the earlier "auto‑list on receipt" behaviour.)*
+- ⬜ **Listing controls** — publish/unpublish, offered quantity + **buffer**, effective‑dated **price per listing**, **re‑list on price change** (old offer closes, new price opens), per‑customer / per‑segment visibility, hide‑when‑below‑buffer.
+- ⬜ **B2B online ordering portal** — retailers browse the depot's **offered** catalog + their price, place orders, track status, reorder.
+- ⬜ **Credit control** — **party‑wise credit & bill limits**, terms, holds on overdue; backorders & **allocation on short/scarce stock**.
+- ⬜ **Pricing schemes** — multiple price lists, trade/quantity schemes & discounts, contract/customer‑specific pricing, expiry/near‑expiry sale prompts at billing (see the [Commercial & trade engine](#commercial--trade-engine-the-buying--selling-tricks)).
 - ⬜ **Controlled‑substance distribution controls** — **trading‑partner licence verification** (buyer is a licensed pharmacy), **suspicious‑order monitoring** (unusual quantity/frequency flags), **saleable‑returns verification** before restock (Rwanda FDA regime; DSCSA/EPCIS‑aligned for export markets).
 - ⬜ **Route/dispatch & delivery** — picking lists, load/manifest, proof‑of‑delivery, driver hand‑off *(full logistics depth; deferred past the lean flow)*.
 - ⬜ Returns from retailers (return‑to‑depot), statements to customers.
@@ -125,7 +127,8 @@ what's shipped. Status marks each line.
 - ⬜ **Interaction/allergy/duplicate‑therapy safety review (DUR)** at dispense (registered patient), counselling notes.
 - ⬜ **Prescription lifecycle** — script intake, **refills & refill‑due reminders**, partial fills, **patient medication history**, prescriber verification.
 - ⬜ **Controlled‑drug register** — statutory running balance, witness, quarterly report, receipt‑to‑dispensing audit trail.
-- ⬜ Patient/customer lookup, loyalty, held/parked sales, price overrides (with approval), discounts, refunds, exchange.
+- ⬜ Patient/customer lookup, held/parked sales, price overrides (with approval), refunds, exchange.
+- ⬜ **Promotions at POS** — apply **coupons / loyalty points / BOGO / bundles / seasonal** offers with **stacking rules + min‑margin floor** (Commercial & trade engine).
 - ⬜ POS calculators (dose, change, discount, unit price) and quick tools.
 
 ### 7. Online (e‑commerce)
@@ -135,7 +138,8 @@ what's shipped. Status marks each line.
 - ⬜ Patient accounts, order history, reorder, **auto‑refill / subscription**, saved medication profiles, personalised reminders.
 - ⬜ **Live pharmacist chat / teleconsultation** hand‑off; diagnostic/appointment booking (future healthcare‑ecosystem hooks).
 - ⬜ **Mobile apps** (Android/iOS) alongside the web storefront; push notifications.
-- ⬜ Online payments (MoMo/Airtel/card), refunds, online→branch stock routing, promotions.
+- ⬜ Online payments (MoMo/Airtel/card), refunds, online→branch stock routing.
+- ⬜ **Promotions & loyalty online** — promo codes, member‑only offers, points earn/redeem, seasonal campaigns (Commercial & trade engine).
 - ⬜ Trilingual patient‑facing content (EN/RW/FR).
 
 ### 8. Insurance
@@ -210,6 +214,77 @@ payroll run, claim resubmit, stock adjustment, user creation, disposal…) route
 
 ---
 
+## Commercial & trade engine (the buying & selling "tricks")
+Real depots and pharmacies don't just move stock at one price — they run a
+commercial game. The system must **model these tactics as first‑class**, not force
+operators to fake them in spreadsheets. (Researched & cited below.)
+
+### Selling side (depot → retailer, and retail → patient)
+- ⬜ **Offered vs on‑hand** — publish fewer units than you hold; hold stock back against a **price rise**, reserve for contract customers, or release in **tranches** (the core model above).
+- ⬜ **Effective‑dated pricing & re‑list on price change** — price changes open a new listing; old offers close. Full **price history** for audit and margin analysis.
+- ⬜ **Tiered / volume discounts** — cheaper unit price at higher quantities; **cumulative (retroactive) discounts** — "buy X over 6 months → rebate/credit."
+- ⬜ **Free goods / bonus schemes** — "buy 10 get 1 free", bonus quantity, sample packs (stock‑ and margin‑accurate, not a hidden price cut).
+- ⬜ **Minimum order quantity (MOQ)** & **case‑pack / multiples** rules; waive MOQ for a first order.
+- ⬜ **Trade / contract / per‑customer price lists** — different prices for different buyers/segments; promotional pricing windows.
+- ⬜ **Payment‑terms levers** — **early‑payment discount** (e.g. 2/10 net 30), **credit terms** (net 30/45) as a closing tool, party‑wise **credit & bill limits**, holds on overdue.
+- ⬜ **Short‑dated & slow‑mover tactics** — discount **near‑expiry** stock to push turnover; **bundle** slow movers with fast movers (auto‑bundler suggestions); near‑expiry **action lists**; expiry prompts at billing.
+- ⬜ **Allocation on scarcity** — when stock is short, ration across buyers by rule (fair‑share / priority customer).
+- ⬜ **Returns levers** — accept near‑expiry returns within a **window** (e.g. 90–120 days before expiry) where credit recovery beats a markdown.
+
+### Buying side (import / procurement)
+- ⬜ **Forward / investment buying** — buy ahead of an expected **price increase**; **deal buying** on supplier promotions (track the deal, its expiry exposure, and the true landed cost).
+- ⬜ **Volume & framework contracts** — bulk/multi‑year commitments for a better rate; **volume‑price contracts**; **pooled/joint purchasing** for bargaining power.
+- ⬜ **Tendering & sourcing** — open / restricted / direct / negotiated / shopping; **scenario & break‑even** analysis; supplier quote comparison (RFQ).
+- ⬜ **Rebates & chargebacks** — supplier rebates, **contract‑price vs list (WAC‑style) chargebacks**, **gross‑to‑net** tracking so true cost is known.
+- ⬜ **Price‑protection clauses** — credit when a supplier's price drops after purchase.
+- ⬜ **Parallel / alternative sourcing** — genuine cross‑border/alternate‑supplier buys for margin (where legal); track provenance.
+- ⬜ **Generic‑substitution economics** — surface the **generic vs brand margin spread** so the counter can substitute profitably & compliantly.
+- ⬜ **Delivery acceptance discipline** — check expiry on every inbound; **refuse short‑dated** stock you can't clear; log deal vs quality trade‑offs.
+
+### Promotions & marketing
+A **campaign engine** that plans, runs, and measures promotions — with rules so a
+promo can't break margin, expiry, or compliance guardrails.
+- ⬜ **Promotion types** — % or amount **discount**, **BOGO / buy‑X‑get‑Y**, **bundle** deals, threshold ("spend N, save M"), **free‑goods/sample**, price‑drop/clearance, **seasonal** offers.
+- ⬜ **Coupons & promo codes** — single/multi‑use, digital + printed, per‑customer targeting, **stacking rules** (which promos combine), start/end dates, budget caps, redemption tracking.
+- ⬜ **Loyalty programme** — points (earn per spend, redeem for discount/free product), **tiers**, member‑only offers, birthday/anniversary, wallet/card, points ledger.
+- ⬜ **Trade promotions (B2B)** — retailer‑facing schemes: promotional price windows, volume/bonus deals, co‑op/display allowances, **promotion accrual** & settlement (ties to rebates/deductions).
+- ⬜ **Targeting & channels** — segment by history/category; push via **SMS / email / in‑app / online storefront** (Connect pipeline); campaign calendar.
+- ⬜ **Guardrails & measurement** — **min‑margin floor** & expiry/compliance checks (no promoting Rx/controlled unlawfully), **approval‑gated** above a threshold, and **uplift/ROI reporting** (redemptions, margin impact, cannibalisation).
+
+> These are **levers the operator controls**, always inside the guardrails: every
+> discount/scheme/holdback is **audited**, margin‑aware, and (where sensitive)
+> **approval‑gated** — the system enables the trade game *without* enabling fraud.
+
+---
+
+## Defects, complaints & dispute resolution
+When goods or money don't match expectations, there must be a **structured claim →
+evidence → resolution** path — not phone calls and lost credits. Routes through the
+[Approvals engine](#a-approvals-engine-the-reusable-authorisation-backbone) and posts
+to Finance as credits/deductions.
+
+### B2B receiving disputes & deductions (buyer ↔ depot/supplier)
+- ⬜ **Raise a claim at receipt** — types: **short‑ship** (fewer than invoiced), **damaged/broken**, **wrong item**, **near/short‑dated**, **price discrepancy**, **quality/seal‑tamper**, **not ordered / over‑ship**.
+- ⬜ **Evidence capture** — photos, **proof‑of‑delivery** noting condition, batch/qty, invoice line reference.
+- ⬜ **Trade vs non‑trade deductions** — pre‑agreed (rebate/promo/volume) vs unanticipated (shortage/damage/return); auto‑match to the invoice line.
+- ⬜ **Resolution outcomes** — **credit note**, replacement/re‑ship, partial accept, refuse & return, or reject claim (with reason); SLA‑timed via the approval engine so nothing stalls.
+- ⬜ **Deduction/short‑pay management** — buyer pays invoice minus disputed amount; track the open deduction to closure; reconcile to the credit note.
+
+### Product‑quality defects & pharmacovigilance
+- ⬜ **Defect / complaint report** — contamination, packaging/labeling defect, therapeutic failure, **suspected counterfeit/falsified**, **adverse drug reaction (ADR)** — with batch/source link.
+- ⬜ **Quarantine & recall link** — a confirmed defect **freezes the batch** across branches and can trigger a **recall**; disposition (return‑to‑supplier / destroy).
+- ⬜ **Regulatory reporting hooks** — notify manufacturer/supplier and **Rwanda FDA** (quality defect / pharmacovigilance / falsified‑product reporting); keep the report + outcome in the document vault.
+
+### Customer & service complaints (retail/online)
+- ⬜ **Complaint log** — product, service, billing, delivery; assignment, resolution, root‑cause, response to patient; feeds quality trends.
+- ⬜ **Escalation & oversight** — unresolved/overdue complaints escalate to a manager/senior (same claim‑lock/SLA/escalation rules as approvals).
+
+### Internal & supplier disputes
+- ⬜ **Supplier chargebacks/claims** — our deductions against a supplier (defective/short/price), statement reconciliation, dispute status.
+- ⬜ **Inter‑branch disputes** — transfer discrepancies between branches (sent ≠ received) with variance approval.
+
+---
+
 ## Master data & core entities (what must exist)
 The first‑class records the whole platform hangs on. Missing ones are gaps to build.
 - ✅ User, Organization (depot/retail/HQ + parent), Department, Location (Rwanda), Role, AuditLog.
@@ -227,6 +302,10 @@ The first‑class records the whole platform hangs on. Missing ones are gaps to 
 - ⬜ **ApprovalRequest / ApprovalStep / ApprovalDecision** (approval engine).
 - ⬜ **OrganizationDocument / UserDocument / EmployeeDocument** (+ Rwanda required sets).
 - ⬜ **StatutoryRate** (versioned, effective‑dated) — PAYE/RSSB/CBHI/VAT.
+- ⬜ **ProductListing / Offer** — `offered_qty`, listing price, buffer, visibility scope, effective dates (on‑hand ≠ offered).
+- ⬜ **PriceScheme / DiscountTier / BonusScheme / Rebate / Chargeback** — the commercial‑engine levers; **CreditTerms / CreditLimit** per customer.
+- ⬜ **Claim / Deduction / Dispute** — receiving disputes, short‑pays, resolutions + evidence; **Complaint**; **DefectReport / AdverseEvent** (pharmacovigilance).
+- ⬜ **Promotion / Campaign / Coupon / LoyaltyAccount / PointsLedger** — the promotions & marketing engine.
 
 ---
 
@@ -238,6 +317,7 @@ Each is a template in the document engine (tamper‑evident, retention‑policie
 - **Insurance:** Claim form, Claim manifest per insurer, EOB (patient), EOP (provider), Prior‑authorization request.
 - **Finance:** AP/AR invoices, Debit/Credit notes, Receipts, Payment vouchers, Remittance advice, Supplier/Customer statements, Trial balance, P&L, Balance sheet, Cash‑flow, EOD/EOM close, VAT/Tax return, Bank reconciliation.
 - **HR:** Employment contract, Offer letter, Payslip, Leave approval, Training/competency certificate, Warning/disciplinary letter, Clearance/exit.
+- **Trade & disputes:** Price‑list / scheme sheet, Quotation/offer, Rebate/credit note, Deduction/short‑pay advice, **Claim form + evidence pack** (photos/PoD), Dispute resolution record, **Defect/complaint report**, ADR/pharmacovigilance report, Recall notice.
 - **Compliance/Admin:** Organisation licence pack, SOP documents, Audit export, Consent record, Approval decision (e‑signed).
 
 ---
@@ -267,8 +347,10 @@ Each is a template in the document engine (tamper‑evident, retention‑policie
 Sales & margin, stock valuation & turns, expiry exposure & wastage, FEFO compliance,
 AR/AP aging, insurer claims status & reconciliation, cash‑up/EOD, VAT/tax, purchasing
 & supplier performance, dispensing & controlled‑drug, payroll & attendance, training/
-competency compliance, licence‑expiry, multi‑branch comparison & HQ consolidation,
-audit trail, KPI dashboards per role — all exportable (PDF/CSV/Excel), schedulable.
+competency compliance, licence‑expiry, **promotion uplift/ROI & loyalty**, **dispute/
+deduction & defect/complaint trends**, offered‑vs‑sold & price‑change history,
+multi‑branch comparison & HQ consolidation, audit trail, KPI dashboards per role —
+all exportable (PDF/CSV/Excel), schedulable.
 
 ---
 
@@ -318,7 +400,7 @@ Legend: ✅ done · 🚧 in progress · ⬜ planned.
 - ⬜ Storage **zones & bins**, **temperature + excursion**, **quarantine/recall**, physical **counts**, reorder management, disposal.
 
 ### Distribution ✅ (core)
-- ✅ Lean transfer flow (place → **approve = ship** → **receive = land**), FEFO allocation, **in‑transit ledger** (no ghost stock), auto‑list on receipt (no re‑keying), **branch↔branch** transfers, wholesale price auto‑pulled, **B2B settlement**, documents (PO/DN/GRN/invoice), GRN records. ⬜ B2B **online ordering portal**, credit control, dispatch/PoD.
+- ✅ Lean transfer flow (place → **approve = ship** → **receive = land**), FEFO allocation, **in‑transit ledger** (no ghost stock), receipt auto‑lands into on‑hand (no re‑keying), **branch↔branch** transfers, wholesale price auto‑pulled, **B2B settlement**, documents (PO/DN/GRN/invoice), GRN records. ⬜ **Offered‑quantity listing model** (depot chooses what/how much to publish — replaces auto‑publish), B2B **online ordering portal**, credit control, dispatch/PoD.
 
 ### Retail POS 🚧
 - ✅ Sale core (search → FEFO → pay → change → **receipt**), split‑tender API, **void**, **partial returns + credit note**, **expired‑stock block**, **Rx/controlled dispensing gate** (pharmacist + patient/prescriber capture) with a **dispensing log**.
@@ -350,7 +432,7 @@ Each phase makes one or more subsystems materially more complete, end‑to‑end
 - **Phase 2 — Distribution & Documents** ✅ — the B2B cycle + document engine.
 - **Phase 3 — Retail counter** 🚧 (~70%) — POS sale, dispensing gate, returns done; **remaining: cash‑drawer, offline‑first sync, Tauri desktop, OTC increment pricing, peripherals, POS calculators.**
 - **Phase 4 — Warehouse depth** ⬜ — storage **zones/bins**, **temperature + excursion**, **quarantine/recall**, stock counts, reorder, disposal. *(Inventory → true WMS.)*
-- **Phase 5 — Procurement & imports** ⬜ — supplier POs, **import + landed‑cost**, goods receipt, supplier invoices (AP), 3‑way match. *(Closes the buy side.)*
+- **Phase 5 — Procurement, imports & the commercial engine** ⬜ — supplier POs, **import + landed‑cost**, goods receipt, supplier invoices (AP), 3‑way match; **buying tactics** (forward/deal buying, tenders, volume/framework contracts, rebates/chargebacks, gross‑to‑net); the **selling‑side trade engine** (offered‑quantity listing, price schemes/tiers, bonus/free‑goods, MOQ, payment terms) and **receiving disputes/deductions + defect/complaint handling**. *(Closes the buy side and makes the depot's commercial game real.)*
 - **Phase 6 — Approvals engine + safety data + master data** ⬜ — the **central approvals inbox** (claim‑lock/SLA/escalation/senior oversight), **Customer/Patient + Prescriber + Prescription** entities, **drug interactions/contraindications/allergy** data, **permission matrix**. *(Unblocks safe dispensing, insurance, and every sensitive action.)*
 - **Phase 7 — Insurance, EBM & the notification pipeline** ⬜ — eligibility + co‑pay split at POS, claims + adjudication + reconciliation, **RRA EBM** fiscal receipts, rules‑based notifications + channels (incl. SMS).
 - **Phase 8 — Finance & consolidation** ⬜ — chart of accounts, journals + auto‑posting, AP/AR, banking/MoMo, tax, EOD/EOM close, **HQ consolidated** books, finance documents, Insights report builder & multi‑branch dashboards.
@@ -394,6 +476,12 @@ decision support beyond interaction/duplication/allergy checks.
 - Pharmacy HR / credential‑based scheduling / CE tracking — [Shifton pharmacy scheduling](https://shifton.com/industries/pharmacy-shift-scheduling/), [Everhour pharmacy scheduling](https://everhour.com/blog/pharmacy-scheduling-software/), [NABP CPE Monitor](https://nabp.pharmacy/programs/cpe-monitor/)
 - Online pharmacy e‑commerce / refills / teleconsult / delivery — [Digital Pharmacy – ecommerce features](https://digitalpharmacy.io/features-in-your-pharmacy-ecommerce-platform/), [CoverMyMeds digital pharmacy/telemedicine](https://www.covermymeds.health/who-we-serve/pharmacy/digital-pharmacy-and-telemedicine)
 - Finance / ERP finance module / inventory valuation — [SoftwareConnect ERP finance modules](https://softwareconnect.com/learn/erp-finance-modules/), [NetSuite ERP finance module](https://www.netsuite.com/portal/resource/articles/erp/erp-finance-module.shtml), [Juleb pharmacy GL](https://juleb.com/blog/pharma-general-ledger-solutions/en)
+- Offered vs on‑hand / reserved / buffer stock — [Stockpilot – available vs offered stock](https://stockpilot.com/blog/inventory-management-depth-available-offered-stock), [ERPAG – on‑hand/reserved/committed](https://learn.erpag.com/project/create-new-product-1/untitled-4/on-hand-reserved-committed-and-awaiting-quantity), [Xoro – inventory reservation](https://xorosoft.com/inventory-reservation-prevent-overselling/)
+- Trade tactics — discounts / MOQ / free goods / payment terms — [Ordercircle – wholesale sales strategies](https://ordercircle.com/blog/7-strategies-to-increase-b2b-wholesale-sales/), [b2bridge – volume discounts](https://b2bridge.io/blog/b2b-volume-discounts/), [BuyersIntelligence – 2/10 net 30](https://blog.buyersintelligence.ai/early-payment-discounts-b2b-2-10-net-30/), [QuickBooks – MOQ](https://quickbooks.intuit.com/r/wholesale-trade/how-minimum-order-quantity-terms-can-earn-you-big-bucks/)
+- Short‑dated / slow‑mover / bundling / rebates‑chargebacks / gross‑to‑net — [StockMeds – short‑dated meds](https://stockmeds.com/short-dated-medications-risk-or-opportunity-for-pharmacies/), [Happy Cabbage – slow‑moving SKUs](https://www.happycabbage.io/post/tactics-to-reduce-slow-moving-skus-at-your-dispensary), [EisnerAmper – gross‑to‑net/WAC](https://www.eisneramper.com/insights/technology/pricing-adjustment-gross-to-net-cat-0318/), [IMA360 – distributor chargebacks](https://ima360.com/reference/chargebacks/what-is-a-distributor-chargeback/)
+- Procurement / tendering / volume contracts / parallel import / generic margins — [Procurement Tactics – pharma procurement](https://procurementtactics.com/pharmaceutical-procurement/), [WHO – tendering & negotiation](https://www.ncbi.nlm.nih.gov/books/NBK570136/bin/webannexb-et6.pdf), [ScienceDirect – generic substitution margins](https://www.sciencedirect.com/science/article/abs/pii/S0014292113000299)
+- Disputes / deductions / defect & complaint handling — [Go Autonomous – B2B claims & disputes](https://goautonomous.io/blogs/b2b-claims-and-dispute-processing-how-autonomous-commerce-resolves-returns-and-credits-without-escalation/), [Tekst – deduction management](https://www.tekst.com/blogs/deduction-management), [Inymbus – retail deductions guide](https://blog.inymbus.com/common-deductions-from-major-retailers-suppliers-guide)
+- Promotions / loyalty / coupons / seasonal & trade promotion — [Antavo – pharmacy loyalty](https://antavo.com/blog/pharmacy-loyalty-programs/), [Xoxoday – pharmacy loyalty guide](https://blog.xoxoday.com/loyalife/pharmacy-loyalty-program/), [DiversifyRx – seasonal promotions](https://diversifyrx.com/pharmacy-profit-seasonal-promotions-for-the-win/), [BlueCart – wholesale discounts & marketing](https://www.bluecart.com/blog/wholesale-discounts-marketing)
 - Rwanda specifics (EBM, MoMo, statutory, insurance, data protection) — see [docs 13, 17, 18](docs/README.md) for the full cited source lists.
 </content>
 </invoke>
