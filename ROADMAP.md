@@ -72,7 +72,7 @@ what's shipped. Status marks each line.
 - ✅ **Staff / PF‑number login** — employees sign in with their **payroll‑file (PF) / staff number** (many counter staff have no email); PF number is the person's key across HR, attendance, payroll, dispensing log & audit.
 - ✅ Organisation model (depot / retail / HQ) + parent link (HQ→branch), departments, **Rwanda location** hierarchy (province→district→sector→cell→village).
 - ✅ Roles + deny‑by‑default RBAC; append‑only **audit log**.
-- ⬜ **Formal company ↔ branch split** (a first‑class `Company` above `Organization`) for large chains that demand it.
+- ✅ **Formal company ↔ branch split** — a first‑class `Company` above `Organization` (branches), with company CRUD, org attach/detach, and **HQ‑of‑company sees all its branches** scoping. Optional: an Organization may still stand alone with no company.
 - ⬜ **Permission matrix** — `permission = resource × action`; roles as permission bundles; per‑permission checks (see [Roles & permissions](#roles--the-permission-matrix)).
 - ⬜ **User provisioning discipline** — users are **created only by HR / Admin / Org‑admin**, never self‑signup; mandatory identity documents on creation (see [User & pharmacy creation](docs/12-requirements-fields-documents-approvals.md)).
 - ⬜ **Pharmacy/organisation onboarding** — licence & document capture (Rwanda FDA, NPC, RDB, RRA), verification, activation gate.

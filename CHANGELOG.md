@@ -18,6 +18,12 @@ Maintenance rules:
 ## [Unreleased]
 
 ### Added
+- **Company ↔ branch split (Admin).** A first-class `Company` above `Organization`:
+  a company owns one or more branch organizations (a solo pharmacy = one company with
+  one branch; a chain = a company with an HQ + branches). Company CRUD (admin-gated,
+  audited, scoped), attach/detach organizations, and **HQ-of-company visibility** (an
+  HQ user sees every branch in their company; a branch sees itself). Organizations may
+  still stand alone with no company. New admin **Companies** page.
 - **Retail cash-drawer / till sessions (Phase 3).** Open a drawer with a float, ring
   up sales against it, and **cash up** at close — the register computes **expected
   cash** (float + cash taken − change given − cash refunds) and the **over/short**.

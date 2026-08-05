@@ -7,7 +7,39 @@ from typing import Any
 
 from rest_framework import serializers
 
-from apps.iam.models import AuditLog, Department, License, Organization, Role, User
+from apps.iam.models import (
+    AuditLog,
+    Company,
+    Department,
+    License,
+    Organization,
+    Role,
+    User,
+)
+
+
+class CompanySerializer(serializers.ModelSerializer):
+    branch_count = serializers.IntegerField(source="branches.count", read_only=True)
+
+    class Meta:
+        model = Company
+        fields = [
+            "id",
+            "name",
+            "legal_name",
+            "tin",
+            "registration_number",
+            "contact_person",
+            "phone",
+            "email",
+            "logo_url",
+            "currency",
+            "is_active",
+            "branch_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "branch_count", "created_at", "updated_at"]
 
 
 class LicenseSerializer(serializers.ModelSerializer):
@@ -66,6 +98,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
         model = Organization
         fields = [
             "id",
+            "company",
             "parent",
             "name",
             "type",
