@@ -31,6 +31,36 @@ class HasRole(BasePermission):
         return type(f"HasRole_{role_code}", (cls,), {"required_role": role_code})
 
 
+class HasPermission(BasePermission):
+    """Grant access only to users whose roles include a given permission code.
+
+    Use via ``HasPermission.require("sale.void")``. Superusers / SYS_ADMIN always pass
+    (see ``User.has_permission``).
+    """
+
+    required_permission: str = ""
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        user = request.user
+        if not user.is_authenticated or not isinstance(user, User):
+            return False
+        return user.has_permission(self.required_permission)
+
+    @classmethod
+    def require(cls, code: str) -> type[HasPermission]:
+        return type(f"HasPermission_{code}", (cls,), {"required_permission": code})
+
+
+class IsSysAdmin(BasePermission):
+    """Only a superuser or SYS_ADMIN — for system-wide config like the role matrix."""
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        user = request.user
+        if not user.is_authenticated or not isinstance(user, User):
+            return False
+        return bool(user.is_superuser or user.has_role("SYS_ADMIN"))
+
+
 class IsAdminRole(BasePermission):
     """Reusable check: superuser, SYS_ADMIN, or ORG_ADMIN. Used to gate admin writes."""
 

@@ -14,12 +14,35 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 
 
+class Permission(models.Model):
+    """A single grantable capability = ``resource`` × ``action`` (e.g. ``sale.void``).
+
+    Roles are bundles of permissions; access checks are per-permission (not per-role
+    name), so a pharmacy can re-shape what a role may do without touching code.
+    """
+
+    resource = models.CharField(max_length=40)  # e.g. "sale", "order", "user"
+    action = models.CharField(max_length=40)  # e.g. "create", "approve", "manage"
+    code = models.CharField(max_length=80, unique=True)  # "<resource>.<action>"
+    description = models.CharField(max_length=200, blank=True, default="")
+
+    class Meta:
+        ordering = ["resource", "action"]
+        constraints = [
+            models.UniqueConstraint(fields=["resource", "action"], name="uniq_resource_action")
+        ]
+
+    def __str__(self) -> str:
+        return self.code
+
+
 class Role(models.Model):
-    """A named role users can hold (base RBAC). Permissions are attached in Phase 1."""
+    """A named role users can hold. A role is a **bundle of permissions**."""
 
     code = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, default="")
+    permissions = models.ManyToManyField(Permission, related_name="roles", blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -166,6 +189,25 @@ class User(AbstractUser):
 
     def has_role(self, code: str) -> bool:
         return self.roles.filter(code=code).exists()
+
+    def has_permission(self, code: str) -> bool:
+        """True if any of the user's roles grants ``code``. Superusers and SYS_ADMIN
+        implicitly hold every permission."""
+        if self.is_superuser or self.has_role("SYS_ADMIN"):
+            return True
+        return self.roles.filter(permissions__code=code).exists()
+
+    def permission_codes(self) -> set[str]:
+        """All permission codes this user holds (via their roles)."""
+        from apps.iam.models import Permission
+
+        if self.is_superuser or self.has_role("SYS_ADMIN"):
+            return set(Permission.objects.values_list("code", flat=True))
+        return set(
+            self.roles.filter(permissions__isnull=False).values_list(
+                "permissions__code", flat=True
+            )
+        )
 
 
 class ImpersonationSession(models.Model):

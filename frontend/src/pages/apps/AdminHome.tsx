@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Boxes, Building2, Network, ShieldCheck, Users } from "lucide-react";
+import { Activity, Boxes, Building2, KeyRound, Network, ShieldCheck, Users } from "lucide-react";
 import { api } from "../../lib/api";
 import type { Paginated } from "../../lib/types";
 import { AppHeader, SectionCard, SectionGrid, StatTile } from "../../components/AppHome";
@@ -64,6 +64,12 @@ export function AdminHome() {
           description="Create and manage staff, assign roles, and view-as any user."
           to="/users"
           meta={n(users)}
+        />
+        <SectionCard
+          icon={KeyRound}
+          title="Roles & permissions"
+          description="The permission matrix — what each role is allowed to do (resource × action)."
+          to="/permissions"
         />
         <SectionCard
           icon={Activity}

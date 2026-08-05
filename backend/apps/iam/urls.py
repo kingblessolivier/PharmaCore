@@ -13,6 +13,7 @@ from apps.iam.views import (
     LoginView,
     MeView,
     OrganizationViewSet,
+    PermissionViewSet,
     RoleViewSet,
     StopImpersonateView,
     UserViewSet,
@@ -24,6 +25,7 @@ router.register("organizations", OrganizationViewSet, basename="organization")
 router.register("departments", DepartmentViewSet, basename="department")
 router.register("users", UserViewSet, basename="user")
 router.register("roles", RoleViewSet, basename="role")
+router.register("permissions", PermissionViewSet, basename="permission")
 router.register("licenses", LicenseViewSet, basename="license")
 router.register("audit-logs", AuditLogViewSet, basename="audit-log")
 
