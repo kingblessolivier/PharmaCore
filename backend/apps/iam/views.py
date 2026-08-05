@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Count, QuerySet
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -57,6 +59,16 @@ def _token_claim(request: Request, key: str) -> Any:
     return token.get(key)  # type: ignore[union-attr]
 
 
+def _check_password_strength(password: str, user: User | None = None) -> None:
+    """Run Django's configured password validators; re-raise as a DRF 400."""
+    if not password:
+        raise ValidationError("A password is required.")
+    try:
+        validate_password(password, user)
+    except DjangoValidationError as exc:
+        raise ValidationError(list(exc.messages)) from exc
+
+
 def _user_by_identifier(identifier: str) -> User | None:
     """Look up a user by username or (non-empty) PF number — mirrors the login backend."""
     from django.db.models import Q
@@ -98,6 +110,7 @@ class MeView(APIView):
         user = cast(User, request.user)
         data = dict(UserSerializer(user).data)
         data["permissions"] = sorted(user.permission_codes())
+        data["must_change_password"] = user.must_change_password
         admin_id = _token_claim(request, "act_as_admin_id")
         if admin_id:
             admin = User.objects.filter(pk=admin_id).first()
@@ -143,6 +156,32 @@ class ImpersonateView(APIView):
             request=request,
         )
         return Response({"access": str(token), "target": UserSerializer(target).data})
+
+
+class ChangePasswordView(APIView):
+    """Let the signed-in user change their own password (old + new, strength-checked)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        old = str(request.data.get("old_password", ""))
+        new = str(request.data.get("new_password", ""))
+        if not user.check_password(old):
+            raise ValidationError({"old_password": "Current password is incorrect."})
+        _check_password_strength(new, user)
+        user.set_password(new)
+        user.must_change_password = False
+        user.save(update_fields=["password", "must_change_password"])
+        record_audit(
+            action="PASSWORD_CHANGE",
+            user=user,
+            organization=user.organization,
+            entity_type="user",
+            entity_id=str(user.pk),
+            request=request,
+        )
+        return Response({"detail": "Password changed."})
 
 
 class StopImpersonateView(APIView):
@@ -565,6 +604,29 @@ class UserViewSet(viewsets.ModelViewSet):
                 "recent": AuditLogSerializer(logs[:50], many=True).data,
             }
         )
+
+    @action(detail=True, methods=["post"], url_path="set-password")
+    def set_password(self, request: Request, pk: str | None = None) -> Response:
+        """Admin resets a user's password (strength-checked); the user must then change
+        it on next sign-in (``must_change_password``). Org-scoped via ``get_object``."""
+        target = self.get_object()
+        actor = cast(User, request.user)
+        if target.pk == actor.pk:
+            raise ValidationError("Use 'change password' to update your own password.")
+        new = str(request.data.get("password", ""))
+        _check_password_strength(new, target)
+        target.set_password(new)
+        target.must_change_password = True
+        target.save(update_fields=["password", "must_change_password"])
+        record_audit(
+            action="PASSWORD_RESET",
+            user=actor,
+            organization=target.organization,
+            entity_type="user",
+            entity_id=str(target.pk),
+            request=request,
+        )
+        return Response({"detail": "Password reset. The user must change it on next sign-in."})
 
     def _guard_org(self, serializer: BaseSerializer[Any]) -> None:
         actor = cast(User, self.request.user)

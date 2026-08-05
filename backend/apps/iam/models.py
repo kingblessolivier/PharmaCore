@@ -240,6 +240,8 @@ class User(AbstractUser):
         Department, null=True, blank=True, on_delete=models.SET_NULL, related_name="users"
     )
     roles = models.ManyToManyField(Role, related_name="users", blank=True)
+    # Set True when an admin resets the password; the user must set a new one.
+    must_change_password = models.BooleanField(default=False)
 
     class Meta(AbstractUser.Meta):  # type: ignore[name-defined]
         constraints = [

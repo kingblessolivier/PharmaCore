@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, BadgeCheck, Eye, FileText, Plus, Trash2 } from "lucide-react";
+import { Activity, BadgeCheck, Eye, FileText, KeyRound, Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
@@ -21,6 +21,7 @@ import {
   Spinner,
   TextField,
 } from "../components/ui";
+import { ResetPasswordModal } from "../components/ResetPasswordModal";
 
 const DOC_TYPES = [
   ["NATIONAL_ID", "National ID"],
@@ -361,6 +362,7 @@ export function UsersPage() {
   const [editing, setEditing] = useState<UserAdmin | null>(null);
   const [activityFor, setActivityFor] = useState<number | null>(null);
   const [docsFor, setDocsFor] = useState<UserAdmin | null>(null);
+  const [resetFor, setResetFor] = useState<UserAdmin | null>(null);
   const [busyViewAs, setBusyViewAs] = useState<number | null>(null);
 
   const users = useQuery({
@@ -469,6 +471,9 @@ export function UsersPage() {
                       <Button variant="secondary" onClick={() => setDocsFor(u)}>
                         <FileText className="h-3.5 w-3.5" /> Documents
                       </Button>
+                      <Button variant="secondary" onClick={() => setResetFor(u)}>
+                        <KeyRound className="h-3.5 w-3.5" /> Reset pw
+                      </Button>
                       <Button variant="secondary" onClick={() => setEditing(u)}>
                         Edit
                       </Button>
@@ -506,6 +511,13 @@ export function UsersPage() {
         <ActivityModal userId={activityFor} onClose={() => setActivityFor(null)} />
       )}
       {docsFor && <DocumentsModal user={docsFor} onClose={() => setDocsFor(null)} />}
+      {resetFor && (
+        <ResetPasswordModal
+          userId={resetFor.id}
+          username={resetFor.username}
+          onClose={() => setResetFor(null)}
+        />
+      )}
     </div>
   );
 }

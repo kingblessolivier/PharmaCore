@@ -6,6 +6,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.iam.views import (
     AuditLogViewSet,
+    ChangePasswordView,
     CompanyViewSet,
     DepartmentViewSet,
     ImpersonateView,
@@ -39,6 +40,7 @@ urlpatterns = [
     path("auth/login", LoginView.as_view(), name="login"),
     path("auth/refresh", TokenRefreshView.as_view(), name="token-refresh"),
     path("auth/me", MeView.as_view(), name="me"),
+    path("auth/change-password", ChangePasswordView.as_view(), name="change-password"),
     path("auth/impersonate", ImpersonateView.as_view(), name="impersonate"),
     path("auth/impersonate/stop", StopImpersonateView.as_view(), name="impersonate-stop"),
     *router.urls,
