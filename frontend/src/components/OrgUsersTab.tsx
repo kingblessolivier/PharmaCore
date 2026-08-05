@@ -46,6 +46,7 @@ function UserModal({
   const qc = useQueryClient();
   const editing = Boolean(user);
   const [username, setUsername] = useState(user?.username ?? "");
+  const [pfNumber, setPfNumber] = useState(user?.pf_number ?? "");
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState(user?.first_name ?? "");
   const [lastName, setLastName] = useState(user?.last_name ?? "");
@@ -58,6 +59,7 @@ function UserModal({
     mutationFn: () => {
       const body: Record<string, unknown> = {
         username,
+        pf_number: pfNumber,
         first_name: firstName,
         last_name: lastName,
         phone,
@@ -91,14 +93,22 @@ function UserModal({
   return (
     <Modal title={editing ? `Edit ${user!.username}` : "Add user"} onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <TextField
-          label="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          required
-          disabled={editing}
-          autoFocus={!editing}
-        />
+        <div className="grid grid-cols-2 gap-3">
+          <TextField
+            label="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+            disabled={editing}
+            autoFocus={!editing}
+          />
+          <TextField
+            label="PF / staff number"
+            value={pfNumber}
+            onChange={(e) => setPfNumber(e.target.value)}
+            placeholder="used to sign in"
+          />
+        </div>
         <TextField
           label={editing ? "New password (leave blank to keep)" : "Password"}
           type="password"

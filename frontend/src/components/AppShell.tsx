@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Activity,
   Bell,
   Building2,
   ChevronDown,
   ClipboardList,
+  Eye,
   FileText,
   LayoutDashboard,
   LogOut,
@@ -190,6 +192,8 @@ const NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, roles: "all" },
   { to: "/organizations", label: "Organizations", icon: Building2, end: false, roles: ["ORG_ADMIN"] },
   { to: "/departments", label: "Departments", icon: Network, end: false, roles: ["ORG_ADMIN"] },
+  { to: "/users", label: "Users", icon: Users, end: false, roles: ["ORG_ADMIN"] },
+  { to: "/activity", label: "Activity & logs", icon: Activity, end: false, roles: ["ORG_ADMIN"] },
   { to: "/products", label: "Catalog", icon: Pill, end: false, roles: ["ORG_ADMIN", "PHARMACIST"] },
   { to: "/suppliers", label: "Suppliers", icon: Truck, end: false, roles: ["ORG_ADMIN"] },
   { to: "/orders", label: "Purchase orders", icon: ClipboardList, end: false, roles: ["ORG_ADMIN", "PHARMACIST"] },
@@ -197,6 +201,27 @@ const NAV: NavItem[] = [
   { to: "/finance", label: "Finance", icon: Wallet, end: false, roles: ["ORG_ADMIN"] },
   { to: "/documents", label: "Documents", icon: FileText, end: false, roles: "all" },
 ];
+
+function ViewAsBanner() {
+  const { user, stopImpersonating } = useAuth();
+  if (!user?.impersonator) return null;
+  return (
+    <div className="sticky top-0 z-50 flex items-center justify-center gap-3 bg-amber-500 px-4 py-1.5 text-sm font-medium text-amber-950">
+      <Eye className="h-4 w-4" />
+      <span>
+        Viewing as <strong>{user.username}</strong>
+        {user.roles.length > 0 && <> ({user.roles.join(", ")})</>} — you are{" "}
+        <strong>{user.impersonator.username}</strong>. Everything you do is audited.
+      </span>
+      <button
+        onClick={() => void stopImpersonating()}
+        className="rounded-md bg-amber-950/90 px-2.5 py-1 text-xs font-semibold text-amber-50 hover:bg-amber-950"
+      >
+        Exit view-as
+      </button>
+    </div>
+  );
+}
 
 export function AppShell() {
   const { user, logout } = useAuth();
@@ -223,6 +248,7 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen bg-surface-100 text-ink-900">
+      <ViewAsBanner />
       <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-line bg-surface-0 px-4">
         <BrandMark />
         <span className="text-[15px] font-semibold tracking-tight">

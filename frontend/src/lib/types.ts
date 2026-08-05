@@ -1,6 +1,7 @@
 export interface Me {
   id: number;
   username: string;
+  pf_number: string;
   email: string;
   first_name: string;
   last_name: string;
@@ -12,6 +13,8 @@ export interface Me {
   is_superuser: boolean;
   roles: string[];
   date_joined: string;
+  /** Present only while an admin is viewing-as this user. */
+  impersonator?: { id: number; username: string } | null;
 }
 
 export type OrgType = "DEPOT" | "RETAIL" | "HQ";
@@ -68,6 +71,7 @@ export interface Role {
 export interface UserAdmin {
   id: number;
   username: string;
+  pf_number: string;
   email: string;
   first_name: string;
   last_name: string;
@@ -87,7 +91,15 @@ export interface AuditLogEntry {
   user: string | null;
   organization: number | null;
   ip_address: string | null;
+  changes?: Record<string, unknown> | null;
   created_at: string;
+}
+
+export interface UserActivity {
+  user: UserAdmin;
+  last_login: string | null;
+  counts: Record<string, number>;
+  recent: AuditLogEntry[];
 }
 
 export interface License {

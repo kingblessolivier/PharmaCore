@@ -108,6 +108,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "username",
+            "pf_number",
             "email",
             "first_name",
             "last_name",
@@ -139,6 +140,7 @@ class UserAdminSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "username",
+            "pf_number",
             "email",
             "first_name",
             "last_name",

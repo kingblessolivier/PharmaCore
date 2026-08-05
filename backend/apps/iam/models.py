@@ -111,6 +111,12 @@ class User(AbstractUser):
     """
 
     phone = models.CharField(max_length=20, blank=True, default="")
+    # Payroll-file / staff number — an alternate login identifier for staff who
+    # have no email. Unique when set; the person's key across HR/attendance/audit.
+    pf_number = models.CharField(
+        max_length=30, blank=True, default="", db_index=True,
+        help_text="Payroll-file / staff number; usable to sign in.",
+    )
     organization = models.ForeignKey(
         Organization, null=True, blank=True, on_delete=models.SET_NULL, related_name="users"
     )
@@ -119,8 +125,46 @@ class User(AbstractUser):
     )
     roles = models.ManyToManyField(Role, related_name="users", blank=True)
 
+    class Meta(AbstractUser.Meta):  # type: ignore[name-defined]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["pf_number"],
+                condition=models.Q(pf_number__gt=""),
+                name="uniq_pf_number_when_set",
+            )
+        ]
+
     def has_role(self, code: str) -> bool:
         return self.roles.filter(code=code).exists()
+
+
+class ImpersonationSession(models.Model):
+    """Records an admin 'view-as' session: who acted as whom, when, and until when.
+
+    Super-admin power is never invisible — every impersonation is stamped here and
+    in the audit log, and the UI shows a banner while it is active.
+    """
+
+    admin = models.ForeignKey(
+        "iam.User", on_delete=models.CASCADE, related_name="impersonations_started"
+    )
+    target = models.ForeignKey(
+        "iam.User", on_delete=models.CASCADE, related_name="impersonated_as"
+    )
+    started_at = models.DateTimeField(auto_now_add=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-started_at"]
+        indexes = [models.Index(fields=["admin", "-started_at"])]
+
+    @property
+    def is_active(self) -> bool:
+        return self.ended_at is None
+
+    def __str__(self) -> str:
+        return f"{self.admin_id} as {self.target_id}"
 
 
 class License(models.Model):
