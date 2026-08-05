@@ -5,7 +5,52 @@ from typing import Any
 
 from rest_framework import serializers
 
-from apps.retail.models import TAX_RATES, Dispensing, Payment, Sale, SaleItem
+from apps.retail.models import (
+    TAX_RATES,
+    Dispensing,
+    DrawerSession,
+    Payment,
+    Sale,
+    SaleItem,
+)
+
+
+class DrawerSessionSerializer(serializers.ModelSerializer):
+    cashier_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DrawerSession
+        fields = [
+            "id",
+            "organization",
+            "cashier",
+            "cashier_name",
+            "status",
+            "opening_float",
+            "counted_cash",
+            "expected_cash",
+            "over_short",
+            "notes",
+            "opened_at",
+            "closed_at",
+        ]
+        read_only_fields = [
+            "id",
+            "cashier",
+            "cashier_name",
+            "status",
+            "counted_cash",
+            "expected_cash",
+            "over_short",
+            "opened_at",
+            "closed_at",
+        ]
+
+    def get_cashier_name(self, obj: DrawerSession) -> str | None:
+        u = obj.cashier
+        if not u:
+            return None
+        return u.get_full_name() or u.username
 
 
 class DispensingSerializer(serializers.ModelSerializer):

@@ -12,6 +12,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 from apps.documents.models import DocType, Document
@@ -20,6 +21,7 @@ from apps.iam.models import User
 from apps.inventory.models import InventoryBatch, StockMovement
 from apps.retail.models import (
     Dispensing,
+    DrawerSession,
     Payment,
     Sale,
     SaleBatchAllocation,
@@ -27,6 +29,12 @@ from apps.retail.models import (
     SaleReturn,
     SaleReturnItem,
 )
+
+_CENTS = Decimal("0.01")
+
+
+def _q(value: Decimal) -> Decimal:
+    return value.quantize(_CENTS)
 
 
 class InsufficientStock(Exception):
@@ -347,3 +355,77 @@ def void_sale(*, sale: Sale, reason: str, user: User | None) -> Sale:
     sale.voided_at = timezone.now()
     sale.save(update_fields=["status", "void_reason", "voided_at", "updated_at"])
     return sale
+
+
+def drawer_report(session: DrawerSession) -> dict[str, Any]:
+    """The cash position of a till session (works while OPEN as an X-report, and on
+    CLOSE as a Z-report). Expected drawer cash =
+    opening float + cash taken − change given − cash refunds.
+
+    Only physical cash affects the drawer; mobile-money / card tenders are reported
+    separately for the shift total but don't change what's in the till.
+    """
+    completed = session.sales.filter(status=Sale.Status.COMPLETED)
+    cash_in = (
+        Payment.objects.filter(
+            sale__drawer_session=session,
+            sale__status=Sale.Status.COMPLETED,
+            method=Payment.Method.CASH,
+        ).aggregate(s=Sum("amount"))["s"]
+        or Decimal("0")
+    )
+    change_out = completed.aggregate(s=Sum("change_due"))["s"] or Decimal("0")
+    refunds = (
+        SaleReturn.objects.filter(sale__drawer_session=session).aggregate(s=Sum("refund_amount"))[
+            "s"
+        ]
+        or Decimal("0")
+    )
+    noncash = (
+        Payment.objects.filter(
+            sale__drawer_session=session, sale__status=Sale.Status.COMPLETED
+        )
+        .exclude(method=Payment.Method.CASH)
+        .aggregate(s=Sum("amount"))["s"]
+        or Decimal("0")
+    )
+    expected = session.opening_float + cash_in - change_out - refunds
+    # Money as strings, matching the rest of the API (DRF coerces decimals to strings).
+    return {
+        "sales_count": completed.count(),
+        "opening_float": str(_q(session.opening_float)),
+        "cash_payments": str(_q(cash_in)),
+        "change_given": str(_q(change_out)),
+        "cash_refunds": str(_q(refunds)),
+        "noncash_payments": str(_q(noncash)),
+        "expected_cash": str(_q(expected)),
+    }
+
+
+@transaction.atomic
+def close_drawer(
+    *, session: DrawerSession, counted_cash: Decimal, user: User | None, notes: str = ""
+) -> DrawerSession:
+    """Cash up: reconcile the counted cash against the expected cash and close."""
+    if session.status != DrawerSession.Status.OPEN:
+        raise ValueError("This drawer is already closed.")
+    expected = Decimal(drawer_report(session)["expected_cash"])
+    session.counted_cash = _q(counted_cash)
+    session.expected_cash = expected
+    session.over_short = _q(counted_cash - expected)
+    session.notes = notes
+    session.status = DrawerSession.Status.CLOSED
+    session.closed_at = timezone.now()
+    session.closed_by = user
+    session.save(
+        update_fields=[
+            "counted_cash",
+            "expected_cash",
+            "over_short",
+            "notes",
+            "status",
+            "closed_at",
+            "closed_by",
+        ]
+    )
+    return session

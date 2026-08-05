@@ -46,6 +46,15 @@ class Sale(models.Model):
     cashier = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
+    # The till session this sale rang up in (set when a drawer is open) — lets the
+    # cash-up reconcile physical cash against what the register expects.
+    drawer_session = models.ForeignKey(
+        "retail.DrawerSession",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sales",
+    )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
     # Snapshotted at completion so the receipt stays reproducible.
     amount_tendered = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -204,3 +213,49 @@ class Payment(models.Model):
 
     def __str__(self) -> str:
         return f"{self.method} {self.amount}"
+
+
+class DrawerSession(models.Model):
+    """A cash-drawer / till session for one cashier at one pharmacy.
+
+    Opened with a **float** (starting cash). Sales rung up while it's open link to
+    it. At **close** the cashier counts the cash; the register reconciles it against
+    the **expected** cash (opening float + cash taken − change given − cash refunds)
+    and records the **over/short**. At most one open drawer per cashier per org.
+    """
+
+    class Status(models.TextChoices):
+        OPEN = "OPEN", "Open"
+        CLOSED = "CLOSED", "Closed"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.PROTECT, related_name="drawer_sessions"
+    )
+    cashier = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN)
+    opening_float = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    counted_cash = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    expected_cash = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    over_short = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    notes = models.CharField(max_length=255, blank=True, default="")
+    opened_at = models.DateTimeField(auto_now_add=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    closed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    class Meta:
+        ordering = ["-opened_at"]
+        indexes = [models.Index(fields=["organization", "status"])]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "cashier"],
+                condition=models.Q(status="OPEN"),
+                name="one_open_drawer_per_cashier",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"Drawer #{self.pk} · {self.get_status_display()}"
