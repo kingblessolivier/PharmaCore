@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   Bell,
+  Boxes,
   Building2,
   ChevronDown,
   ClipboardList,
@@ -184,23 +185,48 @@ interface NavItem {
   to: string;
   label: string;
   icon: typeof LayoutDashboard;
-  end: boolean;
-  roles: "all" | string[]; // "all" = everyone; else visible to admins + these roles
+  end?: boolean;
+  roles?: "all" | string[]; // per-item override; else inherits the group
 }
 
-const NAV: NavItem[] = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, roles: "all" },
-  { to: "/companies", label: "Companies", icon: Building2, end: false, roles: ["ORG_ADMIN"] },
-  { to: "/organizations", label: "Organizations", icon: Building2, end: false, roles: ["ORG_ADMIN"] },
-  { to: "/departments", label: "Departments", icon: Network, end: false, roles: ["ORG_ADMIN"] },
-  { to: "/users", label: "Users", icon: Users, end: false, roles: ["ORG_ADMIN"] },
-  { to: "/activity", label: "Activity & logs", icon: Activity, end: false, roles: ["ORG_ADMIN"] },
-  { to: "/products", label: "Catalog", icon: Pill, end: false, roles: ["ORG_ADMIN", "PHARMACIST"] },
-  { to: "/suppliers", label: "Suppliers", icon: Truck, end: false, roles: ["ORG_ADMIN"] },
-  { to: "/orders", label: "Purchase orders", icon: ClipboardList, end: false, roles: ["ORG_ADMIN", "PHARMACIST"] },
-  { to: "/pos", label: "Point of sale", icon: ShoppingCart, end: false, roles: "all" },
-  { to: "/finance", label: "Finance", icon: Wallet, end: false, roles: ["ORG_ADMIN"] },
-  { to: "/documents", label: "Documents", icon: FileText, end: false, roles: "all" },
+interface NavGroup {
+  label: string; // "" = ungrouped (rendered without a header)
+  roles: "all" | string[]; // "all" = everyone; else visible to admins + these roles
+  items: NavItem[];
+}
+
+// Side nav grouped by subsystem, per docs/design/04-navigation.md §3.1 — Company,
+// Organizations, Departments, Users and the Audit Log all live under ADMIN (not as
+// separate top-level entries).
+const NAV: NavGroup[] = [
+  { label: "", roles: "all", items: [{ to: "/", label: "Dashboard", icon: LayoutDashboard, end: true }] },
+  {
+    label: "Catalog",
+    roles: ["ORG_ADMIN", "PHARMACIST"],
+    items: [{ to: "/products", label: "Products", icon: Pill }],
+  },
+  {
+    label: "Distribution",
+    roles: ["ORG_ADMIN", "PHARMACIST"],
+    items: [
+      { to: "/orders", label: "Purchase orders", icon: ClipboardList },
+      { to: "/suppliers", label: "Suppliers", icon: Truck },
+    ],
+  },
+  { label: "Retail", roles: "all", items: [{ to: "/pos", label: "Point of sale", icon: ShoppingCart }] },
+  { label: "Finance", roles: ["ORG_ADMIN"], items: [{ to: "/finance", label: "Finance", icon: Wallet }] },
+  { label: "Insights", roles: ["ORG_ADMIN"], items: [{ to: "/documents", label: "Documents", icon: FileText }] },
+  {
+    label: "Admin",
+    roles: ["ORG_ADMIN"],
+    items: [
+      { to: "/companies", label: "Organizations & branches", icon: Building2 },
+      { to: "/organizations", label: "Organizations", icon: Network },
+      { to: "/departments", label: "Departments", icon: Boxes },
+      { to: "/users", label: "Users & roles", icon: Users },
+      { to: "/activity", label: "Audit log", icon: Activity },
+    ],
+  },
 ];
 
 function ViewAsBanner() {
@@ -232,9 +258,12 @@ export function AppShell() {
   // whole admin console. Admins see everything.
   const admin = isAdmin(user);
   const userRoles = user?.roles ?? [];
-  const nav = NAV.filter(
-    (n) => n.roles === "all" || admin || n.roles.some((r) => userRoles.includes(r)),
-  );
+  const canSee = (roles: "all" | string[] | undefined) =>
+    roles === undefined || roles === "all" || admin || roles.some((r) => userRoles.includes(r));
+  const nav = NAV.filter((g) => canSee(g.roles)).map((g) => ({
+    ...g,
+    items: g.items.filter((i) => canSee(i.roles ?? g.roles)),
+  }));
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -285,29 +314,46 @@ export function AppShell() {
 
       <div className="flex">
         <nav className="min-h-[calc(100vh-3.5rem)] w-56 border-r border-line bg-surface-0 p-2">
-          {nav.map(({ to, label, icon: Icon, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) =>
-                `mb-0.5 flex items-center gap-2.5 rounded-md px-3 py-2 text-sm ${
-                  isActive
-                    ? "bg-brand-50 font-semibold text-brand-700"
-                    : "text-ink-700 hover:bg-surface-100"
-                }`
-              }
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </NavLink>
-          ))}
-          <div className="mt-3 px-3 text-[11px] uppercase tracking-wide text-ink-500">More modules</div>
-          {["Insurance", "HR & Payroll", "Reporting"].map((m) => (
-            <div key={m} className="px-3 py-1.5 text-sm text-ink-500/60">
-              {m} <span className="text-[10px]">soon</span>
-            </div>
-          ))}
+          {nav.map((group, gi) =>
+            group.items.length === 0 ? null : (
+              <div key={group.label || `g${gi}`} className={group.label ? "mb-1 mt-3 first:mt-0" : ""}>
+                {group.label && (
+                  <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+                    {group.label}
+                  </div>
+                )}
+                {group.items.map(({ to, label, icon: Icon, end }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={end}
+                    className={({ isActive }) =>
+                      `mb-0.5 flex items-center gap-2.5 rounded-md px-3 py-2 text-sm ${
+                        isActive
+                          ? "bg-brand-50 font-semibold text-brand-700"
+                          : "text-ink-700 hover:bg-surface-100"
+                      }`
+                    }
+                  >
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </NavLink>
+                ))}
+              </div>
+            ),
+          )}
+          {admin && (
+            <>
+              <div className="mt-4 px-3 text-[11px] uppercase tracking-wide text-ink-500">
+                More modules
+              </div>
+              {["Insurance", "People (HR)", "Online store"].map((m) => (
+                <div key={m} className="px-3 py-1.5 text-sm text-ink-500/60">
+                  {m} <span className="text-[10px]">soon</span>
+                </div>
+              ))}
+            </>
+          )}
         </nav>
 
         <main className="min-w-0 flex-1 p-6">
