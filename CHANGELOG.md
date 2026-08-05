@@ -18,6 +18,10 @@ Maintenance rules:
 ## [Unreleased]
 
 ### Added
+- **Password controls (Admin).** Admins can **reset a user's password** (forcing a
+  change on next sign-in), users can **change their own** password, both **strength-
+  validated** and audited; `/api/auth/me` exposes `must_change_password`. A **Reset pw**
+  action was added to the Users page.
 - **Per-tenant org settings (Admin).** Each organization now has a **subscription plan**
   (Basic / Standard / Premium / Enterprise), a **brand colour**, and **feature toggles**
   (online store, insurance, loyalty, B2B portal, offline POS), managed by an admin via
