@@ -98,6 +98,7 @@ what's shipped. Status marks each line.
 - ⬜ **Disposal/destruction** — expired/damaged write‑off with witness sign‑off & certificate (esp. controlled).
 - ⬜ **GS1 2D DataMatrix** scan & parse (GTIN + **batch + expiry + serial** in one code) at receipt/dispatch; per‑unit **serialisation & track‑&‑trace** (EPCIS‑ready export for regulated/export markets), aggregation (case→pallet).
 - ⬜ **Cold‑chain rigour** — mean‑kinetic‑temperature, calibrated‑sensor register, excursion investigation & disposition record.
+- ⬜ **Consignment / vendor‑managed inventory (VMI)** — stock physically held but **owned by the supplier until sold/used** (payment triggers on consumption); and our stock placed on consignment at a customer's site — ownership/liability tracked separately from on‑hand.
 - ⬜ Multi‑warehouse per org, put‑away/pick strategies, wave/zone picking (warehouse scale).
 
 ### 4. Procurement & imports
@@ -117,6 +118,8 @@ what's shipped. Status marks each line.
 - ⬜ **Pricing schemes** — multiple price lists, trade/quantity schemes & discounts, contract/customer‑specific pricing, expiry/near‑expiry sale prompts at billing (see the [Commercial & trade engine](#commercial--trade-engine-the-buying--selling-tricks)).
 - ⬜ **Controlled‑substance distribution controls** — **trading‑partner licence verification** (buyer is a licensed pharmacy), **suspicious‑order monitoring** (unusual quantity/frequency flags), **saleable‑returns verification** before restock (Rwanda FDA regime; DSCSA/EPCIS‑aligned for export markets).
 - ⬜ **Route/dispatch & delivery** — picking lists, load/manifest, proof‑of‑delivery, driver hand‑off *(full logistics depth; deferred past the lean flow)*.
+- ⬜ **Field sales / route‑to‑market** — **sales reps / medical reps**, **pre‑sales** (rep takes orders on a mobile visit) and **van sales** (sell‑from‑stock on the vehicle), **territories/beats + journey plans**, visit logging & call reports, rep **targets & commission/incentive** schemes.
+- ⬜ **Institutional & B2G customers** — hospitals, health centres, clinics, NGOs, government; **tender/bid response** (quote to a tender, contract award, scheduled call‑off orders), contract pricing & delivery schedules.
 - ⬜ Returns from retailers (return‑to‑depot), statements to customers.
 
 ### 6. Retail (POS)
@@ -130,6 +133,7 @@ what's shipped. Status marks each line.
 - ⬜ **Controlled‑drug register** — statutory running balance, witness, quarterly report, receipt‑to‑dispensing audit trail.
 - ⬜ Patient/customer lookup, held/parked sales, price overrides (with approval), refunds, exchange.
 - ⬜ **Promotions at POS** — apply **coupons / loyalty points / BOGO / bundles / seasonal** offers with **stacking rules + min‑margin floor** (Commercial & trade engine).
+- ⬜ **Clinical / pharmacy services** — **vaccinations, injections, point‑of‑care testing/screening (BP, glucose, malaria…), consultations** as **billable services**: service catalog, **appointment scheduling**, consent, service record/notes, follow‑up, and their own receipts/claims.
 - ⬜ POS calculators (dose, change, discount, unit price) and quick tools.
 
 ### 7. Online (e‑commerce)
@@ -298,6 +302,39 @@ to Finance as credits/deductions.
 
 ---
 
+## Quality Management System (QMS / GDP)
+A depot that wants to pass a **GDP inspection** needs more than a defect log — it
+needs a formal QMS. (Most common inspection findings: temperature‑oversight gaps,
+supplier‑governance failures, ineffective CAPA, documentation‑integrity issues.)
+- ⬜ **Deviation management** — log any departure from procedure/spec, classify, investigate **root cause**.
+- ⬜ **CAPA** — corrective & preventive actions: plan → implement → **verify effectiveness** → close, with due dates & owners (via the approvals engine).
+- ⬜ **Change control** — controlled review/approval of process/system/supplier changes.
+- ⬜ **Self‑inspection / internal audit** — scheduled audits, findings, follow‑up to closure.
+- ⬜ **Supplier & customer qualification** — approve/qualify trading partners (licences, GDP status), periodic re‑qualification.
+- ⬜ **Equipment calibration & maintenance** — fridges/sensors/scales: calibration schedule, maintenance log, out‑of‑calibration handling.
+- ⬜ **Document & SOP control** — versioned SOPs, controlled distribution, training‑to‑SOP linkage, **retention**.
+- ⬜ **Risk management** — risk register + risk‑based prioritisation feeding inspections and CAPA.
+
+## Supporting modules (smaller but required)
+- ⬜ **Contract & agreement management** — supplier/customer/tenant contracts & price agreements, renewal alerts, linked to pricing & credit.
+- ⬜ **Expense management** — staff expense claims & **advances/floats**, approval, reimbursement (MoMo), posting to Finance.
+- ⬜ **Asset & equipment register** — fridges, shelving, IT, **vehicles** (light fleet: assignment, service/fuel log, insurance/roadworthiness expiry) — full GPS telematics stays out of scope.
+- ⬜ **Accounting export / interoperability** — export to an external accountant / accounting package (Sage/QuickBooks‑style) + standard data export.
+- ⬜ **Help & support** — in‑app help, guided tours, support/issue tickets, feedback.
+
+---
+
+## Go‑live, onboarding & configuration
+Nothing works on day one without **bringing the business's existing reality in** —
+a real gap that sinks ERP rollouts if ignored.
+- ⬜ **Tenant onboarding wizard** — org/licence capture, branches, users/roles, departments, locations, settings.
+- ⬜ **Opening balances** — **opening stock** (batches, qty, valuation) reconciled to the GL, **opening AR/AP** (open invoices with aging preserved), **opening GL / trial balance**, cash/bank, **employee & leave balances**. Summary‑balance approach first; transaction‑level optional.
+- ⬜ **Data migration** — import catalog, customers/suppliers, patients, price lists from spreadsheets/legacy (CSV + mapping + validation + dry‑run).
+- ⬜ **Configuration** — **document/number sequences** (invoice/PO/GRN numbering) per tenant, **fiscal calendar/periods**, tax classes, statutory‑rate seed, rounding/currency, approval thresholds, notification rules.
+- ⬜ **Go‑live reconciliation & validation** — trial balance ties to legacy, AR/AP aging matches, stock valuation matches physical count; post‑go‑live checklist & hypercare.
+
+---
+
 ## Master data & core entities (what must exist)
 The first‑class records the whole platform hangs on. Missing ones are gaps to build.
 - ✅ User, Organization (depot/retail/HQ + parent), Department, Location (Rwanda), Role, AuditLog.
@@ -319,6 +356,13 @@ The first‑class records the whole platform hangs on. Missing ones are gaps to 
 - ⬜ **PriceScheme / DiscountTier / BonusScheme / Rebate / Chargeback** — the commercial‑engine levers; **CreditTerms / CreditLimit** per customer.
 - ⬜ **Claim / Deduction / Dispute** — receiving disputes, short‑pays, resolutions + evidence; **Complaint**; **DefectReport / AdverseEvent** (pharmacovigilance).
 - ⬜ **Promotion / Campaign / Coupon / LoyaltyAccount / PointsLedger** — the promotions & marketing engine.
+- ⬜ **SalesRep / Territory / JourneyPlan / Visit / CommissionScheme** — field sales / route‑to‑market.
+- ⬜ **InstitutionalCustomer / Tender / Bid / Contract** — B2G/institutional selling & agreements.
+- ⬜ **ConsignmentStock** — supplier‑ or self‑owned consignment (ownership ≠ location).
+- ⬜ **ClinicalService / ServiceAppointment / ServiceRecord** — billable pharmacy services.
+- ⬜ **Deviation / CAPA / ChangeControl / SelfInspection / RiskItem / CalibrationRecord** — QMS/GDP.
+- ⬜ **ExpenseClaim / Advance / Asset / Vehicle** — supporting modules.
+- ⬜ **OpeningBalance / NumberSequence / FiscalPeriod** — go‑live & configuration.
 
 ---
 
@@ -481,14 +525,14 @@ Each phase makes one or more subsystems materially more complete, end‑to‑end
 - **Phase 1 — Core data + design system** ✅ — Catalog, Inventory core, org/branch model.
 - **Phase 2 — Distribution & Documents** ✅ — the B2B cycle + document engine.
 - **Phase 3 — Retail counter** 🚧 (~70%) — POS sale, dispensing gate, returns done; **remaining: cash‑drawer, offline‑first sync, Tauri desktop, OTC increment pricing, peripherals, POS calculators.**
-- **Phase 4 — Warehouse depth** ⬜ — storage **zones/bins**, **temperature + excursion**, **quarantine/recall**, stock counts, reorder, disposal. *(Inventory → true WMS.)*
-- **Phase 5 — Procurement, imports & the commercial engine** ⬜ — supplier POs, **import + landed‑cost**, goods receipt, supplier invoices (AP), 3‑way match; **buying tactics** (forward/deal buying, tenders, volume/framework contracts, rebates/chargebacks, gross‑to‑net); the **selling‑side trade engine** (offered‑quantity listing, price schemes/tiers, bonus/free‑goods, MOQ, payment terms) and **receiving disputes/deductions + defect/complaint handling**. *(Closes the buy side and makes the depot's commercial game real.)*
+- **Phase 4 — Warehouse depth & QMS** ⬜ — storage **zones/bins**, **temperature + excursion**, **quarantine/recall**, stock counts, reorder, disposal, **consignment/VMI**; the **Quality Management System** (deviations, CAPA, change control, self‑inspection, supplier qualification, equipment calibration) for GDP. *(Inventory → true WMS.)*
+- **Phase 5 — Procurement, imports, commercial engine & field sales** ⬜ — supplier POs, **import + landed‑cost**, goods receipt, supplier invoices (AP), 3‑way match; **buying tactics** (forward/deal buying, tenders, volume/framework contracts, rebates/chargebacks, gross‑to‑net); the **selling‑side trade engine** (offered‑quantity listing, price schemes/tiers, bonus/free‑goods, MOQ, payment terms), **field sales / route‑to‑market** (reps, van/pre‑sales, territories, commissions), **institutional/B2G + tenders**, and **receiving disputes/deductions + defect/complaint handling**. *(Closes the buy side and makes the depot's commercial game real.)*
 - **Phase 6 — Approvals engine + safety data + master data** ⬜ — the **central approvals inbox** (claim‑lock/SLA/escalation/senior oversight), **Customer/Patient + Prescriber + Prescription** entities, **drug interactions/contraindications/allergy** data, **permission matrix**. *(Unblocks safe dispensing, insurance, and every sensitive action.)*
 - **Phase 7 — Insurance, EBM & the notification pipeline** ⬜ — eligibility + co‑pay split at POS, claims + adjudication + reconciliation, **RRA EBM** fiscal receipts, rules‑based notifications + channels (incl. SMS).
 - **Phase 8 — Finance, credit & performance** ⬜ — chart of accounts, journals + auto‑posting, AP/**AR + customer‑credit management (limits/terms/holds/DSO/dunning)**, banking/MoMo, tax, EOD/EOM close, **investment/equity + performance cockpit (gross/net profit, ROI/GMROI)**, **HQ consolidated** books, finance documents & calculators, Insights report builder & multi‑branch dashboards.
 - **Phase 9 — People, payroll, training & SOP** ⬜ — employee master + **PF‑number login**, recruit→onboard→licences→**automated attendance/overtime/shifts/leave**→**gross→net payroll (PAYE/RSSB/CBHI + loans)**→**SOP + training + competency**→performance→offboard, HR documents, controlled‑drug assurance, self‑service portal.
-- **Phase 10 — Online selling & Connect (full)** ⬜ — patient **e‑commerce** + prescription upload + delivery/click‑&‑collect; full **messaging, announcements, tasks, shift notes, knowledge base**, workspace tools (todo/calendar/calculators/templates).
-- **Phase 11 — Hardening, certification & launch** ⬜ — real EBM adapter + **RRA CIS certification**, real insurer/MoMo/SMS adapters, **Postgres RLS**, observability, backups + restore drill, a11y audit, load/e2e, data‑protection registration, **pilot** at one depot + one chain.
+- **Phase 10 — Online, services & Connect (full)** ⬜ — patient **e‑commerce** + prescription upload + delivery/click‑&‑collect; **clinical/pharmacy services** (vaccination/testing/consults) + **appointment scheduling**; full **messaging, announcements, tasks, shift notes, knowledge base**, workspace tools (todo/calendar/calculators/templates).
+- **Phase 11 — Onboarding, hardening, certification & launch** ⬜ — **go‑live tooling** (tenant onboarding wizard, **opening balances**, data migration, number sequences/fiscal periods, reconciliation & hypercare); real EBM adapter + **RRA CIS certification**, real insurer/MoMo/SMS adapters, **Postgres RLS**, observability, backups + restore drill, a11y audit, load/e2e, data‑protection registration, **pilot** at one depot + one chain.
 
 > Sequencing rationale: finish the **counter** (3) — a pharmacy that can't sell isn't
 > usable; make the **warehouse** and **buy side** real (4–5) so depots run end‑to‑end;
@@ -537,6 +581,11 @@ decision support beyond interaction/duplication/allergy checks.
 - Finance performance / profit / ROI / GMROI — [RxConnexion – pharmacy KPIs](https://www.rxconnexion.com/post/top-kpis-for-a-successful-pharmacy-business-what-to-track-for-growth-and-profitability), [Fleming Advisors – profitability & margins](https://www.fleming-advisors.com/post/the-pharmacy-profitability-playbook-understanding-key-metrics-and-margins), [Alchemy – ROI vs ROE](https://www.alchemyhealth.com/articles/a-comprehensive-guide-how-to-measure-the-roi-for-your-on-site-pharmacy-understanding-the-difference-between-roe-and-roi)
 - Customer credit / AR / DSO / collections — [OpenStax – receivables management](https://openstax.org/books/principles-of-finance-2e/pages/19-4-receivables-management), [Intrum – AR management](https://www.intrum.com/insights/guides-and-articles/what-is-accounts-receivable-management-and-why-does-it-matter/), [Harding Group – DSO/terms/credit policy](https://www.thehardinggroup.biz/blog/speeding-up-collections-dso-terms-and-credit-policies/)
 - Buying/selling documents & trade terminology — [Artsyl – proforma vs PO](https://www.artsyltech.com/proforma-invoice-vs-purchase-order), [Cleverence – purchase terminology](https://www.cleverence.com/articles/for-business/purchase-terminology-7049/), [Wikipedia – debit note](https://en.wikipedia.org/wiki/Debit_note), [Billdu – document types](https://faq.billdu.com/en/articles/3001362-document-types-and-differences)
+- Field sales / sales‑force management (reps, territories) — [CloudApper – manage pharma sales force](https://www.cloudapper.ai/sales-force-management/manage-pharmaceutical-sales-force/), [PharmExec – sales‑force effectiveness](https://www.pharmexec.com/view/reinventing-pharma-sales-force-effectiveness)
+- QMS / GDP / deviations / CAPA / change control — [Scilife – QMS in pharma](https://www.scilife.io/blog/qms-in-pharma-guide), [IntuitionLabs – deviations/CAPA/change control](https://intuitionlabs.ai/articles/deviations-capa-change-control), [Zamann – GDP audit & compliance 2026](https://zamann-pharma.com/2026/03/26/good-distribution-practice-gdp-audit-and-compliance-in-year/)
+- Clinical/pharmacy services & appointment scheduling — [EnlivenHealth – pharmacy scheduling](https://enlivenhealth.co/clinical-experience/pharmacy-scheduling-software), [NCPA – vaccination toolkit](https://ncpa.org/no-excuses-vaccination-toolkit)
+- Consignment / VMI & institutional tenders — [Identi – consignment inventory FAQ](https://identimedical.com/faqs/how-to-manage-consignment-inventory/), [Solistica – consignment to hospitals](https://blog.solistica.com/en/the-supply-chain-and-the-consignment-of-goods-to-hospitals)
+- ERP go‑live / data migration / opening balances — [Wiss – ERP implementation roadmap](https://wiss.com/erp-implementation-roadmap-from-selection-to-go-live/), [CAI – ERP go‑live checklist](https://caisoft.com/resources/erp-go-live-checklist/), [Openetech – financial data migration](https://erp.openetech.com/blog/erp/financial-data-migration-in-erp)
 - Rwanda specifics (EBM, MoMo, statutory, insurance, data protection) — see [docs 13, 17, 18](docs/README.md) for the full cited source lists.
 </content>
 </invoke>
