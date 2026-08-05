@@ -181,6 +181,9 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "longitude",
             "is_active",
             "onboarding_status",
+            "plan",
+            "brand_color",
+            "feature_flags",
             "created_at",
             "updated_at",
         ]

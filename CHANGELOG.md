@@ -18,6 +18,10 @@ Maintenance rules:
 ## [Unreleased]
 
 ### Added
+- **Per-tenant org settings (Admin).** Each organization now has a **subscription plan**
+  (Basic / Standard / Premium / Enterprise), a **brand colour**, and **feature toggles**
+  (online store, insurance, loyalty, B2B portal, offline POS), managed by an admin via
+  an org **Settings** modal (audited).
 - **Organisation onboarding & activation gate (Admin).** Capture and **verify** an
   org's compliance documents (Rwanda FDA / NPC / RDB / RRA / tax clearance), an
   onboarding **status** (draft → pending → active → suspended) with **activate / suspend**
