@@ -41,6 +41,38 @@ export function StatTile({ label, value, hint }: { label: string; value: ReactNo
   );
 }
 
+/** A row of frequently-used actions (the Finacle "action tabs" pattern). */
+export function QuickActions({ children }: { children: ReactNode }) {
+  return <div className="mb-6 flex flex-wrap gap-2">{children}</div>;
+}
+
+/** A quick-action pill/button that navigates to a task. */
+export function QuickAction({
+  to,
+  icon: Icon,
+  label,
+  primary = false,
+}: {
+  to: string;
+  icon: LucideIcon;
+  label: string;
+  primary?: boolean;
+}) {
+  return (
+    <Link
+      to={to}
+      className={`inline-flex items-center gap-2 rounded-md px-3.5 py-2 text-sm font-medium transition-colors ${
+        primary
+          ? "bg-brand-600 text-white hover:bg-brand-700"
+          : "border border-line bg-surface-0 text-ink-700 hover:bg-surface-100"
+      }`}
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+    </Link>
+  );
+}
+
 /** A section card linking into one of the app's areas. */
 export function SectionCard({
   icon: Icon,
