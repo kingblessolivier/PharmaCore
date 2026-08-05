@@ -60,7 +60,7 @@ const APPS: AppTile[] = [
   { label: "Inventory", hue: "#0891B2", icon: Boxes, to: "/organizations", roles: ["ORG_ADMIN"] },
   { label: "Finance", hue: "#15803D", icon: Wallet, to: "/finance", roles: ["ORG_ADMIN"] },
   { label: "Insights", hue: "#DB2777", icon: BarChart3, to: "/", roles: "all" },
-  { label: "Admin", hue: "#475569", icon: ShieldCheck, to: "/companies", roles: ["ORG_ADMIN"] },
+  { label: "Admin", hue: "#475569", icon: ShieldCheck, to: "/admin", roles: ["ORG_ADMIN"] },
   { label: "Insurance", hue: "#7C3AED", icon: Shield, to: null, roles: "all" },
   { label: "People", hue: "#EA580C", icon: Users, to: null, roles: "all" },
   { label: "Online", hue: "#0EA5E9", icon: Globe, to: null, roles: "all" },

@@ -18,6 +18,19 @@ Maintenance rules:
 ## [Unreleased]
 
 ### Added
+- **App homes + app-switcher springboard (workspace layout).** A top-left waffle
+  opens a grid of subsystem tiles (Oracle-Fusion / Google-Workspace pattern); each
+  built app opens its **home page** showing what's inside it — starting with the
+  **Admin home** (stat strip + section cards for Organizations & branches, Users,
+  Departments, Audit log).
+
+### Fixed
+- **Admin pages are now route-guarded.** Non-admins could reach admin pages
+  (`/admin`, `/companies`, `/users`, …) by typing the URL even though the nav hid
+  them; a `RequireRoles` guard now bounces them to the dashboard — matching what the
+  nav already enforces. (Data was already API-scoped; this closes the UI hole.)
+
+### Added (earlier)
 - **Company ↔ branch split (Admin).** A first-class `Company` above `Organization`:
   a company owns one or more branch organizations (a solo pharmacy = one company with
   one branch; a chain = a company with an HQ + branches). Company CRUD (admin-gated,

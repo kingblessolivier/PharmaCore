@@ -1,0 +1,77 @@
+import { useQuery } from "@tanstack/react-query";
+import { Activity, Boxes, Building2, Network, ShieldCheck, Users } from "lucide-react";
+import { api } from "../../lib/api";
+import type { Paginated } from "../../lib/types";
+import { AppHeader, SectionCard, SectionGrid, StatTile } from "../../components/AppHome";
+
+// Only the count is needed for the overview — fetch a single row.
+function useCount(key: string, path: string) {
+  return useQuery({
+    queryKey: ["count", key],
+    queryFn: () => api<Paginated<unknown>>(path),
+    select: (d) => d.count,
+  });
+}
+
+export function AdminHome() {
+  const companies = useCount("companies", "/api/companies/?page_size=1");
+  const orgs = useCount("orgs", "/api/organizations/?page_size=1");
+  const users = useCount("users", "/api/users/?page_size=1");
+  const depts = useCount("departments", "/api/departments/?page_size=1");
+  const n = (q: { data?: number; isLoading: boolean }) => (q.isLoading ? "…" : (q.data ?? 0));
+
+  return (
+    <div>
+      <AppHeader
+        icon={ShieldCheck}
+        hue="#475569"
+        title="Admin"
+        subtitle="Companies, branches, people, access and the audit trail — the control room."
+      />
+
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatTile label="Companies" value={n(companies)} />
+        <StatTile label="Organizations" value={n(orgs)} />
+        <StatTile label="Users" value={n(users)} />
+        <StatTile label="Departments" value={n(depts)} />
+      </div>
+
+      <SectionGrid>
+        <SectionCard
+          icon={Building2}
+          title="Organizations & branches"
+          description="Companies and the branches (depots, pharmacies, HQs) they own."
+          to="/companies"
+          meta={n(companies)}
+        />
+        <SectionCard
+          icon={Network}
+          title="Organizations"
+          description="Every depot, retail pharmacy and HQ — profile, licences, stock."
+          to="/organizations"
+          meta={n(orgs)}
+        />
+        <SectionCard
+          icon={Boxes}
+          title="Departments"
+          description="Operational departments within each organization."
+          to="/departments"
+          meta={n(depts)}
+        />
+        <SectionCard
+          icon={Users}
+          title="Users & roles"
+          description="Create and manage staff, assign roles, and view-as any user."
+          to="/users"
+          meta={n(users)}
+        />
+        <SectionCard
+          icon={Activity}
+          title="Audit log"
+          description="The immutable trail of every login, change, and view-as session."
+          to="/activity"
+        />
+      </SectionGrid>
+    </div>
+  );
+}
