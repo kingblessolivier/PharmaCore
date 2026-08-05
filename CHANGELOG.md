@@ -18,6 +18,12 @@ Maintenance rules:
 ## [Unreleased]
 
 ### Added
+- **Admin oversight foundation.** Sign in with a **PF/staff number** (not just a
+  username); **view-as / impersonation** so an admin can enter any user's session to
+  see exactly what they see and do (banner-flagged in the UI, fully audited, blocked
+  for self / other admins / out-of-scope users); **per-user activity** (recent audit
+  trail + action counts + last login); and an **Activity & logs explorer** with
+  filters (user / action / entity / date). New admin **Users** and **Activity** pages.
 - Full system analysis & design documentation set (`docs/`): research findings,
   key decisions (ADRs), data model, SRS, use cases, architecture, workflows/state
   machines, API design, security & compliance.

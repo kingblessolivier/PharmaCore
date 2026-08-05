@@ -47,7 +47,7 @@ export function LoginPage() {
 
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
           <TextField
-            label="Username"
+            label="Username or PF number"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoFocus

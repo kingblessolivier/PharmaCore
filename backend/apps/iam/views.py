@@ -4,18 +4,30 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from django.db.models import QuerySet
+from django.db.models import Count, QuerySet
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from apps.iam.audit import record_audit
-from apps.iam.models import AuditLog, Department, License, Organization, Role, User
+from apps.iam.audit import _client_ip, record_audit
+from apps.iam.models import (
+    AuditLog,
+    Department,
+    ImpersonationSession,
+    License,
+    Organization,
+    Role,
+    User,
+)
 from apps.iam.permissions import CanManageOrg, IsAdminRole
 from apps.iam.scoping import organizations_visible_to
 from apps.iam.serializers import (
@@ -29,31 +41,124 @@ from apps.iam.serializers import (
 )
 
 
+def _token_claim(request: Request, key: str) -> Any:
+    """Read a custom claim off the request's validated JWT (None if absent)."""
+    token = request.auth
+    if token is None:
+        return None
+    return token.get(key)  # type: ignore[union-attr]
+
+
+def _user_by_identifier(identifier: str) -> User | None:
+    """Look up a user by username or (non-empty) PF number — mirrors the login backend."""
+    from django.db.models import Q
+
+    if not identifier:
+        return None
+    return User.objects.filter(
+        Q(username=identifier) | Q(pf_number=identifier, pf_number__gt="")
+    ).first()
+
+
 class LoginView(TokenObtainPairView):
-    """Obtain a JWT access/refresh pair; records an audit entry on success."""
+    """Obtain a JWT access/refresh pair; records an audit entry on success.
+
+    The ``username`` field accepts either a username or a PF/staff number.
+    """
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        username = request.data.get("username", "")
+        identifier = request.data.get("username", "")
         try:
             response = super().post(request, *args, **kwargs)
         except Exception:
             # Failed login (bad credentials / inactive) — record a security event.
-            user = User.objects.filter(username=username).first()
+            user = _user_by_identifier(identifier)
             record_audit(action="LOGIN_FAILED", user=user, entity_type="auth", request=request)
             raise
         if response.status_code == status.HTTP_200_OK:
-            user = User.objects.filter(username=username).first()
+            user = _user_by_identifier(identifier)
             record_audit(action="LOGIN", user=user, entity_type="auth", request=request)
         return response
 
 
 class MeView(APIView):
-    """Return the authenticated user's profile."""
+    """Return the authenticated user's profile (plus the impersonator, if any)."""
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> Response:
-        return Response(UserSerializer(cast(User, request.user)).data)
+        data = dict(UserSerializer(cast(User, request.user)).data)
+        admin_id = _token_claim(request, "act_as_admin_id")
+        if admin_id:
+            admin = User.objects.filter(pk=admin_id).first()
+            data["impersonator"] = (
+                {"id": admin.pk, "username": admin.username} if admin else None
+            )
+        return Response(data)
+
+
+class ImpersonateView(APIView):
+    """Admin **view-as**: start a session and return an access token *for the target
+    user*, carrying the admin's id + session id so the app can show a banner and the
+    action is fully audited. Admin-only, scope-checked, never self/other-admin."""
+
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    def post(self, request: Request) -> Response:
+        actor = cast(User, request.user)
+        if _token_claim(request, "act_as_admin_id"):
+            raise PermissionDenied("Already viewing as another user — exit first.")
+        target = get_object_or_404(User, pk=request.data.get("user_id"))
+        if target.pk == actor.pk:
+            raise PermissionDenied("You cannot view as yourself.")
+        if target.is_superuser or target.has_role("SYS_ADMIN"):
+            raise PermissionDenied("You cannot view as another system admin.")
+        if not (actor.is_superuser or actor.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(actor)
+            if not target.organization_id or not visible.filter(pk=target.organization_id).exists():
+                raise PermissionDenied("That user is outside your organization.")
+        session = ImpersonationSession.objects.create(
+            admin=actor, target=target, ip_address=_client_ip(request)
+        )
+        token = AccessToken.for_user(target)
+        token["act_as_admin_id"] = actor.pk
+        token["imp"] = session.pk
+        record_audit(
+            action="IMPERSONATE_START",
+            user=actor,
+            organization=target.organization,
+            entity_type="user",
+            entity_id=str(target.pk),
+            changes={"target": target.username, "session": session.pk},
+            request=request,
+        )
+        return Response({"access": str(token), "target": UserSerializer(target).data})
+
+
+class StopImpersonateView(APIView):
+    """End the current view-as session (called with the impersonation token)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request) -> Response:
+        session_id = _token_claim(request, "imp")
+        if session_id:
+            session = ImpersonationSession.objects.filter(
+                pk=session_id, ended_at__isnull=True
+            ).first()
+            if session:
+                session.ended_at = timezone.now()
+                session.save(update_fields=["ended_at"])
+                record_audit(
+                    action="IMPERSONATE_STOP",
+                    user=session.admin,
+                    organization=session.target.organization,
+                    entity_type="user",
+                    entity_id=str(session.target_id),
+                    changes={"target": session.target.username, "session": session.pk},
+                    request=request,
+                )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class OrganizationViewSet(viewsets.ModelViewSet):
@@ -235,10 +340,20 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
         if not (actor.is_superuser or actor.has_role("SYS_ADMIN")):
             org_id = actor.organization_id
             qs = qs.filter(organization_id=org_id) if org_id else qs.none()
-        org = self.request.query_params.get("organization")
-        if org:
+        params = self.request.query_params
+        if org := params.get("organization"):
             qs = qs.filter(organization_id=org)
-        return qs
+        if user_id := params.get("user"):
+            qs = qs.filter(user_id=user_id)
+        if act := params.get("action"):
+            qs = qs.filter(action=act)
+        if entity := params.get("entity_type"):
+            qs = qs.filter(entity_type=entity)
+        if since := params.get("since"):
+            qs = qs.filter(created_at__date__gte=since)
+        if until := params.get("until"):
+            qs = qs.filter(created_at__date__lte=until)
+        return qs.order_by("-created_at")
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -263,6 +378,28 @@ class UserViewSet(viewsets.ModelViewSet):
         if org:
             qs = qs.filter(organization_id=org)
         return qs
+
+    @action(detail=True, methods=["get"])
+    def activity(self, request: Request, pk: str | None = None) -> Response:
+        """What this user has been doing: recent audit trail + action counts + last login.
+
+        Org-scoped via ``get_object`` (uses ``get_queryset``), so an ORG_ADMIN can only
+        inspect users in their own organization.
+        """
+        user = self.get_object()
+        logs = AuditLog.objects.filter(user=user).order_by("-created_at")
+        counts = {
+            row["action"]: row["n"]
+            for row in logs.values("action").annotate(n=Count("id")).order_by("-n")
+        }
+        return Response(
+            {
+                "user": UserSerializer(user).data,
+                "last_login": user.last_login,
+                "counts": counts,
+                "recent": AuditLogSerializer(logs[:50], many=True).data,
+            }
+        )
 
     def _guard_org(self, serializer: BaseSerializer[Any]) -> None:
         actor = cast(User, self.request.user)

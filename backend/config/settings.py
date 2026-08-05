@@ -122,6 +122,12 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
 ]
 
+# Allow sign-in by username OR PF/staff number; keep the default backend as fallback.
+AUTHENTICATION_BACKENDS = [
+    "apps.iam.backends.PFOrUsernameBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+
 # --- i18n / tz (English-only UI per ADR-004; Rwanda locale conventions) ---
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "Africa/Kigali"
