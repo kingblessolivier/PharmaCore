@@ -4,6 +4,8 @@ The visual, brand, and interaction design system for PharmaCore. This is the
 authority for *how the system looks and feels* — the counterpart to the technical
 design in [../README.md](../README.md).
 
+> **Alignment note.** PharmaCore is now framed as a **workspace of subsystems** (Google-Workspace / Oracle-ERP style). The full end-to-end layout — subsystem tiles, per-subsystem logos, workspace tools (todo / calendar / calculators), finance document templates, and the dashboards/charts — lives in the **[application blueprint](12-application-blueprint.md)**, which extends the specs below. The [ROADMAP](../../ROADMAP.md) carries current build status.
+
 **Design direction:** *Clean clinical B2B.* In the lineage of **Google Material 3**,
 **Microsoft Fluent 2**, **Linear**, and **Stripe** — restrained color (color
 carries meaning, never decoration), generous whitespace, calm high-density data,
@@ -24,6 +26,7 @@ and one clear primary action per view. A pharmacist should feel the system is
 | 09 | [Dashboards, cards & charts](09-dashboards-and-charts.md) | Stat cards, chart forms, and the **validated colour-blind-safe chart palette** (light + dark) |
 | 10 | [Motion & micro-interactions](10-motion-and-microinteractions.md) | Motion tokens, the interaction catalog, loading/feedback, reduced-motion |
 | 11 | [UX writing & terminology](11-ux-writing-and-terminology.md) | Voice, microcopy, canonical terms (English-only UI, ESL-friendly) |
+| 12 | [Application blueprint](12-application-blueprint.md) | **Full end-to-end layout** — subsystem tiles/logos, workspace shell, per-module screens, workspace tools, document templates, charts |
 
 ## Non-negotiables (the pre-delivery checklist, applied everywhere)
 - SVG icons only — **never emoji as icons**.
@@ -33,5 +36,7 @@ and one clear primary action per view. A pharmacist should feel the system is
 - Color is never the *only* signal (always pair with icon/label) — for colour-blind safety.
 
 ## Status
-Design specification. Reference implementation (tokens as CSS variables / Tailwind
-config, component code) comes with the build phase.
+Design specification — with the **reference implementation already underway**: tokens
+are live as Tailwind/CSS variables, and the component library, AppShell (role-scoped
+nav), POS, dashboards, and forms are built against these specs. See the
+[ROADMAP](../../ROADMAP.md) for per-subsystem status.
