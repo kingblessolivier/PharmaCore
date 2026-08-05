@@ -128,6 +128,20 @@ class Organization(models.Model):
     onboarding_status = models.CharField(
         max_length=20, choices=OnboardingStatus.choices, default=OnboardingStatus.ACTIVE
     )
+
+    # --- Per-tenant settings, plan & branding ---
+    class Plan(models.TextChoices):
+        BASIC = "BASIC", "Basic"
+        STANDARD = "STANDARD", "Standard"
+        PREMIUM = "PREMIUM", "Premium"
+        ENTERPRISE = "ENTERPRISE", "Enterprise"
+
+    plan = models.CharField(max_length=20, choices=Plan.choices, default=Plan.STANDARD)
+    # Primary brand colour (hex, e.g. "#0D9488") — logo_url above is the brand mark.
+    brand_color = models.CharField(max_length=9, blank=True, default="")
+    # Per-tenant feature toggles, e.g. {"online_store": true, "insurance": false}.
+    feature_flags = models.JSONField(default=dict, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

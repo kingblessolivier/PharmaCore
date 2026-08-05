@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Settings2, ShieldCheck, Trash2 } from "lucide-react";
+import { Plus, Settings2, ShieldCheck, Sliders, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { OrganizationForm } from "../components/OrganizationForm";
 import { OrgOnboardingModal, type OnboardingOrg } from "../components/OrgOnboardingModal";
+import { OrgSettingsModal } from "../components/OrgSettingsModal";
 import { Badge, Button, ConfirmModal, Modal, PageHeader, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -18,6 +19,7 @@ export function OrganizationsPage() {
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Organization | null>(null);
   const [onboarding, setOnboarding] = useState<OnboardingOrg | null>(null);
+  const [settingsFor, setSettingsFor] = useState<Organization | null>(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["organizations"],
@@ -103,6 +105,11 @@ export function OrganizationsPage() {
                         </Button>
                       )}
                       {admin && (
+                        <Button variant="secondary" onClick={() => setSettingsFor(o)}>
+                          <Sliders className="h-4 w-4" /> Settings
+                        </Button>
+                      )}
+                      {admin && (
                         <button
                           onClick={() => setDeleting(o)}
                           className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
@@ -140,6 +147,13 @@ export function OrganizationsPage() {
       )}
       {onboarding && (
         <OrgOnboardingModal org={onboarding} onClose={() => setOnboarding(null)} />
+      )}
+      {settingsFor && (
+        <OrgSettingsModal
+          orgId={settingsFor.id}
+          orgName={settingsFor.name}
+          onClose={() => setSettingsFor(null)}
+        />
       )}
       {deleting && (
         <ConfirmModal
