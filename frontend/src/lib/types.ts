@@ -425,6 +425,32 @@ export interface AgingReport {
   payables: AgingSide;
 }
 
+export interface DrawerReport {
+  sales_count: number;
+  opening_float: string;
+  cash_payments: string;
+  change_given: string;
+  cash_refunds: string;
+  noncash_payments: string;
+  expected_cash: string;
+}
+
+export interface DrawerSession {
+  id: number;
+  organization: number;
+  cashier: number | null;
+  cashier_name: string | null;
+  status: "OPEN" | "CLOSED";
+  opening_float: string;
+  counted_cash: string | null;
+  expected_cash: string | null;
+  over_short: string | null;
+  notes: string;
+  opened_at: string;
+  closed_at: string | null;
+  report?: DrawerReport;
+}
+
 export type PaymentMethod = "CASH" | "MOBILE_MONEY" | "CARD";
 export type SaleStatus = "OPEN" | "COMPLETED" | "VOIDED";
 

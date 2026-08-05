@@ -13,6 +13,7 @@ import {
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
+import { DrawerBar } from "../components/DrawerBar";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type {
@@ -188,6 +189,7 @@ export function PosPage() {
       setError(null);
       setDispensingOpen(false);
       void qc.invalidateQueries({ queryKey: ["pos-batches", orgId] });
+      void qc.invalidateQueries({ queryKey: ["drawer-current", orgId] });
     },
     onError: (err) =>
       setError(err instanceof ApiError ? err.message : "Could not complete the sale."),
@@ -234,6 +236,7 @@ export function PosPage() {
           </Button>
         }
       />
+      <DrawerBar orgId={orgId} />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px]">
         {/* Catalog */}
         <div>

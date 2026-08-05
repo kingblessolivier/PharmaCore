@@ -18,6 +18,11 @@ Maintenance rules:
 ## [Unreleased]
 
 ### Added
+- **Retail cash-drawer / till sessions (Phase 3).** Open a drawer with a float, ring
+  up sales against it, and **cash up** at close — the register computes **expected
+  cash** (float + cash taken − change given − cash refunds) and the **over/short**.
+  X/Z report endpoint, one open drawer per cashier, opener/admin-only close, audited.
+  POS shows a till-status bar with live expected cash and a cash-up flow.
 - **Admin oversight foundation.** Sign in with a **PF/staff number** (not just a
   username); **view-as / impersonation** so an admin can enter any user's session to
   see exactly what they see and do (banner-flagged in the UI, fully audited, blocked

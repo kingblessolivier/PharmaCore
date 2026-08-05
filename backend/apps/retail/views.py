@@ -7,8 +7,10 @@ listing; stock moves via the FEFO service. See apps/retail/services.py.
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
+from django.db import IntegrityError
 from django.db.models import QuerySet
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -20,13 +22,19 @@ from rest_framework.response import Response
 from apps.iam.audit import record_audit
 from apps.iam.models import Organization, User
 from apps.iam.scoping import organizations_visible_to
-from apps.retail.models import Dispensing, Sale
-from apps.retail.serializers import DispensingSerializer, SaleSerializer
+from apps.retail.models import Dispensing, DrawerSession, Sale
+from apps.retail.serializers import (
+    DispensingSerializer,
+    DrawerSessionSerializer,
+    SaleSerializer,
+)
 from apps.retail.services import (
     DispensingRequired,
     InsufficientStock,
     PharmacistRequired,
+    close_drawer,
     complete_sale,
+    drawer_report,
     return_sale_items,
     void_sale,
 )
@@ -88,8 +96,13 @@ class SaleViewSet(viewsets.ModelViewSet):
             raise ValidationError("A sale needs at least one item.")
 
         sale = serializer.save(cashier=user, status=Sale.Status.OPEN)
+        # Link the sale to this cashier's open till session (if any) so the cash-up
+        # can reconcile it. Sales rung up with no open drawer simply aren't counted.
+        sale.drawer_session = DrawerSession.objects.filter(
+            organization=org, cashier=user, status=DrawerSession.Status.OPEN
+        ).first()
         sale.sale_number = f"SALE-{sale.pk:06d}"
-        sale.save(update_fields=["sale_number"])
+        sale.save(update_fields=["sale_number", "drawer_session"])
         record_audit(
             action="CREATE",
             user=user,
@@ -219,3 +232,110 @@ class DispensingViewSet(viewsets.ReadOnlyModelViewSet):
         if org and org.isdigit():
             qs = qs.filter(sale__organization_id=int(org))
         return qs
+
+
+class DrawerSessionViewSet(viewsets.ModelViewSet):
+    """Cash-drawer / till sessions: open with a float, ring up sales, then cash up
+    (count the cash → over/short) and close. Org-scoped; one open drawer per cashier."""
+
+    serializer_class = DrawerSessionSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "post", "head", "options"]
+    queryset = DrawerSession.objects.select_related("organization", "cashier")
+
+    def get_queryset(self) -> QuerySet[DrawerSession]:
+        user = cast(User, self.request.user)
+        qs = DrawerSession.objects.select_related("organization", "cashier")
+        if not _is_admin(user):
+            qs = qs.filter(organization__in=organizations_visible_to(user))
+        org = self.request.query_params.get("organization")
+        if org and org.isdigit():
+            qs = qs.filter(organization_id=int(org))
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param)
+        return qs
+
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """Open a drawer with a starting float. One open drawer per cashier per org."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = cast(User, request.user)
+        org = serializer.validated_data["organization"]
+        _require_org_member(user, org)
+        try:
+            session = serializer.save(cashier=user, status=DrawerSession.Status.OPEN)
+        except IntegrityError as exc:
+            raise ValidationError("You already have an open drawer — close it first.") from exc
+        record_audit(
+            action="DRAWER_OPEN",
+            user=user,
+            organization=org,
+            entity_type="drawer_session",
+            entity_id=str(session.pk),
+            request=request,
+        )
+        return Response(DrawerSessionSerializer(session).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["get"])
+    def current(self, request: Request) -> Response:
+        """The caller's open drawer for ?organization, with a live X-report (204 if none)."""
+        user = cast(User, request.user)
+        qs = self.get_queryset().filter(status=DrawerSession.Status.OPEN, cashier=user)
+        org_id = request.query_params.get("organization")
+        if org_id and org_id.isdigit():
+            qs = qs.filter(organization_id=int(org_id))
+        session = qs.first()
+        if session is None:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        data = dict(DrawerSessionSerializer(session).data)
+        data["report"] = drawer_report(session)
+        return Response(data)
+
+    @action(detail=True, methods=["get"])
+    def report(self, request: Request, pk: str | None = None) -> Response:
+        """X/Z cash report for a drawer (running while open, final once closed)."""
+        session = self.get_object()
+        data = dict(DrawerSessionSerializer(session).data)
+        data["report"] = drawer_report(session)
+        return Response(data)
+
+    @action(detail=True, methods=["post"])
+    def close(self, request: Request, pk: str | None = None) -> Response:
+        """Cash up: submit the counted cash → over/short, and close the drawer."""
+        session = self.get_object()
+        user = cast(User, request.user)
+        _require_org_member(user, session.organization)
+        if not _is_admin(user) and session.cashier_id != user.pk:
+            raise PermissionDenied(
+                "Only the cashier who opened this drawer (or an admin) can close it."
+            )
+        raw = request.data.get("counted_cash")
+        if raw is None or raw == "":
+            raise ValidationError("Enter the counted cash to close the drawer.")
+        try:
+            counted = Decimal(str(raw))
+        except (InvalidOperation, TypeError) as exc:
+            raise ValidationError("Counted cash must be a number.") from exc
+        try:
+            close_drawer(
+                session=session,
+                counted_cash=counted,
+                user=user,
+                notes=str(request.data.get("notes", "")).strip(),
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        record_audit(
+            action="DRAWER_CLOSE",
+            user=user,
+            organization=session.organization,
+            entity_type="drawer_session",
+            entity_id=str(session.pk),
+            changes={"over_short": str(session.over_short)},
+            request=request,
+        )
+        session.refresh_from_db()
+        data = dict(DrawerSessionSerializer(session).data)
+        data["report"] = drawer_report(session)
+        return Response(data)
