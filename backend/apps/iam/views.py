@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -21,6 +21,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from apps.iam.audit import _client_ip, record_audit
 from apps.iam.models import (
     AuditLog,
+    Company,
     Department,
     ImpersonationSession,
     License,
@@ -32,6 +33,7 @@ from apps.iam.permissions import CanManageOrg, IsAdminRole
 from apps.iam.scoping import organizations_visible_to
 from apps.iam.serializers import (
     AuditLogSerializer,
+    CompanySerializer,
     DepartmentSerializer,
     LicenseSerializer,
     OrganizationSerializer,
@@ -159,6 +161,50 @@ class StopImpersonateView(APIView):
                     request=request,
                 )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CompanyViewSet(viewsets.ModelViewSet):
+    """The legal business entities that own branches. SYS_ADMIN sees all; an
+    ORG_ADMIN sees only the company their organization belongs to. Writes are
+    admin-gated and audited; a company with branches can't be hard-deleted."""
+
+    serializer_class = CompanySerializer
+    queryset = Company.objects.all()
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_permissions(self) -> list[BasePermission]:
+        if self.action in {"create", "update", "partial_update", "destroy"}:
+            return [IsAuthenticated(), CanManageOrg()]
+        return [IsAuthenticated()]
+
+    def get_queryset(self) -> QuerySet[Company]:
+        user = cast(User, self.request.user)
+        qs = Company.objects.all()
+        if user.is_superuser or user.has_role("SYS_ADMIN"):
+            return qs
+        company_id = user.organization.company_id if user.organization else None
+        return qs.filter(pk=company_id) if company_id else qs.none()
+
+    def _audit(self, action: str, obj: Company) -> None:
+        record_audit(
+            action=action,
+            user=cast(User, self.request.user),
+            entity_type="company",
+            entity_id=str(obj.pk),
+            request=self.request,
+        )
+
+    def perform_create(self, serializer: BaseSerializer[Any]) -> None:
+        self._audit("CREATE", serializer.save())
+
+    def perform_update(self, serializer: BaseSerializer[Any]) -> None:
+        self._audit("UPDATE", serializer.save())
+
+    def perform_destroy(self, instance: Company) -> None:
+        if instance.branches.exists():
+            raise ValidationError("Detach this company's branches before deleting it.")
+        self._audit("DELETE", instance)
+        instance.delete()
 
 
 class OrganizationViewSet(viewsets.ModelViewSet):

@@ -190,6 +190,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, roles: "all" },
+  { to: "/companies", label: "Companies", icon: Building2, end: false, roles: ["ORG_ADMIN"] },
   { to: "/organizations", label: "Organizations", icon: Building2, end: false, roles: ["ORG_ADMIN"] },
   { to: "/departments", label: "Departments", icon: Network, end: false, roles: ["ORG_ADMIN"] },
   { to: "/users", label: "Users", icon: Users, end: false, roles: ["ORG_ADMIN"] },

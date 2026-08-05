@@ -19,8 +19,26 @@ export interface Me {
 
 export type OrgType = "DEPOT" | "RETAIL" | "HQ";
 
+export interface Company {
+  id: number;
+  name: string;
+  legal_name: string;
+  tin: string;
+  registration_number: string;
+  contact_person: string;
+  phone: string;
+  email: string;
+  logo_url: string;
+  currency: string;
+  is_active: boolean;
+  branch_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Organization {
   id: number;
+  company: number | null;
   parent: number | null;
   name: string;
   type: OrgType;

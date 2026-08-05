@@ -29,6 +29,33 @@ class Role(models.Model):
         return self.code
 
 
+class Company(models.Model):
+    """The legal business entity that owns one or more `Organization`s (branches /
+    premises). A solo pharmacy is a Company with a single Organization; a chain is a
+    Company with an HQ + several branch Organizations. Optional — an Organization may
+    stand alone with no Company (the pre-existing single-tenant shape)."""
+
+    name = models.CharField(max_length=255)
+    legal_name = models.CharField(max_length=255, blank=True, default="")
+    tin = models.CharField(max_length=20, blank=True, default="")  # RRA taxpayer id
+    registration_number = models.CharField(max_length=100, blank=True, default="")  # RDB
+    contact_person = models.CharField(max_length=150, blank=True, default="")
+    phone = models.CharField(max_length=20, blank=True, default="")
+    email = models.EmailField(blank=True, default="")
+    logo_url = models.URLField(blank=True, default="")
+    currency = models.CharField(max_length=3, default="RWF")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name_plural = "companies"
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Organization(models.Model):
     """A depot, retail pharmacy, or HQ — the multi-tenant root everything scopes by."""
 
@@ -37,6 +64,9 @@ class Organization(models.Model):
         RETAIL = "RETAIL", "Retail"
         HQ = "HQ", "HQ"
 
+    company = models.ForeignKey(
+        Company, null=True, blank=True, on_delete=models.PROTECT, related_name="branches"
+    )
     parent = models.ForeignKey(
         "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="children"
     )

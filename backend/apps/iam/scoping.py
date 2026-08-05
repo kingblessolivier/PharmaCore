@@ -10,13 +10,20 @@ from apps.iam.models import Organization, User
 def organizations_visible_to(user: User) -> QuerySet[Organization]:
     """Organizations a user may see.
 
-    SYS_ADMIN / superuser see all; everyone else sees only their own organization.
-    (Hierarchy/descendant visibility is a later refinement.) Deny by default: a user
-    with no organization sees nothing.
+    - SYS_ADMIN / superuser: all.
+    - A user at a company's **HQ** branch: every branch in that company (HQ sees
+      across the chain).
+    - Everyone else: only their own organization.
+
+    Deny by default: a user with no organization sees nothing.
     """
     all_orgs = Organization.objects.all()
     if user.is_superuser or user.has_role("SYS_ADMIN"):
         return all_orgs
-    if user.organization_id:
-        return all_orgs.filter(pk=user.organization_id)
-    return Organization.objects.none()
+    org = user.organization
+    if org is None:
+        return Organization.objects.none()
+    # HQ of a company sees all its branches; a branch sees only itself.
+    if org.company_id and org.type == Organization.OrgType.HQ:
+        return all_orgs.filter(company_id=org.company_id)
+    return all_orgs.filter(pk=org.pk)
