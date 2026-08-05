@@ -1,5 +1,7 @@
 # PharmaCore — Security & Compliance Design
 
+> **Alignment note — foundational (early) doc.** PharmaCore is now framed as a **workspace of subsystems**; the research-backed specs [docs 12–19](README.md) and the [ROADMAP](../ROADMAP.md) **supersede or extend** anything here (each cites its sources). Key deltas: backend is **Django + DRF** (ADR-006, not FastAPI); the depot→retail transfer shipped as the **lean flow** — place → **approve = ship** → **receive = land**, auto-listing at the destination — with picking / driver / per-item-count logistics deferred to the Warehouse phase; and much of this is **already built** (see ROADMAP status). Verified Rwanda/international facts live in [13](13-regulatory-licensing-and-documents-rwanda.md) / [14](14-international-operational-standards.md) / [17](17-insurance-and-government.md) / [18](18-rwanda-integrations-and-statutory.md).
+
 > How PharmaCore protects data, records every activity, resists abuse, and meets
 > Rwanda's regulatory obligations (RRA EBM, Rwanda FDA / GDP, health-data privacy).
 > Traces to NFR-SEC/NFR-C in the SRS. **Security is not a phase — it is a property of
