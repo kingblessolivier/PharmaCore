@@ -54,9 +54,9 @@ interface AppTile {
   roles: "all" | string[];
 }
 const APPS: AppTile[] = [
-  { label: "Retail", hue: "#0D9488", icon: ShoppingCart, to: "/pos", roles: "all" },
-  { label: "Catalog", hue: "#CA8A04", icon: Pill, to: "/products", roles: ["ORG_ADMIN", "PHARMACIST"] },
-  { label: "Distribution", hue: "#3B5BDB", icon: Truck, to: "/orders", roles: ["ORG_ADMIN", "PHARMACIST"] },
+  { label: "Retail", hue: "#0D9488", icon: ShoppingCart, to: "/retail", roles: "all" },
+  { label: "Catalog", hue: "#CA8A04", icon: Pill, to: "/catalog", roles: ["ORG_ADMIN", "PHARMACIST"] },
+  { label: "Distribution", hue: "#3B5BDB", icon: Truck, to: "/distribution", roles: ["ORG_ADMIN", "PHARMACIST"] },
   { label: "Inventory", hue: "#0891B2", icon: Boxes, to: "/organizations", roles: ["ORG_ADMIN"] },
   { label: "Finance", hue: "#15803D", icon: Wallet, to: "/finance", roles: ["ORG_ADMIN"] },
   { label: "Insights", hue: "#DB2777", icon: BarChart3, to: "/", roles: "all" },

@@ -21,6 +21,9 @@ import { UsersPage } from "./pages/UsersPage";
 import { ActivityPage } from "./pages/ActivityPage";
 import { CompaniesPage } from "./pages/CompaniesPage";
 import { AdminHome } from "./pages/apps/AdminHome";
+import { RetailHome } from "./pages/apps/RetailHome";
+import { CatalogHome } from "./pages/apps/CatalogHome";
+import { DistributionHome } from "./pages/apps/DistributionHome";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
@@ -58,6 +61,9 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route element={<Protected />}>
               <Route path="/" element={<DashboardPage />} />
+              <Route path="/retail" element={<RetailHome />} />
+              <Route path="/catalog" element={forPharmacy(<CatalogHome />)} />
+              <Route path="/distribution" element={forPharmacy(<DistributionHome />)} />
               <Route path="/admin" element={adminOnly(<AdminHome />)} />
               <Route path="/companies" element={adminOnly(<CompaniesPage />)} />
               <Route path="/organizations" element={adminOnly(<OrganizationsPage />)} />
