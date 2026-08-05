@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
+  BarChart3,
   Bell,
   Boxes,
   Building2,
@@ -8,11 +9,16 @@ import {
   ClipboardList,
   Eye,
   FileText,
+  Globe,
   LayoutDashboard,
+  LayoutGrid,
   LogOut,
+  MessageSquare,
   Network,
   Pill,
   Search,
+  Shield,
+  ShieldCheck,
   ShoppingCart,
   Truck,
   Users,
@@ -34,6 +40,98 @@ function BrandMark() {
         <circle cx="17" cy="12" r="3" />
         <path d="M10 12h4" strokeLinecap="round" />
       </svg>
+    </div>
+  );
+}
+
+// Subsystem tiles for the app-switcher springboard (Oracle-Fusion / Workspace-waffle
+// pattern). Hues are the documented subsystem colours from docs/design/01 §subsystems.
+interface AppTile {
+  label: string;
+  hue: string;
+  icon: typeof LayoutDashboard;
+  to: string | null; // null = not built yet ("soon")
+  roles: "all" | string[];
+}
+const APPS: AppTile[] = [
+  { label: "Retail", hue: "#0D9488", icon: ShoppingCart, to: "/pos", roles: "all" },
+  { label: "Catalog", hue: "#CA8A04", icon: Pill, to: "/products", roles: ["ORG_ADMIN", "PHARMACIST"] },
+  { label: "Distribution", hue: "#3B5BDB", icon: Truck, to: "/orders", roles: ["ORG_ADMIN", "PHARMACIST"] },
+  { label: "Inventory", hue: "#0891B2", icon: Boxes, to: "/organizations", roles: ["ORG_ADMIN"] },
+  { label: "Finance", hue: "#15803D", icon: Wallet, to: "/finance", roles: ["ORG_ADMIN"] },
+  { label: "Insights", hue: "#DB2777", icon: BarChart3, to: "/", roles: "all" },
+  { label: "Admin", hue: "#475569", icon: ShieldCheck, to: "/companies", roles: ["ORG_ADMIN"] },
+  { label: "Insurance", hue: "#7C3AED", icon: Shield, to: null, roles: "all" },
+  { label: "People", hue: "#EA580C", icon: Users, to: null, roles: "all" },
+  { label: "Online", hue: "#0EA5E9", icon: Globe, to: null, roles: "all" },
+  { label: "Connect", hue: "#2563EB", icon: MessageSquare, to: null, roles: "all" },
+];
+
+function AppSwitcher() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const admin = isAdmin(user);
+  const roles = user?.roles ?? [];
+  const canSee = (r: "all" | string[]) =>
+    r === "all" || admin || r.some((x) => roles.includes(x));
+  const tiles = APPS.filter((t) => canSee(t.roles));
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="rounded-md p-1.5 text-ink-600 hover:bg-surface-100"
+        aria-label="Open apps"
+        title="PharmaCore apps"
+      >
+        <LayoutGrid className="h-5 w-5" />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-11 z-50 w-80 rounded-xl border border-line bg-surface-0 p-3 shadow-lg">
+          <div className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+            PharmaCore apps
+          </div>
+          <div className="grid grid-cols-3 gap-1">
+            {tiles.map(({ label, hue, icon: Icon, to }) => {
+              const soon = to === null;
+              return (
+                <button
+                  key={label}
+                  disabled={soon}
+                  onClick={() => {
+                    if (to) {
+                      navigate(to);
+                      setOpen(false);
+                    }
+                  }}
+                  className={`flex flex-col items-center gap-1.5 rounded-lg p-2.5 text-center transition-colors ${
+                    soon ? "cursor-default opacity-45" : "hover:bg-surface-100"
+                  }`}
+                >
+                  <span
+                    className="flex h-11 w-11 items-center justify-center rounded-xl text-white"
+                    style={{ backgroundColor: hue }}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <span className="text-xs font-medium text-ink-700">{label}</span>
+                  {soon && <span className="-mt-1 text-[9px] uppercase text-ink-400">soon</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -280,6 +378,7 @@ export function AppShell() {
     <div className="min-h-screen bg-surface-100 text-ink-900">
       <ViewAsBanner />
       <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-line bg-surface-0 px-4">
+        <AppSwitcher />
         <BrandMark />
         <span className="text-[15px] font-semibold tracking-tight">
           Pharma<span className="text-brand-600">Core</span>
