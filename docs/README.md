@@ -62,6 +62,12 @@ per‑subsystem status and the module‑oriented delivery phases.
   (Warehouse depth on the ROADMAP), not the current build.
 - Organisation is a single `Organization` with a parent link (HQ→branch); a formal
   companies↔branches split remains optional ([doc 19](19-platform-architecture-decisions.md)).
+- **We build in parallel and mark ✅ only when API + UI are both ready and role‑verified**
+  ([Definition of Done](development/definition-of-done.md)); every job is completed on **one page**
+  (search → pick → act, [design/05](design/05-single-page-workflow.md)).
+- The **admin is a true super‑admin** — sees & does everything across all branches/users, can
+  **view‑as (impersonate)** any user to verify RBAC, and monitors activity/performance/logs
+  (all audited) ([ROADMAP → Admin](../ROADMAP.md)).
 
 ## Open decisions — now largely resolved (see the cited docs)
 1. EBM provider → **OSDC (cloud)** via an `EbmProvider` abstraction ([doc 18](18-rwanda-integrations-and-statutory.md), [19](19-platform-architecture-decisions.md)).

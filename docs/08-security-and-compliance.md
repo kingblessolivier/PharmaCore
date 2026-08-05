@@ -39,6 +39,14 @@
   **dynamically denied** if the pharmacist's licence is expired — enforced in the
   service layer, never only in the UI.
 - **Shift-gated access**: terminal (POS/warehouse) login requires an active clocked-in shift.
+- **Admin oversight & _view-as_**: the **system/org admin can see and do everything** across
+  every branch and user (monitor activity, performance, and logs; create/manage users), and can
+  **enter (impersonate) a specific user** to see exactly what that user sees and does — for
+  testing, training, and support. This super-power is **not invisible**: every `view-as` session
+  is **banner-flagged in the UI and fully audited** (who acted as whom, when, and each action).
+  Crucially, admin power does **not** loosen anyone else's scope — RBAC still confines every other
+  role, and `view-as` is precisely how the admin verifies that. (Full capability list in the
+  [ROADMAP → Admin oversight](../../ROADMAP.md).)
 
 ## 3. Encryption & data protection
 - **In transit**: **TLS 1.3** everywhere (clients ↔ backend, backend ↔ RRA / insurers /

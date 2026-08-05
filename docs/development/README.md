@@ -20,6 +20,15 @@ agreements for the engineering team.
 - GitHub templates: `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/`, `.github/CODEOWNERS`
 - Product/technical design: [../README.md](../README.md) · Design system: [../design/README.md](../design/README.md)
 
+## How we work: parallel tracks, one definition of "complete"
+Backend/API and frontend/UI advance **in parallel**, but a feature only counts as
+**complete (ROADMAP ✅) when both are shipped, wired together, and role-verified** —
+not when only one side exists. See the [Definition of Done](definition-of-done.md#when-is-a-feature-complete-parallel-backend--frontend).
+Every job should be doable on **one page** (search → pick → act in place), per the
+[single-page workflow](../design/05-single-page-workflow.md). RBAC is real for every
+role; the **admin** can see and do everything and can **view-as** any user to confirm
+others are correctly scoped.
+
 ## The one-paragraph summary
 Branch from `staging`; small PRs with Conventional Commits; CI (lint → type-check →
 test → build → migration check → security scan) must be green; ≥1 review (≥2 for

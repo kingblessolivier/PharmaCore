@@ -5,6 +5,20 @@ machine" is not done. Use this as the PR self-check.
 
 ---
 
+## When is a *feature* complete? (parallel backend + frontend)
+We work in **parallel tracks** — backend/API and frontend/UI advance together — but a
+feature (and its ✅ on the [ROADMAP](../../ROADMAP.md)) is **not complete until both
+sides are done and wired end-to-end**:
+- [ ] **API ready** — endpoints implemented, validated, **permission-gated**, tested, and documented (OpenAPI/drf-spectacular).
+- [ ] **Frontend ready** — the page/screen exists, is wired to the real API, handles **loading / empty / error** states, and a user in the right role can complete the whole job on it (per the [single-page workflow](../design/05-single-page-workflow.md): search → pick → act in place).
+- [ ] **Role-verified** — the intended roles can do it and **all others are correctly blocked**; verify by using the **admin _view-as / act-as_** tool to walk each role.
+- [ ] **Audit + scope** — every state change writes `audit_log`; data is tenant/branch-scoped.
+
+"API done but no UI", or "UI mocked with no API", or "works for admin but the cashier
+role isn't scoped" = **still 🚧, not ✅.**
+
+---
+
 ## Every change
 - [ ] Meets the acceptance criteria of its issue.
 - [ ] Follows the [coding standards](coding-standards.md); lint/format/type-check pass.
