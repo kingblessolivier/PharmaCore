@@ -69,7 +69,7 @@ what's shipped. Status marks each line.
 
 ### 1. Admin (IAM & tenancy)
 - ✅ JWT auth (argon2), custom `User`, sessions/token refresh.
-- ⬜ **Staff / PF‑number login** — employees sign in with their **payroll‑file (PF) / staff number** (many counter staff have no email); PF number is the person's key across HR, attendance, payroll, dispensing log & audit.
+- ✅ **Staff / PF‑number login** — employees sign in with their **payroll‑file (PF) / staff number** (many counter staff have no email); PF number is the person's key across HR, attendance, payroll, dispensing log & audit.
 - ✅ Organisation model (depot / retail / HQ) + parent link (HQ→branch), departments, **Rwanda location** hierarchy (province→district→sector→cell→village).
 - ✅ Roles + deny‑by‑default RBAC; append‑only **audit log**.
 - ⬜ **Formal company ↔ branch split** (a first‑class `Company` above `Organization`) for large chains that demand it.
@@ -78,12 +78,11 @@ what's shipped. Status marks each line.
 - ⬜ **Pharmacy/organisation onboarding** — licence & document capture (Rwanda FDA, NPC, RDB, RRA), verification, activation gate.
 - ⬜ Org settings, feature flags per tenant, subscription/plan, branding per tenant.
 - ⬜ Password policy, MFA, session controls, API keys/service accounts, SSO (future).
-- ⬜ **Admin oversight & monitoring (super‑admin).** The admin can **see and do everything, across every branch and every user** — while RBAC still confines everyone else strictly to their own scope. *(Testing intent: you sign in only as admin, yet must verify each other role sees/does exactly what it should — no more, no less.)*
-  - **View‑as / act‑as (impersonation)** — admin can **enter a specific user's session** and see **exactly what that user sees and can do** (for testing, training & support); every impersonation is **banner‑flagged and audited** (who acted as whom, when, and every action taken).
-  - **Live activity monitoring** — per‑user and **per‑branch activity feed** ("who is doing what, where, right now"), active sessions, last‑seen; drill from the whole tenant → a branch → a single user.
-  - **Performance monitoring** — per‑user / per‑branch KPIs (sales, dispensing, orders, approvals handled, attendance, void/error/return rates) so the admin can judge **how a person or a pharmacy is performing**.
-  - **Log monitoring** — full **audit‑log explorer** (filter by user / branch / action / record / date), immutable, exportable.
-  - **User management** — create / edit / suspend / reactivate users, assign roles & scope, reset credentials, force‑logout; onboarding with required documents (users created only by **Admin / HR / Org‑admin**, never self‑signup).
+- 🚧 **Admin oversight & monitoring (super‑admin).** The admin can **see and do everything, across every branch and every user** — while RBAC still confines everyone else strictly to their own scope. *(Testing intent: you sign in only as admin, yet must verify each other role sees/does exactly what it should — no more, no less.)*
+  - ✅ **View‑as / act‑as (impersonation)** — admin can **enter a specific user's session** and see **exactly what that user sees and can do** (for testing, training & support); every impersonation is **banner‑flagged and audited** (who acted as whom, when, and every action taken).
+  - ✅ **Log monitoring** — **audit‑log explorer** (filter by user / action / entity / date), immutable; per‑user **activity** (recent trail + action counts + last login). ⬜ per‑branch feed, exports.
+  - ⬜ **Performance monitoring** — per‑user / per‑branch KPIs (sales, dispensing, orders, approvals handled, attendance, void/error/return rates) so the admin can judge **how a person or a pharmacy is performing**.
+  - ✅ **User management** — create / edit / suspend / reactivate users, assign roles & scope (PF number + org). ⬜ reset credentials, force‑logout, required‑document onboarding.
 
 ### 2. Catalog (product master)
 - ✅ Medicine master — FDA reg no., **ATC/INN**, GTIN/barcode, brand & generic name, form, strength, route, pack size & units, controlled schedule, cold‑chain temps, image/leaflet.
@@ -501,6 +500,7 @@ UI (or role‑scoping) is still catching up, it's honestly marked 🚧.
 
 ### Foundations ✅
 - **Admin/IAM** — JWT/argon2, custom `User`, roles/RBAC (deny‑by‑default), org (depot/retail/HQ) + department + **Rwanda location** hierarchy, licences, append‑only **audit log**. *(Companies↔branches remains a single `Organization` with a parent link — a deliberate call; a true split is optional.)*
+- **Admin oversight** ✅ — **PF/staff‑number login**, **view‑as / impersonation** (banner + audited, scope‑guarded), **user management** (create/manage, roles, PF, org; suspend/activate), **audit‑log explorer** + **per‑user activity**.
 - **Catalog** ✅ — medicine master (FDA reg, ATC, GTIN, route, units/pack, controlled schedule, cold‑chain temps, image/leaflet), manufacturers, suppliers, ingredients, barcodes, **bulk CSV import**, margin visibility.
 
 ### Inventory 🚧
@@ -526,14 +526,23 @@ UI (or role‑scoping) is still catching up, it's honestly marked 🚧.
 - ✅ Operational **dashboard**, **role‑scoped navigation**.
 - ⬜ Report builder, KPI charts, **multi‑branch consolidation**, per‑role dashboards.
 
-**Tally so far:** Foundations + Catalog + Distribution core shipped; Retail, Finance,
-Connect, Inventory each partially built. ~50+ PRs merged; ~105 backend tests green.
+**Tally so far:** Foundations + Catalog + Distribution core + **Admin oversight**
+shipped; Retail, Finance, Connect, Inventory each partially built. ~50+ PRs merged;
+116 backend tests green.
 
 ---
 
 ## Delivery phases (module‑oriented, foundation‑first)
 Each phase makes one or more subsystems materially more complete, end‑to‑end
 (backend + UI + design + tests + docs).
+
+> **▶ Current position: finishing Phase 3.** We build **straight through, in order**
+> (Phase 3 → 11), no cherry‑picking; each phase ships as vertical slices (API + page +
+> tests, role‑verified). Phases 0–2 are done; Admin oversight (a foundations
+> capability) also shipped ahead of sequence. *Dependency note:* Phase 3's **remaining**
+> items (cash‑drawer, OTC increments, calculators, offline/Tauri) don't need later
+> phases; the **DUR safety review** on the dispensing gate is intentionally deferred to
+> Phase 6 (Patient/Prescriber + drug‑interaction data), then wired back in.
 
 - **Phase 0 — Foundations** ✅ — Admin/IAM, audit, CI, scaffolds.
 - **Phase 1 — Core data + design system** ✅ — Catalog, Inventory core, org/branch model.
