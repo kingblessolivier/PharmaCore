@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Eye, Plus } from "lucide-react";
+import { Activity, BadgeCheck, Eye, FileText, Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
@@ -10,6 +10,7 @@ import type {
   Role,
   UserActivity,
   UserAdmin,
+  UserDocument,
 } from "../lib/types";
 import {
   Badge,
@@ -20,6 +21,141 @@ import {
   Spinner,
   TextField,
 } from "../components/ui";
+
+const DOC_TYPES = [
+  ["NATIONAL_ID", "National ID"],
+  ["PASSPORT", "Passport"],
+  ["PROFESSIONAL_LICENCE", "Professional licence"],
+  ["CONTRACT", "Employment contract"],
+  ["CERTIFICATE", "Certificate"],
+  ["OTHER", "Other"],
+] as const;
+const DOC_LABEL = Object.fromEntries(DOC_TYPES) as Record<string, string>;
+
+function DocumentsModal({ user, onClose }: { user: UserAdmin; onClose: () => void }) {
+  const qc = useQueryClient();
+  const key = ["user-documents", user.id];
+  const docs = useQuery({
+    queryKey: key,
+    queryFn: () => api<Paginated<UserDocument>>(`/api/user-documents/?user=${user.id}`),
+  });
+  const [docType, setDocType] = useState("NATIONAL_ID");
+  const [number, setNumber] = useState("");
+  const [expiry, setExpiry] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const refresh = () => qc.invalidateQueries({ queryKey: key });
+
+  const add = useMutation({
+    mutationFn: () =>
+      api<UserDocument>("/api/user-documents/", {
+        method: "POST",
+        body: JSON.stringify({
+          user: user.id,
+          doc_type: docType,
+          document_number: number,
+          expiry_date: expiry || null,
+        }),
+      }),
+    onSuccess: () => {
+      setNumber("");
+      setExpiry("");
+      void refresh();
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : "Could not add the document."),
+  });
+  const verify = useMutation({
+    mutationFn: (id: number) => api<UserDocument>(`/api/user-documents/${id}/verify/`, { method: "POST" }),
+    onSuccess: () => void refresh(),
+  });
+  const remove = useMutation({
+    mutationFn: (id: number) => api<void>(`/api/user-documents/${id}/`, { method: "DELETE" }),
+    onSuccess: () => void refresh(),
+  });
+
+  return (
+    <Modal title={`${user.username} — identity documents`} onClose={onClose}>
+      <div className="flex flex-col gap-4">
+        <div className="overflow-hidden rounded-lg border border-line">
+          <table className="w-full text-sm">
+            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
+              <tr>
+                <th className="px-3 py-2">Type</th>
+                <th className="px-3 py-2">Number</th>
+                <th className="px-3 py-2">Expiry</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2 text-right">—</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(docs.data?.results ?? []).map((d) => (
+                <tr key={d.id} className="border-b border-line last:border-0">
+                  <td className="px-3 py-2 font-medium">{DOC_LABEL[d.doc_type] ?? d.doc_type}</td>
+                  <td className="px-3 py-2 text-ink-700">{d.document_number || "—"}</td>
+                  <td className="px-3 py-2 text-ink-700">{d.expiry_date || "—"}</td>
+                  <td className="px-3 py-2">
+                    {d.is_verified ? (
+                      <span className="inline-flex items-center gap-1 text-success">
+                        <BadgeCheck className="h-3.5 w-3.5" /> Verified
+                      </span>
+                    ) : (
+                      <span className="text-warning">Pending</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex justify-end gap-1">
+                      {!d.is_verified && (
+                        <Button variant="secondary" onClick={() => verify.mutate(d.id)}>
+                          Verify
+                        </Button>
+                      )}
+                      <button
+                        onClick={() => remove.mutate(d.id)}
+                        className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
+                        aria-label="Delete document"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {docs.data?.results.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-3 py-5 text-center text-ink-500">
+                    No documents captured yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="rounded-lg border border-line bg-surface-50 p-3">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">
+            Add a document
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <SelectField label="Type" value={docType} onChange={(e) => setDocType(e.target.value)}>
+              {DOC_TYPES.map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </SelectField>
+            <TextField label="Document number" value={number} onChange={(e) => setNumber(e.target.value)} />
+            <TextField label="Expiry (optional)" type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
+            <div className="flex items-end">
+              <Button onClick={() => add.mutate()} disabled={add.isPending}>
+                <Plus className="h-4 w-4" /> Add
+              </Button>
+            </div>
+          </div>
+          {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+        </div>
+      </div>
+    </Modal>
+  );
+}
 
 function UserModal({
   user,
@@ -224,6 +360,7 @@ export function UsersPage() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<UserAdmin | null>(null);
   const [activityFor, setActivityFor] = useState<number | null>(null);
+  const [docsFor, setDocsFor] = useState<UserAdmin | null>(null);
   const [busyViewAs, setBusyViewAs] = useState<number | null>(null);
 
   const users = useQuery({
@@ -329,6 +466,9 @@ export function UsersPage() {
                       <Button variant="secondary" onClick={() => setActivityFor(u.id)}>
                         <Activity className="h-3.5 w-3.5" /> Activity
                       </Button>
+                      <Button variant="secondary" onClick={() => setDocsFor(u)}>
+                        <FileText className="h-3.5 w-3.5" /> Documents
+                      </Button>
                       <Button variant="secondary" onClick={() => setEditing(u)}>
                         Edit
                       </Button>
@@ -365,6 +505,7 @@ export function UsersPage() {
       {activityFor !== null && (
         <ActivityModal userId={activityFor} onClose={() => setActivityFor(null)} />
       )}
+      {docsFor && <DocumentsModal user={docsFor} onClose={() => setDocsFor(null)} />}
     </div>
   );
 }

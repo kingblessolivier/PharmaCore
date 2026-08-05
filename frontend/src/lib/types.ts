@@ -112,6 +112,20 @@ export interface UserAdmin {
   date_joined: string;
 }
 
+export interface UserDocument {
+  id: number;
+  user: number;
+  doc_type: string;
+  document_number: string;
+  document_url: string;
+  issue_date: string | null;
+  expiry_date: string | null;
+  is_verified: boolean;
+  verified_by_name: string | null;
+  notes: string;
+  created_at: string;
+}
+
 export interface AuditLogEntry {
   id: number;
   action: string;

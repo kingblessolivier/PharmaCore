@@ -29,6 +29,7 @@ from apps.iam.models import (
     Permission,
     Role,
     User,
+    UserDocument,
 )
 from apps.iam.permissions import CanManageOrg, IsAdminRole, IsSysAdmin
 from apps.iam.scoping import organizations_visible_to
@@ -41,6 +42,7 @@ from apps.iam.serializers import (
     PermissionSerializer,
     RoleSerializer,
     UserAdminSerializer,
+    UserDocumentSerializer,
     UserSerializer,
 )
 
@@ -518,3 +520,62 @@ class UserViewSet(viewsets.ModelViewSet):
             request=self.request,
         )
         instance.delete()
+
+
+class UserDocumentViewSet(viewsets.ModelViewSet):
+    """Identity documents attached to a user account. Admin-gated, org-scoped;
+    filter with ``?user=<id>``. Every write is audited; documents can be verified."""
+
+    serializer_class = UserDocumentSerializer
+    permission_classes = [IsAuthenticated, IsAdminRole]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+    queryset = UserDocument.objects.select_related("user", "verified_by")
+
+    def _visible_users(self) -> QuerySet[User]:
+        actor = cast(User, self.request.user)
+        if actor.is_superuser or actor.has_role("SYS_ADMIN"):
+            return User.objects.all()
+        return User.objects.filter(organization__in=organizations_visible_to(actor))
+
+    def get_queryset(self) -> QuerySet[UserDocument]:
+        qs = UserDocument.objects.select_related("user", "verified_by").filter(
+            user__in=self._visible_users()
+        )
+        user_id = self.request.query_params.get("user")
+        if user_id:
+            qs = qs.filter(user_id=user_id)
+        return qs
+
+    def _guard(self, serializer: BaseSerializer[Any]) -> None:
+        target = serializer.validated_data.get("user")
+        if target and not self._visible_users().filter(pk=target.pk).exists():
+            raise PermissionDenied("That user is outside your organization.")
+
+    def _audit(self, action: str, obj: UserDocument) -> None:
+        record_audit(
+            action=action,
+            user=cast(User, self.request.user),
+            organization=obj.user.organization,
+            entity_type="user_document",
+            entity_id=str(obj.pk),
+            changes={"doc_type": obj.doc_type, "user": obj.user_id},
+            request=self.request,
+        )
+
+    def perform_create(self, serializer: BaseSerializer[Any]) -> None:
+        self._guard(serializer)
+        self._audit("CREATE", serializer.save())
+
+    def perform_destroy(self, instance: UserDocument) -> None:
+        self._audit("DELETE", instance)
+        instance.delete()
+
+    @action(detail=True, methods=["post"])
+    def verify(self, request: Request, pk: str | None = None) -> Response:
+        """Mark a document as verified (identity confirmed) by the acting admin."""
+        doc = self.get_object()
+        doc.is_verified = True
+        doc.verified_by = cast(User, request.user)
+        doc.save(update_fields=["is_verified", "verified_by"])
+        self._audit("VERIFY", doc)
+        return Response(UserDocumentSerializer(doc).data)

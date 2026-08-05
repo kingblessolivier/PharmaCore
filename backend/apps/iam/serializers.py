@@ -16,7 +16,31 @@ from apps.iam.models import (
     Permission,
     Role,
     User,
+    UserDocument,
 )
+
+
+class UserDocumentSerializer(serializers.ModelSerializer):
+    verified_by_name = serializers.CharField(
+        source="verified_by.username", read_only=True, default=None
+    )
+
+    class Meta:
+        model = UserDocument
+        fields = [
+            "id",
+            "user",
+            "doc_type",
+            "document_number",
+            "document_url",
+            "issue_date",
+            "expiry_date",
+            "is_verified",
+            "verified_by_name",
+            "notes",
+            "created_at",
+        ]
+        read_only_fields = ["id", "is_verified", "verified_by_name", "created_at"]
 
 
 class PermissionSerializer(serializers.ModelSerializer):
