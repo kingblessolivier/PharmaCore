@@ -13,8 +13,11 @@ shape, one hue + glyph per subsystem, one login, one audit trail.
 > **This roadmap is exhaustive on purpose.** It is the master checklist of
 > *everything the platform must eventually do* — every subsystem, every operation,
 > every document, every integration, every workspace tool, every report, every
-> control. Status legend: ✅ done · 🚧 in progress · ⬜ planned. If something a
-> pharmacy does isn't here, it's a gap to add — not an omission by design. The
+> control. Status legend: ✅ done · 🚧 in progress · ⬜ planned. **We build in
+> parallel (backend/API and frontend/UI together): a line is ✅ only when the API
+> _and_ its page are both shipped, wired, and role‑verified** — API‑only or UI‑only
+> stays 🚧 (see [Definition of Done](docs/development/definition-of-done.md)). If
+> something a pharmacy does isn't here, it's a gap to add — not an omission by design. The
 > **[docs](docs/README.md)** (esp. specs [12](docs/12-requirements-fields-documents-approvals.md)–[19](docs/19-platform-architecture-decisions.md)) carry the research and rationale behind each line.
 
 ---
@@ -75,7 +78,12 @@ what's shipped. Status marks each line.
 - ⬜ **Pharmacy/organisation onboarding** — licence & document capture (Rwanda FDA, NPC, RDB, RRA), verification, activation gate.
 - ⬜ Org settings, feature flags per tenant, subscription/plan, branding per tenant.
 - ⬜ Password policy, MFA, session controls, API keys/service accounts, SSO (future).
-- ⬜ Delegation & "act‑on‑behalf", account suspension/reactivation, leaver de‑provisioning.
+- ⬜ **Admin oversight & monitoring (super‑admin).** The admin can **see and do everything, across every branch and every user** — while RBAC still confines everyone else strictly to their own scope. *(Testing intent: you sign in only as admin, yet must verify each other role sees/does exactly what it should — no more, no less.)*
+  - **View‑as / act‑as (impersonation)** — admin can **enter a specific user's session** and see **exactly what that user sees and can do** (for testing, training & support); every impersonation is **banner‑flagged and audited** (who acted as whom, when, and every action taken).
+  - **Live activity monitoring** — per‑user and **per‑branch activity feed** ("who is doing what, where, right now"), active sessions, last‑seen; drill from the whole tenant → a branch → a single user.
+  - **Performance monitoring** — per‑user / per‑branch KPIs (sales, dispensing, orders, approvals handled, attendance, void/error/return rates) so the admin can judge **how a person or a pharmacy is performing**.
+  - **Log monitoring** — full **audit‑log explorer** (filter by user / branch / action / record / date), immutable, exportable.
+  - **User management** — create / edit / suspend / reactivate users, assign roles & scope, reset credentials, force‑logout; onboarding with required documents (users created only by **Admin / HR / Org‑admin**, never self‑signup).
 
 ### 2. Catalog (product master)
 - ✅ Medicine master — FDA reg no., **ATC/INN**, GTIN/barcode, brand & generic name, form, strength, route, pack size & units, controlled schedule, cold‑chain temps, image/leaflet.
@@ -204,6 +212,7 @@ what's shipped. Status marks each line.
 - ⬜ **KPI charts** (validated colour‑blind‑safe palette) — sales, margin, stock turns, expiry exposure, aging, claims, footfall.
 - ⬜ **Multi‑branch consolidation** & comparison, drill‑down, period compare.
 - ⬜ Per‑role dashboards (cashier, pharmacist, branch manager, HQ exec, finance, HR).
+- ⬜ **Admin monitoring cockpit** — cross‑tenant/branch **activity feed**, **per‑user & per‑branch performance**, session + **audit‑log explorer** (the analytics face of [Admin oversight](#1-admin-iam--tenancy)).
 - ⬜ Data warehouse/exports, forecasting (demand), anomaly flags.
 
 ### Cross‑cutting apps (present in every subsystem)
@@ -363,6 +372,7 @@ The first‑class records the whole platform hangs on. Missing ones are gaps to 
 - ⬜ **Deviation / CAPA / ChangeControl / SelfInspection / RiskItem / CalibrationRecord** — QMS/GDP.
 - ⬜ **ExpenseClaim / Advance / Asset / Vehicle** — supporting modules.
 - ⬜ **OpeningBalance / NumberSequence / FiscalPeriod** — go‑live & configuration.
+- ⬜ **ImpersonationSession / ActivityEvent / UserSession** — admin oversight, view‑as, activity & performance monitoring (on top of the immutable audit log).
 
 ---
 
@@ -463,7 +473,7 @@ checks are per‑permission (least privilege). Indicative roles → scope:
 | **HR officer** | employees, payroll, leave, training; no stock/finance |
 | **Branch manager** | approvals for their branch, branch dashboards |
 | **HQ executive** | all branches (read + high‑level approvals), consolidation |
-| **System / Org admin** | tenant config, users/roles, everything |
+| **System / Org admin** | **everything, everywhere** — tenant config, users/roles, **view‑as any user**, monitor all activity/performance/logs across every branch |
 
 Feeds the **approvals engine** (who may approve what) and the **no‑self‑approval /
 supervisor‑of / senior‑oversight** rules.
@@ -473,17 +483,21 @@ supervisor‑of / senior‑oversight** rules.
 ## Platform & non‑functional (must hold across every subsystem)
 - **Multi‑tenancy** — shared‑schema + **`tenant_id` on every row**; ✅ app‑layer scoping (`organizations_visible_to`); ⬜ **PostgreSQL RLS** safety net; silo DB option for very large chains.
 - **Offline‑first (POS)** — ⬜ local encrypted SQLite + **outbox + idempotency‑key** sync, **LWW** conflict resolution, server re‑runs FEFO on sync; append‑only money/stock = replay‑safe.
-- **Security** — deny‑by‑default RBAC, tenant + branch scoping, **append‑only audit & stock ledger**, rate limiting, encryption (transit/at‑rest/field/device), MFA, secrets management.
+- **Security** — deny‑by‑default RBAC, tenant + branch scoping, **append‑only audit & stock ledger**, rate limiting, encryption (transit/at‑rest/field/device), MFA, secrets management; **admin oversight & view‑as impersonation are themselves audited** (super‑admin power is logged, never invisible).
 - **Compliance** — **GDP** (immutability/traceability/cold‑chain), **RRA** (EBM/VAT), **Rwanda FDA** (licences, controlled reports), **Data Protection Law 058/2021** (consent, **data residency in Rwanda** or NCSA offshore cert, data‑subject rights).
 - **Localisation** — **UI English**; **patient‑facing** (receipts, SMS, online) in **Kinyarwanda + French**; whole‑RWF rounding customer‑facing, 2‑dp internal cost.
 - **Retention & e‑signatures** — per‑document retention (fiscal/GDP ≥ 5–10 yrs); approvals e‑signed; legally‑binding external signatures via document engine.
+- **Interaction model** — subsystems are separate **pages**, but each job **completes on one page** (search → pick → act in place via command palette, master–detail, and inline reveals); no multi‑page wizards for a single transaction. Modeled on mature ERP/workspace UIs. See [design/05 single‑page workflow](docs/design/05-single-page-workflow.md).
+- **Ways of working** — **parallel backend + frontend**, ✅ only when both ship & are role‑verified ([Definition of Done](docs/development/definition-of-done.md)).
 - **Reliability & ops** — backups + **restore drill**, observability/logging/metrics, error tracking, health checks, migrations discipline, CI/CD gates, a11y (≥ 4.5:1, keyboard, reduced‑motion), performance budgets, load/e2e tests.
 - **Assets & prerequisites (procure, not code)** — brand SVGs per subsystem, EBM/MoMo/SMS/card/RSSB onboarding (build against **mocks** meanwhile), pilot partner (one depot + one chain), catalog seed data.
 
 ---
 
 ## What's already built (delivered to `staging`)
-Legend: ✅ done · 🚧 in progress · ⬜ planned.
+Legend: ✅ done · 🚧 in progress · ⬜ planned. **Under the parallel rule, ✅ means the
+API *and* its page are both live and role‑verified;** where a backend exists but its
+UI (or role‑scoping) is still catching up, it's honestly marked 🚧.
 
 ### Foundations ✅
 - **Admin/IAM** — JWT/argon2, custom `User`, roles/RBAC (deny‑by‑default), org (depot/retail/HQ) + department + **Rwanda location** hierarchy, licences, append‑only **audit log**. *(Companies↔branches remains a single `Organization` with a parent link — a deliberate call; a true split is optional.)*
