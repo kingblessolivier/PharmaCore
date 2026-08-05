@@ -74,7 +74,7 @@ what's shipped. Status marks each line.
 - ✅ Roles + deny‑by‑default RBAC; append‑only **audit log**.
 - ✅ **Formal company ↔ branch split** — a first‑class `Company` above `Organization` (branches), with company CRUD, org attach/detach, and **HQ‑of‑company sees all its branches** scoping. Optional: an Organization may still stand alone with no company.
 - ✅ **Permission matrix** — `permission = resource × action` catalogue (23 perms) + `Role.permissions` bundles (seeded for every role), `User.has_permission()` + `HasPermission.require()` DRF class + `can()` frontend helper, `/me` exposes the user's permission codes, and a **SYS_ADMIN‑editable matrix UI** (roles × permissions grid, audited). ⬜ Migrating each endpoint's check from role‑name to permission is incremental.
-- ⬜ **User provisioning discipline** — users are **created only by HR / Admin / Org‑admin**, never self‑signup; mandatory identity documents on creation (see [User & pharmacy creation](docs/12-requirements-fields-documents-approvals.md)).
+- 🚧 **User provisioning discipline** — ✅ users are **created only by HR / Admin / Org‑admin** (no self‑signup), ✅ **identity documents** captured & verified per user account (`UserDocument`: national ID / passport / professional licence / contract, admin‑gated, org‑scoped, audited). ⬜ hard‑requiring documents *before* activation is the remaining bit (see [User & pharmacy creation](docs/12-requirements-fields-documents-approvals.md)).
 - ⬜ **Pharmacy/organisation onboarding** — licence & document capture (Rwanda FDA, NPC, RDB, RRA), verification, activation gate.
 - ⬜ Org settings, feature flags per tenant, subscription/plan, branding per tenant.
 - ⬜ Password policy, MFA, session controls, API keys/service accounts, SSO (future).

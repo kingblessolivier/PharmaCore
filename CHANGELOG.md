@@ -18,6 +18,10 @@ Maintenance rules:
 ## [Unreleased]
 
 ### Added
+- **User identity documents (Admin).** Capture and **verify** identity documents on a
+  user account (`UserDocument`: national ID, passport, professional licence, contract) —
+  admin-gated, org-scoped, audited, with a **Documents** modal on the Users page (add /
+  verify / delete). Distinct from HR employment documents.
 - **Permission matrix (Admin).** Permissions are now `resource × action` (23-code
   catalogue); roles are **bundles of permissions** (seeded for every role);
   `User.has_permission()` + a `HasPermission.require()` DRF class + a `can()` frontend

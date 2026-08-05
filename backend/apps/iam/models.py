@@ -210,6 +210,42 @@ class User(AbstractUser):
         )
 
 
+class UserDocument(models.Model):
+    """An identity document attached to a **user account** (who may sign in) — national
+    ID, passport, professional licence, or contract. This is account-provisioning
+    identity, distinct from HR employment/payroll documents. Admins capture and
+    verify these when creating/managing a user.
+    """
+
+    class DocType(models.TextChoices):
+        NATIONAL_ID = "NATIONAL_ID", "National ID"
+        PASSPORT = "PASSPORT", "Passport"
+        PROFESSIONAL_LICENCE = "PROFESSIONAL_LICENCE", "Professional licence"
+        CONTRACT = "CONTRACT", "Employment contract"
+        CERTIFICATE = "CERTIFICATE", "Certificate"
+        OTHER = "OTHER", "Other"
+
+    user = models.ForeignKey("iam.User", on_delete=models.CASCADE, related_name="documents")
+    doc_type = models.CharField(max_length=30, choices=DocType.choices)
+    document_number = models.CharField(max_length=100, blank=True, default="")
+    document_url = models.URLField(blank=True, default="")
+    issue_date = models.DateField(null=True, blank=True)
+    expiry_date = models.DateField(null=True, blank=True)
+    is_verified = models.BooleanField(default=False)
+    verified_by = models.ForeignKey(
+        "iam.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    notes = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["user", "doc_type"])]
+
+    def __str__(self) -> str:
+        return f"{self.doc_type} · {self.user_id}"
+
+
 class ImpersonationSession(models.Model):
     """Records an admin 'view-as' session: who acted as whom, when, and until when.
 
