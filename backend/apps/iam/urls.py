@@ -12,6 +12,7 @@ from apps.iam.views import (
     LicenseViewSet,
     LoginView,
     MeView,
+    OrganizationDocumentViewSet,
     OrganizationViewSet,
     PermissionViewSet,
     RoleViewSet,
@@ -23,6 +24,9 @@ from apps.iam.views import (
 router = DefaultRouter()
 router.register("companies", CompanyViewSet, basename="company")
 router.register("organizations", OrganizationViewSet, basename="organization")
+router.register(
+    "organization-documents", OrganizationDocumentViewSet, basename="organization-document"
+)
 router.register("departments", DepartmentViewSet, basename="department")
 router.register("users", UserViewSet, basename="user")
 router.register("user-documents", UserDocumentViewSet, basename="user-document")

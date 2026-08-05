@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Settings2, Trash2 } from "lucide-react";
+import { Plus, Settings2, ShieldCheck, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { OrganizationForm } from "../components/OrganizationForm";
+import { OrgOnboardingModal, type OnboardingOrg } from "../components/OrgOnboardingModal";
 import { Badge, Button, ConfirmModal, Modal, PageHeader, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -16,6 +17,7 @@ export function OrganizationsPage() {
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Organization | null>(null);
+  const [onboarding, setOnboarding] = useState<OnboardingOrg | null>(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["organizations"],
@@ -85,6 +87,22 @@ export function OrganizationsPage() {
                         <Settings2 className="h-4 w-4" /> Manage
                       </Button>
                       {admin && (
+                        <Button
+                          variant="secondary"
+                          onClick={() =>
+                            setOnboarding({
+                              id: o.id,
+                              name: o.name,
+                              onboarding_status:
+                                (o as unknown as { onboarding_status?: string }).onboarding_status ??
+                                "ACTIVE",
+                            })
+                          }
+                        >
+                          <ShieldCheck className="h-4 w-4" /> Onboarding
+                        </Button>
+                      )}
+                      {admin && (
                         <button
                           onClick={() => setDeleting(o)}
                           className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
@@ -119,6 +137,9 @@ export function OrganizationsPage() {
             onCancel={() => setCreating(false)}
           />
         </Modal>
+      )}
+      {onboarding && (
+        <OrgOnboardingModal org={onboarding} onClose={() => setOnboarding(null)} />
       )}
       {deleting && (
         <ConfirmModal
