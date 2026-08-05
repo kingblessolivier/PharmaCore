@@ -51,8 +51,8 @@ subsystem below.
 | 7 | **Sell online** | Patient storefront, prescription upload, click‑&‑collect / delivery, teleconsult hand‑off | Missed demand, manual phone orders |
 | 8 | **Insurance & fiscal** | Eligibility, co‑pay split, claims queue + adjudication + reconciliation, **EBM** fiscal receipts (RRA) | Rejected claims, non‑compliant receipts |
 | 9 | **Returns, recalls & disputes** | Customer returns (credit note), return‑to‑supplier, **batch recall** traceability, disposal/destruction; **receiving claims/deductions**, **defect/complaint & ADR reporting**, dispute resolution | Unrecoverable losses, unsafe stock on shelf, unresolved claims |
-| 10 | **Finance** | AP (suppliers) / AR (buyers, insurers), ledgers, **aging**, EOD closeout, banking/MoMo, tax, **consolidated HQ** books | Cash leakage, blind margins, unpaid debts |
-| 11 | **People & training** | Recruit → onboard → licences & dispensing rights → attendance/shifts/leave → **payroll (PAYE/RSSB)** → **SOP + competency** → performance → offboard | Unlicensed dispensing, untrained staff |
+| 10 | **Finance & performance** | AP/AR + **customer credit**, ledgers, **aging/DSO**, closeout, banking/MoMo, tax; **invested capital, gross/net profit, ROI/GMROI** the owner can read | Cash leakage, blind margins, unpaid debts, not knowing if you're profitable |
+| 11 | **People & training** | Recruit → onboard → licences & dispensing rights → **automated attendance/overtime/shifts/leave** → **gross→net payroll (PAYE/RSSB/CBHI)** → **SOP + competency** → performance → offboard; **PF‑number login** | Unlicensed dispensing, untrained staff, payroll errors, buddy‑punching |
 | 12 | **Communicate & warn** | Messaging, announcements, tasks, shift notes; **operational alerts** (expiry, low‑stock, licence, temperature, overdue, controlled thresholds) | Things falling through the cracks |
 | 13 | **Approve & authorise** | Any sensitive action routes to a **central approvals inbox**; claim‑to‑lock, no self‑approval, SLA timeout, escalation | Bottlenecks, unaccountable sign‑off, stalled approvals |
 | 14 | **See everything** | Role dashboards, KPIs, **multi‑branch** analytics, exports, audit trail | Flying blind |
@@ -66,6 +66,7 @@ what's shipped. Status marks each line.
 
 ### 1. Admin (IAM & tenancy)
 - ✅ JWT auth (argon2), custom `User`, sessions/token refresh.
+- ⬜ **Staff / PF‑number login** — employees sign in with their **payroll‑file (PF) / staff number** (many counter staff have no email); PF number is the person's key across HR, attendance, payroll, dispensing log & audit.
 - ✅ Organisation model (depot / retail / HQ) + parent link (HQ→branch), departments, **Rwanda location** hierarchy (province→district→sector→cell→village).
 - ✅ Roles + deny‑by‑default RBAC; append‑only **audit log**.
 - ⬜ **Formal company ↔ branch split** (a first‑class `Company` above `Organization`) for large chains that demand it.
@@ -151,27 +152,38 @@ what's shipped. Status marks each line.
 - ⬜ Government integration hooks (RSSB digital system, IremboGov context) — mock first.
 
 ### 9. Finance
+> **The owner/finance‑head must know: how much is invested, how the business is performing (gross & net profit + margins), who owes us and how old, and is cash safe.**
 - ✅ B2B settlement, **aged receivables & payables** (per‑partner, bucketed).
 - ⬜ **Chart of accounts**, double‑entry **journals** + auto‑posting from sales/purchases/stock/payroll, sub‑ledgers.
-- ⬜ **AP** (supplier bills, payment runs, MoMo disbursements) / **AR** (customer & insurer invoices, receipts, dunning).
-- ⬜ **Banking & cash** — bank/MoMo/Airtel accounts, reconciliation, petty cash, cash‑book.
+- ⬜ **AP** — supplier bills, 3‑way match, payment runs, **MoMo disbursements**, supplier statements/reconciliation, DPO.
+- ⬜ **AR & customer credit management** — customer invoices (buyers + insurers), receipts, **credit application → credit scoring → credit limit**, **credit terms** (net 30/45, 2/10 net 30), **credit holds** on breach/overdue, **aging + DSO**, **statements of account**, **collections/dunning** ladder, write‑offs/bad‑debt provision.
+- ⬜ **Banking & cash** — bank/MoMo/Airtel accounts, reconciliation, petty cash, cash‑book, cash‑flow forecast.
 - ⬜ **Tax** — VAT (class B = 18%), **EBM fiscalisation** (OSDC), withholding, tax reports/returns.
-- ⬜ **Period close** — EOD/EOM closeout, trial balance, P&L, balance sheet, cash‑flow; **HQ consolidation** across branches.
+- ⬜ **Investment & equity** — capital invested, owner's equity, drawings, retained earnings, capital‑vs‑expense classification, fixed‑asset register + depreciation.
+- ⬜ **Business performance** — **gross profit / gross margin**, **net profit / net margin**, COGS, operating expenses, EBITDA, **ROI / ROE / GMROI**, **DSO/DPO**, break‑even, stock turns; a **performance cockpit** (period compare, per‑branch) the leader reads at a glance.
+- ⬜ **Period close** — EOD/EOM closeout, trial balance, **P&L, balance sheet, cash‑flow**; **HQ consolidation** across branches.
 - ⬜ **Inventory valuation & costing** — costing method (weighted‑average / FEFO‑lot cost), **lot‑level valuation**, stock valuation & COGS posting, revaluation, shrinkage/write‑off to GL.
 - ⬜ **Budgets & costing** — budgets vs actual, cost centres, margin & profitability analysis.
 - ⬜ **Finance documents** — invoices, credit/debit notes, receipts, statements, remittance, vouchers, EOD/EOM reports (see [Documents catalog](#documents-catalog)).
 - ⬜ Multi‑currency (imports), fixed assets/depreciation (light).
 
 ### 10. People (HR & payroll)
-- ⬜ **Recruitment** — requisition, job posting, applicants, interviews, offer.
-- ⬜ **Onboarding** — employee master, contract, documents (ID, licences, certificates), asset/equipment issue, checklist.
+> **Who works here, what they earn, how it's calculated & deducted, and are they present** — the leader must see all of it at a glance.
+- ⬜ **Employee master** — PF/staff number, personal + next‑of‑kin, contract type, grade/step, department/branch, bank/MoMo, **RSSB number**, TIN, salary structure (base + allowances), start date, reporting line.
+- ⬜ **Recruitment (external)** — requisition, job posting, applicants, shortlisting, interviews, offer → converts to onboarding.
+- ⬜ **Onboarding** — contract, **documents** (ID, licences, certificates, CV, contract), asset/equipment issue, induction checklist.
 - ⬜ **Licences & dispensing rights** — pharmacist/tech licences (NPC/board) + expiry tracking gating dispensing; **CPD/CE hour logging + renewal alerts**.
-- ⬜ **Time & attendance** — **credential‑based scheduling** (auto‑assign shifts only to staff with a valid licence; ensure each shift has a pharmacist on cover), shifts/rosters across branches, clock in/out, leave (types, balances, requests→approval), overtime, absence.
-- ⬜ **Payroll** — PAYE bands, **RSSB pension 12%**, maternity 0.6%, **CBHI 0.5% net**, transport allowance in base, payslips, bank/MoMo pay run, statutory filings; versioned `statutory_rates`.
+- ⬜ **Automated attendance** — **clock in/out** (biometric / PIN / **PF number** / device), auto‑build timesheets, lateness/absence flags, **overtime** auto‑calc from rostered vs worked hours, **shift premiums**, break rules; corrections via approval.
+- ⬜ **Shifts & rostering** — shift patterns, **credential‑based scheduling** (only valid‑licence staff; every shift has a pharmacist on cover), coverage rules across branches, shift swaps, roster publish.
+- ⬜ **Leave** — types & balances, accrual, requests→approval, calendar, carry‑over, encashment; feeds payroll.
+- ⬜ **Payroll — gross → net engine.** **Gross** = base + allowances (incl. **transport allowance**, now in the contributory base) + **overtime** + bonus/commission + shift premium. **Deductions** = **PAYE** (bands 0/10/20/30%) + **RSSB pension 6% employee** + **maternity 0.3% employee** + **CBHI 0.5% of net** + loans/advances/salary‑advance + union/other; employer side (RSSB 6% + maternity 0.3%) computed for cost. **Net = gross − deductions.** Versioned, effective‑dated `statutory_rates`; **payslips**, bank/MoMo **pay run**, statutory **filings/returns**, payroll journal → Finance.
+- ⬜ **Payroll controls** — payroll register, run approval (no self‑approval), reprocessing, arrears/back‑pay, proration for joiners/leavers, 13th‑cheque/bonus runs, **payroll calculator** (see [calculators](#c-workspace-tools-the-utility-belt)).
 - ⬜ **Training & SOP** — SOP library, assign‑and‑acknowledge, training courses/records, **competency assessments** + periodic re‑checks, controlled‑drug competency.
-- ⬜ **Performance** — reviews, goals, disciplinary, warnings.
-- ⬜ **Offboarding** — clearance, final pay, de‑provision, exit.
-- ⬜ Org chart, self‑service portal (payslips/leave), headcount reports.
+- ⬜ **Performance** — reviews, goals, disciplinary, warnings, promotions/transfers, salary revisions (history).
+- ⬜ **Offboarding** — resignation/termination, clearance checklist, **final settlement** (leave encashment, dues), de‑provision login, exit interview, certificate of service.
+- ⬜ **HR documents** — contract, offer letter, payslip, leave approval, warning/disciplinary letter, training/competency certificate, clearance, certificate of service, ID/licence copies (in the document vault, retention‑policied).
+- ⬜ **Self‑service & reporting** — employee portal (payslip/leave/attendance), org chart, headcount/turnover/attendance/leave‑liability reports.
+- ⬜ **External HR touchpoints** — RSSB (registration, contribution filing), RRA (PAYE), NPC (pharmacist registration), labour‑law compliance.
 
 ### 11. Connect (workspace & communication)
 - ✅ Contextual comments + @mentions, **operational notifications** (order lifecycle, payments) + **daily alert scheduler** (expiry/expired/low‑stock/overdue), notification centre (bell).
@@ -207,7 +219,8 @@ payroll run, claim resubmit, stock adjustment, user creation, disposal…) route
 - ⬜ **Every legal/finance/HR/clinical document** as a template (see [Documents catalog](#documents-catalog)); tamper‑evidence (QR/hash/signature), multi‑company logos, retention policy per type, e‑signature, PDF vault + versioning.
 
 #### C. Workspace tools (the "utility belt")
-- ⬜ **To‑do lists** (personal + assigned via Connect), **calendar** (shifts, expiries, licence renewals, deliveries, paydays), **calculators** (dose, markup/margin, VAT, change, unit‑price, payroll), **notes**, **document templates** picker, quick search/command palette.
+- ⬜ **To‑do lists** (personal + assigned via Connect), **calendar** (shifts, expiries, licence renewals, deliveries, paydays), **notes**, **document‑templates** picker, quick search/command palette.
+- ⬜ **Internal calculators** — **payroll gross→net** (PAYE + RSSB pension + maternity + CBHI + loans), **overtime**, **margin/markup**, **VAT** (inclusive/exclusive), **GMROI / ROI / ROE**, **DSO/DPO**, **landed‑cost**, **reorder‑point/par**, **discount & change**, **unit‑price / OTC increment**, **dose**. Each pulls live config (statutory rates, tax class) so results match the books.
 
 #### D. Platform (non‑functional, every app)
 - **Design system & brand**, **Security & audit**, **RBAC & tenant/branch scoping**, **Compliance (GDP/RRA/FDA/Data‑Protection)**, **Testing**, **Offline/sync**, **Notifications** — detailed in [Platform & non‑functional](#platform--non-functional-must-hold-across-every-subsystem).
@@ -296,9 +309,9 @@ The first‑class records the whole platform hangs on. Missing ones are gaps to 
 - ⬜ **DrugInteraction / Contraindication / AllergyClass / DuplicateTherapyGroup** — the DUR knowledge base the safety review runs against.
 - ⬜ **StorageZone / Bin / TemperatureLog** — warehouse structure + cold‑chain.
 - ⬜ **InsuranceProvider / Policy / Claim / EOB‑EOP**.
-- ⬜ **Employee / Contract / Licence / Attendance / LeaveRequest / Payslip / TrainingRecord / Competency**.
+- ⬜ **Employee (PF/staff no.) / Contract / SalaryStructure / Licence / Shift‑Roster / Attendance‑Timesheet / LeaveRequest / PayrollRun / Payslip / LoanAdvance / TrainingRecord / Competency**.
 - ⬜ **PurchaseOrder / SupplierInvoice / LandedCost**.
-- ⬜ **Account / Journal / JournalLine / TaxRecord / BankAccount / FiscalReceipt (EBM)**.
+- ⬜ **Account / Journal / JournalLine / TaxRecord / BankAccount / FiscalReceipt (EBM) / CreditProfile (application, limit, terms, hold) / Statement**.
 - ⬜ **ApprovalRequest / ApprovalStep / ApprovalDecision** (approval engine).
 - ⬜ **OrganizationDocument / UserDocument / EmployeeDocument** (+ Rwanda required sets).
 - ⬜ **StatutoryRate** (versioned, effective‑dated) — PAYE/RSSB/CBHI/VAT.
@@ -319,6 +332,21 @@ Each is a template in the document engine (tamper‑evident, retention‑policie
 - **HR:** Employment contract, Offer letter, Payslip, Leave approval, Training/competency certificate, Warning/disciplinary letter, Clearance/exit.
 - **Trade & disputes:** Price‑list / scheme sheet, Quotation/offer, Rebate/credit note, Deduction/short‑pay advice, **Claim form + evidence pack** (photos/PoD), Dispute resolution record, **Defect/complaint report**, ADR/pharmacovigilance report, Recall notice.
 - **Compliance/Admin:** Organisation licence pack, SOP documents, Audit export, Consent record, Approval decision (e‑signed).
+
+### The buying ↔ selling document flow (who issues what, in order)
+`Enquiry → Quotation/RFQ → Purchase Order (LPO) → Order Acknowledgement → Proforma
+Invoice → Advice/Dispatch Note → Delivery Note / Waybill / Consignment Note → Goods
+Receipt Note (GRN) → (Tax) Invoice → Debit Note / Credit Note → Statement of Account
+→ Remittance Advice → Receipt.` Each is a template in the document engine; the same
+chain runs **inbound** (we buy from suppliers) and **outbound** (we sell to retailers).
+
+### Trade terminology glossary (the words operators use)
+The system speaks the trade's language so the UI and reports feel native.
+- **Order/pricing:** Enquiry · Quotation/RFQ · Purchase Order (PO/LPO) · Proforma invoice · MOQ (minimum order qty) · case pack · **list price / trade price / net price** · WAC (wholesale acquisition cost) · markup vs **margin** · landed cost · COGS.
+- **Discounts/terms:** **trade discount** · **cash/settlement discount** (e.g. **2/10 net 30**) · quantity/volume discount · **bonus / free goods** · rebate · chargeback · gross‑to‑net · **net 30/45**, **EOM**, **prox./ult.** · **COD** (cash on delivery) · **CWO/CIA** (cash with order / in advance) · credit limit · **DSO/DPO** · aging.
+- **Delivery/logistics:** advice note · delivery note · **waybill / consignment note** · proof of delivery (PoD) · backorder · short‑ship · **Incoterms** (EXW, FOB, CIF, DDP) · carriage paid/forward · FEFO/FIFO.
+- **Billing/settlement:** (tax) invoice · **debit note** (increase what's owed) · **credit note** (reduce/refund) · statement of account · remittance advice · receipt · **E&OE** (errors & omissions excepted) · deduction/short‑pay.
+- **Stock/finance:** on‑hand vs **offered** vs reserved/allocated · par/reorder point · stock turns · **GMROI** · gross/net profit & margin · ROI/ROE.
 
 ---
 
@@ -351,6 +379,28 @@ competency compliance, licence‑expiry, **promotion uplift/ROI & loyalty**, **d
 deduction & defect/complaint trends**, offered‑vs‑sold & price‑change history,
 multi‑branch comparison & HQ consolidation, audit trail, KPI dashboards per role —
 all exportable (PDF/CSV/Excel), schedulable.
+
+---
+
+## Leadership & management operations (the management cockpit)
+The system isn't only for cashiers and storekeepers — it must make **leaders'
+daily jobs** easier: know the numbers, spot problems, decide, approve, and steer.
+Each leader gets a **role cockpit** (dashboard + tasks + approvals + reports).
+
+| Leader | What they do every day | How PharmaCore helps |
+|---|---|---|
+| **Owner / Director** | Is the business healthy? Am I making money? Is my capital safe? | Performance cockpit — **invested capital, gross/net profit & margin, ROI/GMROI, cash position, top approvals**; per‑branch compare |
+| **Pharmacy / Branch manager** | Staffing & rosters, stock health, sales vs target, complaints, compliance | Branch dashboard — sales today, low/expiring stock, to‑approve/receive, attendance, open complaints/disputes; **claim‑&‑approve** inbox |
+| **HQ executive (chain)** | Compare branches, consolidate, set policy/pricing, high‑level approvals | Multi‑branch consolidation, central catalog/price control, exception alerts, senior **oversight of all approvals** (forward/reassign) |
+| **Finance manager / accountant** | AP/AR, cash, close the books, tax/EBM, performance | Ledgers + auto‑posting, **aging + DSO/DPO**, bank/MoMo reconciliation, EOM close, **P&L/BS/cash‑flow**, VAT/EBM, finance calculators |
+| **HR manager** | Who's on today, leave, payroll, licences, training | Employee master, **automated attendance & overtime**, leave calendar, **gross→net payroll run**, licence/CPD expiry alerts, training/competency status |
+| **Procurement / purchasing manager** | What to buy, from whom, at what price/terms | Reorder suggestions, supplier compare/RFQ, **PO → GRN → invoice** 3‑way match, landed cost, rebates/chargebacks, forward/deal‑buy tracking |
+| **Warehouse / store manager** | Put‑away, cold chain, counts, quarantine, dispatch | Zones/bins, **temperature + excursion alerts**, cycle counts + variance, quarantine/recall, pick/dispatch, FEFO discipline |
+| **Superintendent pharmacist (compliance)** | Legal, safe dispensing; controlled‑drug assurance | Dispensing gate + **DUR safety review**, **controlled‑drug register** + quarterly report, licence tracking, defect/ADR reporting, audit trail |
+
+> Common thread for every leader: a **single place to see the truth** (real numbers,
+> not guesses), a **claim‑to‑lock approvals inbox** (nothing stalls, no self‑approval,
+> senior oversight), and **role‑scoped documents & reports** on demand.
 
 ---
 
@@ -435,8 +485,8 @@ Each phase makes one or more subsystems materially more complete, end‑to‑end
 - **Phase 5 — Procurement, imports & the commercial engine** ⬜ — supplier POs, **import + landed‑cost**, goods receipt, supplier invoices (AP), 3‑way match; **buying tactics** (forward/deal buying, tenders, volume/framework contracts, rebates/chargebacks, gross‑to‑net); the **selling‑side trade engine** (offered‑quantity listing, price schemes/tiers, bonus/free‑goods, MOQ, payment terms) and **receiving disputes/deductions + defect/complaint handling**. *(Closes the buy side and makes the depot's commercial game real.)*
 - **Phase 6 — Approvals engine + safety data + master data** ⬜ — the **central approvals inbox** (claim‑lock/SLA/escalation/senior oversight), **Customer/Patient + Prescriber + Prescription** entities, **drug interactions/contraindications/allergy** data, **permission matrix**. *(Unblocks safe dispensing, insurance, and every sensitive action.)*
 - **Phase 7 — Insurance, EBM & the notification pipeline** ⬜ — eligibility + co‑pay split at POS, claims + adjudication + reconciliation, **RRA EBM** fiscal receipts, rules‑based notifications + channels (incl. SMS).
-- **Phase 8 — Finance & consolidation** ⬜ — chart of accounts, journals + auto‑posting, AP/AR, banking/MoMo, tax, EOD/EOM close, **HQ consolidated** books, finance documents, Insights report builder & multi‑branch dashboards.
-- **Phase 9 — People, training & SOP** ⬜ — recruit→onboard→licences→attendance/leave→**payroll (PAYE/RSSB/CBHI)**→**SOP + training + competency**→performance→offboard, controlled‑drug assurance.
+- **Phase 8 — Finance, credit & performance** ⬜ — chart of accounts, journals + auto‑posting, AP/**AR + customer‑credit management (limits/terms/holds/DSO/dunning)**, banking/MoMo, tax, EOD/EOM close, **investment/equity + performance cockpit (gross/net profit, ROI/GMROI)**, **HQ consolidated** books, finance documents & calculators, Insights report builder & multi‑branch dashboards.
+- **Phase 9 — People, payroll, training & SOP** ⬜ — employee master + **PF‑number login**, recruit→onboard→licences→**automated attendance/overtime/shifts/leave**→**gross→net payroll (PAYE/RSSB/CBHI + loans)**→**SOP + training + competency**→performance→offboard, HR documents, controlled‑drug assurance, self‑service portal.
 - **Phase 10 — Online selling & Connect (full)** ⬜ — patient **e‑commerce** + prescription upload + delivery/click‑&‑collect; full **messaging, announcements, tasks, shift notes, knowledge base**, workspace tools (todo/calendar/calculators/templates).
 - **Phase 11 — Hardening, certification & launch** ⬜ — real EBM adapter + **RRA CIS certification**, real insurer/MoMo/SMS adapters, **Postgres RLS**, observability, backups + restore drill, a11y audit, load/e2e, data‑protection registration, **pilot** at one depot + one chain.
 
@@ -482,6 +532,11 @@ decision support beyond interaction/duplication/allergy checks.
 - Procurement / tendering / volume contracts / parallel import / generic margins — [Procurement Tactics – pharma procurement](https://procurementtactics.com/pharmaceutical-procurement/), [WHO – tendering & negotiation](https://www.ncbi.nlm.nih.gov/books/NBK570136/bin/webannexb-et6.pdf), [ScienceDirect – generic substitution margins](https://www.sciencedirect.com/science/article/abs/pii/S0014292113000299)
 - Disputes / deductions / defect & complaint handling — [Go Autonomous – B2B claims & disputes](https://goautonomous.io/blogs/b2b-claims-and-dispute-processing-how-autonomous-commerce-resolves-returns-and-credits-without-escalation/), [Tekst – deduction management](https://www.tekst.com/blogs/deduction-management), [Inymbus – retail deductions guide](https://blog.inymbus.com/common-deductions-from-major-retailers-suppliers-guide)
 - Promotions / loyalty / coupons / seasonal & trade promotion — [Antavo – pharmacy loyalty](https://antavo.com/blog/pharmacy-loyalty-programs/), [Xoxoday – pharmacy loyalty guide](https://blog.xoxoday.com/loyalife/pharmacy-loyalty-program/), [DiversifyRx – seasonal promotions](https://diversifyrx.com/pharmacy-profit-seasonal-promotions-for-the-win/), [BlueCart – wholesale discounts & marketing](https://www.bluecart.com/blog/wholesale-discounts-marketing)
+- Pharmacy leadership / manager duties & KPIs — [APOS – pharmacy manager role](https://careers.apos-society.org/career/pharmacy-manager), [Council on Pharmacy Standards – KPIs](https://pharmacystandards.org/cpom/section-5-1-key-performance-indicators-kpis-for-pharmacy-operations/), [DosePacker – pharmacy KPIs](https://dosepacker.com/blog/pharmacy-kpis)
+- HR / payroll gross→net / deductions / attendance — [Asanify – gross‑to‑net](https://asanify.com/glossary/gross-to-net-calculation/), [AIHR – statutory deductions](https://www.aihr.com/hr-glossary/statutory-deductions/), [Keka – payroll in HR](https://academy.keka.com/blog/what-is-payroll-in-hr/), [Softhealer – attendance & leave](https://softhealer.com/blog/articals-11/attendance-leave-management-a-key-hrms-function-12711)
+- Finance performance / profit / ROI / GMROI — [RxConnexion – pharmacy KPIs](https://www.rxconnexion.com/post/top-kpis-for-a-successful-pharmacy-business-what-to-track-for-growth-and-profitability), [Fleming Advisors – profitability & margins](https://www.fleming-advisors.com/post/the-pharmacy-profitability-playbook-understanding-key-metrics-and-margins), [Alchemy – ROI vs ROE](https://www.alchemyhealth.com/articles/a-comprehensive-guide-how-to-measure-the-roi-for-your-on-site-pharmacy-understanding-the-difference-between-roe-and-roi)
+- Customer credit / AR / DSO / collections — [OpenStax – receivables management](https://openstax.org/books/principles-of-finance-2e/pages/19-4-receivables-management), [Intrum – AR management](https://www.intrum.com/insights/guides-and-articles/what-is-accounts-receivable-management-and-why-does-it-matter/), [Harding Group – DSO/terms/credit policy](https://www.thehardinggroup.biz/blog/speeding-up-collections-dso-terms-and-credit-policies/)
+- Buying/selling documents & trade terminology — [Artsyl – proforma vs PO](https://www.artsyltech.com/proforma-invoice-vs-purchase-order), [Cleverence – purchase terminology](https://www.cleverence.com/articles/for-business/purchase-terminology-7049/), [Wikipedia – debit note](https://en.wikipedia.org/wiki/Debit_note), [Billdu – document types](https://faq.billdu.com/en/articles/3001362-document-types-and-differences)
 - Rwanda specifics (EBM, MoMo, statutory, insurance, data protection) — see [docs 13, 17, 18](docs/README.md) for the full cited source lists.
 </content>
 </invoke>
