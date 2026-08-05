@@ -20,6 +20,7 @@ import { SuppliersPage } from "./pages/SuppliersPage";
 import { UsersPage } from "./pages/UsersPage";
 import { ActivityPage } from "./pages/ActivityPage";
 import { CompaniesPage } from "./pages/CompaniesPage";
+import { PermissionMatrixPage } from "./pages/PermissionMatrixPage";
 import { AdminHome } from "./pages/apps/AdminHome";
 import { RetailHome } from "./pages/apps/RetailHome";
 import { CatalogHome } from "./pages/apps/CatalogHome";
@@ -70,6 +71,7 @@ function App() {
               <Route path="/organizations/:id" element={adminOnly(<OrganizationDetailPage />)} />
               <Route path="/departments" element={adminOnly(<DepartmentsPage />)} />
               <Route path="/users" element={adminOnly(<UsersPage />)} />
+              <Route path="/permissions" element={adminOnly(<PermissionMatrixPage />)} />
               <Route path="/activity" element={adminOnly(<ActivityPage />)} />
               <Route path="/products" element={forPharmacy(<ProductsPage />)} />
               <Route path="/products/:id" element={forPharmacy(<ProductDetailPage />)} />

@@ -13,9 +13,16 @@ from apps.iam.models import (
     Department,
     License,
     Organization,
+    Permission,
     Role,
     User,
 )
+
+
+class PermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Permission
+        fields = ["id", "resource", "action", "code", "description"]
 
 
 class CompanySerializer(serializers.ModelSerializer):
@@ -88,9 +95,14 @@ class AuditLogSerializer(serializers.ModelSerializer):
 
 
 class RoleSerializer(serializers.ModelSerializer):
+    permissions = serializers.SlugRelatedField(
+        slug_field="code", many=True, queryset=Permission.objects.all(), required=False
+    )
+
     class Meta:
         model = Role
-        fields = ["id", "code", "name", "description"]
+        fields = ["id", "code", "name", "description", "permissions"]
+        read_only_fields = ["id", "code", "name", "description"]
 
 
 class OrganizationSerializer(serializers.ModelSerializer):

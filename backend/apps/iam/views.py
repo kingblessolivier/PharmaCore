@@ -26,10 +26,11 @@ from apps.iam.models import (
     ImpersonationSession,
     License,
     Organization,
+    Permission,
     Role,
     User,
 )
-from apps.iam.permissions import CanManageOrg, IsAdminRole
+from apps.iam.permissions import CanManageOrg, IsAdminRole, IsSysAdmin
 from apps.iam.scoping import organizations_visible_to
 from apps.iam.serializers import (
     AuditLogSerializer,
@@ -37,6 +38,7 @@ from apps.iam.serializers import (
     DepartmentSerializer,
     LicenseSerializer,
     OrganizationSerializer,
+    PermissionSerializer,
     RoleSerializer,
     UserAdminSerializer,
     UserSerializer,
@@ -89,7 +91,9 @@ class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> Response:
-        data = dict(UserSerializer(cast(User, request.user)).data)
+        user = cast(User, request.user)
+        data = dict(UserSerializer(user).data)
+        data["permissions"] = sorted(user.permission_codes())
         admin_id = _token_claim(request, "act_as_admin_id")
         if admin_id:
             admin = User.objects.filter(pk=admin_id).first()
@@ -313,12 +317,39 @@ class DepartmentViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
-class RoleViewSet(viewsets.ReadOnlyModelViewSet):
-    """Read-only list of assignable roles (for the role picker)."""
+class RoleViewSet(viewsets.ModelViewSet):
+    """Roles = bundles of permissions. Read for any authed user (the role picker +
+    the permission matrix); **editing a role's permissions is SYS_ADMIN‑only** since
+    roles are system‑wide, and every change is audited."""
 
     serializer_class = RoleSerializer
-    queryset = Role.objects.all()
-    permission_classes = [IsAuthenticated]
+    queryset = Role.objects.prefetch_related("permissions").all()
+    pagination_class = None
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def get_permissions(self) -> list[BasePermission]:
+        if self.action in {"update", "partial_update"}:
+            return [IsAuthenticated(), IsSysAdmin()]
+        return [IsAuthenticated()]
+
+    def perform_update(self, serializer: BaseSerializer[Any]) -> None:
+        role = serializer.save()
+        record_audit(
+            action="UPDATE",
+            user=cast(User, self.request.user),
+            entity_type="role",
+            entity_id=str(role.pk),
+            changes={"permissions": sorted(role.permissions.values_list("code", flat=True))},
+            request=self.request,
+        )
+
+
+class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
+    """The full permission catalogue (resource × action) for the matrix."""
+
+    serializer_class = PermissionSerializer
+    queryset = Permission.objects.all()
+    permission_classes = [IsAuthenticated, IsAdminRole]
     pagination_class = None
 
 

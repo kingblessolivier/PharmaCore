@@ -12,6 +12,8 @@ export interface Me {
   is_staff: boolean;
   is_superuser: boolean;
   roles: string[];
+  /** Permission codes this user holds (via their roles). */
+  permissions?: string[];
   date_joined: string;
   /** Present only while an admin is viewing-as this user. */
   impersonator?: { id: number; username: string } | null;
@@ -83,6 +85,15 @@ export interface Role {
   id: number;
   code: string;
   name: string;
+  description: string;
+  permissions: string[];
+}
+
+export interface Permission {
+  id: number;
+  resource: string;
+  action: string;
+  code: string;
   description: string;
 }
 

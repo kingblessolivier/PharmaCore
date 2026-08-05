@@ -322,6 +322,7 @@ const NAV: NavGroup[] = [
       { to: "/organizations", label: "Organizations", icon: Network },
       { to: "/departments", label: "Departments", icon: Boxes },
       { to: "/users", label: "Users & roles", icon: Users },
+      { to: "/permissions", label: "Permissions", icon: ShieldCheck },
       { to: "/activity", label: "Audit log", icon: Activity },
     ],
   },

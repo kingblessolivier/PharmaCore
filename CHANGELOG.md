@@ -18,6 +18,11 @@ Maintenance rules:
 ## [Unreleased]
 
 ### Added
+- **Permission matrix (Admin).** Permissions are now `resource × action` (23-code
+  catalogue); roles are **bundles of permissions** (seeded for every role);
+  `User.has_permission()` + a `HasPermission.require()` DRF class + a `can()` frontend
+  helper; `/api/auth/me` returns the user's permission codes. A **SYS-ADMIN-editable
+  matrix UI** (roles × permissions grid, audited) lets you reshape what each role may do.
 - **App homes + app-switcher springboard (workspace layout).** A top-left waffle
   opens a grid of subsystem tiles (Oracle-Fusion / Google-Workspace pattern); each
   built app opens its **home page** showing what's inside it — starting with the
