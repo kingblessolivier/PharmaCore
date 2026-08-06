@@ -29,6 +29,7 @@ import { EmployeesPage } from "./pages/EmployeesPage";
 import { EmployeeDetailPage } from "./pages/EmployeeDetailPage";
 import { PayrollPage } from "./pages/PayrollPage";
 import { SupplierBillsPage } from "./pages/SupplierBillsPage";
+import { BankingPage } from "./pages/BankingPage";
 import { AdminHome } from "./pages/apps/AdminHome";
 import { RetailHome } from "./pages/apps/RetailHome";
 import { CatalogHome } from "./pages/apps/CatalogHome";
@@ -96,6 +97,7 @@ function App() {
               <Route path="/finance/journal" element={forFinance(<JournalPage />)} />
               <Route path="/finance/credit" element={forFinance(<CreditProfilesPage />)} />
               <Route path="/finance/payables" element={forFinance(<SupplierBillsPage />)} />
+              <Route path="/finance/banking" element={forFinance(<BankingPage />)} />
               <Route path="/people" element={forHR(<PeopleHome />)} />
               <Route path="/people/employees" element={forHR(<EmployeesPage />)} />
               <Route path="/people/employees/:id" element={forHR(<EmployeeDetailPage />)} />

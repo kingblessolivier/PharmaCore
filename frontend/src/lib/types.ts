@@ -741,3 +741,45 @@ export interface SupplierBill {
   payments: SupplierBillPayment[];
   created_at: string;
 }
+
+export type BankAccountKind = "BANK" | "MOMO" | "AIRTEL" | "CASH";
+
+export interface BankAccount {
+  id: number;
+  organization: number;
+  name: string;
+  kind: BankAccountKind;
+  bank_name: string;
+  account_number: string;
+  currency: string;
+  opening_balance: string;
+  gl_account: number;
+  gl_account_code: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface CashBookLine {
+  line_id: number;
+  entry_date: string;
+  entry_number: string;
+  description: string;
+  side: BalanceSide;
+  amount: number;
+  running_balance: number;
+  is_reconciled: boolean;
+  reconciled_at: string | null;
+  statement_reference: string;
+}
+
+export interface CashFlowBucket {
+  bucket: "d30" | "d60" | "d90" | "over90";
+  inflows: number;
+  outflows: number;
+  projected_balance: number;
+}
+
+export interface CashFlowForecast {
+  cash_on_hand: number;
+  projection: CashFlowBucket[];
+}

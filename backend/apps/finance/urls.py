@@ -4,6 +4,8 @@ from rest_framework.routers import DefaultRouter
 
 from apps.finance.views import (
     AccountViewSet,
+    BankAccountViewSet,
+    CashFlowForecastView,
     CreditProfileViewSet,
     JournalEntryViewSet,
     SupplierBillViewSet,
@@ -14,5 +16,7 @@ router.register("accounts", AccountViewSet, basename="finance-account")
 router.register("journal-entries", JournalEntryViewSet, basename="journal-entry")
 router.register("credit-profiles", CreditProfileViewSet, basename="credit-profile")
 router.register("supplier-bills", SupplierBillViewSet, basename="supplier-bill")
+router.register("bank-accounts", BankAccountViewSet, basename="bank-account")
+router.register("cash-flow-forecast", CashFlowForecastView, basename="cash-flow-forecast")
 
 urlpatterns = router.urls

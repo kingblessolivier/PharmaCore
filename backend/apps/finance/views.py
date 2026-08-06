@@ -13,20 +13,25 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 
-from apps.finance.models import Account, CreditProfile, JournalEntry, SupplierBill
+from apps.finance.models import Account, BankAccount, CreditProfile, JournalEntry, SupplierBill
 from apps.finance.serializers import (
     AccountSerializer,
+    BankAccountSerializer,
     CreditProfileSerializer,
     JournalEntrySerializer,
     SupplierBillSerializer,
 )
 from apps.finance.services import (
+    cash_book_lines,
+    cash_flow_forecast,
+    create_bank_account,
+    reconcile_lines,
     record_supplier_bill,
     record_supplier_bill_payment,
     request_credit_override,
 )
 from apps.iam.audit import record_audit
-from apps.iam.models import User
+from apps.iam.models import Organization, User
 from apps.iam.scoping import organizations_visible_to
 
 
@@ -225,3 +230,96 @@ class SupplierBillViewSet(viewsets.ModelViewSet):
         )
         bill.refresh_from_db()
         return Response(SupplierBillSerializer(bill).data)
+
+
+class BankAccountViewSet(viewsets.ModelViewSet):
+    """Bank/MoMo/Airtel/cash accounts — each has its own GL sub-account, cash-book,
+    and reconciliation state."""
+
+    serializer_class = BankAccountSerializer
+    queryset = BankAccount.objects.select_related("organization", "gl_account")
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self) -> QuerySet[BankAccount]:
+        user = cast(User, self.request.user)
+        qs = BankAccount.objects.select_related("organization", "gl_account")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            qs = qs.filter(organization__in=organizations_visible_to(user))
+        org_param = self.request.query_params.get("organization")
+        if org_param and org_param.isdigit():
+            qs = qs.filter(organization_id=int(org_param))
+        return qs
+
+    def create(self, request: Request, *args: object, **kwargs: object) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        try:
+            organization = Organization.objects.get(pk=str(request.data.get("organization")))
+        except (Organization.DoesNotExist, TypeError, ValueError) as exc:
+            raise ValidationError("A valid 'organization' id is required.") from exc
+        try:
+            account = create_bank_account(
+                organization=organization,
+                name=str(request.data.get("name", "")),
+                kind=str(request.data.get("kind", BankAccount.Kind.BANK)),
+                bank_name=str(request.data.get("bank_name", "")),
+                account_number=str(request.data.get("account_number", "")),
+                currency=str(request.data.get("currency", "RWF")),
+                opening_balance=Decimal(str(request.data.get("opening_balance", 0))),
+                user=user,
+            )
+        except (ValueError, TypeError) as exc:
+            raise ValidationError(str(exc)) from exc
+        record_audit(
+            action="CREATE",
+            user=user,
+            organization=organization,
+            entity_type="bank_account",
+            entity_id=str(account.pk),
+            request=request,
+        )
+        return Response(BankAccountSerializer(account).data, status=201)
+
+    @action(detail=True, methods=["get"], url_path="cash-book")
+    def cash_book(self, request: Request, pk: str | None = None) -> Response:
+        account = self.get_object()
+        return Response(cash_book_lines(account))
+
+    @action(detail=True, methods=["post"], url_path="reconcile")
+    def reconcile(self, request: Request, pk: str | None = None) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        line_ids = request.data.get("line_ids", [])
+        if not isinstance(line_ids, list) or not line_ids:
+            raise ValidationError("'line_ids' must be a non-empty list.")
+        count = reconcile_lines(
+            line_ids=[int(i) for i in line_ids],
+            statement_reference=str(request.data.get("statement_reference", "")),
+            user=user,
+        )
+        return Response({"reconciled": count})
+
+
+class CashFlowForecastView(viewsets.ViewSet):
+    """A real cash-flow projection built from unpaid B2B receivables and
+    supplier-bill payables due, bucketed by how soon they're due."""
+
+    def list(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        org_param = request.query_params.get("organization")
+        if org_param and org_param.isdigit():
+            try:
+                organization = Organization.objects.get(pk=org_param)
+            except Organization.DoesNotExist as exc:
+                raise ValidationError("Organization not found.") from exc
+        elif user.organization_id:
+            organization = cast(Organization, user.organization)
+        else:
+            raise ValidationError("An 'organization' query param is required.")
+        if not (
+            user.is_superuser
+            or user.has_role("SYS_ADMIN")
+            or organization in organizations_visible_to(user)
+        ):
+            raise PermissionDenied("You may not view this organization's cash-flow forecast.")
+        return Response(cash_flow_forecast(organization))

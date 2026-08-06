@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, CreditCard, ScrollText, Wallet } from "lucide-react";
+import { BookOpen, CreditCard, Landmark, ScrollText, Wallet } from "lucide-react";
 import { api } from "../../lib/api";
 import type { DashboardSummary } from "../../lib/types";
 import { AppHeader, SectionCard, SectionGrid, StatTile } from "../../components/AppHome";
@@ -55,6 +55,12 @@ export function FinanceHome() {
           title="Supplier bills (AP)"
           description="Record supplier invoices and payments — posts straight to the ledger."
           to="/finance/payables"
+        />
+        <SectionCard
+          icon={Landmark}
+          title="Banking & cash"
+          description="Bank/MoMo/cash accounts, cash-book, reconciliation, and a cash-flow forecast."
+          to="/finance/banking"
         />
       </SectionGrid>
     </div>

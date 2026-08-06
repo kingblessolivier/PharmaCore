@@ -115,12 +115,51 @@ class JournalLine(models.Model):
         max_digits=14, decimal_places=2, validators=[MinValueValidator(0.01)]
     )
     memo = models.CharField(max_length=200, blank=True, default="")
+    # Bank reconciliation: matched against a bank/MoMo statement line.
+    is_reconciled = models.BooleanField(default=False)
+    reconciled_at = models.DateTimeField(null=True, blank=True)
+    statement_reference = models.CharField(max_length=100, blank=True, default="")
 
     class Meta:
         ordering = ["id"]
 
     def __str__(self) -> str:
         return f"{self.side} {self.amount} {self.account.code}"
+
+
+class BankAccount(models.Model):
+    """A bank/MoMo/Airtel/cash account an organization holds. Each gets its own
+    chart-of-accounts sub-ledger (a child of the "1000 Cash & Bank" control
+    account) so its cash-book and reconciliation are tracked separately —
+    ROADMAP "9. Finance": "bank/MoMo/Airtel accounts, reconciliation, ... cash-book"."""
+
+    class Kind(models.TextChoices):
+        BANK = "BANK", "Bank"
+        MOMO = "MOMO", "Mobile money (MTN MoMo)"
+        AIRTEL = "AIRTEL", "Mobile money (Airtel)"
+        CASH = "CASH", "Cash on hand"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="bank_accounts"
+    )
+    name = models.CharField(max_length=150)
+    kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.BANK)
+    bank_name = models.CharField(max_length=150, blank=True, default="")
+    account_number = models.CharField(max_length=50, blank=True, default="")
+    currency = models.CharField(max_length=3, default="RWF")
+    opening_balance = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    # The dedicated GL sub-account this bank account's postings hit (auto-created).
+    gl_account = models.OneToOneField(
+        Account, on_delete=models.PROTECT, related_name="bank_account"
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.kind})"
 
 
 class CreditProfile(models.Model):
