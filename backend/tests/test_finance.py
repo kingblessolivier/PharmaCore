@@ -49,7 +49,7 @@ def senior(depot: Organization) -> User:
 @pytest.mark.django_db
 def test_ensure_default_accounts_idempotent(depot: Organization) -> None:
     accounts = ensure_default_accounts(depot)
-    assert accounts["1000"].name == "Cash & Bank"
+    assert accounts["1100"].name == "Cash on Hand"
     count_before = Account.objects.filter(organization=depot).count()
     ensure_default_accounts(depot)
     assert Account.objects.filter(organization=depot).count() == count_before
@@ -63,8 +63,8 @@ def test_post_journal_requires_balance(depot: Organization) -> None:
             organization=depot,
             description="unbalanced",
             lines=[
-                {"account": accounts["1000"], "side": "DEBIT", "amount": Decimal("10"), "memo": ""},
-                {"account": accounts["1100"], "side": "CREDIT", "amount": Decimal("5"), "memo": ""},
+                {"account": accounts["1100"], "side": "DEBIT", "amount": Decimal("10"), "memo": ""},
+                {"account": accounts["1400"], "side": "CREDIT", "amount": Decimal("5"), "memo": ""},
             ],
         )
 
@@ -76,7 +76,7 @@ def test_post_journal_balanced_ok(depot: Organization) -> None:
         organization=depot,
         description="opening",
         lines=[
-            {"account": accounts["1000"], "side": "DEBIT", "amount": Decimal("100"), "memo": ""},
+            {"account": accounts["1100"], "side": "DEBIT", "amount": Decimal("100"), "memo": ""},
             {"account": accounts["3000"], "side": "CREDIT", "amount": Decimal("100"), "memo": ""},
         ],
     )
@@ -97,7 +97,7 @@ def test_account_api_reports_balances_signed_to_normal_side(
         organization=depot,
         description="opening",
         lines=[
-            {"account": accounts["1000"], "side": "DEBIT", "amount": Decimal("100"), "memo": ""},
+            {"account": accounts["1100"], "side": "DEBIT", "amount": Decimal("100"), "memo": ""},
             {"account": accounts["3000"], "side": "CREDIT", "amount": Decimal("100"), "memo": ""},
         ],
     )
@@ -105,9 +105,9 @@ def test_account_api_reports_balances_signed_to_normal_side(
     assert resp.status_code == 200, resp.content
     by_code = {a["code"]: a for a in resp.json()["results"]}
 
-    assert Decimal(by_code["1000"]["balance"]) == Decimal("100")  # debit-normal asset
+    assert Decimal(by_code["1100"]["balance"]) == Decimal("100")  # debit-normal asset
     assert Decimal(by_code["3000"]["balance"]) == Decimal("100")  # credit-normal equity
-    assert Decimal(by_code["1100"]["balance"]) == Decimal("0")  # untouched
+    assert Decimal(by_code["1400"]["balance"]) == Decimal("0")  # untouched
 
     # The accounting identity holds across the whole chart: A = L + E + (Rev - Exp).
     def total(kind: str) -> Decimal:

@@ -17,11 +17,27 @@ from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
 
-from apps.distribution.models import GoodsReceivedNote, InTransitStock, StockOrder
+from apps.distribution.models import (
+    CustomerReturn,
+    DepotProductListing,
+    GoodsReceivedNote,
+    InTransitStock,
+    JourneyPlan,
+    SalesRepresentative,
+    SalesVisitLog,
+    StockOrder,
+    TenderContract,
+)
 from apps.distribution.serializers import (
+    CustomerReturnSerializer,
+    DepotProductListingSerializer,
     GRNSerializer,
     InTransitStockSerializer,
+    JourneyPlanSerializer,
+    SalesRepresentativeSerializer,
+    SalesVisitLogSerializer,
     StockOrderSerializer,
+    TenderContractSerializer,
 )
 from apps.distribution.services import (
     approve_and_ship,
@@ -413,3 +429,82 @@ class GRNViewSet(viewsets.ReadOnlyModelViewSet):
             return qs
         visible = organizations_visible_to(user)
         return qs.filter(Q(retail__in=visible) | Q(order__depot__in=visible))
+
+
+class DepotProductListingViewSet(viewsets.ModelViewSet):
+    serializer_class = DepotProductListingSerializer
+    queryset = DepotProductListing.objects.select_related("depot", "product")
+
+    def get_queryset(self) -> QuerySet[DepotProductListing]:
+        user = cast(User, self.request.user)
+        qs = DepotProductListing.objects.select_related("depot", "product")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(depot__in=visible)
+        return qs
+
+
+class SalesRepresentativeViewSet(viewsets.ModelViewSet):
+    serializer_class = SalesRepresentativeSerializer
+    queryset = SalesRepresentative.objects.select_related("organization", "user", "employee")
+
+    def get_queryset(self) -> QuerySet[SalesRepresentative]:
+        user = cast(User, self.request.user)
+        qs = SalesRepresentative.objects.select_related("organization", "user", "employee")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(organization__in=visible)
+        return qs
+
+
+class JourneyPlanViewSet(viewsets.ModelViewSet):
+    serializer_class = JourneyPlanSerializer
+    queryset = JourneyPlan.objects.select_related("rep", "customer_org")
+
+    def get_queryset(self) -> QuerySet[JourneyPlan]:
+        user = cast(User, self.request.user)
+        qs = JourneyPlan.objects.select_related("rep", "customer_org")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(rep__organization__in=visible)
+        return qs
+
+
+class SalesVisitLogViewSet(viewsets.ModelViewSet):
+    serializer_class = SalesVisitLogSerializer
+    queryset = SalesVisitLog.objects.select_related("rep", "customer_org", "order")
+
+    def get_queryset(self) -> QuerySet[SalesVisitLog]:
+        user = cast(User, self.request.user)
+        qs = SalesVisitLog.objects.select_related("rep", "customer_org", "order")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(rep__organization__in=visible)
+        return qs
+
+
+class TenderContractViewSet(viewsets.ModelViewSet):
+    serializer_class = TenderContractSerializer
+    queryset = TenderContract.objects.select_related("depot", "client_org", "product")
+
+    def get_queryset(self) -> QuerySet[TenderContract]:
+        user = cast(User, self.request.user)
+        qs = TenderContract.objects.select_related("depot", "client_org", "product")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(Q(depot__in=visible) | Q(client_org__in=visible))
+        return qs
+
+
+class CustomerReturnViewSet(viewsets.ModelViewSet):
+    serializer_class = CustomerReturnSerializer
+    queryset = CustomerReturn.objects.select_related("depot", "retail")
+
+    def get_queryset(self) -> QuerySet[CustomerReturn]:
+        user = cast(User, self.request.user)
+        qs = CustomerReturn.objects.select_related("depot", "retail")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(Q(depot__in=visible) | Q(retail__in=visible))
+        return qs
+

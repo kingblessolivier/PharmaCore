@@ -114,13 +114,16 @@ def _apply_payroll_run(approval: ApprovalRequest) -> None:
     totals = {
         "gross": sum((r.gross for r in records), Decimal("0")),
         "paye": sum((r.paye for r in records), Decimal("0")),
-        "rssb_employee": sum(
-            (r.pension_employee + r.maternity_employee for r in records), Decimal("0")
-        ),
-        "rssb_employer": sum(
-            (r.pension_employer + r.maternity_employer for r in records), Decimal("0")
-        ),
+        "pension_employee": sum((r.pension_employee for r in records), Decimal("0")),
+        "pension_employer": sum((r.pension_employer for r in records), Decimal("0")),
+        "maternity_employee": sum((r.maternity_employee for r in records), Decimal("0")),
+        "maternity_employer": sum((r.maternity_employer for r in records), Decimal("0")),
         "cbhi": sum((r.cbhi for r in records), Decimal("0")),
+        # Occupational Hazards + RAMA roll into PayrollRecord once those statutory
+        # lines are added (F3.2). Until then the GL posts a zero, which the
+        # payroll journal helper short-circuits — no orphan zero-valued entries.
+        "occupational_hazard": Decimal("0"),
+        "rama": Decimal("0"),
         "net_pay": sum((r.net_pay for r in records), Decimal("0")),
     }
     period_label = f"{run.period_start}–{run.period_end}"
@@ -129,9 +132,13 @@ def _apply_payroll_run(approval: ApprovalRequest) -> None:
         period_label=period_label,
         total_gross=totals["gross"],
         total_paye=totals["paye"],
-        total_rssb_employee=totals["rssb_employee"],
-        total_rssb_employer=totals["rssb_employer"],
+        total_pension_employee=totals["pension_employee"],
+        total_pension_employer=totals["pension_employer"],
+        total_maternity_employee=totals["maternity_employee"],
+        total_maternity_employer=totals["maternity_employer"],
         total_cbhi=totals["cbhi"],
+        total_occupational_hazard=totals["occupational_hazard"],
+        total_rama=totals["rama"],
         total_net_pay=totals["net_pay"],
         user=approval.decided_by,
         reference_id=str(run.pk),

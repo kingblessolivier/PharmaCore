@@ -200,3 +200,144 @@ class StockOrderSerializer(serializers.ModelSerializer):
             # Authoritative: the depot's wholesale price, never the buyer's input.
             OrderItem.objects.create(order=order, price_per_unit=listing.wholesale_price, **item)
         return order
+
+
+class DepotProductListingSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.generic_name", read_only=True)
+    product_brand = serializers.CharField(source="product.brand_name", read_only=True)
+    depot_name = serializers.CharField(source="depot.name", read_only=True)
+    available_for_order = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = DepotProductListing
+        fields = [
+            "id",
+            "depot",
+            "depot_name",
+            "product",
+            "product_name",
+            "product_brand",
+            "offered_qty",
+            "buffer_qty",
+            "price_per_unit",
+            "available_for_order",
+            "is_published",
+            "customer_segment",
+            "min_order_qty",
+            "updated_at",
+            "created_at",
+        ]
+        read_only_fields = ["id", "available_for_order", "updated_at", "created_at"]
+
+
+class SalesRepresentativeSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="user.username", read_only=True)
+    full_name = serializers.CharField(source="user.get_full_name", read_only=True)
+
+    class Meta:
+        model = SalesRepresentative
+        fields = [
+            "id",
+            "organization",
+            "user",
+            "username",
+            "full_name",
+            "employee",
+            "territory_code",
+            "monthly_sales_target",
+            "commission_rate_pct",
+            "is_active",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+
+class JourneyPlanSerializer(serializers.ModelSerializer):
+    rep_username = serializers.CharField(source="rep.user.username", read_only=True)
+    customer_name = serializers.CharField(source="customer_org.name", read_only=True)
+
+    class Meta:
+        model = JourneyPlan
+        fields = [
+            "id",
+            "rep",
+            "rep_username",
+            "customer_org",
+            "customer_name",
+            "planned_date",
+            "is_completed",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+
+class SalesVisitLogSerializer(serializers.ModelSerializer):
+    rep_username = serializers.CharField(source="rep.user.username", read_only=True)
+    customer_name = serializers.CharField(source="customer_org.name", read_only=True)
+
+    class Meta:
+        model = SalesVisitLog
+        fields = [
+            "id",
+            "journey_plan",
+            "rep",
+            "rep_username",
+            "customer_org",
+            "customer_name",
+            "visit_type",
+            "visited_at",
+            "notes",
+            "order",
+            "sales_amount",
+        ]
+        read_only_fields = ["id", "visited_at"]
+
+
+class TenderContractSerializer(serializers.ModelSerializer):
+    depot_name = serializers.CharField(source="depot.name", read_only=True)
+    client_name = serializers.CharField(source="client_org.name", read_only=True)
+    product_name = serializers.CharField(source="product.generic_name", read_only=True)
+    remaining_qty = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = TenderContract
+        fields = [
+            "id",
+            "tender_number",
+            "depot",
+            "depot_name",
+            "client_org",
+            "client_name",
+            "product",
+            "product_name",
+            "contract_price",
+            "total_committed_qty",
+            "drawn_qty",
+            "remaining_qty",
+            "valid_until",
+            "is_active",
+            "created_at",
+        ]
+        read_only_fields = ["id", "remaining_qty", "created_at"]
+
+
+class CustomerReturnSerializer(serializers.ModelSerializer):
+    depot_name = serializers.CharField(source="depot.name", read_only=True)
+    retail_name = serializers.CharField(source="retail.name", read_only=True)
+
+    class Meta:
+        model = CustomerReturn
+        fields = [
+            "id",
+            "return_number",
+            "depot",
+            "depot_name",
+            "retail",
+            "retail_name",
+            "status",
+            "reason",
+            "credit_note_amount",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
