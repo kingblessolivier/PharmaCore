@@ -89,6 +89,19 @@ class JournalEntry(models.Model):
             models.Index(fields=["organization", "entry_date"]),
             models.Index(fields=["reference_type", "reference_id"]),
         ]
+        constraints = [
+            # ADR-011 idempotency contract: every handler in
+            # JournalPostingService is idempotent on (source_doc,
+            # source_line). For top-level journal entries that means a unique
+            # (org, reference_type, reference_id) per posted entry. Conditional
+            # because manual / adjustment entries legitimately share a single
+            # empty reference.
+            models.UniqueConstraint(
+                fields=["organization", "reference_type", "reference_id"],
+                condition=models.Q(reference_type__gt=""),
+                name="uniq_journal_reference_per_org",
+            )
+        ]
 
     def __str__(self) -> str:
         return self.entry_number or f"JE#{self.pk}"

@@ -107,7 +107,13 @@ def post_journal(
     user: User | None = None,
 ) -> JournalEntry:
     """Create a balanced journal entry. Raises ValueError if debits != credits, or
-    PeriodClosedError if the entry would land inside a closed period."""
+    PeriodClosedError if the entry would land inside a closed period.
+
+    Idempotent on ``(organization, reference_type, reference_id)`` when a
+    reference is supplied (ADR-011 contract): a re-run with the same source
+    doc id returns the existing posted entry instead of creating a duplicate.
+    Manual / adjustment postings (``reference_type == ""``) are not deduplicated.
+    """
     debit = sum(
         (ln["amount"] for ln in lines if ln["side"] == JournalLine.Side.DEBIT), Decimal("0")
     )
@@ -116,6 +122,18 @@ def post_journal(
     )
     if not lines or debit != credit:
         raise ValueError(f"Journal entry does not balance: debits={debit} credits={credit}.")
+
+    # Idempotency check — only when we have a meaningful reference. Empty
+    # ``reference_type`` is reserved for manual postings / adjustments which
+    # legitimately do not deduplicate.
+    if reference_type:
+        existing = JournalEntry.objects.filter(
+            organization=organization,
+            reference_type=reference_type,
+            reference_id=str(reference_id),
+        ).first()
+        if existing is not None:
+            return existing
 
     assert_period_open(organization, entry_date or timezone.now().date())
 
