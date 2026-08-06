@@ -89,11 +89,12 @@ def test_record_payment_rolls_up_status_and_posts_journal(
     assert resp2.json()["status"] == "PAID"
     assert resp2.json()["amount_due"] == "0.00"
 
+    # Each payment posts its own entry, keyed on the payment row — sharing the
+    # bill's reference would make post_journal deduplicate them away.
     payment_entries = JournalEntry.objects.filter(
         organization=org,
-        reference_type="supplier_bill",
-        reference_id=str(bill.pk),
-        description__icontains="Payment",
+        reference_type="supplier_bill_payment",
+        reference_id__in=[str(p.pk) for p in bill.payments.all()],
     )
     assert payment_entries.count() == 2
 

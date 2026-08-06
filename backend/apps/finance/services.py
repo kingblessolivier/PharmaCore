@@ -3,6 +3,9 @@ auto-posting from B2B settlement, and the credit-override approval handler."""
 
 from __future__ import annotations
 
+import csv
+import io
+from collections.abc import Sequence
 from decimal import Decimal
 from typing import Any, TypedDict
 
@@ -12,14 +15,21 @@ from django.utils import timezone
 from apps.approvals import registry
 from apps.approvals.models import ApprovalRequest
 from apps.approvals.services import request_approval
+from apps.core.sequences import next_number
 from apps.finance.models import (
     Account,
     AccountingPeriod,
     BankAccount,
     CreditProfile,
+    CustomerCredit,
+    CustomerInvoice,
+    CustomerReceipt,
+    DunningNotice,
     JournalEntry,
     JournalLine,
     OpeningBalance,
+    PaymentRun,
+    PaymentRunLine,
     SupplierBill,
     SupplierBillPayment,
     TenantSettings,
@@ -28,30 +38,125 @@ from apps.iam.audit import record_audit
 from apps.iam.models import Organization, User
 
 # Standard control accounts, auto-vivified per organization the first time they're
-# needed (code, name, type, normal_balance).
+# needed (code, name, type, normal_balance). See PR F3 (roadmap §F3) for the full
+# Rwanda statutory sub-ledger chart of accounts — every statutory liability gets
+# its own 2200-level account so the RRA sub-ledger reconciles per statute.
 _CONTROL_ACCOUNTS: list[tuple[str, str, str, str]] = [
-    ("1000", "Cash & Bank", Account.Type.ASSET, Account.Balance.DEBIT),
-    ("1100", "Accounts Receivable", Account.Type.ASSET, Account.Balance.DEBIT),
-    ("1200", "Inventory on Hand", Account.Type.ASSET, Account.Balance.DEBIT),
-    ("1300", "VAT Input (purchase tax recoverable)", Account.Type.ASSET, Account.Balance.DEBIT),
-    ("2000", "Accounts Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
-    ("2050", "VAT Output (sales tax payable)", Account.Type.LIABILITY, Account.Balance.CREDIT),
-    ("2060", "Withholding Tax Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
-    ("2100", "PAYE Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
-    ("2200", "RSSB Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
-    ("2300", "CBHI Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
-    ("2400", "Net Pay Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
-    ("2500", "Inventory Adjustment / Disposal Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
+    # Cash & equivalents (three buckets: physical cash, bank, mobile money).
+    ("1100", "Cash on Hand", Account.Type.ASSET, Account.Balance.DEBIT),
+    ("1200", "Bank", Account.Type.ASSET, Account.Balance.DEBIT),
+    ("1300", "Mobile Money", Account.Type.ASSET, Account.Balance.DEBIT),
+    # VAT charged by suppliers, recoverable from the RRA on the next return —
+    # an asset, and the input side of every VAT return.
+    ("1350", "VAT Input — Recoverable", Account.Type.ASSET, Account.Balance.DEBIT),
+    ("1400", "Accounts Receivable — Trade", Account.Type.ASSET, Account.Balance.DEBIT),
+    ("1500", "Inventory on Hand", Account.Type.ASSET, Account.Balance.DEBIT),
+    ("1700", "Fixed Assets (cost)", Account.Type.ASSET, Account.Balance.DEBIT),
+    ("1701", "Accumulated Depreciation", Account.Type.ASSET, Account.Balance.CREDIT),
+    # Trade payables.
+    ("2100", "Accounts Payable — Trade", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    # Money held for a customer but not yet earned (overpayments, credit notes,
+    # returns). Kept out of 2100 so the AP ageing is purely supplier debt.
+    (
+        # 2150 is taken by Procurement's GRNI control account.
+        "2160",
+        "Customer Deposits & On-Account Credits",
+        Account.Type.LIABILITY,
+        Account.Balance.CREDIT,
+    ),
+    # Statutory sub-ledger — Rwanda (employee/employer portions each post to a
+    # distinct account so the RRA returns tie out line-by-line).
+    ("2200", "PAYE Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    ("2210", "RSSB Pension Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    ("2220", "RSSB Maternity Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    ("2230", "CBHI Payable", Account.Type.ASSET, Account.Balance.DEBIT),
+    ("2240", "Occupational Hazards Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    ("2250", "RAMA Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    # Tax + regulatory liabilities (output VAT, EBM device-levy, WHT).
+    ("2300", "VAT Payable (Output)", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    ("2400", "EBM Liability", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    ("2500", "WHT Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    # Net pay cleared on payment — interim holding account for the
+    # payroll run's payable before funds disburse.
+    ("2600", "Net Pay Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    # Equity.
     ("3000", "Owner's Equity", Account.Type.EQUITY, Account.Balance.CREDIT),
-    ("4000", "Sales Revenue", Account.Type.REVENUE, Account.Balance.CREDIT),
+    # Revenue — split by channel so gross-margin reports can roll up cleanly.
+    ("4100", "Retail Revenue", Account.Type.REVENUE, Account.Balance.CREDIT),
+    ("4200", "Wholesale Revenue", Account.Type.REVENUE, Account.Balance.CREDIT),
+    ("4300", "Services Revenue", Account.Type.REVENUE, Account.Balance.CREDIT),
+    # Cost of sales / inventory adjustments / shrinkage.
     ("5000", "Cost of Goods Sold", Account.Type.EXPENSE, Account.Balance.DEBIT),
-    ("6000", "Salaries & Wages Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
-    ("6100", "Payroll Employer Contributions Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
+    ("5100", "Inventory Adjustments", Account.Type.EXPENSE, Account.Balance.DEBIT),
+    ("5900", "Shrinkage Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
+    # Payroll — employee-side gross salary + employer statutory contributions.
+    # Each employer-side contribution posts to its own 61xx account so the
+    # P&L by cost-line is auditable.
+    ("6100", "Salaries & Wages Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
+    ("6110", "Employer RSSB Pension Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
+    ("6120", "Employer Maternity Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
+    ("6130", "Occupational Hazards Insurance Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
+    ("6140", "RAMA Employer Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
+    # Statutory tax expense (corporate income tax — distinct from withholding).
+    ("7000", "Tax Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
+    # Realised FX difference between the rate a foreign bill was booked at and
+    # the rate it was settled at. A gain posts as a credit to the same account.
+    ("7100", "FX Gain / Loss", Account.Type.EXPENSE, Account.Balance.DEBIT),
+]
+
+
+# Pre-F3 codes that were renamed/restructured when the statutory sub-ledger was
+# introduced. Older tenants may have rows with these codes; we rename them in
+# place so the new posts (which reference new codes) do not collide and the old
+# ones are not orphaned. Each tuple is ``(old_code, new_code, new_name,
+# new_account_type, new_normal_balance)``; rows that match the old code but
+# already carry the new code are no-ops. Idempotent: re-running is harmless.
+#
+# Note: the old ``2200 RSSB Payable`` row (which bundled pension+maternity
+# employee contributions in a single control) is intentionally left alone —
+# that liability still exists on the books, and the new payroll posts to the
+# finer-grained 2210/2220/2230 accounts going forward. Same for ``2300 CBHI``.
+_LEGACY_ACCOUNT_REMAP: list[tuple[str, str, str, str, str]] = [
+    ("1000", "1100", "Cash on Hand", Account.Type.ASSET, Account.Balance.DEBIT),
+    ("1100", "1400", "Accounts Receivable — Trade", Account.Type.ASSET, Account.Balance.DEBIT),
+    ("1200", "1500", "Inventory on Hand", Account.Type.ASSET, Account.Balance.DEBIT),
+    ("1300", "2400", "EBM Liability", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    ("2000", "2100", "Accounts Payable — Trade", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    ("2050", "2300", "VAT Payable (Output)", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    ("2060", "2500", "WHT Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    ("2100", "2200", "PAYE Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    ("2400", "2600", "Net Pay Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    ("2500", "5100", "Inventory Adjustments", Account.Type.EXPENSE, Account.Balance.DEBIT),
+    ("4000", "4100", "Retail Revenue", Account.Type.REVENUE, Account.Balance.CREDIT),
+    ("6000", "6100", "Salaries & Wages Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
+    ("6100", "6110", "Employer RSSB Pension Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
 ]
 
 
 def ensure_default_accounts(organization: Organization) -> dict[str, Account]:
-    """Idempotently create the standard control accounts for an org's books."""
+    """Idempotently create the standard control accounts for an org's books.
+
+    On first call for an org seeded under the pre-F3 chart, the legacy
+    ``old_code`` rows are renamed to their ``new_code`` equivalents so the new
+    payroll / inventory posts (which reference the new codes) land on the right
+    accounts and the historical rows aren't orphaned. New orgs see only the
+    post-F3 chart. Re-running on a current org is a no-op.
+    """
+    for old_code, new_code, new_name, new_type, new_balance in _LEGACY_ACCOUNT_REMAP:
+        try:
+            legacy = Account.objects.get(organization=organization, code=old_code)
+        except Account.DoesNotExist:
+            continue
+        # Skip if the new code already exists — org already modernised, leave
+        # both rows alone rather than guessing which carries the real balance.
+        if Account.objects.filter(organization=organization, code=new_code).exists():
+            continue
+        legacy.code = new_code
+        legacy.name = new_name
+        legacy.account_type = new_type
+        legacy.normal_balance = new_balance
+        legacy.save(update_fields=["code", "name", "account_type", "normal_balance", "updated_at"])
+
     by_code: dict[str, Account] = {}
     for code, name, acc_type, normal_balance in _CONTROL_ACCOUNTS:
         account, _ = Account.objects.get_or_create(
@@ -165,8 +270,8 @@ def post_journal(
 def post_payment_journal(*, order: Any, amount: Decimal, user: User | None) -> None:
     """Auto-post a B2B settlement payment to both parties' books.
 
-    Depot (seller) books: Dr Cash & Bank / Cr Accounts Receivable.
-    Retail (buyer) books: Dr Accounts Payable / Cr Cash & Bank.
+    Depot (seller) books: Dr Cash / Cr Accounts Receivable — Trade.
+    Retail (buyer) books: Dr Accounts Payable — Trade / Cr Cash.
     """
     depot_accounts = ensure_default_accounts(order.depot)
     post_journal(
@@ -174,13 +279,13 @@ def post_payment_journal(*, order: Any, amount: Decimal, user: User | None) -> N
         description=f"Settlement received for {order.order_number}",
         lines=[
             {
-                "account": depot_accounts["1000"],
+                "account": depot_accounts["1100"],
                 "side": JournalLine.Side.DEBIT,
                 "amount": amount,
                 "memo": "",
             },
             {
-                "account": depot_accounts["1100"],
+                "account": depot_accounts["1400"],
                 "side": JournalLine.Side.CREDIT,
                 "amount": amount,
                 "memo": "",
@@ -196,13 +301,13 @@ def post_payment_journal(*, order: Any, amount: Decimal, user: User | None) -> N
         description=f"Settlement paid for {order.order_number}",
         lines=[
             {
-                "account": retail_accounts["2000"],
+                "account": retail_accounts["2100"],
                 "side": JournalLine.Side.DEBIT,
                 "amount": amount,
                 "memo": "",
             },
             {
-                "account": retail_accounts["1000"],
+                "account": retail_accounts["1100"],
                 "side": JournalLine.Side.CREDIT,
                 "amount": amount,
                 "memo": "",
@@ -220,78 +325,203 @@ def post_payroll_journal(
     period_label: str,
     total_gross: Decimal,
     total_paye: Decimal,
-    total_rssb_employee: Decimal,
-    total_rssb_employer: Decimal,
+    total_pension_employee: Decimal,
+    total_pension_employer: Decimal,
+    total_maternity_employee: Decimal,
+    total_maternity_employer: Decimal,
     total_cbhi: Decimal,
+    total_occupational_hazard: Decimal,
+    total_rama: Decimal,
     total_net_pay: Decimal,
     user: User | None,
     reference_id: str = "",
 ) -> None:
-    """Auto-post a payroll run to the GL: gross expense funds statutory payables +
-    net-pay payable; employer-side RSSB contributions post as a second, separate
-    expense (never mixed with the employee-withheld portion)."""
+    """Auto-post a payroll run to the GL (F3 chart of accounts).
+
+    The employee-side posting funds the per-statute 2200-level payables:
+
+        Dr 6100 Salaries (gross)
+            Cr 2200 PAYE Payable
+            Cr 2210 RSSB Pension Payable  (employee share)
+            Cr 2220 RSSB Maternity Payable  (employee share)
+            Cr 2230 CBHI Payable
+            Cr 2240 Occupational Hazards Payable
+            Cr 2250 RAMA Payable
+            Cr 2600 Net Pay Payable
+
+    Each employer-side statutory contribution posts to its own 61xx expense
+    account and credits the matching 22xx payable — never bundled, so the P&L
+    by cost-line is auditable and the statutory sub-ledger reconciles per
+    statute.
+    """
     accounts = ensure_default_accounts(organization)
+    employee_credit_lines: list[JournalLineInput] = [
+        {
+            "account": accounts["2200"],
+            "side": JournalLine.Side.CREDIT,
+            "amount": total_paye,
+            "memo": "PAYE",
+        },
+        {
+            "account": accounts["2210"],
+            "side": JournalLine.Side.CREDIT,
+            "amount": total_pension_employee,
+            "memo": "RSSB pension (employee)",
+        },
+        {
+            "account": accounts["2220"],
+            "side": JournalLine.Side.CREDIT,
+            "amount": total_maternity_employee,
+            "memo": "RSSB maternity (employee)",
+        },
+        {
+            "account": accounts["2230"],
+            "side": JournalLine.Side.CREDIT,
+            "amount": total_cbhi,
+            "memo": "CBHI",
+        },
+    ]
+    if total_occupational_hazard > 0:
+        employee_credit_lines.append(
+            {
+                "account": accounts["2240"],
+                "side": JournalLine.Side.CREDIT,
+                "amount": total_occupational_hazard,
+                "memo": "Occupational hazards",
+            }
+        )
+    if total_rama > 0:
+        employee_credit_lines.append(
+            {
+                "account": accounts["2250"],
+                "side": JournalLine.Side.CREDIT,
+                "amount": total_rama,
+                "memo": "RAMA",
+            }
+        )
+    employee_credit_lines.append(
+        {
+            "account": accounts["2600"],
+            "side": JournalLine.Side.CREDIT,
+            "amount": total_net_pay,
+            "memo": "Net pay",
+        }
+    )
     post_journal(
         organization=organization,
         description=f"Payroll — {period_label}",
         lines=[
             {
-                "account": accounts["6000"],
+                "account": accounts["6100"],
                 "side": JournalLine.Side.DEBIT,
                 "amount": total_gross,
                 "memo": "",
             },
-            {
-                "account": accounts["2100"],
-                "side": JournalLine.Side.CREDIT,
-                "amount": total_paye,
-                "memo": "PAYE",
-            },
-            {
-                "account": accounts["2200"],
-                "side": JournalLine.Side.CREDIT,
-                "amount": total_rssb_employee,
-                "memo": "RSSB (employee)",
-            },
-            {
-                "account": accounts["2300"],
-                "side": JournalLine.Side.CREDIT,
-                "amount": total_cbhi,
-                "memo": "CBHI",
-            },
-            {
-                "account": accounts["2400"],
-                "side": JournalLine.Side.CREDIT,
-                "amount": total_net_pay,
-                "memo": "Net pay",
-            },
+            *employee_credit_lines,
         ],
         reference_type="payroll_run",
         reference_id=reference_id,
         user=user,
     )
-    if total_rssb_employer > 0:
-        post_journal(
+    # Each employer-side statutory posts as its own balanced entry so the P&L
+    # breaks out per statute and the matching payable gets credited.
+    _employer_post(
+        accounts=accounts,
+        organization=organization,
+        period_label=period_label,
+        expense_account=accounts["6110"],
+        payable_account=accounts["2210"],
+        amount=total_pension_employer,
+        memo="RSSB pension (employer)",
+        statute="RSSB_PENSION",
+        reference_id=reference_id,
+        user=user,
+    )
+    _employer_post(
+        accounts=accounts,
+        organization=organization,
+        period_label=period_label,
+        expense_account=accounts["6120"],
+        payable_account=accounts["2220"],
+        amount=total_maternity_employer,
+        memo="RSSB maternity (employer)",
+        statute="RSSB_MATERNITY",
+        reference_id=reference_id,
+        user=user,
+    )
+    if total_occupational_hazard > 0:
+        _employer_post(
+            accounts=accounts,
             organization=organization,
-            description=f"Payroll employer contributions — {period_label}",
-            lines=[
-                {
-                    "account": accounts["6100"],
-                    "side": JournalLine.Side.DEBIT,
-                    "amount": total_rssb_employer,
-                    "memo": "",
-                },
-                {
-                    "account": accounts["2200"],
-                    "side": JournalLine.Side.CREDIT,
-                    "amount": total_rssb_employer,
-                    "memo": "RSSB (employer)",
-                },
-            ],
-            reference_type="payroll_run",
+            period_label=period_label,
+            expense_account=accounts["6130"],
+            payable_account=accounts["2240"],
+            amount=total_occupational_hazard,
+            memo="Occupational hazards (employer)",
+            statute="OCCUPATIONAL_HAZARDS",
             reference_id=reference_id,
             user=user,
         )
+    if total_rama > 0:
+        _employer_post(
+            accounts=accounts,
+            organization=organization,
+            period_label=period_label,
+            expense_account=accounts["6140"],
+            payable_account=accounts["2250"],
+            amount=total_rama,
+            memo="RAMA (employer)",
+            statute="RAMA",
+            reference_id=reference_id,
+            user=user,
+        )
+
+
+def _employer_post(
+    *,
+    accounts: dict[str, Account],
+    organization: Organization,
+    period_label: str,
+    expense_account: Account,
+    payable_account: Account,
+    amount: Decimal,
+    memo: str,
+    statute: str,
+    reference_id: str,
+    user: User | None,
+) -> None:
+    """Post a single employer-side statutory contribution as its own balanced
+    entry (Dr expense / Cr payable). Caller filters on ``amount > 0`` to avoid
+    posting zero-valued journals that would clutter the GL.
+
+    ``statute`` keeps each contribution's idempotency reference distinct.
+    post_journal deduplicates on (organization, reference_type, reference_id),
+    so sharing one reference across the whole run meant only the first of the
+    five payroll entries ever reached the ledger.
+    """
+    if amount <= 0:
+        return
+    post_journal(
+        organization=organization,
+        description=f"Payroll employer contributions — {period_label}",
+        lines=[
+            {
+                "account": expense_account,
+                "side": JournalLine.Side.DEBIT,
+                "amount": amount,
+                "memo": "",
+            },
+            {
+                "account": payable_account,
+                "side": JournalLine.Side.CREDIT,
+                "amount": amount,
+                "memo": memo,
+            },
+        ],
+        reference_type="payroll_employer",
+        reference_id=f"{reference_id}:{statute}",
+        user=user,
+    )
 
 
 def request_credit_override(
@@ -412,7 +642,7 @@ def record_supplier_bill(
             "memo": "Inventory / expense (net of VAT)",
         },
         {
-            "account": accounts["2000"],
+            "account": accounts["2100"],
             "side": JournalLine.Side.CREDIT,
             "amount": total_amount,
             "memo": "",
@@ -422,7 +652,7 @@ def record_supplier_bill(
         lines.insert(
             1,
             {
-                "account": accounts["1300"],
+                "account": accounts["1350"],
                 "side": JournalLine.Side.DEBIT,
                 "amount": vat_amount,
                 "memo": f"VAT Input (class {tax_class or '?'})",
@@ -445,10 +675,10 @@ def record_supplier_bill_payment(
     *, bill: SupplierBill, amount: Decimal, method: str, reference: str, user: User | None
 ) -> SupplierBill:
     """Record a payment against a supplier bill and roll up its settlement status;
-    posts Dr Accounts Payable / Cr Cash & Bank."""
+    posts Dr Accounts Payable / Cr the account matching the tender."""
     if amount <= 0:
         raise ValueError("Payment amount must be positive.")
-    SupplierBillPayment.objects.create(
+    payment = SupplierBillPayment.objects.create(
         bill=bill, amount=amount, method=method, reference=reference, recorded_by=user
     )
     bill.amount_paid = bill.amount_paid + amount
@@ -464,23 +694,36 @@ def record_supplier_bill_payment(
         description=f"Payment on supplier bill {bill.bill_number or bill.pk}",
         lines=[
             {
-                "account": accounts["2000"],
+                "account": accounts["2100"],
                 "side": JournalLine.Side.DEBIT,
                 "amount": amount,
-                "memo": "",
+                "memo": reference,
             },
             {
-                "account": accounts["1000"],
+                "account": accounts[_RECEIPT_ACCOUNT.get(method, "1100")],
                 "side": JournalLine.Side.CREDIT,
                 "amount": amount,
-                "memo": "",
+                "memo": method,
             },
         ],
-        reference_type="supplier_bill",
-        reference_id=str(bill.pk),
+        # Keyed on the payment, not the bill: post_journal deduplicates on the
+        # reference pair, and the bill's own Dr expense / Cr AP entry already
+        # owns ("supplier_bill", bill.pk) — sharing it silently swallowed every
+        # payment entry, so AP was never relieved.
+        reference_type="supplier_bill_payment",
+        reference_id=str(payment.pk),
         user=user,
     )
     return bill
+
+
+# Which cash control account a wallet's sub-ledger hangs under.
+_BANK_ACCOUNT_PARENT = {
+    "CASH": "1100",
+    "BANK": "1200",
+    "MOMO": "1300",
+    "AIRTEL": "1300",
+}
 
 
 @transaction.atomic
@@ -496,17 +739,25 @@ def create_bank_account(
     user: User | None = None,
 ) -> BankAccount:
     """Open a bank/MoMo/Airtel/cash account — creates its own GL sub-account under
-    the "1000 Cash & Bank" control account so its cash-book is tracked separately,
-    and posts an opening-balance entry if one is given."""
+    the matching cash control account so its cash-book is tracked separately,
+    and posts an opening-balance entry if one is given.
+
+    The parent follows the tender: a MoMo wallet belongs under 1300, not under
+    the bank control, so the cash-flow statement and the trial balance both see
+    it in the right place.
+    """
     control = ensure_default_accounts(organization)
-    existing = BankAccount.objects.filter(organization=organization).count()
+    parent_code = _BANK_ACCOUNT_PARENT.get(kind, "1200")
+    existing = Account.objects.filter(
+        organization=organization, code__startswith=f"{parent_code}-"
+    ).count()
     gl_account = Account.objects.create(
         organization=organization,
-        code=f"1000-{existing + 1:02d}",
+        code=f"{parent_code}-{existing + 1:02d}",
         name=name,
         account_type=Account.Type.ASSET,
         normal_balance=Account.Balance.DEBIT,
-        parent=control["1000"],
+        parent=control[parent_code],
     )
     account = BankAccount.objects.create(
         organization=organization,
@@ -717,7 +968,8 @@ def close_period(
     from apps.events.publishers import publish_fiscal_period_event
 
     period_event = (
-        EventType.EOM_CLOSE_FINALISED if kind == AccountingPeriod.Kind.MONTH
+        EventType.EOM_CLOSE_FINALISED
+        if kind == AccountingPeriod.Kind.MONTH
         else EventType.FISCAL_PERIOD_CLOSED
     )
     publish_fiscal_period_event(
@@ -793,14 +1045,15 @@ def post_sale_journal(*, sale: Any, user: User | None) -> JournalEntry | None:
     """Auto-post a completed retail sale to the GL.
 
     Debits:
-      * Cash & Bank (1000)  — full sale total (retail is cash-on-delivery).
+      * Cash on Hand (1100)  — full sale total (retail is cash-on-delivery).
     Credits:
-      * Sales Revenue (4000) — sum of line_net (price excluding VAT portion).
-      * VAT Output (2050)   — sum of line_tax (only the B-class 18% portion;
-                              Rwanda exempts / zero-rates medicines A/C/D).
+      * Retail Revenue (4100) — sum of line_net (price excluding VAT portion).
+      * VAT Payable — Output (2300) — sum of line_tax (only the B-class 18%
+                                  portion; Rwanda exempts / zero-rates
+                                  medicines A/C/D).
     COGS leg (separate entry so it has its own reference + audit trail):
       Debit  COGS (5000)
-      Credit Inventory (1200)
+      Credit Inventory (1500)
       at the FEFO batch's ``wholesale_cost``. This is the moment inventory
       leaves the books: every retail sale also adjusts the on-hand value.
 
@@ -819,13 +1072,13 @@ def post_sale_journal(*, sale: Any, user: User | None) -> JournalEntry | None:
 
     revenue_lines: list[JournalLineInput] = [
         {
-            "account": accounts["1000"],
+            "account": accounts["1100"],
             "side": JournalLine.Side.DEBIT,
             "amount": total,
             "memo": "Cash & equivalents at POS",
         },
         {
-            "account": accounts["4000"],
+            "account": accounts["4100"],
             "side": JournalLine.Side.CREDIT,
             "amount": revenue_net,
             "memo": "Sales revenue (net of VAT)",
@@ -834,7 +1087,7 @@ def post_sale_journal(*, sale: Any, user: User | None) -> JournalEntry | None:
     if vat_output > 0:
         revenue_lines.append(
             {
-                "account": accounts["2050"],
+                "account": accounts["2300"],
                 "side": JournalLine.Side.CREDIT,
                 "amount": vat_output,
                 "memo": "VAT Output (18% on standard-rated lines)",
@@ -874,13 +1127,17 @@ def post_sale_journal(*, sale: Any, user: User | None) -> JournalEntry | None:
                     "memo": "Cost of goods sold (FEFO batch cost)",
                 },
                 {
-                    "account": accounts["1200"],
+                    "account": accounts["1500"],
                     "side": JournalLine.Side.CREDIT,
                     "amount": cogs_total,
                     "memo": "Inventory on hand (FEFO allocations)",
                 },
             ],
-            reference_type="sale",
+            # Its own reference: post_journal deduplicates on the reference
+            # pair, and the revenue leg already owns ("sale", sale.pk) — sharing
+            # it meant the COGS entry was silently dropped and every sale looked
+            # like pure margin.
+            reference_type="sale_cogs",
             reference_id=str(sale.pk),
             user=user,
         )
@@ -904,8 +1161,14 @@ def post_sale_journal(*, sale: Any, user: User | None) -> JournalEntry | None:
 
 @transaction.atomic
 def post_inventory_adjustment(
-    *, batch: Any, delta: int, unit_cost: Decimal | None, reason: str,
-    reference_type: str, reference_id: str, user: User | None,
+    *,
+    batch: Any,
+    delta: int,
+    unit_cost: Decimal | None,
+    reason: str,
+    reference_type: str,
+    reference_id: str,
+    user: User | None,
 ) -> JournalEntry | None:
     """Auto-post a stock-count variance (approved StockCount) to the GL.
 
@@ -926,17 +1189,33 @@ def post_inventory_adjustment(
 
     if delta > 0:
         lines: list[JournalLineInput] = [
-            {"account": accounts["1200"], "side": JournalLine.Side.DEBIT, "amount": amount,
-             "memo": "Stock found (variance surplus)"},
-            {"account": accounts["5000"], "side": JournalLine.Side.CREDIT, "amount": amount,
-             "memo": "COGS reversal on found stock"},
+            {
+                "account": accounts["1500"],
+                "side": JournalLine.Side.DEBIT,
+                "amount": amount,
+                "memo": "Stock found (variance surplus)",
+            },
+            {
+                "account": accounts["5000"],
+                "side": JournalLine.Side.CREDIT,
+                "amount": amount,
+                "memo": "COGS reversal on found stock",
+            },
         ]
     else:
         lines = [
-            {"account": accounts["5000"], "side": JournalLine.Side.DEBIT, "amount": amount,
-             "memo": "COGS — stock shrinkage"},
-            {"account": accounts["1200"], "side": JournalLine.Side.CREDIT, "amount": amount,
-             "memo": "Inventory written off (variance loss)"},
+            {
+                "account": accounts["5000"],
+                "side": JournalLine.Side.DEBIT,
+                "amount": amount,
+                "memo": "COGS — stock shrinkage",
+            },
+            {
+                "account": accounts["1500"],
+                "side": JournalLine.Side.CREDIT,
+                "amount": amount,
+                "memo": "Inventory written off (variance loss)",
+            },
         ]
 
     entry = post_journal(
@@ -978,13 +1257,18 @@ def post_inventory_adjustment(
 
 @transaction.atomic
 def post_writeoff(
-    *, batch: Any, quantity: int, reason: str,
-    reference_type: str, reference_id: str, user: User | None,
+    *,
+    batch: Any,
+    quantity: int,
+    reason: str,
+    reference_type: str,
+    reference_id: str,
+    user: User | None,
 ) -> JournalEntry | None:
     """Auto-post a StockDisposal (destruction / writeoff) at the batch's cost.
 
-    Dr Inventory Adjustment / Disposal Expense (2500)
-    Cr Inventory on Hand (1200)
+    Dr Inventory Adjustments (5100)
+    Cr Inventory on Hand (1500)
     """
     if quantity <= 0:
         return None
@@ -999,13 +1283,15 @@ def post_writeoff(
         description=f"Stock writeoff — batch {batch.batch_number} ({reason})",
         lines=[
             {
-                "account": accounts["2500"],
+                "account": accounts["5100"],
                 "side": JournalLine.Side.DEBIT,
                 "amount": amount,
                 "memo": f"{quantity} units disposed",
             },
             {
-                "account": accounts["1200"],
+                # 1500 under the statutory chart. 1200 is Bank now, so this was
+                # crediting the bank balance for every stock write-off.
+                "account": accounts["1500"],
                 "side": JournalLine.Side.CREDIT,
                 "amount": amount,
                 "memo": "Inventory on hand removed",
@@ -1099,13 +1385,15 @@ def record_tax_payment(
         description=f"RRA remittance — {payment.payment_number}",
         lines=[
             {
-                "account": accounts["2050"],
+                # 2300/1100 under the statutory chart of accounts — the old
+                # 2050/1000 codes were renamed by the F3 migration.
+                "account": accounts["2300"],
                 "side": JournalLine.Side.DEBIT,
                 "amount": amount,
                 "memo": f"VAT Output paid ({period_start}–{period_end})",
             },
             {
-                "account": accounts["1000"],
+                "account": accounts[_RECEIPT_ACCOUNT.get(method, "1100")],
                 "side": JournalLine.Side.CREDIT,
                 "amount": amount,
                 "memo": method,
@@ -1175,13 +1463,16 @@ def mirror_ebm_to_ledger(*, tax_record: Any, user: User | None) -> JournalEntry:
         description=f"EBM mirror — receipt {tax_record.receipt_number}",
         lines=[
             {
-                "account": accounts["1100"],
+                # 1400/2300 under the statutory chart of accounts — the old
+                # 1100 (receivables) and 2050 (VAT output) codes were renamed
+                # by the F3 migration.
+                "account": accounts["1400"],
                 "side": JournalLine.Side.DEBIT,
                 "amount": vat_total,
                 "memo": "EBM-fiscalized VAT receivable from RRA reconciliation",
             },
             {
-                "account": accounts["2050"],
+                "account": accounts["2300"],
                 "side": JournalLine.Side.CREDIT,
                 "amount": vat_total,
                 "memo": f"EBM {tax_record.receipt_number} (A:{tax_record.tax_class_a} B:{tax_record.tax_class_b} C:{tax_record.tax_class_c})",
@@ -1212,7 +1503,6 @@ def _apply_tax_payment(approval: ApprovalRequest) -> None:
     """Apply an approved tax-payment request: call ``record_tax_payment`` with
     the payload values. No self-approval by design — the registry decorator
     enforces the segregation."""
-    from apps.finance.models import TaxPayment
 
     organization = approval.organization
     payload = approval.payload
@@ -1339,7 +1629,9 @@ def _validate_gl_trial_balance(organization: Organization, rows: list[OpeningBal
         raise OpeningBalanceValidationError(errors)
 
 
-def _validate_ar_ap_aging(organization: Organization, rows: list[OpeningBalance], kind: str) -> None:
+def _validate_ar_ap_aging(
+    organization: Organization, rows: list[OpeningBalance], kind: str
+) -> None:
     """AR/AP aging rows must reference a known partner (catalog.Supplier or a
     downstream Customer model — fall back to raw reference_id if the model is
     absent). Each row must carry a positive amount and a valid aging bucket."""
@@ -1376,9 +1668,7 @@ def _validate_stock_batches(organization: Organization, rows: list[OpeningBalanc
     for row in rows:
         pid = row.payload.get("product_id")
         if pid is None or int(pid) not in valid_ids:
-            errors.append(
-                f"STOCK_BATCH row {row.reference_key}: unknown product_id {pid!r}"
-            )
+            errors.append(f"STOCK_BATCH row {row.reference_key}: unknown product_id {pid!r}")
         qty = int(row.payload.get("quantity", 0) or 0)
         if qty <= 0:
             errors.append(f"STOCK_BATCH row {row.reference_key}: quantity must be > 0")
@@ -1400,9 +1690,7 @@ def _validate_employee_leave(organization: Organization, rows: list[OpeningBalan
     for row in rows:
         emp_id = str(row.payload.get("employee_id", ""))
         if emp_id not in employee_ids:
-            errors.append(
-                f"EMPLOYEE_LEAVE row {row.reference_key}: unknown employee_id {emp_id!r}"
-            )
+            errors.append(f"EMPLOYEE_LEAVE row {row.reference_key}: unknown employee_id {emp_id!r}")
         leave_type = row.payload.get("leave_type", "")
         if leave_type not in valid_types:
             errors.append(
@@ -1442,9 +1730,7 @@ def validate_opening_balance_rows(
             )
         dedupe_key = (kind, ref_key)
         if dedupe_key in seen_keys:
-            raise OpeningBalanceValidationError(
-                [f"Duplicate row within import: {kind}/{ref_key}"]
-            )
+            raise OpeningBalanceValidationError([f"Duplicate row within import: {kind}/{ref_key}"])
         seen_keys.add(dedupe_key)
         by_kind.setdefault(kind, []).append(
             OpeningBalance(
@@ -1458,13 +1744,9 @@ def validate_opening_balance_rows(
     if OpeningBalance.Kind.GL_TRIAL_BALANCE in by_kind:
         _validate_gl_trial_balance(organization, by_kind[OpeningBalance.Kind.GL_TRIAL_BALANCE])
     if OpeningBalance.Kind.AR_AGING in by_kind:
-        _validate_ar_ap_aging(
-            organization, by_kind[OpeningBalance.Kind.AR_AGING], "AR_AGING"
-        )
+        _validate_ar_ap_aging(organization, by_kind[OpeningBalance.Kind.AR_AGING], "AR_AGING")
     if OpeningBalance.Kind.AP_AGING in by_kind:
-        _validate_ar_ap_aging(
-            organization, by_kind[OpeningBalance.Kind.AP_AGING], "AP_AGING"
-        )
+        _validate_ar_ap_aging(organization, by_kind[OpeningBalance.Kind.AP_AGING], "AP_AGING")
     if OpeningBalance.Kind.STOCK_BATCH in by_kind:
         _validate_stock_batches(organization, by_kind[OpeningBalance.Kind.STOCK_BATCH])
     if OpeningBalance.Kind.EMPLOYEE_LEAVE in by_kind:
@@ -1503,9 +1785,7 @@ def import_opening_balances(
     if apply:
         _apply_opening_balances(organization=organization, user=user)
     return list(
-        OpeningBalance.objects.filter(organization=organization).order_by(
-            "kind", "reference_key"
-        )
+        OpeningBalance.objects.filter(organization=organization).order_by("kind", "reference_key")
     )
 
 
@@ -1588,3 +1868,638 @@ def _apply_opening_balances(*, organization: Organization, user: User | None) ->
     OpeningBalance.objects.filter(organization=organization, applied_at__isnull=True).update(
         applied_at=timezone.now()
     )
+
+
+# ---------------------------------------------------------------------------
+# Accounts receivable (ROADMAP 9): invoices, receipts, on-account credit, dunning
+# ---------------------------------------------------------------------------
+
+
+class CreditHoldError(ValueError):
+    """Raised when a customer's credit profile forbids further invoicing."""
+
+
+def _customer_outstanding(organization: Organization, customer: Organization) -> Decimal:
+    """Total still owed to ``organization`` by ``customer`` across open invoices."""
+    total = Decimal("0.00")
+    open_invoices = CustomerInvoice.objects.filter(
+        organization=organization, customer=customer
+    ).exclude(status__in=[CustomerInvoice.Status.PAID, CustomerInvoice.Status.CANCELLED])
+    for inv in open_invoices:
+        total += inv.total_amount - inv.amount_paid
+    return total.quantize(Decimal("0.01"))
+
+
+def _assert_credit_allows(
+    *, organization: Organization, customer: Organization, new_amount: Decimal
+) -> None:
+    """Guard an invoice against the customer's credit profile.
+
+    No profile means no credit terms were agreed, so nothing is blocked: plenty
+    of customers trade cash-on-delivery.
+    """
+    profile = CreditProfile.objects.filter(creditor=organization, debtor=customer).first()
+    if profile is None:
+        return
+    if profile.status == CreditProfile.Status.HOLD:
+        reason = profile.hold_reason or "no reason recorded"
+        raise CreditHoldError(f"{customer.name} is on credit hold ({reason}).")
+    if profile.credit_limit > 0:
+        projected = _customer_outstanding(organization, customer) + new_amount
+        if projected > profile.credit_limit:
+            raise CreditHoldError(
+                f"{customer.name} credit limit breached: outstanding would be "
+                f"{projected} against a limit of {profile.credit_limit}."
+            )
+
+
+@transaction.atomic
+def record_customer_invoice(
+    *,
+    organization: Organization,
+    customer: Organization,
+    invoice_date: Any,
+    due_date: Any,
+    total_amount: Decimal,
+    vat_amount: Decimal = Decimal("0"),
+    tax_class: str = "B",
+    reference_type: str = "",
+    reference_id: str = "",
+    notes: str = "",
+    user: User | None = None,
+) -> CustomerInvoice:
+    """Raise a B2B invoice and post it to the GL.
+
+        Dr 1400 Accounts Receivable      total
+        Cr 4100 Revenue                  total - vat
+        Cr 2300 VAT Output               vat        (omitted when zero-rated)
+
+    Refuses if the customer is on credit hold or the invoice would breach their
+    credit limit.
+    """
+    total_amount = Decimal(total_amount)
+    vat_amount = Decimal(vat_amount or 0)
+    if total_amount <= 0:
+        raise ValueError("Invoice total must be positive.")
+    if vat_amount < 0 or vat_amount > total_amount:
+        raise ValueError("vat_amount must be between 0 and total_amount.")
+
+    _assert_credit_allows(organization=organization, customer=customer, new_amount=total_amount)
+
+    seq = next_number(organization=organization, domain="FINANCE", kind="CINV")
+    invoice = CustomerInvoice.objects.create(
+        organization=organization,
+        customer=customer,
+        invoice_number=f"INV-{organization.pk}-{seq:05d}",
+        invoice_date=invoice_date,
+        due_date=due_date,
+        total_amount=total_amount,
+        vat_amount=vat_amount,
+        tax_class=tax_class,
+        reference_type=reference_type,
+        reference_id=reference_id,
+        notes=notes,
+        created_by=user,
+    )
+
+    accounts = ensure_default_accounts(organization)
+    net = (total_amount - vat_amount).quantize(Decimal("0.01"))
+    lines: list[JournalLineInput] = [
+        {
+            "account": accounts["1400"],
+            "side": "DEBIT",
+            "amount": total_amount,
+            "memo": f"Invoice {invoice.invoice_number} for {customer.name}",
+        },
+        {
+            "account": accounts["4100"],
+            "side": "CREDIT",
+            "amount": net,
+            "memo": f"Revenue on {invoice.invoice_number}",
+        },
+    ]
+    if vat_amount > 0:
+        lines.append(
+            {
+                "account": accounts["2300"],
+                "side": "CREDIT",
+                "amount": vat_amount,
+                "memo": f"VAT output ({tax_class}) on {invoice.invoice_number}",
+            }
+        )
+
+    post_journal(
+        organization=organization,
+        entry_date=invoice_date,
+        description=f"Customer invoice {invoice.invoice_number}",
+        lines=lines,
+        reference_type="customer_invoice",
+        reference_id=str(invoice.pk),
+        user=user,
+    )
+    record_audit(
+        action="CREATE",
+        user=user,
+        organization=organization,
+        entity_type="customer_invoice",
+        entity_id=str(invoice.pk),
+        changes={"total": str(total_amount), "customer": customer.name},
+    )
+    return invoice
+
+
+# Which cash-side control account a tender lands in.
+_RECEIPT_ACCOUNT = {
+    "CASH": "1100",
+    "CHEQUE": "1100",
+    "BANK_TRANSFER": "1200",
+    "MOBILE_MONEY": "1300",
+}
+
+
+@transaction.atomic
+def record_customer_receipt(
+    *,
+    invoice: CustomerInvoice,
+    amount: Decimal,
+    method: str = "CASH",
+    reference: str = "",
+    received_on: Any = None,
+    user: User | None = None,
+) -> CustomerReceipt:
+    """Receive money against an invoice and post it.
+
+        Dr 1100/1200/1300 (by tender)    amount
+        Cr 1400 Accounts Receivable      amount applied
+
+    Anything paid beyond the balance becomes an on-account ``CustomerCredit``
+    (a liability) rather than over-crediting AR.
+    """
+    amount = Decimal(amount)
+    if amount <= 0:
+        raise ValueError("Receipt amount must be positive.")
+    invoice.refresh_from_db()
+    if invoice.is_settled:
+        raise ValueError(f"Invoice {invoice.invoice_number} is already paid in full.")
+
+    received_on = received_on or timezone.now().date()
+    organization = invoice.organization
+    seq = next_number(organization=organization, domain="FINANCE", kind="RCT")
+    receipt = CustomerReceipt.objects.create(
+        invoice=invoice,
+        receipt_number=f"RCT-{organization.pk}-{seq:05d}",
+        amount=amount,
+        method=method,
+        reference=reference,
+        received_on=received_on,
+        created_by=user,
+    )
+
+    applied = min(amount, invoice.amount_due)
+    overpaid = (amount - applied).quantize(Decimal("0.01"))
+
+    invoice.amount_paid = (invoice.amount_paid + applied).quantize(Decimal("0.01"))
+    invoice.status = (
+        CustomerInvoice.Status.PAID
+        if invoice.amount_paid >= invoice.total_amount
+        else CustomerInvoice.Status.PARTIAL
+    )
+    invoice.save(update_fields=["amount_paid", "status", "updated_at"])
+
+    accounts = ensure_default_accounts(organization)
+    cash_code = _RECEIPT_ACCOUNT.get(method, "1100")
+    lines: list[JournalLineInput] = [
+        {
+            "account": accounts[cash_code],
+            "side": "DEBIT",
+            "amount": amount,
+            "memo": f"Receipt {receipt.receipt_number} ({method})",
+        },
+        {
+            "account": accounts["1400"],
+            "side": "CREDIT",
+            "amount": applied,
+            "memo": f"Settles {invoice.invoice_number}",
+        },
+    ]
+    if overpaid > 0:
+        # Money held but not earned - a liability until applied or refunded.
+        lines.append(
+            {
+                "account": accounts["2160"],
+                "side": "CREDIT",
+                "amount": overpaid,
+                "memo": f"On-account credit for {invoice.customer.name}",
+            }
+        )
+        CustomerCredit.objects.create(
+            organization=organization,
+            customer=invoice.customer,
+            amount=overpaid,
+            balance=overpaid,
+            source=CustomerCredit.Source.OVERPAYMENT,
+            source_receipt=receipt,
+            notes=f"Overpayment on {invoice.invoice_number}",
+        )
+
+    post_journal(
+        organization=organization,
+        entry_date=received_on,
+        description=f"Customer receipt {receipt.receipt_number}",
+        lines=lines,
+        reference_type="customer_receipt",
+        reference_id=str(receipt.pk),
+        user=user,
+    )
+    return receipt
+
+
+# Days past due -> ladder step. Checked high-to-low so the worst step wins.
+_DUNNING_LADDER = [
+    (60, DunningNotice.Level.LEGAL),
+    (30, DunningNotice.Level.FINAL),
+    (14, DunningNotice.Level.SECOND),
+    (7, DunningNotice.Level.REMINDER),
+]
+
+
+@transaction.atomic
+def apply_dunning(*, organization: Organization, today: Any = None) -> list[DunningNotice]:
+    """Walk open invoices and issue the next collections step for each.
+
+    Idempotent: one notice per level per invoice, so re-running the same day
+    issues nothing new. Reaching the legal step puts the customer's credit
+    profile on hold, which blocks further B2B orders.
+    """
+    today = today or timezone.now().date()
+    issued: list[DunningNotice] = []
+
+    open_invoices = CustomerInvoice.objects.filter(organization=organization).exclude(
+        status__in=[CustomerInvoice.Status.PAID, CustomerInvoice.Status.CANCELLED]
+    )
+    for invoice in open_invoices:
+        days_past = (today - invoice.due_date).days
+        if days_past < 7:
+            continue
+
+        level = next(lvl for threshold, lvl in _DUNNING_LADDER if days_past >= threshold)
+        if DunningNotice.objects.filter(invoice=invoice, level=level).exists():
+            continue
+
+        issued.append(
+            DunningNotice.objects.create(
+                invoice=invoice,
+                level=level,
+                days_past_due=days_past,
+                amount_due=invoice.amount_due,
+                sent_on=today,
+            )
+        )
+
+        if invoice.status != CustomerInvoice.Status.OVERDUE:
+            invoice.status = CustomerInvoice.Status.OVERDUE
+            invoice.save(update_fields=["status", "updated_at"])
+
+        if level == DunningNotice.Level.LEGAL:
+            profile = CreditProfile.objects.filter(
+                creditor=organization, debtor=invoice.customer
+            ).first()
+            if profile and profile.status != CreditProfile.Status.HOLD:
+                profile.status = CreditProfile.Status.HOLD
+                profile.hold_reason = f"Auto-hold: {invoice.invoice_number} is 60+ days overdue."
+                profile.save(update_fields=["status", "hold_reason", "updated_at"])
+    return issued
+
+
+# A customer who has let an invoice run this far past its due date stops being
+# able to place new orders on credit, whatever their limit says. The dunning
+# ladder issues the FINAL demand at the same age.
+ORDER_BLOCK_DAYS_OVERDUE = 30
+
+
+def days_overdue(organization: Organization, customer: Organization, *, today: Any = None) -> int:
+    """Age of the customer's oldest unsettled invoice, in days past its due date.
+
+    Zero when nothing is overdue.
+    """
+    today = today or timezone.now().date()
+    oldest = (
+        CustomerInvoice.objects.filter(organization=organization, customer=customer)
+        .exclude(status__in=[CustomerInvoice.Status.PAID, CustomerInvoice.Status.CANCELLED])
+        .order_by("due_date")
+        .first()
+    )
+    if oldest is None:
+        return 0
+    return max(0, (today - oldest.due_date).days)
+
+
+def assert_may_order_on_credit(
+    *,
+    seller: Organization,
+    buyer: Organization,
+    order_amount: Decimal = Decimal("0"),
+    today: Any = None,
+) -> None:
+    """Gate a B2B order against the buyer's credit standing with this seller.
+
+    Raises :class:`CreditHoldError` when the buyer is on hold, has an invoice
+    too far past due, or the order would push them over their limit. Callers in
+    the API layer turn that into an HTTP 409 — the request is well-formed, it is
+    the buyer's account that refuses it.
+
+    No credit profile means the pair trades cash-on-delivery, which nothing here
+    needs to block.
+    """
+    profile = CreditProfile.objects.filter(creditor=seller, debtor=buyer).first()
+    if profile is None:
+        return
+
+    if profile.status == CreditProfile.Status.HOLD:
+        reason = profile.hold_reason or "no reason recorded"
+        raise CreditHoldError(f"{buyer.name} is on credit hold ({reason}).")
+
+    overdue = days_overdue(seller, buyer, today=today)
+    if overdue > ORDER_BLOCK_DAYS_OVERDUE:
+        raise CreditHoldError(
+            f"{buyer.name} has an invoice {overdue} days past due "
+            f"(limit is {ORDER_BLOCK_DAYS_OVERDUE}). Settle it before ordering again."
+        )
+
+    if profile.credit_limit > 0 and order_amount > 0:
+        projected = _customer_outstanding(seller, buyer) + Decimal(order_amount)
+        if projected > profile.credit_limit:
+            raise CreditHoldError(
+                f"{buyer.name} credit limit breached: exposure would be {projected} "
+                f"against a limit of {profile.credit_limit}."
+            )
+
+
+# ---------------------------------------------------------------------------
+# Payment runs (ROADMAP 9): batch supplier settlement with a disbursement file
+# ---------------------------------------------------------------------------
+
+
+# Above this total a run needs two sign-offs rather than one. Set in RWF; the
+# figure is deliberately conservative — a second pair of eyes costs a minute,
+# a mis-keyed batch costs a month.
+DUAL_APPROVAL_THRESHOLD = Decimal("5000000")
+
+
+class PaymentRunError(ValueError):
+    """Raised when a payment run is asked to do something its state forbids."""
+
+
+def _payee_details(bill: SupplierBill, method: str) -> tuple[str, str]:
+    """Where the money for this bill should go: (payee name, account/MSISDN).
+
+    Settlement details live on the procurement supplier profile when that app
+    is installed; a bare catalog supplier still has a phone number, which is
+    what a MoMo payout needs anyway.
+    """
+    supplier = bill.supplier
+    account = ""
+    try:
+        from apps.procurement.models import SupplierProfile
+
+        profile = SupplierProfile.objects.filter(supplier=supplier).first()
+    except Exception:  # pragma: no cover - procurement not installed
+        profile = None
+    if profile is not None:
+        account = (
+            profile.mobile_money_number
+            if method == PaymentRun.Method.MOBILE_MONEY
+            else profile.bank_account_number
+        )
+    if not account and method == PaymentRun.Method.MOBILE_MONEY:
+        account = getattr(supplier, "phone", "") or ""
+    return supplier.name, account
+
+
+@transaction.atomic
+def create_payment_run(
+    *,
+    organization: Organization,
+    bills: Sequence[SupplierBill],
+    method: str = PaymentRun.Method.BANK_TRANSFER,
+    scheduled_for: Any = None,
+    notes: str = "",
+    user: User | None = None,
+) -> PaymentRun:
+    """Open a draft run over the given bills, one line each for what is still due."""
+    if not bills:
+        raise PaymentRunError("A payment run needs at least one bill.")
+
+    seq = next_number(organization=organization, domain="FINANCE", kind="PRUN")
+    run = PaymentRun.objects.create(
+        organization=organization,
+        run_number=f"PRUN-{organization.pk}-{seq:05d}",
+        method=method,
+        scheduled_for=scheduled_for,
+        notes=notes,
+        created_by=user,
+    )
+
+    total = Decimal("0.00")
+    for bill in bills:
+        if bill.organization_id != organization.pk:
+            raise PaymentRunError(f"{bill} belongs to another organization.")
+        if bill.status == SupplierBill.Status.PAID:
+            raise PaymentRunError(f"{bill} is already paid in full.")
+        # A bill sitting in another live run is already spoken for.
+        if PaymentRunLine.objects.filter(
+            bill=bill,
+            payment_run__status__in=[
+                PaymentRun.Status.DRAFT,
+                PaymentRun.Status.AWAITING_APPROVAL,
+                PaymentRun.Status.APPROVED,
+            ],
+        ).exists():
+            raise PaymentRunError(f"{bill} is already in an open payment run.")
+
+        amount = Decimal(bill.amount_due).quantize(Decimal("0.01"))
+        payee_name, payee_account = _payee_details(bill, method)
+        PaymentRunLine.objects.create(
+            payment_run=run,
+            bill=bill,
+            amount=amount,
+            payee_name=payee_name,
+            payee_account=payee_account,
+        )
+        total += amount
+
+    run.total_amount = total
+    run.approvals_required = 2 if total > DUAL_APPROVAL_THRESHOLD else 1
+    run.save(update_fields=["total_amount", "approvals_required", "updated_at"])
+    record_audit(
+        action="CREATE",
+        user=user,
+        organization=organization,
+        entity_type="payment_run",
+        entity_id=str(run.pk),
+        changes={"total": str(total), "lines": str(len(bills))},
+    )
+    return run
+
+
+def build_disbursement_file(run: PaymentRun) -> tuple[str, str]:
+    """Render the run as the CSV its channel expects: (filename, body).
+
+    Every row carries an idempotency key of ``run_id:bill_id`` so a file that
+    gets uploaded twice — which happens — settles once.
+    """
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    if run.method == PaymentRun.Method.MOBILE_MONEY:
+        writer.writerow(["msisdn", "amount", "reference", "idempotency_key"])
+        for line in run.lines.select_related("bill__supplier"):
+            writer.writerow(
+                [
+                    line.payee_account,
+                    f"{line.amount:.2f}",
+                    line.bill.bill_number or f"BILL-{line.bill_id}",
+                    line.idempotency_key,
+                ]
+            )
+        name = f"{run.run_number}-momo.csv"
+    else:
+        writer.writerow(
+            ["account_number", "account_name", "amount", "reference", "idempotency_key"]
+        )
+        for line in run.lines.select_related("bill__supplier"):
+            writer.writerow(
+                [
+                    line.payee_account,
+                    line.payee_name,
+                    f"{line.amount:.2f}",
+                    line.bill.bill_number or f"BILL-{line.bill_id}",
+                    line.idempotency_key,
+                ]
+            )
+        name = f"{run.run_number}-bank.csv"
+    return name, buffer.getvalue()
+
+
+@transaction.atomic
+def submit_payment_run(*, run: PaymentRun, user: User) -> ApprovalRequest:
+    """Send a draft run for sign-off. Nothing moves until it comes back approved."""
+    if run.status != PaymentRun.Status.DRAFT:
+        raise PaymentRunError("Only a draft run can be submitted for approval.")
+    if not run.lines.exists():
+        raise PaymentRunError("A payment run needs at least one line.")
+
+    run.status = PaymentRun.Status.AWAITING_APPROVAL
+    run.save(update_fields=["status", "updated_at"])
+    return request_approval(
+        resource_type="finance.payment_run",
+        resource_id=str(run.pk),
+        organization=run.organization,
+        requested_by=user,
+        payload={"total_amount": str(run.total_amount), "method": run.method},
+        reason=f"Payment run {run.run_number} · {run.line_count} bills · {run.total_amount}",
+    )
+
+
+@registry.register("finance.payment_run")
+def _apply_payment_run_approval(approval: ApprovalRequest) -> None:
+    """One sign-off landed. Below the threshold that is the whole story; above
+    it, raise a second request in this approver's name so the engine's
+    no-self-approval rule guarantees a different second signature."""
+    run = PaymentRun.objects.get(pk=int(approval.resource_id))
+    run.approvals_received += 1
+
+    if run.approvals_received < run.approvals_required:
+        run.save(update_fields=["approvals_received", "updated_at"])
+        request_approval(
+            resource_type="finance.payment_run",
+            resource_id=str(run.pk),
+            organization=run.organization,
+            requested_by=approval.decided_by or approval.requested_by,
+            payload=approval.payload,
+            reason=(
+                f"Second approval for {run.run_number} "
+                f"({run.total_amount} exceeds the dual-approval threshold)"
+            ),
+        )
+        return
+
+    run.status = PaymentRun.Status.APPROVED
+    run.approved_at = timezone.now()
+    filename, body = build_disbursement_file(run)
+    run.disbursement_filename = filename
+    run.disbursement_file = body
+    run.save(
+        update_fields=[
+            "status",
+            "approvals_received",
+            "approved_at",
+            "disbursement_filename",
+            "disbursement_file",
+            "updated_at",
+        ]
+    )
+
+
+@transaction.atomic
+def disburse_payment_run(*, run: PaymentRun, user: User | None = None) -> PaymentRun:
+    """Money has left the building — post a payment against every line.
+
+    Idempotent per line, so re-running after a partial failure settles only what
+    is still outstanding.
+    """
+    if run.status not in {PaymentRun.Status.APPROVED, PaymentRun.Status.DISBURSED}:
+        raise PaymentRunError("Only an approved run can be disbursed.")
+
+    for line in run.lines.select_related("bill").select_for_update():
+        if line.paid:
+            continue
+        record_supplier_bill_payment(
+            bill=line.bill,
+            amount=line.amount,
+            method=run.method,
+            reference=f"{run.run_number}#{line.idempotency_key}",
+            user=user,
+        )
+        line.paid = True
+        line.save(update_fields=["paid"])
+
+    if run.status != PaymentRun.Status.DISBURSED:
+        run.status = PaymentRun.Status.DISBURSED
+        run.disbursed_at = timezone.now()
+        run.save(update_fields=["status", "disbursed_at", "updated_at"])
+    record_audit(
+        action="PAYMENT",
+        user=user,
+        organization=run.organization,
+        entity_type="payment_run",
+        entity_id=str(run.pk),
+        changes={"total": str(run.total_amount)},
+    )
+    return run
+
+
+@transaction.atomic
+def lock_payment_run(*, run: PaymentRun, user: User | None = None) -> PaymentRun:
+    """Close the run once the bank statement agrees with it. Nothing further
+    can be added, re-disbursed, or cancelled."""
+    if run.status != PaymentRun.Status.DISBURSED:
+        raise PaymentRunError("Only a disbursed run can be locked.")
+    run.status = PaymentRun.Status.LOCKED
+    run.locked_at = timezone.now()
+    run.save(update_fields=["status", "locked_at", "updated_at"])
+    return run
+
+
+@transaction.atomic
+def cancel_payment_run(
+    *, run: PaymentRun, user: User | None = None, reason: str = ""
+) -> PaymentRun:
+    """Abandon a run that has not paid anything yet."""
+    if run.status in {PaymentRun.Status.DISBURSED, PaymentRun.Status.LOCKED}:
+        raise PaymentRunError("Money has already moved — this run cannot be cancelled.")
+    run.status = PaymentRun.Status.CANCELLED
+    run.notes = (f"{run.notes} · Cancelled: {reason}" if run.notes else f"Cancelled: {reason}")[
+        :255
+    ]
+    run.save(update_fields=["status", "notes", "updated_at"])
+    return run

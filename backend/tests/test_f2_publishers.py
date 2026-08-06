@@ -29,7 +29,10 @@ from apps.events.publishers import (
 )
 from apps.iam.models import Organization
 
-pytestmark = pytest.mark.django_db
+# ``transaction=True``: publish() defers its write to transaction.on_commit
+# whenever it is inside an atomic block, and pytest-django's default fixture
+# wraps every test in one that never commits — so the rows would never appear.
+pytestmark = pytest.mark.django_db(transaction=True)
 
 
 @pytest.fixture

@@ -5,22 +5,39 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any, cast
 
+from django.db import transaction
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
 
-from apps.distribution.models import GoodsReceivedNote, InTransitStock, StockOrder
+from apps.distribution.models import (
+    CustomerReturn,
+    DepotProductListing,
+    GoodsReceivedNote,
+    InTransitStock,
+    JourneyPlan,
+    SalesRepresentative,
+    SalesVisitLog,
+    StockOrder,
+    TenderContract,
+)
 from apps.distribution.serializers import (
+    CustomerReturnSerializer,
+    DepotProductListingSerializer,
     GRNSerializer,
     InTransitStockSerializer,
+    JourneyPlanSerializer,
+    SalesRepresentativeSerializer,
+    SalesVisitLogSerializer,
     StockOrderSerializer,
+    TenderContractSerializer,
 )
 from apps.distribution.services import (
     approve_and_ship,
@@ -29,11 +46,24 @@ from apps.distribution.services import (
     record_order_payment,
     release_order_reservations,
 )
-from apps.finance.services import post_payment_journal
+from apps.finance.services import (
+    CreditHoldError,
+    assert_may_order_on_credit,
+    post_payment_journal,
+)
 from apps.iam.audit import record_audit
 from apps.iam.models import User
 from apps.iam.scoping import organizations_visible_to
 from apps.workspace.notify import notify_org_admins
+
+
+class CreditHoldConflict(APIException):
+    """409, not 400: the order is well-formed — the buyer's credit standing is
+    what refuses it, and it will succeed unchanged once the account is cleared."""
+
+    status_code = 409
+    default_detail = "The buyer's credit standing blocks this order."
+    default_code = "credit_hold"
 
 
 def _age_bucket(due, today) -> str:  # type: ignore[no-untyped-def]
@@ -133,8 +163,26 @@ class StockOrderViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("You can only create orders for your own organization.")
         if not serializer.validated_data.get("items"):
             raise ValidationError("An order needs at least one item.")
-        # order_number is stamped inside the serializer's atomic create().
-        order = serializer.save(ordered_by=user, status=StockOrder.Status.DRAFT)
+        depot = serializer.validated_data["depot"]
+        # Cheap refusals first — hold and overdue need no line prices, so a blocked
+        # buyer never touches the database.
+        try:
+            assert_may_order_on_credit(seller=depot, buyer=retail)
+        except CreditHoldError as exc:
+            raise CreditHoldConflict(str(exc)) from exc
+        try:
+            with transaction.atomic():
+                # order_number is stamped inside the serializer's atomic create().
+                order = serializer.save(ordered_by=user, status=StockOrder.Status.DRAFT)
+                # Lines are priced by the depot during create(), so the exposure
+                # check can only run once the order exists. The rollback undoes it.
+                assert_may_order_on_credit(
+                    seller=order.depot,
+                    buyer=order.retail,
+                    order_amount=Decimal(str(order.total_amount)),
+                )
+        except CreditHoldError as exc:
+            raise CreditHoldConflict(str(exc)) from exc
         record_audit(
             action="CREATE",
             user=user,
@@ -149,6 +197,15 @@ class StockOrderViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         if order.status != StockOrder.Status.DRAFT:
             raise ValidationError("Only draft orders can be submitted.")
+        # A draft can sit for days; re-check in case the account went on hold since.
+        try:
+            assert_may_order_on_credit(
+                seller=order.depot,
+                buyer=order.retail,
+                order_amount=Decimal(str(order.total_amount)),
+            )
+        except CreditHoldError as exc:
+            raise CreditHoldConflict(str(exc)) from exc
         order.status = StockOrder.Status.PENDING
         order.save(update_fields=["status", "updated_at"])
         generate_po_document(order=order, user=cast(User, request.user))
@@ -372,3 +429,82 @@ class GRNViewSet(viewsets.ReadOnlyModelViewSet):
             return qs
         visible = organizations_visible_to(user)
         return qs.filter(Q(retail__in=visible) | Q(order__depot__in=visible))
+
+
+class DepotProductListingViewSet(viewsets.ModelViewSet):
+    serializer_class = DepotProductListingSerializer
+    queryset = DepotProductListing.objects.select_related("depot", "product")
+
+    def get_queryset(self) -> QuerySet[DepotProductListing]:
+        user = cast(User, self.request.user)
+        qs = DepotProductListing.objects.select_related("depot", "product")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(depot__in=visible)
+        return qs
+
+
+class SalesRepresentativeViewSet(viewsets.ModelViewSet):
+    serializer_class = SalesRepresentativeSerializer
+    queryset = SalesRepresentative.objects.select_related("organization", "user", "employee")
+
+    def get_queryset(self) -> QuerySet[SalesRepresentative]:
+        user = cast(User, self.request.user)
+        qs = SalesRepresentative.objects.select_related("organization", "user", "employee")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(organization__in=visible)
+        return qs
+
+
+class JourneyPlanViewSet(viewsets.ModelViewSet):
+    serializer_class = JourneyPlanSerializer
+    queryset = JourneyPlan.objects.select_related("rep", "customer_org")
+
+    def get_queryset(self) -> QuerySet[JourneyPlan]:
+        user = cast(User, self.request.user)
+        qs = JourneyPlan.objects.select_related("rep", "customer_org")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(rep__organization__in=visible)
+        return qs
+
+
+class SalesVisitLogViewSet(viewsets.ModelViewSet):
+    serializer_class = SalesVisitLogSerializer
+    queryset = SalesVisitLog.objects.select_related("rep", "customer_org", "order")
+
+    def get_queryset(self) -> QuerySet[SalesVisitLog]:
+        user = cast(User, self.request.user)
+        qs = SalesVisitLog.objects.select_related("rep", "customer_org", "order")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(rep__organization__in=visible)
+        return qs
+
+
+class TenderContractViewSet(viewsets.ModelViewSet):
+    serializer_class = TenderContractSerializer
+    queryset = TenderContract.objects.select_related("depot", "client_org", "product")
+
+    def get_queryset(self) -> QuerySet[TenderContract]:
+        user = cast(User, self.request.user)
+        qs = TenderContract.objects.select_related("depot", "client_org", "product")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(Q(depot__in=visible) | Q(client_org__in=visible))
+        return qs
+
+
+class CustomerReturnViewSet(viewsets.ModelViewSet):
+    serializer_class = CustomerReturnSerializer
+    queryset = CustomerReturn.objects.select_related("depot", "retail")
+
+    def get_queryset(self) -> QuerySet[CustomerReturn]:
+        user = cast(User, self.request.user)
+        qs = CustomerReturn.objects.select_related("depot", "retail")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(Q(depot__in=visible) | Q(retail__in=visible))
+        return qs
+

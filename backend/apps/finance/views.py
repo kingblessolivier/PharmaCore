@@ -8,6 +8,7 @@ from typing import Any, cast
 
 from django.db.models import Case, DecimalField, Q, QuerySet, Sum, When
 from django.db.models.functions import Coalesce
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -23,9 +24,14 @@ from apps.finance.models import (
     BankAccount,
     Budget,
     CreditProfile,
+    CustomerCredit,
+    CustomerInvoice,
+    CustomerReceipt,
+    DunningNotice,
     FixedAsset,
     JournalEntry,
     JournalLine,
+    PaymentRun,
     SupplierBill,
     TaxCode,
     TaxPayment,
@@ -37,23 +43,38 @@ from apps.finance.serializers import (
     BankAccountSerializer,
     BudgetSerializer,
     CreditProfileSerializer,
+    CustomerCreditSerializer,
+    CustomerInvoiceSerializer,
+    CustomerReceiptSerializer,
+    DunningNoticeSerializer,
     FixedAssetSerializer,
     JournalEntrySerializer,
+    PaymentRunSerializer,
     SupplierBillSerializer,
     TaxCodeSerializer,
     TaxPaymentSerializer,
     TaxRecordSerializer,
 )
 from apps.finance.services import (
+    CreditHoldError,
+    PaymentRunError,
+    apply_dunning,
+    cancel_payment_run,
     cash_book_lines,
     cash_flow_forecast,
     close_period,
     create_bank_account,
+    create_payment_run,
+    disburse_payment_run,
+    lock_payment_run,
     reconcile_lines,
+    record_customer_invoice,
+    record_customer_receipt,
     record_supplier_bill,
     record_supplier_bill_payment,
     reopen_period,
     request_credit_override,
+    submit_payment_run,
 )
 from apps.iam.audit import record_audit
 from apps.iam.models import Organization, User
@@ -478,6 +499,30 @@ class FinanceReportsView(viewsets.ViewSet):
         org = _resolve_org(request, cast(User, request.user))
         return Response(_money_safe(reports.inventory_valuation(org)))
 
+    @action(detail=False, methods=["get"], url_path="ar-aging")
+    def ar_aging(self, request: Request) -> Response:
+        """Open receivables bucketed by how far past due they are, per customer."""
+        org = _resolve_org(request, cast(User, request.user))
+        as_of = _date_param(request, "as_of", timezone.now().date())
+        return Response(_money_safe(reports.ar_aging(org, as_of=as_of)))
+
+    @action(detail=False, methods=["get"], url_path="statement")
+    def statement(self, request: Request) -> Response:
+        """A printable statement of account for one customer over a period."""
+        user = cast(User, request.user)
+        org = _resolve_org(request, user)
+        customer_param = request.query_params.get("customer")
+        if not (customer_param and customer_param.isdigit()):
+            raise ValidationError("A 'customer' query param is required.")
+        try:
+            customer = Organization.objects.get(pk=int(customer_param))
+        except Organization.DoesNotExist as exc:
+            raise ValidationError("Customer not found.") from exc
+        start, end = self._period(request)
+        return Response(
+            _money_safe(reports.statement_of_account(org, customer, start=start, end=end))
+        )
+
     @action(detail=False, methods=["get"], url_path="vat-return")
     def vat_return(self, request: Request) -> Response:
         """Rwanda VAT return draft for the period: per-class Output/Input,
@@ -650,3 +695,285 @@ class BudgetViewSet(viewsets.ModelViewSet):
         _require_finance_manage(user)
         serializer.save()
 
+
+class CustomerInvoiceViewSet(viewsets.ModelViewSet):
+    """AR: invoices raised on B2B customers, plus the receipts against them.
+
+    Creation and receipting both go through the service layer so the GL entry,
+    the credit-limit guard, and the numbering sequence stay in one place.
+    """
+
+    serializer_class = CustomerInvoiceSerializer
+    queryset = CustomerInvoice.objects.select_related("organization", "customer")
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self) -> QuerySet[CustomerInvoice]:
+        user = cast(User, self.request.user)
+        qs = CustomerInvoice.objects.select_related("organization", "customer").prefetch_related(
+            "receipts"
+        )
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            # Both sides of the trade can see the invoice — the seller because
+            # they raised it, the buyer because they owe it.
+            qs = qs.filter(Q(organization__in=visible) | Q(customer__in=visible))
+        params = self.request.query_params
+        for field in ("organization", "customer"):
+            value = params.get(field)
+            if value and value.isdigit():
+                qs = qs.filter(**{f"{field}_id": int(value)})
+        status_param = params.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param.upper())
+        if params.get("outstanding") in {"1", "true", "True"}:
+            qs = qs.exclude(
+                status__in=[CustomerInvoice.Status.PAID, CustomerInvoice.Status.CANCELLED]
+            )
+        return qs
+
+    def create(self, request: Request, *args: object, **kwargs: object) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        serializer = CustomerInvoiceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        try:
+            invoice = record_customer_invoice(
+                organization=data["organization"],
+                customer=data["customer"],
+                invoice_date=data["invoice_date"],
+                due_date=data["due_date"],
+                total_amount=data["total_amount"],
+                vat_amount=data.get("vat_amount") or Decimal("0"),
+                tax_class=data.get("tax_class", "B"),
+                reference_type=data.get("reference_type", ""),
+                reference_id=data.get("reference_id", ""),
+                notes=data.get("notes", ""),
+                user=user,
+            )
+        except CreditHoldError as exc:
+            # 409, not 400: the request is well-formed; the customer's credit
+            # state is what refuses it.
+            return Response({"detail": str(exc)}, status=409)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        return Response(CustomerInvoiceSerializer(invoice).data, status=201)
+
+    @action(detail=True, methods=["post"], url_path="record-receipt")
+    def record_receipt(self, request: Request, pk: str | None = None) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        invoice = self.get_object()
+        try:
+            receipt = record_customer_receipt(
+                invoice=invoice,
+                amount=Decimal(str(request.data.get("amount", 0))),
+                method=str(request.data.get("method", "CASH")),
+                reference=str(request.data.get("reference", "")),
+                user=user,
+            )
+        except (ValueError, ArithmeticError) as exc:
+            raise ValidationError(str(exc)) from exc
+        record_audit(
+            action="PAYMENT",
+            user=user,
+            organization=invoice.organization,
+            entity_type="customer_invoice",
+            entity_id=str(invoice.pk),
+            changes={"amount": str(receipt.amount), "method": receipt.method},
+            request=request,
+        )
+        invoice.refresh_from_db()
+        return Response(CustomerInvoiceSerializer(invoice).data, status=201)
+
+
+class CustomerReceiptViewSet(viewsets.ReadOnlyModelViewSet):
+    """Receipt register. Receipts are created via the invoice's
+    ``record-receipt`` action so they can never exist without a GL entry."""
+
+    serializer_class = CustomerReceiptSerializer
+    queryset = CustomerReceipt.objects.select_related("invoice__customer", "invoice__organization")
+
+    def get_queryset(self) -> QuerySet[CustomerReceipt]:
+        user = cast(User, self.request.user)
+        qs = CustomerReceipt.objects.select_related("invoice__customer", "invoice__organization")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(Q(invoice__organization__in=visible) | Q(invoice__customer__in=visible))
+        invoice_param = self.request.query_params.get("invoice")
+        if invoice_param and invoice_param.isdigit():
+            qs = qs.filter(invoice_id=int(invoice_param))
+        return qs
+
+
+class CustomerCreditViewSet(viewsets.ReadOnlyModelViewSet):
+    """On-account credits (overpayments, credit notes, returns) held for a customer."""
+
+    serializer_class = CustomerCreditSerializer
+    queryset = CustomerCredit.objects.select_related("organization", "customer")
+
+    def get_queryset(self) -> QuerySet[CustomerCredit]:
+        user = cast(User, self.request.user)
+        qs = CustomerCredit.objects.select_related("organization", "customer")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(Q(organization__in=visible) | Q(customer__in=visible))
+        customer_param = self.request.query_params.get("customer")
+        if customer_param and customer_param.isdigit():
+            qs = qs.filter(customer_id=int(customer_param))
+        return qs
+
+
+class DunningNoticeViewSet(viewsets.ReadOnlyModelViewSet):
+    """The collections queue. ``run`` walks the ladder for an organization and
+    issues whatever step each overdue invoice has newly earned."""
+
+    serializer_class = DunningNoticeSerializer
+    queryset = DunningNotice.objects.select_related("invoice__customer")
+
+    def get_queryset(self) -> QuerySet[DunningNotice]:
+        user = cast(User, self.request.user)
+        qs = DunningNotice.objects.select_related("invoice__customer", "invoice__organization")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(Q(invoice__organization__in=visible) | Q(invoice__customer__in=visible))
+        org_param = self.request.query_params.get("organization")
+        if org_param and org_param.isdigit():
+            qs = qs.filter(invoice__organization_id=int(org_param))
+        level = self.request.query_params.get("level")
+        if level:
+            qs = qs.filter(level=level.upper())
+        return qs
+
+    @action(detail=False, methods=["post"], url_path="run")
+    def run(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        organization = _resolve_org(request, user)
+        issued = apply_dunning(organization=organization)
+        record_audit(
+            action="UPDATE",
+            user=user,
+            organization=organization,
+            entity_type="dunning_run",
+            entity_id=str(organization.pk),
+            changes={"issued": str(len(issued))},
+            request=request,
+        )
+        return Response(
+            {"issued": len(issued), "notices": DunningNoticeSerializer(issued, many=True).data},
+            status=201,
+        )
+
+
+class PaymentRunViewSet(viewsets.ModelViewSet):
+    """Batch supplier settlement: build a run, get it signed off, hand the file
+    to the bank, then post the payments.
+
+    Every state change is a named action rather than a PATCH — a payment run's
+    status is the audit trail, not a field anyone gets to set.
+    """
+
+    serializer_class = PaymentRunSerializer
+    queryset = PaymentRun.objects.select_related("organization").prefetch_related(
+        "lines__bill__supplier"
+    )
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self) -> QuerySet[PaymentRun]:
+        user = cast(User, self.request.user)
+        qs = PaymentRun.objects.select_related("organization").prefetch_related(
+            "lines__bill__supplier"
+        )
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            qs = qs.filter(organization__in=organizations_visible_to(user))
+        org_param = self.request.query_params.get("organization")
+        if org_param and org_param.isdigit():
+            qs = qs.filter(organization_id=int(org_param))
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param.upper())
+        return qs
+
+    def create(self, request: Request, *args: object, **kwargs: object) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        organization = _resolve_org(request, user)
+        bill_ids = request.data.get("bills") or []
+        if not isinstance(bill_ids, list) or not bill_ids:
+            raise ValidationError("Provide a non-empty 'bills' list.")
+        bills = list(SupplierBill.objects.filter(pk__in=bill_ids, organization=organization))
+        if len(bills) != len(set(bill_ids)):
+            raise ValidationError("One or more bills were not found in this organization.")
+        try:
+            run = create_payment_run(
+                organization=organization,
+                bills=bills,
+                method=str(request.data.get("method", PaymentRun.Method.BANK_TRANSFER)),
+                scheduled_for=request.data.get("scheduled_for") or None,
+                notes=str(request.data.get("notes", "")),
+                user=user,
+            )
+        except PaymentRunError as exc:
+            raise ValidationError(str(exc)) from exc
+        return Response(PaymentRunSerializer(run).data, status=201)
+
+    @action(detail=True, methods=["post"])
+    def submit(self, request: Request, pk: str | None = None) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        run = self.get_object()
+        try:
+            approval = submit_payment_run(run=run, user=user)
+        except PaymentRunError as exc:
+            raise ValidationError(str(exc)) from exc
+        run.refresh_from_db()
+        data = PaymentRunSerializer(run).data
+        data["approval_request"] = approval.pk
+        return Response(data, status=201)
+
+    @action(detail=True, methods=["post"])
+    def disburse(self, request: Request, pk: str | None = None) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        run = self.get_object()
+        try:
+            disburse_payment_run(run=run, user=user)
+        except PaymentRunError as exc:
+            raise ValidationError(str(exc)) from exc
+        run.refresh_from_db()
+        return Response(PaymentRunSerializer(run).data)
+
+    @action(detail=True, methods=["post"])
+    def lock(self, request: Request, pk: str | None = None) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        run = self.get_object()
+        try:
+            lock_payment_run(run=run, user=user)
+        except PaymentRunError as exc:
+            raise ValidationError(str(exc)) from exc
+        run.refresh_from_db()
+        return Response(PaymentRunSerializer(run).data)
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request: Request, pk: str | None = None) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        run = self.get_object()
+        try:
+            cancel_payment_run(run=run, user=user, reason=str(request.data.get("reason", "")))
+        except PaymentRunError as exc:
+            raise ValidationError(str(exc)) from exc
+        run.refresh_from_db()
+        return Response(PaymentRunSerializer(run).data)
+
+    @action(detail=True, methods=["get"], url_path="disbursement-file")
+    def disbursement_file(self, request: Request, pk: str | None = None) -> HttpResponse:
+        """Download the CSV the bank or MoMo aggregator expects."""
+        run = self.get_object()
+        if not run.disbursement_file:
+            raise ValidationError("This run has no disbursement file yet — approve it first.")
+        response = HttpResponse(run.disbursement_file, content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="{run.disbursement_filename}"'
+        return response

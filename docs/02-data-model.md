@@ -552,6 +552,47 @@ audit_log  ← writes for every state change
 
 ---
 
+## Procurement & imports (`apps/procurement`) — shipped
+
+The buy side. Org-scoped on the **buying** organization; money is held in the
+document's own `currency` with an `exchange_rate` to RWF, and anything that reaches
+inventory is base-currency and **landed**.
+
+```
+catalog.suppliers ─┬─ supplier_profiles (1:1 standing/terms/banking/scorecard)
+                   ├─< supplier_licences        (GDP qualification gate)
+                   ├─< supplier_price_agreements (effective-dated, volume breaks)
+                   └─< supplier_evaluations      (scored from posted receipts)
+
+purchase_requisitions ─< requisition_lines
+        │  (approved, consolidated at HQ)
+        ▼
+request_for_quotations ─< rfq_lines
+        └─< supplier_quotes ─< supplier_quote_lines      (award → PO)
+        ▼
+purchase_orders ─< purchase_order_lines
+        ├── import_consignments ─< landed_cost_components   (allocated into unit cost)
+        ├─< goods_receipts ─< goods_receipt_lines → inventory.batches (+ QualityCheck)
+        └─< supplier_invoices ─< supplier_invoice_lines     (3-way match)
+                     ├─< supplier_notes (debit / credit)
+                     └── finance.supplier_bills (payable + GL)
+
+number_sequences   ← gapless per (org, domain, kind, year) document numbering
+```
+
+**Invariants**
+- A PO cannot be **approved** if the supplier is suspended/blacklisted or a *required*
+  licence is missing, unverified or expired.
+- A goods receipt cannot be **posted** without a batch number, and never with an
+  already-expired batch; posting is irreversible (it writes the immutable ledger).
+- A supplier invoice with a match variance cannot be **submitted** without an audited
+  override reason; approval is done by the approvals engine, never the requester.
+- GL: receipt posts `Dr 1200 Inventory / Cr 2150 GRNI`; invoice approval posts
+  `Dr 2150 GRNI (+ Dr 5000 price variance) (+ Dr 1300 VAT input) / Cr 2000 AP`;
+  a debit/credit note posts `Dr 2000 AP / Cr 5000`.
+
+---
+
 ## Table count summary
 
 ~70 tables across 13 modules (incl. the `workspace` collaboration/notifications/tools

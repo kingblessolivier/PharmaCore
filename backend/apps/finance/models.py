@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
 
@@ -391,7 +392,9 @@ class TaxRecord(models.Model):
     taxable_amount = models.DecimalField(max_digits=14, decimal_places=2)
     vat_amount = models.DecimalField(max_digits=14, decimal_places=2)
     tax_class_a = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # Exempt
-    tax_class_b = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # 18% Standard VAT
+    tax_class_b = models.DecimalField(
+        max_digits=14, decimal_places=2, default=0
+    )  # 18% Standard VAT
     tax_class_c = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # Zero Rated
     qr_code_payload = models.TextField(blank=True, default="")
     fiscalized_at = models.DateTimeField(auto_now_add=True)
@@ -460,14 +463,18 @@ class TaxCode(models.Model):
     description = models.CharField(max_length=255, blank=True, default="")
     rate_pct = models.DecimalField(max_digits=5, decimal_places=2)
     withholding_pct = models.DecimalField(
-        max_digits=5, decimal_places=2, default=0,
+        max_digits=5,
+        decimal_places=2,
+        default=0,
         help_text="Withholding tax rate applied to this class (0 if not subject to WHT).",
     )
     effective_from = models.DateField()
     effective_to = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     source_reference = models.CharField(
-        max_length=255, blank=True, default="",
+        max_length=255,
+        blank=True,
+        default="",
         help_text="RRA circular / Finance Law / Gazette reference that justifies the rate.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -486,7 +493,9 @@ class TaxCode(models.Model):
         indexes = [models.Index(fields=["organization", "code", "effective_from"])]
 
     def __str__(self) -> str:
-        span = f"{self.effective_from}" + (f"→{self.effective_to}" if self.effective_to else "→open")
+        span = f"{self.effective_from}" + (
+            f"→{self.effective_to}" if self.effective_to else "→open"
+        )
         return f"{self.code} {self.rate_pct}% ({span})"
 
 
@@ -509,7 +518,9 @@ class TaxPayment(models.Model):
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     method = models.CharField(max_length=20, choices=Method.choices, default=Method.BANK_TRANSFER)
     rra_reference = models.CharField(
-        max_length=100, blank=True, default="",
+        max_length=100,
+        blank=True,
+        default="",
         help_text="RRA e-Tax receipt / bank confirmation reference.",
     )
     notes = models.TextField(blank=True, default="")
@@ -664,3 +675,255 @@ class TenantSettings(models.Model):
     def __str__(self) -> str:
         return f"TenantSettings({self.organization.name})"
 
+
+# ---------------------------------------------------------------------------
+# Accounts receivable (§9 AR): customer invoices, receipts, on-account credit
+# and the dunning ladder. Every money movement posts to the GL, which stays the
+# single source of truth — these rows are the sub-ledger that explains it.
+# ---------------------------------------------------------------------------
+
+
+class CustomerInvoice(models.Model):
+    """A B2B invoice raised on a customer (usually a retail buyer)."""
+
+    class Status(models.TextChoices):
+        OPEN = "OPEN", "Open"
+        PARTIAL = "PARTIAL", "Partially paid"
+        PAID = "PAID", "Paid"
+        OVERDUE = "OVERDUE", "Overdue"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.PROTECT, related_name="customer_invoices"
+    )
+    customer = models.ForeignKey(
+        "iam.Organization", on_delete=models.PROTECT, related_name="invoices_received"
+    )
+    invoice_number = models.CharField(max_length=30, unique=True)
+    invoice_date = models.DateField()
+    due_date = models.DateField()
+    total_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    vat_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    tax_class = models.CharField(max_length=1, default="B")
+    amount_paid = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
+    reference_type = models.CharField(max_length=40, blank=True, default="")
+    reference_id = models.CharField(max_length=40, blank=True, default="")
+    notes = models.CharField(max_length=255, blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-invoice_date", "-id"]
+        indexes = [
+            models.Index(fields=["organization", "status"]),
+            models.Index(fields=["customer", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.invoice_number
+
+    @property
+    def amount_due(self) -> Decimal:
+        return (self.total_amount - self.amount_paid).quantize(Decimal("0.01"))
+
+    @property
+    def is_settled(self) -> bool:
+        return self.amount_paid >= self.total_amount
+
+
+class CustomerReceipt(models.Model):
+    """Cash/bank/MoMo received against a customer invoice."""
+
+    class Method(models.TextChoices):
+        CASH = "CASH", "Cash"
+        BANK_TRANSFER = "BANK_TRANSFER", "Bank transfer"
+        MOBILE_MONEY = "MOBILE_MONEY", "Mobile money"
+        CHEQUE = "CHEQUE", "Cheque"
+
+    invoice = models.ForeignKey(CustomerInvoice, on_delete=models.PROTECT, related_name="receipts")
+    receipt_number = models.CharField(max_length=30, unique=True)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    method = models.CharField(max_length=20, choices=Method.choices, default=Method.CASH)
+    reference = models.CharField(max_length=100, blank=True, default="")
+    received_on = models.DateField()
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-received_on", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.receipt_number} · {self.amount}"
+
+
+class CustomerCredit(models.Model):
+    """On-account credit owed back to a customer (e.g. an overpayment).
+
+    Held as a liability until it is applied to a future invoice or refunded.
+    """
+
+    class Source(models.TextChoices):
+        OVERPAYMENT = "OVERPAYMENT", "Overpayment"
+        CREDIT_NOTE = "CREDIT_NOTE", "Credit note"
+        RETURN = "RETURN", "Return"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.PROTECT, related_name="customer_credits_issued"
+    )
+    customer = models.ForeignKey(
+        "iam.Organization", on_delete=models.PROTECT, related_name="customer_credits"
+    )
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    balance = models.DecimalField(max_digits=14, decimal_places=2)
+    source = models.CharField(max_length=20, choices=Source.choices, default=Source.OVERPAYMENT)
+    source_receipt = models.ForeignKey(
+        CustomerReceipt, null=True, blank=True, on_delete=models.SET_NULL, related_name="credits"
+    )
+    notes = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Credit {self.balance} · {self.customer.name}"
+
+
+class DunningNotice(models.Model):
+    """One step of the collections ladder against an overdue invoice.
+
+    Levels escalate with days past due; the final level puts the customer's
+    credit profile on hold so no further B2B orders can be placed.
+    """
+
+    class Level(models.TextChoices):
+        REMINDER = "REMINDER", "Reminder (7 days)"
+        SECOND = "SECOND", "Second notice (14 days)"
+        FINAL = "FINAL", "Final demand (30 days)"
+        LEGAL = "LEGAL", "Legal / hold (60 days)"
+
+    invoice = models.ForeignKey(
+        CustomerInvoice, on_delete=models.CASCADE, related_name="dunning_notices"
+    )
+    level = models.CharField(max_length=10, choices=Level.choices)
+    days_past_due = models.IntegerField()
+    amount_due = models.DecimalField(max_digits=14, decimal_places=2)
+    sent_on = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-sent_on", "-id"]
+        constraints = [
+            # One notice per level per invoice — makes the ladder idempotent.
+            models.UniqueConstraint(
+                fields=["invoice", "level"], name="uniq_dunning_level_per_invoice"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.level} · {self.invoice.invoice_number}"
+
+
+class PaymentRun(models.Model):
+    """A batch of supplier bills paid together in one disbursement.
+
+    Paying bills one at a time is how money goes missing: no single approval
+    covers the total, and there is no file to hand the bank. A run gathers the
+    bills, gets approved once (twice above the threshold), emits a disbursement
+    file, and only then posts the payments — so the approved total and the
+    disbursed total are the same number by construction.
+    """
+
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "Draft"
+        AWAITING_APPROVAL = "AWAITING_APPROVAL", "Awaiting approval"
+        APPROVED = "APPROVED", "Approved"
+        DISBURSED = "DISBURSED", "Disbursed"
+        LOCKED = "LOCKED", "Locked"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    class Method(models.TextChoices):
+        BANK_TRANSFER = "BANK_TRANSFER", "Bank transfer"
+        MOBILE_MONEY = "MOBILE_MONEY", "Mobile money"
+        CHEQUE = "CHEQUE", "Cheque"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.PROTECT, related_name="payment_runs"
+    )
+    run_number = models.CharField(max_length=30, unique=True)
+    method = models.CharField(max_length=20, choices=Method.choices, default=Method.BANK_TRANSFER)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    scheduled_for = models.DateField(null=True, blank=True)
+    total_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    # How many sign-offs this run needs, and how many it has. Two are required
+    # above the dual-approval threshold; the second request is raised in the
+    # first approver's name so the engine's no-self-approval rule forces a
+    # genuinely different pair of eyes.
+    approvals_required = models.PositiveSmallIntegerField(default=1)
+    approvals_received = models.PositiveSmallIntegerField(default=0)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    disbursed_at = models.DateTimeField(null=True, blank=True)
+    locked_at = models.DateTimeField(null=True, blank=True)
+    # The file handed to the bank / MoMo aggregator, kept inline so it can be
+    # re-downloaded and audited without a storage round-trip.
+    disbursement_filename = models.CharField(max_length=120, blank=True, default="")
+    disbursement_file = models.TextField(blank=True, default="")
+    notes = models.CharField(max_length=255, blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [models.Index(fields=["organization", "status"])]
+
+    def __str__(self) -> str:
+        return f"{self.run_number} · {self.total_amount}"
+
+    @property
+    def is_editable(self) -> bool:
+        return self.status == self.Status.DRAFT
+
+    @property
+    def line_count(self) -> int:
+        return self.lines.count()
+
+
+class PaymentRunLine(models.Model):
+    """One supplier bill inside a run, with the payee details captured at the
+    moment the run was built — a supplier changing their bank account later must
+    not silently rewrite a file that was already approved."""
+
+    payment_run = models.ForeignKey(PaymentRun, on_delete=models.CASCADE, related_name="lines")
+    bill = models.ForeignKey(SupplierBill, on_delete=models.PROTECT, related_name="run_lines")
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    payee_name = models.CharField(max_length=255, blank=True, default="")
+    payee_account = models.CharField(max_length=50, blank=True, default="")
+    paid = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [
+            # A bill can only appear once in a run — otherwise the file would
+            # instruct the bank to pay it twice.
+            models.UniqueConstraint(
+                fields=["payment_run", "bill"], name="uniq_bill_per_payment_run"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.bill} · {self.amount}"
+
+    @property
+    def idempotency_key(self) -> str:
+        """Stable per (run, bill), so a re-sent file cannot pay twice."""
+        return f"{self.payment_run_id}:{self.bill_id}"

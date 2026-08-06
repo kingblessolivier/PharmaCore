@@ -15,9 +15,15 @@ import pytest
 from django.db import connections, transaction
 
 from apps.core.sequences import next_document_number, next_number
+from apps.iam.models import Organization
 from apps.procurement.models import NumberSequence
 
 pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture
+def organization(db: None) -> Organization:
+    return Organization.objects.create(name="Sequence Test Depot", type="DEPOT")
 
 
 def test_first_call_returns_one(organization):
@@ -105,12 +111,17 @@ def test_different_years_have_independent_counters(organization):
     assert b == 1
 
 
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skipif(
+    connections["default"].vendor == "sqlite",
+    reason=(
+        "SQLite locks the whole file for writes, so concurrent worker threads "
+        "raise 'database table is locked' rather than exercising the row lock. "
+        "The guarantee under test is a Postgres SELECT FOR UPDATE."
+    ),
+)
 def test_concurrent_threads_get_unique_numbers(organization):
-    """Two threads racing on the same sequence must not collide.
-
-    SQLite serialises transactions so this test is meaningful under
-    Postgres; it still confirms the helper doesn't deadlock or crash.
-    """
+    """Two threads racing on the same sequence must not collide."""
     NUM_THREADS = 10
     results: list[int] = []
     lock = threading.Lock()

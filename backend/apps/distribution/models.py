@@ -255,3 +255,162 @@ class Reservation(models.Model):
 
     def __str__(self) -> str:
         return f"{self.quantity} of {self.batch} for {self.order}"
+
+
+class DepotProductListing(models.Model):
+    """Depot offered stock listing (decoupled from physical warehouse on-hand). ROADMAP '5. Distribution'."""
+
+    depot = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="depot_listings"
+    )
+    product = models.ForeignKey("catalog.Product", on_delete=models.CASCADE, related_name="depot_listings")
+    offered_qty = models.PositiveIntegerField(default=0)
+    buffer_qty = models.PositiveIntegerField(default=0)
+    price_per_unit = models.DecimalField(max_digits=14, decimal_places=2)
+    is_published = models.BooleanField(default=True)
+    customer_segment = models.CharField(max_length=50, blank=True, default="ALL")
+    min_order_qty = models.PositiveIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["depot", "product"], name="uniq_depot_product_listing")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.depot.name} · {self.product.name} (Offered: {self.offered_qty})"
+
+    @property
+    def available_for_order(self) -> int:
+        return max(0, self.offered_qty - self.buffer_qty)
+
+
+class SalesRepresentative(models.Model):
+    """Field sales rep / medical rep master. ROADMAP '5. Distribution'."""
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="sales_reps"
+    )
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="sales_rep_profile")
+    employee = models.ForeignKey("hr.Employee", null=True, blank=True, on_delete=models.SET_NULL, related_name="sales_reps")
+    territory_code = models.CharField(max_length=50, default="KIGALI-CENTRAL")
+    monthly_sales_target = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    commission_rate_pct = models.DecimalField(max_digits=5, decimal_places=2, default=2.50)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["user__username"]
+
+    def __str__(self) -> str:
+        return f"Rep {self.user.username} ({self.territory_code})"
+
+
+class JourneyPlan(models.Model):
+    """Rep scheduled customer beat/visit plan. ROADMAP '5. Distribution'."""
+
+    rep = models.ForeignKey(SalesRepresentative, on_delete=models.CASCADE, related_name="journey_plans")
+    customer_org = models.ForeignKey("iam.Organization", on_delete=models.CASCADE, related_name="rep_visits")
+    planned_date = models.DateField()
+    is_completed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["planned_date"]
+
+    def __str__(self) -> str:
+        return f"{self.planned_date} · {self.rep} ➔ {self.customer_org.name}"
+
+
+class SalesVisitLog(models.Model):
+    """Field sales rep call report & pre-sale/van-sale log. ROADMAP '5. Distribution'."""
+
+    class VisitType(models.TextChoices):
+        PRE_SALE = "PRE_SALE", "Pre-sale order visit"
+        VAN_SALE = "VAN_SALE", "Van sale (sell-from-stock)"
+        CALL_ONLY = "CALL_ONLY", "Detailing / Call only"
+
+    journey_plan = models.ForeignKey(JourneyPlan, null=True, blank=True, on_delete=models.SET_NULL, related_name="visit_logs")
+    rep = models.ForeignKey(SalesRepresentative, on_delete=models.CASCADE, related_name="visit_logs")
+    customer_org = models.ForeignKey("iam.Organization", on_delete=models.CASCADE, related_name="completed_visits")
+    visit_type = models.CharField(max_length=20, choices=VisitType.choices, default=VisitType.PRE_SALE)
+    visited_at = models.DateTimeField(auto_now_add=True)
+    notes = models.TextField(blank=True, default="")
+    order = models.ForeignKey(StockOrder, null=True, blank=True, on_delete=models.SET_NULL, related_name="visit_origin")
+    sales_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ["-visited_at"]
+
+    def __str__(self) -> str:
+        return f"{self.rep} visit to {self.customer_org.name} ({self.visit_type})"
+
+
+class VanStock(models.Model):
+    """Inventory assigned to a van for sell-from-stock sales. ROADMAP '5. Distribution'."""
+
+    rep = models.ForeignKey(SalesRepresentative, on_delete=models.CASCADE, related_name="van_stocks")
+    product = models.ForeignKey("catalog.Product", on_delete=models.CASCADE)
+    batch_number = models.CharField(max_length=50)
+    quantity = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["rep", "product"]
+        constraints = [
+            models.UniqueConstraint(fields=["rep", "product", "batch_number"], name="uniq_van_stock_item")
+        ]
+
+    def __str__(self) -> str:
+        return f"Van {self.rep} · {self.product.name} ({self.quantity} units)"
+
+
+class TenderContract(models.Model):
+    """Institutional / B2G Tender Contract & Locked Price Agreement. ROADMAP '5. Distribution'."""
+
+    tender_number = models.CharField(max_length=50, unique=True)
+    depot = models.ForeignKey("iam.Organization", on_delete=models.CASCADE, related_name="tender_contracts")
+    client_org = models.ForeignKey("iam.Organization", on_delete=models.CASCADE, related_name="awarded_tenders")
+    product = models.ForeignKey("catalog.Product", on_delete=models.CASCADE)
+    contract_price = models.DecimalField(max_digits=14, decimal_places=2)
+    total_committed_qty = models.PositiveIntegerField()
+    drawn_qty = models.PositiveIntegerField(default=0)
+    valid_until = models.DateField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-valid_until"]
+
+    def __str__(self) -> str:
+        return f"Tender {self.tender_number} · {self.client_org.name}"
+
+    @property
+    def remaining_qty(self) -> int:
+        return max(0, self.total_committed_qty - self.drawn_qty)
+
+
+class CustomerReturn(models.Model):
+    """Retailer return-to-depot request with quality inspection. ROADMAP '5. Distribution'."""
+
+    class Status(models.TextChoices):
+        REQUESTED = "REQUESTED", "Requested by retailer"
+        INSPECTING = "INSPECTING", "Inspecting at depot"
+        APPROVED = "APPROVED", "Approved & Restocked / Credited"
+        REJECTED = "REJECTED", "Rejected (Damaged / Invalid)"
+
+    return_number = models.CharField(max_length=40, unique=True)
+    depot = models.ForeignKey("iam.Organization", on_delete=models.CASCADE, related_name="incoming_returns")
+    retail = models.ForeignKey("iam.Organization", on_delete=models.CASCADE, related_name="outgoing_returns")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.REQUESTED)
+    reason = models.TextField(blank=True, default="")
+    credit_note_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Return {self.return_number} from {self.retail.name}"
+

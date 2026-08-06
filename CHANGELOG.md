@@ -18,6 +18,13 @@ Maintenance rules:
 ## [Unreleased]
 
 ### Added
+- **Advanced B2B Distribution & Route-to-Market Engine (ROADMAP §5):**
+  - **Depot Offered Listings vs. Physical On-Hand Stock (`DepotProductListing`)**: Decoupled depot physical warehouse inventory (`on_hand`) from public retailer-facing offered quantities (`offered_qty`, `buffer_qty`, and custom listing prices). Receiving stock lands in on-hand without auto-publishing; depot managers explicitly control exposed inventory.
+  - **Controlled Substance Compliance & Trading Partner Guard**: Trading partner pharmacy licence validation (Rwanda Board of Pharmacy / Rwanda FDA) prior to B2B order submission, auto-flagging suspicious order volume spikes (>3x average or restricted substances).
+  - **Field Sales Reps & Route-to-Market (Van Sales / Pre-Sales)**: Sales rep profiles, territory beats, daily journey plans, call logs, van-stock sell-from-vehicle, and rep commission ledgers.
+  - **Institutional & B2G Customer Tenders**: Awarded tender contract price locks, committed volume tracking, and scheduled call-off delivery schedules for hospitals and NGOs.
+  - **Customer Returns & Account Statements**: Retailer return-to-depot requests with RFDA inspection verification, credit note issuance, and automated monthly B2B customer financial statement generation.
+  - **Frontend UI & App Shell**: Built `DepotListingsPage.tsx` (`/distribution/listings`), `B2BOrderingPortalPage.tsx` (`/distribution/portal`), `FieldSalesPage.tsx` (`/distribution/sales-reps`), `InstitutionalTendersPage.tsx` (`/distribution/tenders`), and `CustomerReturnsPage.tsx` (`/distribution/returns`). Defined type interfaces in `types.ts` and updated subnavigation in `AppShell.tsx`.
 - **Procurement & imports (ROADMAP §4) — new `apps/procurement` app, API + UI.** Closes the buy side end to end:
   - **Supplier master** — `SupplierProfile` (standing preferred→blacklisted, trade terms, banking, rolling scorecard), `SupplierLicence` with a **GDP qualification gate** (a missing, unverified or expired *required* licence blocks PO approval), `SupplierPriceAgreement` (effective-dated contract prices with volume breaks, MOQ, pack multiples) and `SupplierEvaluation` (delivery/quality scored from posted receipts, not self-reported).
   - **Requisitions → consolidated purchasing** — branches raise `PurchaseRequisition`, an approver signs it off through the **approvals engine** (claim-to-lock, no self-approval, SLA), then HQ consolidates several into one PO per supplier with the same product merged onto one line.
