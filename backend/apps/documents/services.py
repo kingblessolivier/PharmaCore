@@ -23,6 +23,7 @@ _TEMPLATES = {
     "TAX_INVOICE": "documents/tax_invoice.html",
     "RECEIPT": "documents/receipt.html",
     "CREDIT_NOTE": "documents/credit_note.html",
+    "PAYSLIP": "documents/payslip.html",
 }
 
 

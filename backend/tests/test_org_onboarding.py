@@ -88,9 +88,7 @@ def test_admin_adds_and_verifies_org_document(sys_admin: User, retail: Organizat
         format="json",
     )
     assert resp.status_code == 201, resp.content
-    doc = OrganizationDocument.objects.get(
-        organization=retail, doc_type="RWANDA_FDA_LICENCE"
-    )
+    doc = OrganizationDocument.objects.get(organization=retail, doc_type="RWANDA_FDA_LICENCE")
     assert AuditLog.objects.filter(action="CREATE", entity_type="organization_document").exists()
 
     v = _auth(sys_admin).post(f"/api/organization-documents/{doc.pk}/verify/")
@@ -125,7 +123,6 @@ def test_org_admin_scoped_to_own_org_documents(
     OrganizationDocument.objects.create(organization=other, doc_type="RDB_CERTIFICATE")
     resp = _auth(org_admin).get("/api/organization-documents/")
     orgs = {
-        OrganizationDocument.objects.get(pk=r["id"]).organization_id
-        for r in resp.json()["results"]
+        OrganizationDocument.objects.get(pk=r["id"]).organization_id for r in resp.json()["results"]
     }
     assert orgs == {retail.pk}

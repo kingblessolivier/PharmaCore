@@ -60,12 +60,18 @@ def test_alerts_command_flags_low_stock_and_expiry() -> None:
         organization=org, product=product, retail_price="100", min_stock_level=10
     )
     InventoryBatch.objects.create(
-        organization=org, product=product, batch_number="OK",
-        expiry_date=date.today() + timedelta(days=200), quantity_available=2,
+        organization=org,
+        product=product,
+        batch_number="OK",
+        expiry_date=date.today() + timedelta(days=200),
+        quantity_available=2,
     )
     InventoryBatch.objects.create(
-        organization=org, product=product, batch_number="OLD",
-        expiry_date=date.today() - timedelta(days=1), quantity_available=5,
+        organization=org,
+        product=product,
+        batch_number="OLD",
+        expiry_date=date.today() - timedelta(days=1),
+        quantity_available=5,
     )
 
     call_command("notify_alerts")
