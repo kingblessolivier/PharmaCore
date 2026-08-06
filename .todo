@@ -1,0 +1,18 @@
+{
+  "tasks": [
+    {
+      "id": "1785959579631x9oc8o",
+      "title": "Review blocked/reverted work in frontend/src/lib/roles.ts",
+      "category": "Blocked",
+      "dueDate": null,
+      "completed": false
+    },
+    {
+      "id": "1785959582040a2f738",
+      "title": "Review blocked/reverted work in backend/apps/iam/permissions.py",
+      "category": "Blocked",
+      "dueDate": null,
+      "completed": false
+    }
+  ]
+}

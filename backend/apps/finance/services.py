@@ -30,11 +30,16 @@ from apps.iam.models import Organization, User
 _CONTROL_ACCOUNTS: list[tuple[str, str, str, str]] = [
     ("1000", "Cash & Bank", Account.Type.ASSET, Account.Balance.DEBIT),
     ("1100", "Accounts Receivable", Account.Type.ASSET, Account.Balance.DEBIT),
+    ("1200", "Inventory on Hand", Account.Type.ASSET, Account.Balance.DEBIT),
+    ("1300", "VAT Input (purchase tax recoverable)", Account.Type.ASSET, Account.Balance.DEBIT),
     ("2000", "Accounts Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    ("2050", "VAT Output (sales tax payable)", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    ("2060", "Withholding Tax Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
     ("2100", "PAYE Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
     ("2200", "RSSB Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
     ("2300", "CBHI Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
     ("2400", "Net Pay Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    ("2500", "Inventory Adjustment / Disposal Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
     ("3000", "Owner's Equity", Account.Type.EQUITY, Account.Balance.CREDIT),
     ("4000", "Sales Revenue", Account.Type.REVENUE, Account.Balance.CREDIT),
     ("5000", "Cost of Goods Sold", Account.Type.EXPENSE, Account.Balance.DEBIT),
@@ -343,14 +348,24 @@ def record_supplier_bill(
     bill_date: Any,
     due_date: Any,
     total_amount: Decimal,
+    vat_amount: Decimal = Decimal("0"),
+    tax_class: str = "",
     reference_type: str = "",
     reference_id: str = "",
     notes: str = "",
     user: User | None = None,
 ) -> SupplierBill:
-    """Record a supplier invoice (AP) and post it to the GL: Dr an expense/asset
-    account, Cr Accounts Payable — the liability is recognised the moment the bill
-    is booked, before any cash moves."""
+    """Record a supplier invoice (AP) and post it to the GL.
+
+    If ``vat_amount`` is supplied, the entry splits:
+      Dr Expense (net)   = total − vat
+      Dr VAT Input       = vat           (recoverable from RRA on next return)
+      Cr Accounts Payable = total
+
+    If ``vat_amount`` is 0 (zero-rated supplier, VAT-exempt import, or legacy
+    data), the entry is the legacy single-line:
+      Dr Expense / Cr AP.
+    """
     bill = SupplierBill.objects.create(
         organization=organization,
         supplier=supplier,
@@ -358,30 +373,46 @@ def record_supplier_bill(
         bill_date=bill_date,
         due_date=due_date,
         total_amount=total_amount,
+        vat_amount=vat_amount,
+        tax_class=tax_class,
         reference_type=reference_type,
         reference_id=reference_id,
         notes=notes,
         created_by=user,
     )
     accounts = ensure_default_accounts(organization)
+    net_expense = (total_amount - vat_amount).quantize(Decimal("0.01"))
+    if net_expense < 0:
+        raise ValueError("vat_amount cannot exceed total_amount.")
+    lines: list[JournalLineInput] = [
+        {
+            "account": accounts["5000"],
+            "side": JournalLine.Side.DEBIT,
+            "amount": net_expense,
+            "memo": "Inventory / expense (net of VAT)",
+        },
+        {
+            "account": accounts["2000"],
+            "side": JournalLine.Side.CREDIT,
+            "amount": total_amount,
+            "memo": "",
+        },
+    ]
+    if vat_amount > 0:
+        lines.insert(
+            1,
+            {
+                "account": accounts["1300"],
+                "side": JournalLine.Side.DEBIT,
+                "amount": vat_amount,
+                "memo": f"VAT Input (class {tax_class or '?'})",
+            },
+        )
     post_journal(
         organization=organization,
         entry_date=bill_date,
         description=f"Supplier bill {bill.bill_number or bill.pk} — {supplier.name}",
-        lines=[
-            {
-                "account": accounts["5000"],
-                "side": JournalLine.Side.DEBIT,
-                "amount": total_amount,
-                "memo": "",
-            },
-            {
-                "account": accounts["2000"],
-                "side": JournalLine.Side.CREDIT,
-                "amount": total_amount,
-                "memo": "",
-            },
-        ],
+        lines=lines,
         reference_type="supplier_bill",
         reference_id=str(bill.pk),
         user=user,
@@ -682,3 +713,453 @@ def reopen_period(*, period: AccountingPeriod, user: User | None, reason: str) -
         changes={"reason": reason},
     )
     return period
+
+
+# ---------------------------------------------------------------------------
+# Slice 2 — auto-posting the operational reality into the ledger.
+#
+# Up to here, the ledger only captured journal entries that were explicitly
+# posted by a service (payroll, supplier bill, B2B settlement). The P&L stayed
+# empty because nothing was posting sales. These three functions close that
+# gap so the leader's cockpit — the Finance home — reflects the business as it
+# happens:
+#
+#   * ``post_sale_journal`` — every completed POS sale → AR/cash, revenue,
+#     VAT Output, and COGS+Inventory at the FEFO batch's wholesale_cost.
+#   * ``post_inventory_adjustment`` — a stock-count variance →
+#     Dr/COGS  Cr/Inventory so the GL moves with the physical count.
+#   * ``post_writeoff`` — a StockDisposal (destruction, expiry) →
+#     Dr Inventory Adjustment Expense / Cr Inventory at batch cost.
+# ---------------------------------------------------------------------------
+
+
+@transaction.atomic
+def post_sale_journal(*, sale: Any, user: User | None) -> JournalEntry | None:
+    """Auto-post a completed retail sale to the GL.
+
+    Debits:
+      * Cash & Bank (1000)  — full sale total (retail is cash-on-delivery).
+    Credits:
+      * Sales Revenue (4000) — sum of line_net (price excluding VAT portion).
+      * VAT Output (2050)   — sum of line_tax (only the B-class 18% portion;
+                              Rwanda exempts / zero-rates medicines A/C/D).
+    COGS leg (separate entry so it has its own reference + audit trail):
+      Debit  COGS (5000)
+      Credit Inventory (1200)
+      at the FEFO batch's ``wholesale_cost``. This is the moment inventory
+      leaves the books: every retail sale also adjusts the on-hand value.
+
+    Returns the sales-side JournalEntry (or None if the sale had no value).
+    """
+    accounts = ensure_default_accounts(sale.organization)
+
+    # Sales side: cash/debit-revenue + VAT split. Prices are VAT-inclusive
+    # (see apps/retail/models.py), so each line already knows its tax portion.
+    revenue_net = sum((i.line_net for i in sale.items.all()), Decimal("0"))
+    vat_output = sum((i.line_tax for i in sale.items.all()), Decimal("0"))
+    total = sale.total
+
+    if total <= 0:
+        return None
+
+    revenue_lines: list[JournalLineInput] = [
+        {
+            "account": accounts["1000"],
+            "side": JournalLine.Side.DEBIT,
+            "amount": total,
+            "memo": "Cash & equivalents at POS",
+        },
+        {
+            "account": accounts["4000"],
+            "side": JournalLine.Side.CREDIT,
+            "amount": revenue_net,
+            "memo": "Sales revenue (net of VAT)",
+        },
+    ]
+    if vat_output > 0:
+        revenue_lines.append(
+            {
+                "account": accounts["2050"],
+                "side": JournalLine.Side.CREDIT,
+                "amount": vat_output,
+                "memo": "VAT Output (18% on standard-rated lines)",
+            }
+        )
+
+    sale_entry = post_journal(
+        organization=sale.organization,
+        description=f"Sale {sale.sale_number or sale.pk} — POS revenue",
+        lines=revenue_lines,
+        reference_type="sale",
+        reference_id=str(sale.pk),
+        user=user,
+    )
+
+    # COGS leg: draw the cost straight off the FEFO allocations so the GL
+    # agrees with the on-hand value, batch by batch.
+    cogs_total = Decimal("0")
+    cogs_lines: list[JournalLineInput] = []
+    for item in sale.items.prefetch_related("allocations__batch").all():
+        for alloc in item.allocations.all():
+            unit_cost = alloc.batch.wholesale_cost or Decimal("0")
+            cost = (unit_cost * alloc.quantity).quantize(Decimal("0.01"))
+            if cost <= 0:
+                continue
+            cogs_total += cost
+
+    if cogs_total > 0:
+        post_journal(
+            organization=sale.organization,
+            description=f"Sale {sale.sale_number or sale.pk} — COGS",
+            lines=[
+                {
+                    "account": accounts["5000"],
+                    "side": JournalLine.Side.DEBIT,
+                    "amount": cogs_total,
+                    "memo": "Cost of goods sold (FEFO batch cost)",
+                },
+                {
+                    "account": accounts["1200"],
+                    "side": JournalLine.Side.CREDIT,
+                    "amount": cogs_total,
+                    "memo": "Inventory on hand (FEFO allocations)",
+                },
+            ],
+            reference_type="sale",
+            reference_id=str(sale.pk),
+            user=user,
+        )
+
+    record_audit(
+        action="SALE_POSTED",
+        user=user,
+        organization=sale.organization,
+        entity_type="sale",
+        entity_id=str(sale.pk),
+        changes={
+            "entry_id": sale_entry.pk,
+            "total": str(total),
+            "revenue_net": str(revenue_net),
+            "vat_output": str(vat_output),
+            "cogs": str(cogs_total),
+        },
+    )
+    return sale_entry
+
+
+@transaction.atomic
+def post_inventory_adjustment(
+    *, batch: Any, delta: int, unit_cost: Decimal | None, reason: str,
+    reference_type: str, reference_id: str, user: User | None,
+) -> JournalEntry | None:
+    """Auto-post a stock-count variance (approved StockCount) to the GL.
+
+    A positive ``delta`` means we found more than the books showed (Dr Inventory
+    / Cr COGS — a gain, reducing expense). A negative delta means we found
+    less (Dr COGS / Cr Inventory — a shrinkage expense).
+    """
+    if delta == 0:
+        return None
+
+    cost_per_unit = unit_cost if unit_cost is not None else batch.wholesale_cost
+    if not cost_per_unit:
+        # No cost recorded yet — skip the GL leg, the movement ledger still
+        # records the physical truth.
+        return None
+    amount = (Decimal(str(cost_per_unit)) * abs(int(delta))).quantize(Decimal("0.01"))
+    accounts = ensure_default_accounts(batch.organization)
+
+    if delta > 0:
+        lines: list[JournalLineInput] = [
+            {"account": accounts["1200"], "side": JournalLine.Side.DEBIT, "amount": amount,
+             "memo": "Stock found (variance surplus)"},
+            {"account": accounts["5000"], "side": JournalLine.Side.CREDIT, "amount": amount,
+             "memo": "COGS reversal on found stock"},
+        ]
+    else:
+        lines = [
+            {"account": accounts["5000"], "side": JournalLine.Side.DEBIT, "amount": amount,
+             "memo": "COGS — stock shrinkage"},
+            {"account": accounts["1200"], "side": JournalLine.Side.CREDIT, "amount": amount,
+             "memo": "Inventory written off (variance loss)"},
+        ]
+
+    entry = post_journal(
+        organization=batch.organization,
+        description=f"Inventory variance — batch {batch.batch_number} ({reason})",
+        lines=lines,
+        reference_type=reference_type,
+        reference_id=reference_id,
+        user=user,
+    )
+    record_audit(
+        action="INVENTORY_ADJUSTMENT_POSTED",
+        user=user,
+        organization=batch.organization,
+        entity_type="inventory_batch",
+        entity_id=str(batch.pk),
+        changes={"delta": delta, "amount": str(amount), "reason": reason},
+    )
+    return entry
+
+
+@transaction.atomic
+def post_writeoff(
+    *, batch: Any, quantity: int, reason: str,
+    reference_type: str, reference_id: str, user: User | None,
+) -> JournalEntry | None:
+    """Auto-post a StockDisposal (destruction / writeoff) at the batch's cost.
+
+    Dr Inventory Adjustment / Disposal Expense (2500)
+    Cr Inventory on Hand (1200)
+    """
+    if quantity <= 0:
+        return None
+    cost_per_unit = batch.wholesale_cost
+    if not cost_per_unit:
+        return None
+    amount = (Decimal(str(cost_per_unit)) * quantity).quantize(Decimal("0.01"))
+    accounts = ensure_default_accounts(batch.organization)
+
+    entry = post_journal(
+        organization=batch.organization,
+        description=f"Stock writeoff — batch {batch.batch_number} ({reason})",
+        lines=[
+            {
+                "account": accounts["2500"],
+                "side": JournalLine.Side.DEBIT,
+                "amount": amount,
+                "memo": f"{quantity} units disposed",
+            },
+            {
+                "account": accounts["1200"],
+                "side": JournalLine.Side.CREDIT,
+                "amount": amount,
+                "memo": "Inventory on hand removed",
+            },
+        ],
+        reference_type=reference_type,
+        reference_id=reference_id,
+        user=user,
+    )
+    record_audit(
+        action="WRITE_OFF_POSTED",
+        user=user,
+        organization=batch.organization,
+        entity_type="inventory_batch",
+        entity_id=str(batch.pk),
+        changes={"quantity": quantity, "amount": str(amount), "reason": reason},
+    )
+    return entry
+
+
+# ---------------------------------------------------------------------------
+# Slice 3 — Tax, VAT, EBM fiscalization bridge.
+#
+# Two control accounts were added for tax:
+#   1300 VAT Input (asset — recoverable from RRA)
+#   2050 VAT Output (liability — owed to RRA)
+#   2060 Withholding Tax Payable (liability)
+#
+# The ``record_tax_payment`` flow is approval-gated via the approvals engine
+# (`finance.tax_payment` resource type) — money leaves the bank.
+# ---------------------------------------------------------------------------
+
+
+@transaction.atomic
+def record_tax_payment(
+    *,
+    organization: Organization,
+    paid_on: Any,
+    period_start: Any,
+    period_end: Any,
+    amount: Decimal,
+    method: str = "BANK_TRANSFER",
+    rra_reference: str = "",
+    notes: str = "",
+    user: User | None = None,
+) -> Any:
+    """Record an RRA remittance and post Dr VAT Output / Cr Cash & Bank.
+
+    The full amount pays down VAT Output by default; if the org has withholding
+    tax owed the caller should split manually and call once per liability, or
+    use the ``finance.tax_payment`` approval handler to apply the split.
+    """
+    from apps.finance.models import TaxPayment
+
+    if amount <= 0:
+        raise ValueError("Tax payment amount must be positive.")
+    payment = TaxPayment.objects.create(
+        organization=organization,
+        paid_on=paid_on,
+        period_start=period_start,
+        period_end=period_end,
+        amount=amount,
+        method=method,
+        rra_reference=rra_reference,
+        notes=notes,
+        created_by=user,
+    )
+    payment.payment_number = f"TAX-{organization.pk}-{payment.pk:06d}"
+    payment.save(update_fields=["payment_number"])
+    accounts = ensure_default_accounts(organization)
+    post_journal(
+        organization=organization,
+        entry_date=paid_on,
+        description=f"RRA remittance — {payment.payment_number}",
+        lines=[
+            {
+                "account": accounts["2050"],
+                "side": JournalLine.Side.DEBIT,
+                "amount": amount,
+                "memo": f"VAT Output paid ({period_start}–{period_end})",
+            },
+            {
+                "account": accounts["1000"],
+                "side": JournalLine.Side.CREDIT,
+                "amount": amount,
+                "memo": method,
+            },
+        ],
+        reference_type="tax_payment",
+        reference_id=str(payment.pk),
+        user=user,
+    )
+    record_audit(
+        action="TAX_PAYMENT_RECORDED",
+        user=user,
+        organization=organization,
+        entity_type="tax_payment",
+        entity_id=str(payment.pk),
+        changes={
+            "amount": str(amount),
+            "period_start": str(period_start),
+            "period_end": str(period_end),
+            "rra_reference": rra_reference,
+        },
+    )
+    return payment
+
+
+@transaction.atomic
+def mirror_ebm_to_ledger(*, tax_record: Any, user: User | None) -> JournalEntry:
+    """EBM fiscalization bridge — when a TaxRecord lands from the SDC/OSDC,
+    mirror its per-class breakdown into the GL so the EBM register and the
+    VAT Output ledger agree to the cent.
+
+    The TaxRecord stores `tax_class_a/b/c` amounts. We post:
+      Dr Sales Revenue (split across classes proportionally)  Cr VAT Output (sum)
+    Actually the *revenue* lines are already posted by ``post_sale_journal``,
+    so the EBM mirror only writes a confirming VAT Output credit so the
+    RRA-side audit register reconciles. No double-post of revenue.
+    """
+    accounts = ensure_default_accounts(tax_record.organization)
+    vat_total = sum(
+        (
+            Decimal(str(tax_record.tax_class_a or 0)),
+            Decimal(str(tax_record.tax_class_b or 0)),
+            Decimal(str(tax_record.tax_class_c or 0)),
+        ),
+        Decimal("0"),
+    )
+    if vat_total <= 0:
+        raise ValueError("TaxRecord carries no VAT to mirror.")
+    entry = post_journal(
+        organization=tax_record.organization,
+        description=f"EBM mirror — receipt {tax_record.receipt_number}",
+        lines=[
+            {
+                "account": accounts["1100"],
+                "side": JournalLine.Side.DEBIT,
+                "amount": vat_total,
+                "memo": "EBM-fiscalized VAT receivable from RRA reconciliation",
+            },
+            {
+                "account": accounts["2050"],
+                "side": JournalLine.Side.CREDIT,
+                "amount": vat_total,
+                "memo": f"EBM {tax_record.receipt_number} (A:{tax_record.tax_class_a} B:{tax_record.tax_class_b} C:{tax_record.tax_class_c})",
+            },
+        ],
+        reference_type="tax_record",
+        reference_id=str(tax_record.pk),
+        user=user,
+    )
+    record_audit(
+        action="EBM_MIRRORED",
+        user=user,
+        organization=tax_record.organization,
+        entity_type="tax_record",
+        entity_id=str(tax_record.pk),
+        changes={"vat_total": str(vat_total)},
+    )
+    return entry
+
+
+# Approval-gated RRA remittance — money leaves the bank, so it routes through
+# the central approvals engine rather than being applied directly. The approval
+# handler below is invoked once a senior approves the request.
+
+
+@registry.register("finance.tax_payment")
+def _apply_tax_payment(approval: ApprovalRequest) -> None:
+    """Apply an approved tax-payment request: call ``record_tax_payment`` with
+    the payload values. No self-approval by design — the registry decorator
+    enforces the segregation."""
+    from apps.finance.models import TaxPayment
+
+    organization = approval.organization
+    payload = approval.payload
+    payment = record_tax_payment(
+        organization=organization,
+        paid_on=payload.get("paid_on") or timezone.now().date(),
+        period_start=payload["period_start"],
+        period_end=payload["period_end"],
+        amount=Decimal(payload["amount"]),
+        method=payload.get("method", "BANK_TRANSFER"),
+        rra_reference=payload.get("rra_reference", ""),
+        notes=payload.get("notes", ""),
+        user=approval.decided_by,
+    )
+    record_audit(
+        action="TAX_PAYMENT_APPLIED",
+        user=approval.decided_by,
+        organization=organization,
+        entity_type="tax_payment",
+        entity_id=str(payment.pk),
+        changes=payload,
+    )
+
+
+def request_tax_payment(
+    *,
+    organization: Organization,
+    requested_by: User,
+    paid_on: Any,
+    period_start: Any,
+    period_end: Any,
+    amount: Decimal,
+    method: str = "BANK_TRANSFER",
+    rra_reference: str = "",
+    notes: str = "",
+    reason: str = "",
+) -> ApprovalRequest:
+    """Propose an RRA remittance — routed through the approvals engine so a
+    senior must sign off before the money leaves the bank."""
+    payload = {
+        "paid_on": str(paid_on),
+        "period_start": str(period_start),
+        "period_end": str(period_end),
+        "amount": str(amount),
+        "method": method,
+        "rra_reference": rra_reference,
+        "notes": notes,
+    }
+    return request_approval(
+        resource_type="finance.tax_payment",
+        resource_id=str(organization.pk),
+        organization=organization,
+        requested_by=requested_by,
+        payload=payload,
+        reason=reason,
+    )

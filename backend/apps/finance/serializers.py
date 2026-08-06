@@ -9,11 +9,16 @@ from apps.finance.models import (
     Account,
     AccountingPeriod,
     BankAccount,
+    Budget,
     CreditProfile,
+    FixedAsset,
     JournalEntry,
     JournalLine,
     SupplierBill,
     SupplierBillPayment,
+    TaxCode,
+    TaxPayment,
+    TaxRecord,
 )
 
 
@@ -183,6 +188,8 @@ class SupplierBillSerializer(serializers.ModelSerializer):
             "bill_date",
             "due_date",
             "total_amount",
+            "vat_amount",
+            "tax_class",
             "amount_paid",
             "amount_due",
             "status",
@@ -193,6 +200,55 @@ class SupplierBillSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "amount_paid", "amount_due", "status", "payments", "created_at"]
+
+
+class TaxCodeSerializer(serializers.ModelSerializer):
+    """A Rwanda VAT tax class (A/B/C/D) with its effective-dated rate."""
+
+    class Meta:
+        model = TaxCode
+        fields = [
+            "id",
+            "organization",
+            "code",
+            "description",
+            "rate_pct",
+            "withholding_pct",
+            "effective_from",
+            "effective_to",
+            "is_active",
+            "source_reference",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class TaxPaymentSerializer(serializers.ModelSerializer):
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+    created_by_name = serializers.CharField(
+        source="created_by.username", read_only=True, default=None
+    )
+
+    class Meta:
+        model = TaxPayment
+        fields = [
+            "id",
+            "organization",
+            "organization_name",
+            "payment_number",
+            "paid_on",
+            "period_start",
+            "period_end",
+            "amount",
+            "method",
+            "rra_reference",
+            "notes",
+            "created_by",
+            "created_by_name",
+            "created_at",
+        ]
+        read_only_fields = ["id", "payment_number", "created_by", "created_by_name", "created_at"]
 
 
 class AccountingPeriodSerializer(serializers.ModelSerializer):
@@ -248,3 +304,78 @@ class BankAccountSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "gl_account", "gl_account_code", "created_at"]
+
+
+class FixedAssetSerializer(serializers.ModelSerializer):
+    net_book_value = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    annual_depreciation = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+
+    class Meta:
+        model = FixedAsset
+        fields = [
+            "id",
+            "organization",
+            "organization_name",
+            "asset_number",
+            "name",
+            "category",
+            "acquisition_date",
+            "acquisition_cost",
+            "useful_life_years",
+            "salvage_value",
+            "accumulated_depreciation",
+            "net_book_value",
+            "annual_depreciation",
+            "is_active",
+            "created_at",
+        ]
+        read_only_fields = ["id", "net_book_value", "annual_depreciation", "created_at"]
+
+
+class TaxRecordSerializer(serializers.ModelSerializer):
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+
+    class Meta:
+        model = TaxRecord
+        fields = [
+            "id",
+            "organization",
+            "organization_name",
+            "receipt_number",
+            "sdc_id",
+            "mrc_number",
+            "taxable_amount",
+            "vat_amount",
+            "tax_class_a",
+            "tax_class_b",
+            "tax_class_c",
+            "qr_code_payload",
+            "fiscalized_at",
+        ]
+        read_only_fields = ["id", "fiscalized_at"]
+
+
+class BudgetSerializer(serializers.ModelSerializer):
+    department_name = serializers.CharField(source="department.name", read_only=True)
+    account_code = serializers.CharField(source="account.code", read_only=True)
+    account_name = serializers.CharField(source="account.name", read_only=True)
+    variance = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = Budget
+        fields = [
+            "id",
+            "organization",
+            "department",
+            "department_name",
+            "financial_year",
+            "account",
+            "account_code",
+            "account_name",
+            "budgeted_amount",
+            "actual_amount",
+            "variance",
+            "created_at",
+        ]
+        read_only_fields = ["id", "variance", "created_at"]

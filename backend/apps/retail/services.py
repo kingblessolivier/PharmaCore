@@ -17,6 +17,7 @@ from django.utils import timezone
 
 from apps.documents.models import DocType, Document
 from apps.documents.services import generate_document
+from apps.finance.services import post_sale_journal
 from apps.iam.models import User
 from apps.inventory.models import InventoryBatch, StockMovement
 from apps.retail.models import (
@@ -227,6 +228,10 @@ def complete_sale(
             prescriber_license=d.get("prescriber_license", "").strip(),
             prescription_reference=d.get("prescription_reference", "").strip(),
         )
+    # Auto-post the sale to the GL so the Finance cockpit reflects today's
+    # reality: Dr Cash & Bank / Cr Sales Revenue + VAT Output, then the COGS
+    # leg at the FEFO batch's wholesale_cost (Dr COGS / Cr Inventory).
+    post_sale_journal(sale=sale, user=user)
     _generate_receipt(sale, user)
     return sale
 

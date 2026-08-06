@@ -179,6 +179,75 @@ what's shipped. Status marks each line.
 - ⬜ **Finance documents** — invoices, credit/debit notes, receipts, statements, remittance, vouchers, EOD/EOM reports (see [Documents catalog](#documents-catalog)).
 - ⬜ Multi‑currency (imports), fixed assets/depreciation (light).
 
+#### 9.1 Finance — Design (global)
+
+**Architecture:** a Django app `apps/finance/` over the shared PostgreSQL, double‑entry from day one. Every money‑moving domain event (sale finalised, supplier bill approved, payroll run approved, inventory adjustment, asset depreciation) emits a **journal entry** through a `JournalPostingService`. Posters are idempotent on `(source_doc, source_line)` so retries are safe.
+
+**Core entities:**
+`ChartOfAccounts`, `FiscalPeriod`, `PeriodClose`, `JournalEntry`, `JournalLine`, `JournalSource` (enum: `SALE / PURCHASE / PAYROLL / INVENTORY_ADJ / MANUAL / OPENING_BALANCE / FX / DEPRECIATION / BANK_RECON / STATUTORY_PAYMENT`), `Customer`, `Supplier` (financial extensions of distribution masters), `CustomerInvoice`, `SupplierInvoice`, `InvoiceLine`, `CreditProfile`, `Receipt`, `Payment`, `PaymentAllocation`, `BankAccount`, `BankStatement`, `BankReconciliation`, `MoMoTransaction`, `TaxRecord` (VAT / PAYE / WHT), `EBMReceipt`, `FixedAsset`, `DepreciationSchedule`, `Budget`, `CostCenter`, `NumberSequence` (per‑tenant invoice/PO/GRN/journal numbering), `OpeningBalance`.
+
+**Seeded Rwanda‑appropriate CoA groups:** 1000 Assets (1100 Cash, 1200 Bank, 1300 MoMo, 1400 AR Trade, 1500 Inventory, 1700 Fixed Assets), 2000 Liabilities (2100 AP Trade, **2200 PAYE Payable, 2210 RSSB Pension Payable, 2220 RSSB Maternity Payable, 2230 CBHI Payable, 2240 Occupational Hazards Payable, 2250 RAMA Payable**, 2300 VAT Payable, 2400 EBM Liability, 2500 WHT Payable), 3000 Equity, 4000 Revenue (4100 Retail, 4200 Wholesale, 4300 Services), 5000 COGS, 6000 Expenses (**6100 Salaries, 6110 Employer RSSB Pension, 6120 Employer Maternity, 6130 Occupational Hazards Insurance, 6140 RAMA Employer**), 7000 Tax.
+
+**Statutory sub‑ledgers as first‑class GL accounts** (not a side table): PAYE/RSSB/CBHI/Occ‑Hazards/RAMA/VAT/WHT are all `2200‑level` (or 2300 for VAT) accounts. Auto‑posting populates them; the **Statutory Due** dashboard reads balances directly and generates the RRA/RSSB return files.
+
+**APRs & controls:**
+- **3‑way match** — `SupplierInvoice` cannot be approved until `GRN` + `PurchaseOrder` reconcile (qty, unit price, totals); variance creates an **approval‑engine** item.
+- **Payment runs** — batched, dual approval above threshold (Finance manager + Director), generates bank/MoMo disbursement files with idempotency keys.
+- **Period close** — `FiscalPeriod.status` transitions `Open → Soft‑Closed → Hard‑Closed`; reopen requires an audit‑recorded reason.
+- **HQ consolidation** — inter‑branch intercompany transactions generate elimination entries at EOM.
+
+**Pages:** Chart of Accounts (tree + journal inspector), Journals (search/drill/posting source), AR (aging, statements, dunning queue), AP (bills, 3‑way match, payment runs), Invoices (list/detail/PDF), Payments (runs, MoMo/bank files, reconciliation), Statutory (PAYE/RSSB/VAT schedules + filings tracker), Banking (accounts, statement import, reconciliation), Fixed Assets, Period Close (EOD/EOM, trial balance, P&L, BS, CF, multi‑branch consolidation), Reports (standard + report builder).
+
+#### 9.2 Finance — Dataflows
+
+```
+[SaleFinalised (POS)]
+   └─► JournalPostingService.post('SALE', sale_id)
+        Dr AR/Cash/MoMo  (split by tender)
+        Cr 4100/4200 Sales Revenue
+        Cr 2300 VAT Output         (18% class B)
+        Dr 5100 COGS
+        Cr 1500 Inventory          (lot‑level cost)
+
+[SupplierBillApproved]
+   └─► post('PURCHASE', bill_id)
+        Dr 1500 Inventory / 6xxx Expense
+        Dr 2300 VAT Input
+        Cr 2100 AP Trade
+
+[PaymentReceived]
+   └─► post('PAYMENT', receipt_id) + allocate
+        Dr 1200 Bank / 1300 MoMo
+        Cr 1400 AR  (per allocation)
+
+[PaymentMade]
+   └─► post('PAYMENT', payment_id)
+        Dr 2100 AP
+        Cr 1200 Bank / 1300 MoMo
+
+[PayrollRunApproved]               (← from People)
+   └─► post('PAYROLL', payroll_run_id)   ← see 10.2 cross‑system flow
+
+[InventoryAdjustment / Disposal]
+   └─► post('INVENTORY_ADJ', source_doc)
+        Dr 5900 Inventory Adjustments (or 6xxx Shrinkage)
+        Cr 1500 Inventory
+
+[StatutoryPayment (PAYE/RSSB/VAT)]
+   └─► post('STATUTORY_PAYMENT', filing_id)
+        Dr 2200/2300 Payable
+        Cr 1200 Bank
+
+[BankReconciliation]
+   └─► post('BANK_RECON', recon_id) for matched lines
+        Dr/Cr 1100 vs 1200 (eliminate timing diff)
+
+[AssetDepreciation]
+   └─► post('DEPRECIATION', schedule_id)
+        Dr 6xxx Depreciation Expense
+        Cr 1701 Accumulated Depreciation
+```
+
 ### 10. People (HR & payroll)
 > **Who works here, what they earn, how it's calculated & deducted, and are they present** — the leader must see all of it at a glance.
 - ⬜ **Employee master** — PF/staff number, personal + next‑of‑kin, contract type, grade/step, department/branch, bank/MoMo, **RSSB number**, TIN, salary structure (base + allowances), start date, reporting line.
@@ -196,6 +265,205 @@ what's shipped. Status marks each line.
 - ⬜ **HR documents** — contract, offer letter, payslip, leave approval, warning/disciplinary letter, training/competency certificate, clearance, certificate of service, ID/licence copies (in the document vault, retention‑policied).
 - ⬜ **Self‑service & reporting** — employee portal (payslip/leave/attendance), org chart, headcount/turnover/attendance/leave‑liability reports.
 - ⬜ **External HR touchpoints** — RSSB (registration, contribution filing), RRA (PAYE), NPC (pharmacist registration), labour‑law compliance.
+
+#### 10.1 People — Design (global)
+
+**Architecture:** Django app `apps/hr/` over the shared PostgreSQL. The **payroll engine is a pure function**: `payroll(employee_inputs × StatutoryRate effective on period_end) → Payslip`. Reproducible, re‑runnable, auditable. Rwanda compliance is **data, not code** — versioned, effective‑dated `StatutoryRate` rows; the engine never hardcodes bands or rates.
+
+**Core entities:**
+`Employee` (with `pf_number` as the cross‑system key), `EmploymentContract`, `SalaryStructure`, `SalaryComponent` (`code ∈ {basic, housing, transport, responsibility, other, contributory_to_pension}`, `flag`), `SalaryRevision`, `StatutoryRate` (see §C), `AttendanceLog`, `Timesheet`, `Shift`, `ShiftRoster`, `RosterAssignment` (with `coverage_role` for credential checks), `LeaveType`, `LeaveBalance`, `LeaveRequest`, `LeaveAccrual`, `LoanAdvance`, `LoanInstallment`, `PayrollRun`, `Payslip`, `PayslipLine` (itemised gross/deductions/net/employer_cost), `PayrollAdjustment` (retro/arrears), `StatutoryFiling`, `ProfessionalLicence`, `CPDRecord`, `TrainingRecord`, `CompetencyAssessment`, `DisciplinaryAction`, `PerformanceReview`, `EmployeeDocument`.
+
+**Payroll run lifecycle:**
+`Draft  →  Calculated  →  Approved (no self‑approval)  →  Paid (bank/MoMo file generated)  →  Locked (immutable)`. Locks freeze attendance, leave balances, loan schedules, and `StatutoryRate` resolution for the period; any later change requires a **payroll adjustment** in a future run.
+
+**Cross‑system permissions on employees:** an employee cannot be terminated while an open payroll run references them; a run cannot be approved until all timesheets are approved; statutory filing cannot be marked filed unless the underlying GL sub‑ledger balance ties out.
+
+**Pages:** Dashboard (headcount, today's attendance, pending approvals, payroll due, licence expiries, training compliance %), Employees (list/detail/contracts/documents/salary history), Attendance (live clock feed, exceptions, corrections), Shifts/Roster (week view, publish, swaps, credential check), Leave (calendar/requests/balances), Payroll (Run list, Run detail, Register, Calculator, Approve, Payslips), Loans/Advances, Training & Licences (expiry heat‑map, CPD tracker), Reports (headcount, turnover, leave liability, payroll cost), Employee self‑service (payslips, leave requests, attendance view, profile).
+
+#### 10.2 People — Dataflows
+
+```
+[Biometric/PIN/PF device]
+   └─► POST /api/attendance/clock  → AttendanceLog
+                                       ↓
+[Roster published]
+   + Timesheet auto‑build (worked/overtime/late)  → Manager approves
+                                                       ↓
+[Leave approved]      ──┐
+[Loan installment due] ──┤
+                       ├─►  PayrollRun.Calculated (per employee)
+[StatutoryRate resolved]│      payslips = pure fn(employee_inputs × rate)
+[Salary revision freeze]│
+                       │
+[Manager / Finance / Director review & approve]  ──►  PayrollRun.Approved
+                                                       │
+                                                       ├─► Payslips published (employee self‑service)
+                                                       ├─► Net pay → Bank/MoMo file (idempotency key)
+                                                       ├─► PAYE + RSSB unified filing generated (due 15th next month)
+                                                       └─►► EVENT: PayrollRunApproved
+                                                                  │
+                                                                  └─►► Finance.JournalPostingService.post('PAYROLL', run_id)
+                                                                            (see §9.2)
+
+[StatutoryPaymentConfirmed (PAYE / RSSB paid)]
+   └─► EVENT: StatutoryPaid
+          └─► Finance clears 2200‑level payable accounts
+          └─► HR.StatutoryFiling.status = 'FILED_PAID'
+          └─► Audit log entry
+
+[Termination approved]
+   └─► HR computes Final Settlement (leave encash + pro‑rata + dues)
+   └─► Employee.user.is_active = False; de‑provision login
+   └─► Finance posts termination accrual (if any) + Schedule of service document
+```
+
+#### 10.3 Gross‑to‑Net formula (Rwanda, versioned by `StatutoryRate`)
+
+```
+gross = basic + housing + transport + responsibility + other
+      + overtime_pay + shift_premium + bonus − unpaid_leave_deduction
+
+paye  = marginal_tax(gross − non_taxable, PAYE_BAND)        # 0/10/20/30% bands
+
+rssb_pension_ee = gross_incl_transport × RSSB_PENSION_EE    # 6% (2025)
+maternity_ee    = (gross − transport)      × RSSB_MATERNITY_EE   # 0.3%
+cbhi_ee         = (gross − paye − rssb_pension − maternity)
+                                                  × CBHI_EE  # 0.5% on net
+rssb_pension_er = gross_incl_transport × RSSB_PENSION_ER    # 6%
+maternity_er    = (gross − transport)      × RSSB_MATERNITY_ER   # 0.3%
+occ_hazards_er  = gross                    × OCC_HAZ_ER     # 2%
+rama_ee, rama_er (if opted in)              × RAMA_EE / RAMA_ER  # 7.5%+7.5% on basic
+
+net = gross − paye − rssb_pension_ee − maternity_ee − cbhi_ee − other_deductions
+```
+
+The Labour Code (Law N° 66/2018, Art. 70) governs pay periods (daily/weekly/fortnightly/monthly). For formal‑sector monthly employees the **15th of the following month** is the practical deadline driven by PAYE/RSSB remittance rather than a calendar day stated in the Code (the 2009 7‑working‑day rule was removed in 2018). Statutory filing deadlines (PAYE / RSSB monthly: 15th; PIT annual: 31 March) are encoded on `StatutoryFiling.due_date` and surface on the Statutory Due dashboard.
+
+### Cross‑cutting engines (added — referenced by HR + Finance + every subsystem)
+
+These are first‑class subsystems that didn't previously exist as named sections. They are the backbone that the People (HR) and Finance subsystems — and every other sensitive action — depend on. See the original §A Approvals engine block below for the spec of (A).
+
+#### C. Statutory rates engine (Rwanda‑first, versioned)
+
+A single, **effective‑dated** table that owns every rate the system uses to compute or report compliance. Rwanda compliance is **data, not code** — so a new Finance Law, a phased pension rise, or an RSSB bulletin changes one row, not a code deploy.
+
+- **Entity:** `StatutoryRate(code, valid_from, valid_to, params JSONB, source_url, published_by, status)`
+- **Codes (seeded; expand as needed):**
+  - `PAYE_BAND` — `params.bands = [[60000, 0.00], [100000, 0.10], [200000, 0.20], [null, 0.30]]`
+  - `RSSB_PENSION_EE`, `RSSB_PENSION_ER`, `RSSB_PENSION_BASE` (gross_incl_transport)
+  - `RSSB_MATERNITY_EE`, `RSSB_MATERNITY_ER`, `RSSB_MATERNITY_BASE` (gross_excl_transport)
+  - `OCC_HAZARDS_ER`, `OCC_HAZARDS_BASE` (gross)
+  - `CBHI_EE`, `CBHI_BASE` (net_after_paye_rssb_maternity)
+  - `RAMA_EE`, `RAMA_ER`, `RAMA_BASE` (basic), `RAMA_MIN_HEADCOUNT` (7)
+  - `VAT_CLASS_B` (0.18), `WHT_RATES`, `EBM_PROVIDER`
+- **Resolution rule:** `(code, period_end_date)` → row where `valid_from ≤ period_end < valid_to`. The payroll engine, the statutory filing generator, and the Finance tax sub‑ledger all read from this resolver.
+- **Auditability:** every published row stores `source_url` (RRA / RSSB / Official Gazette) and `published_by`. Publishing a new rate requires approval (Finance manager + Director).
+- **Seed data (Rwanda 2025/26):** PAYE bands from Organic Law N° 026/2024 (effective fiscal year 2025); pension 6%+6% with scheduled rises in 2027/2028/2029/2030 (Presidential Order N° 086/01, gazetted 13 Dec 2024); maternity 0.3%+0.3% (Law N° 003/2016 amended by Law N° 049/2024); CBHI 0.5% on net (Prime Minister's Order N° 034/01 of 13/01/2020); occupational hazards 2% ER (Law N° 13/2009); RAMA 7.5%+7.5% on basic; VAT 18% class B.
+- **Source‑of‑truth UI:** Admin → Statutory Rates (timeline view, diff between consecutive rows, "Publish rate" wizard that requires a source URL).
+
+#### D. Domain event bus (the integration backbone)
+
+A thin in‑process pub/sub with a Django Signals core and an outbox table for reliable cross‑subsystem delivery. Every money‑ or compliance‑relevant action publishes a domain event; consumers in HR, Finance, Distribution, Documents, Reporting subscribe.
+
+- **Entity:** `OutboxEvent(id, event_type, payload JSONB, occurred_at, status [pending/published/failed], retries)`
+- **Pattern:** producers `transaction.on_commit(lambda: outbox.publish(...))`; consumers register `subscribe(event_type, handler)`; a worker dispatches pending events, retries with backoff, marks published.
+- **First‑class events (seeded; new ones added per subsystem):**
+  - `SaleFinalised`, `SaleReturned`, `EBMReceiptIssued`
+  - `PurchaseOrderApproved`, `GoodsReceivedNotePosted`, `SupplierBillApproved`
+  - `InventoryAdjusted`, `BatchQuarantined`, `BatchRecalled`, `StockDisposed`
+  - `EmployeeHired`, `EmployeeTerminated`, `TimesheetApproved`, `PayrollRunApproved`, `PayslipPublished`, `StatutoryFilingGenerated`, `StatutoryPaymentConfirmed`
+  - `CustomerInvoiceIssued`, `PaymentReceived`, `PaymentMade`, `CreditLimitChanged`, `CreditHoldEngaged`
+  - `FiscalPeriodOpened`, `FiscalPeriodClosed`, `PeriodReopened`, `EODCloseFinalised`, `EOMCloseFinalised`
+  - `ApprovalRequested`, `ApprovalClaimed`, `ApprovalGranted`, `ApprovalRejected`, `ApprovalEscalated`, `ApprovalSLABreached`
+- **Idempotency:** consumers must be idempotent on `(event_type, source_doc_id, source_line_id)`. The outbox guarantees at‑least‑once delivery; consumers tolerate duplicates.
+- **Why:** removes tight Django imports between apps, makes HR ↔ Finance ↔ Distribution integration testable in isolation, gives Finance a reliable stream to post journals from, and gives Reporting a real‑time feed.
+
+#### E. Numbers, periods & opening balances (cross‑cutting infrastructure)
+
+Previously scattered; now first‑class.
+
+- `NumberSequence` — per‑tenant, per‑type (Invoice/PO/GRN/Payroll/Journal/Document). Gapless, monotonic, transactional; the document engine calls `next_number(tenant, 'INVOICE')` under `SELECT … FOR UPDATE`.
+- `FiscalPeriod` — calendar (month) + custom (4‑4‑5 retail). `Open → SoftClosed → HardClosed`. Reopening requires approval + audit reason.
+- `OpeningBalance` — opening stock (batches + qty + valuation), opening AR/AP (with aging preserved), opening GL trial balance, opening employee/leave balances. Migration wizard validates that the sum ties out before committing.
+- `TenantSettings` (already partially via Admin) — `costing_method ∈ {wac, fefo_lot}`, `currency`, `fx_provider`, `default_country='RW'`, `pay_period ∈ {monthly, fortnightly, weekly}`, `statutory_remittance_day=15`, `pit_filing_deadline_month=3, day=31`.
+
+### Subsystem integration & event flows (People ↔ Finance ↔ the rest)
+
+The single source of integration truth — read this when implementing or reviewing any cross‑app change.
+
+```
+                        ┌──────────────────────────────────────────┐
+                        │          OutboxEvent / Domain Bus        │
+                        │  (Django Signals + outbox table, §D)     │
+                        └──────────────────────────────────────────┘
+                                    ▲      ▲      ▲      ▲
+                                    │      │      │      │
+                  People(HR)        │      │      │      │     Finance
+                  ──────────        │      │      │      │     ────────
+                  PayrollRunApproved─►    │      │      │
+                  StatutoryFilingGen──►    │      │      │
+                  StatutoryPaymentCnf─►   │      │      │
+                  EmployeeHired ──────────►│      │      │
+                  EmployeeTerminated ─────►│      │      │
+                                            │      │      │
+                  Inventory                │      │      │
+                  ──────────               │      │      │
+                  BatchQuarantined ─────────►│      │      │
+                  StockDisposed ────────────►│      │      │
+                  InventoryAdjusted ────────►│      │      │
+                                            │      │      │
+                  Distribution              │      │      │
+                  ─────────────             │      │      │
+                  PurchaseOrderApproved ─────►│      │      │
+                  GoodsReceivedNotePosted ──►│      │      │
+                                            │      │      │
+                  Retail                    │      │      │
+                  ──────                    │      │      │
+                  SaleFinalised ─────────────►│      │      │
+                  PaymentReceived ───────────►│      │      │
+                  PaymentMade ───────────────►│      │      │
+                                            │      │      │
+                                            ▼      ▼      ▼
+                                  ┌──────────────────────────┐
+                                  │ Finance JournalPostingSvc│
+                                  │   (idempotent on src_doc) │
+                                  └──────────────────────────┘
+                                            │
+                                            ▼
+                                  ChartOfAccounts (1000‑7000)
+                                  Statutory sub‑ledgers (2200‑level)
+                                  PeriodClose → Reports
+```
+
+**Key end‑to‑end flows (numbered for traceability):**
+
+1. **Payroll → GL → Statutory payment**
+   `PayrollRunApproved` → `post('PAYROLL')` (Dr Salaries/ER costs, Cr PAYE/RSSB/CBHI/Occ‑Hazards/Cash) → `StatutoryFilingGenerated` (due 15th) → on pay‑day `StatutoryPaymentConfirmed` → `post('STATUTORY_PAYMENT')` (Dr payable, Cr Bank).
+
+2. **Sale → GL → EBM**
+   `SaleFinalised` → `post('SALE')` (Dr Cash/MoMo/AR, Cr Sales + VAT) → COGS posting (Dr COGS, Cr Inventory at lot cost) → async `EBMReceiptIssued` → `EBMReceipt` stored with SDC signature + QR.
+
+3. **Supplier goods receipt → 3‑way match → GL**
+   `GoodsReceivedNotePosted` → when matching `SupplierBillApproved` → `post('PURCHASE')` (Dr Inventory/Expense + VAT Input, Cr AP). Variance → approval engine.
+
+4. **Inventory adjustment / disposal → GL**
+   `InventoryAdjusted` / `StockDisposed` → `post('INVENTORY_ADJ')` (Dr Shrinkage / Write‑off, Cr Inventory). Always approval‑gated.
+
+5. **Credit control**
+   `CustomerInvoiceIssued` → updates `CreditProfile.outstanding`; if `> credit_limit` or `> terms.days_overdue` → `CreditHoldEngaged` → Distribution rejects new orders for that customer.
+
+6. **Period close**
+   `EODCloseFinalised` → trial balance snapshot. `FiscalPeriodClosed` (EOM) → P&L/BS/CF reports generated; HQ consolidation runs elimination entries for inter‑branch transactions.
+
+7. **Approval lifecycle** (used by every flow above)
+   `ApprovalRequested → ApprovalClaimed (lock) → ApprovalGranted | ApprovalRejected`. SLA timer auto‑escalates per the [approval rules](docs/02-architecture.md); no self‑approval; supervisor‑of / senior oversight (see [approvals block](#a-approvals-engine-the-reusable-authorisation-backbone)).
+
+**Validation invariants (cross‑system integrity):**
+- A payroll run cannot be approved while any timesheet is pending.
+- A statutory filing cannot be marked `FILED_PAID` unless the GL sub‑ledger balance equals the filing amount.
+- An employee cannot be terminated while referenced by an open payroll run.
+- A `FiscalPeriod` in `HardClosed` rejects all postings except reversal entries (audit‑recorded).
+- A `CreditProfile.on_hold = True` blocks new B2B orders in Distribution.
 
 ### 11. Connect (workspace & communication)
 - ✅ Contextual comments + @mentions, **operational notifications** (order lifecycle, payments) + **daily alert scheduler** (expiry/expired/low‑stock/overdue), notification centre (bell).
@@ -355,12 +623,14 @@ The first‑class records the whole platform hangs on. Missing ones are gaps to 
 - ⬜ **DrugInteraction / Contraindication / AllergyClass / DuplicateTherapyGroup** — the DUR knowledge base the safety review runs against.
 - ⬜ **StorageZone / Bin / TemperatureLog** — warehouse structure + cold‑chain.
 - ⬜ **InsuranceProvider / Policy / Claim / EOB‑EOP**.
-- ⬜ **Employee (PF/staff no.) / Contract / SalaryStructure / Licence / Shift‑Roster / Attendance‑Timesheet / LeaveRequest / PayrollRun / Payslip / LoanAdvance / TrainingRecord / Competency**.
+- ⬜ **Employee (PF/staff no.) / EmploymentContract / SalaryStructure / SalaryComponent / SalaryRevision / AttendanceLog / Timesheet / Shift / ShiftRoster / RosterAssignment / LeaveType / LeaveBalance / LeaveRequest / LeaveAccrual / LoanAdvance / LoanInstallment / PayrollRun / Payslip / PayslipLine / PayrollAdjustment / StatutoryFiling / ProfessionalLicence / CPDRecord / TrainingRecord / CompetencyAssessment / DisciplinaryAction / PerformanceReview** — the full People model.
 - ⬜ **PurchaseOrder / SupplierInvoice / LandedCost**.
-- ⬜ **Account / Journal / JournalLine / TaxRecord / BankAccount / FiscalReceipt (EBM) / CreditProfile (application, limit, terms, hold) / Statement**.
-- ⬜ **ApprovalRequest / ApprovalStep / ApprovalDecision** (approval engine).
+- ⬜ **ChartOfAccounts / FiscalPeriod / PeriodClose / JournalEntry / JournalLine / JournalSource / CustomerInvoice / SupplierInvoice / InvoiceLine / Payment / PaymentAllocation / BankAccount / BankStatement / BankReconciliation / MoMoTransaction / TaxRecord (VAT / PAYE / WHT) / EBMReceipt / FixedAsset / DepreciationSchedule / Budget / CostCenter** — the full Finance model.
+- ⬜ **CreditProfile** (application, scoring, limit, terms, hold), **DunningNotice**, **StatementOfAccount**, **WriteOff** — AR + credit control.
+- ⬜ **ApprovalRequest / ApprovalStep / ApprovalDecision / ApprovalDelegation / ApprovalSLATimer** (approval engine — see §A; first‑class data so the inbox is queryable).
+- ⬜ **OutboxEvent / EventSubscription** — domain event bus (§D). First‑class so it survives a worker restart and is auditable.
+- ⬜ **StatutoryRate** (versioned, effective‑dated) — PAYE bands, RSSB pension EE/ER, maternity EE/ER, CBHI EE, occupational hazards ER, RAMA EE/ER, VAT, WHT, EBM provider — with `source_url` + `published_by` (§C).
 - ⬜ **OrganizationDocument / UserDocument / EmployeeDocument** (+ Rwanda required sets).
-- ⬜ **StatutoryRate** (versioned, effective‑dated) — PAYE/RSSB/CBHI/VAT.
 - ⬜ **ProductListing / Offer** — `offered_qty`, listing price, buffer, visibility scope, effective dates (on‑hand ≠ offered).
 - ⬜ **PriceScheme / DiscountTier / BonusScheme / Rebate / Chargeback** — the commercial‑engine levers; **CreditTerms / CreditLimit** per customer.
 - ⬜ **Claim / Deduction / Dispute** — receiving disputes, short‑pays, resolutions + evidence; **Complaint**; **DefectReport / AdverseEvent** (pharmacovigilance).
@@ -371,7 +641,7 @@ The first‑class records the whole platform hangs on. Missing ones are gaps to 
 - ⬜ **ClinicalService / ServiceAppointment / ServiceRecord** — billable pharmacy services.
 - ⬜ **Deviation / CAPA / ChangeControl / SelfInspection / RiskItem / CalibrationRecord** — QMS/GDP.
 - ⬜ **ExpenseClaim / Advance / Asset / Vehicle** — supporting modules.
-- ⬜ **OpeningBalance / NumberSequence / FiscalPeriod** — go‑live & configuration.
+- ⬜ **OpeningBalance / NumberSequence / FiscalPeriod / TenantSettings** — go‑live & configuration (costing method, pay period, statutory remittance day, FX provider).
 - ⬜ **ImpersonationSession / ActivityEvent / UserSession** — admin oversight, view‑as, activity & performance monitoring (on top of the immutable audit log).
 
 ---
@@ -553,8 +823,31 @@ Each phase makes one or more subsystems materially more complete, end‑to‑end
 - **Phase 5 — Procurement, imports, commercial engine & field sales** ⬜ — supplier POs, **import + landed‑cost**, goods receipt, supplier invoices (AP), 3‑way match; **buying tactics** (forward/deal buying, tenders, volume/framework contracts, rebates/chargebacks, gross‑to‑net); the **selling‑side trade engine** (offered‑quantity listing, price schemes/tiers, bonus/free‑goods, MOQ, payment terms), **field sales / route‑to‑market** (reps, van/pre‑sales, territories, commissions), **institutional/B2G + tenders**, and **receiving disputes/deductions + defect/complaint handling**. *(Closes the buy side and makes the depot's commercial game real.)*
 - **Phase 6 — Approvals engine + safety data + master data** ⬜ — the **central approvals inbox** (claim‑lock/SLA/escalation/senior oversight), **Customer/Patient + Prescriber + Prescription** entities, **drug interactions/contraindications/allergy** data, **permission matrix**. *(Unblocks safe dispensing, insurance, and every sensitive action.)*
 - **Phase 7 — Insurance, EBM & the notification pipeline** ⬜ — eligibility + co‑pay split at POS, claims + adjudication + reconciliation, **RRA EBM** fiscal receipts, rules‑based notifications + channels (incl. SMS).
-- **Phase 8 — Finance, credit & performance** ⬜ — chart of accounts, journals + auto‑posting, AP/**AR + customer‑credit management (limits/terms/holds/DSO/dunning)**, banking/MoMo, tax, EOD/EOM close, **investment/equity + performance cockpit (gross/net profit, ROI/GMROI)**, **HQ consolidated** books, finance documents & calculators, Insights report builder & multi‑branch dashboards.
-- **Phase 9 — People, payroll, training & SOP** ⬜ — employee master + **PF‑number login**, recruit→onboard→licences→**automated attendance/overtime/shifts/leave**→**gross→net payroll (PAYE/RSSB/CBHI + loans)**→**SOP + training + competency**→performance→offboard, HR documents, controlled‑drug assurance, self‑service portal.
+- **Phase 8 — Finance, credit & performance** ⬜ — sub‑phases, built in this order (see §9.1/9.2):
+  1. **Foundations** — CoA, FiscalPeriod, JournalEntry/Line, NumberSequence, **Domain Event Bus (OutboxEvent)**, StatutoryRates seed (Rwanda 2025/26), basic Reporting shell, period‑close primitives.
+  2. **Auto‑posting core** — `JournalPostingService` + per‑source `PostingHandler` (SALE/PURCHASE/INVENTORY_ADJ/PAYROLL/MANUAL/DEPRECIATION/STATUTORY_PAYMENT); idempotency; reversal entries.
+  3. **AR + credit** — CustomerInvoice, Receipt, allocation, **CreditProfile** (application → scoring → limit/terms → hold), aging + DSO, statements, **dunning ladder**, write‑off (approval‑gated).
+  4. **AP + payments** — SupplierInvoice, **3‑way match** (PO ↔ GRN ↔ Invoice), Payment runs, **MoMo disbursement** (mock first, real later), supplier statements, DPO.
+  5. **Banking** — BankAccount, statement import, **BankReconciliation**, payment matching; petty cash.
+  6. **Statutory schedules** — PAYE/RSSB/VAT/WHT schedules auto‑generated from journals; **Statutory Due** dashboard; payment of statutory bodies with file output (RRA/RSSB upload‑ready CSV/JSON).
+  7. **Inventory ↔ GL** — lot‑level costing (WAC or FEFO‑lot), COGS posting on SaleFinalised, revaluation, shrinkage/write‑off to GL.
+  8. **Period close + reports** — EOD/EOM, trial balance, **P&L / Balance Sheet / Cash Flow**, **HQ consolidation** (eliminations), Insights report builder + multi‑branch dashboards, role cockpits.
+  9. **Investment / equity + assets** — capital, drawings, retained earnings, FixedAsset register + depreciation schedule (straight‑line / reducing‑balance), performance cockpit (gross/net profit, **ROI / ROE / GMROI / DSO / DPO**).
+  10. **Finance documents** — invoices/credit notes/receipts/statements/remittance/vouchers/EOD‑EOM/PIT summary via the documents engine (tamper‑evident, retention‑policied).
+- **Phase 9 — People, payroll, training & SOP** ⬜ — sub‑phases, built in this order (see §10.1/10.2):
+  1. **Foundations** — Employee master (PF/staff no. as cross‑system key), EmploymentContract, SalaryStructure + Components + Revisions, EmployeeDocument, **StatutoryRates seed for HR** (already in Phase 8.1 — verify linkage), PF‑number login (already in Admin), professional licence tracking.
+  2. **Recruitment → onboarding** — requisitions, applicants, offer → contract, induction checklist, asset/equipment issue.
+  3. **Attendance** — AttendanceLog (biometric/PIN/PF/Mobile), Timesheet auto‑build, overtime/lateness/absence, manager approval.
+  4. **Shifts & rostering** — Shift patterns, Roster publish, **credential‑based scheduling** (no pharmacist on duty → block), shift swaps, coverage rules across branches.
+  5. **Leave** — types/balances/accrual, requests→approval, calendar, carry‑over, encashment feeds into PayrollRun.
+  6. **Payroll engine** — pure‑function `Payslip = f(employee_inputs × StatutoryRate(period_end))`; supports monthly/fortnightly/weekly/daily per Labour Code Art. 70; payslip PDF.
+  7. **Payroll run lifecycle** — Draft → Calculated → Approved (no self‑approval) → Paid (bank/MoMo file with idempotency key) → Locked (immutable); payroll register, proration for joiners/leavers, arrears/back‑pay via `PayrollAdjustment`, 13th‑cheque.
+  8. **Statutory filings** — PAYE monthly + RSSB unified (pension + maternity + CBHI + occ‑hazards + RAMA) + year‑end PIT schedule; auto‑generation, due dates, **filing tracker**, payments from Finance.
+  9. **Loans & advances** — loan application, amortization schedule, per‑month installment into payroll deductions, balance reporting.
+  10. **Performance + disciplinary + offboarding** — reviews, goals, warnings, salary revisions (history), termination with final settlement (leave encash + pro‑rata + dues), certificate of service, de‑provision login.
+  11. **Training & SOP** — SOP library, assign & acknowledge, TrainingRecord, **CompetencyAssessment** + periodic re‑checks, **controlled‑drug competency**, **CPD/CE hour logging + renewal alerts** for NPC/Rwanda FDA licences.
+  12. **HR documents & self‑service** — contract, offer, payslip, leave approval, warning, training/competency certificate, clearance, certificate of service via the documents engine; employee self‑service portal (payslips, leave requests, attendance, profile); org chart; HR reports (headcount, turnover, attendance, leave liability, payroll cost).
+  13. **HR ↔ Finance integration tests** — every People event (`PayrollRunApproved`, `StatutoryFilingGenerated`, `StatutoryPaymentConfirmed`, `EmployeeHired`, `EmployeeTerminated`) end‑to‑end through the outbox bus into Finance journals, with reconciliation checks.
 - **Phase 10 — Online, services & Connect (full)** ⬜ — patient **e‑commerce** + prescription upload + delivery/click‑&‑collect; **clinical/pharmacy services** (vaccination/testing/consults) + **appointment scheduling**; full **messaging, announcements, tasks, shift notes, knowledge base**, workspace tools (todo/calendar/calculators/templates).
 - **Phase 11 — Onboarding, hardening, certification & launch** ⬜ — **go‑live tooling** (tenant onboarding wizard, **opening balances**, data migration, number sequences/fiscal periods, reconciliation & hypercare); real EBM adapter + **RRA CIS certification**, real insurer/MoMo/SMS adapters, **Postgres RLS**, observability, backups + restore drill, a11y audit, load/e2e, data‑protection registration, **pilot** at one depot + one chain.
 

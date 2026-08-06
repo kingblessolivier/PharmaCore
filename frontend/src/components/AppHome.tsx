@@ -149,6 +149,16 @@ export function SectionCard({
 }
 
 /** Grid wrapper for a group of section cards. */
-export function SectionGrid({ children }: { children: ReactNode }) {
-  return <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{children}</div>;
+export function SectionGrid({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 ${className}`}>
+      {children}
+    </div>
+  );
 }

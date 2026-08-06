@@ -12,6 +12,10 @@ from apps.catalog.models import Product
 from apps.iam.models import Organization, User
 from apps.inventory.models import InventoryBatch, PharmacyProduct, StockMovement
 
+# Lazy import: finance.services imports retail.services already, so a top-level
+# import here would create a circular dependency when the inventory app loads
+# before finance (e.g. under a test runner that doesn't pre-load finance).
+
 
 @transaction.atomic
 def receive_intake(
@@ -102,14 +106,19 @@ def adjust_stock(
     batch.quantity_available = counted_quantity
     batch.save(update_fields=["quantity_available", "updated_at"])
     _movement(batch, StockMovement.Type.ADJUSTMENT, delta, reason, user)
+    # The GL leg is the caller's responsibility (StockCount.approve_count) —
+    # the cost stream needs quantity + reference together, which only the
+    # caller knows. Left as a comment here so future readers see the seam.
     return batch
 
 
 @transaction.atomic
 def log_wastage(
-    *, batch: InventoryBatch, quantity: int, reason: str = "", user: User | None = None
+    *, batch: InventoryBatch, quantity: int, reason: str = "", user: User | None = None,
+    reference_type: str = "wastage", reference_id: str = "",
 ) -> InventoryBatch:
-    """Remove expired/damaged stock from a batch (never below zero)."""
+    """Remove expired/damaged stock from a batch (never below zero). Auto-posts
+    the GL writeoff entry so the books move with the physical loss."""
     if quantity <= 0:
         raise ValueError("Wastage quantity must be positive.")
     if quantity > batch.quantity_available:
@@ -117,4 +126,15 @@ def log_wastage(
     batch.quantity_available -= quantity
     batch.save(update_fields=["quantity_available", "updated_at"])
     _movement(batch, StockMovement.Type.WASTAGE, -quantity, reason, user)
+    # Mirror the loss into the GL: Dr Inventory Adjustment / Cr Inventory.
+    from apps.finance.services import post_writeoff
+
+    post_writeoff(
+        batch=batch,
+        quantity=quantity,
+        reason=reason or "Wastage",
+        reference_type=reference_type,
+        reference_id=reference_id,
+        user=user,
+    )
     return batch

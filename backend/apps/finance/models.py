@@ -273,6 +273,12 @@ class SupplierBill(models.Model):
     bill_date = models.DateField()
     due_date = models.DateField(null=True, blank=True)
     total_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    # VAT-inclusive default for backwards compatibility. If vat_amount is set,
+    # the bill posts to the GL as: Dr Expense(net) + Dr VAT Input(vat_amount) /
+    # Cr AP(total_amount). If vat_amount is 0, the whole amount posts to Dr
+    # Expense / Cr AP (zero-rated supplier or non-VAT-able import).
+    vat_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    tax_class = models.CharField(max_length=4, blank=True, default="")
     amount_paid = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.UNPAID)
     reference_type = models.CharField(max_length=50, blank=True, default="")
@@ -317,3 +323,192 @@ class SupplierBillPayment(models.Model):
 
     def __str__(self) -> str:
         return f"{self.amount} for {self.bill}"
+
+
+class FixedAsset(models.Model):
+    """Fixed asset register & straight-line depreciation schedule. ROADMAP '9. Finance'."""
+
+    class Category(models.TextChoices):
+        EQUIPMENT = "EQUIPMENT", "Medical & Cold-Chain Equipment"
+        FURNITURE = "FURNITURE", "Pharmacy Furniture & Fixtures"
+        VEHICLE = "VEHICLE", "Delivery Vehicle"
+        IT_HARDWARE = "IT_HARDWARE", "IT & POS Hardware"
+        LEASEHOLD = "LEASEHOLD", "Leasehold Improvements"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="fixed_assets"
+    )
+    asset_number = models.CharField(max_length=30, unique=True)
+    name = models.CharField(max_length=150)
+    category = models.CharField(max_length=30, choices=Category.choices, default=Category.EQUIPMENT)
+    acquisition_date = models.DateField()
+    acquisition_cost = models.DecimalField(max_digits=14, decimal_places=2)
+    useful_life_years = models.PositiveIntegerField(default=5)
+    salvage_value = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    accumulated_depreciation = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-acquisition_date"]
+
+    def __str__(self) -> str:
+        return f"{self.asset_number} · {self.name}"
+
+    @property
+    def net_book_value(self) -> Decimal:
+        return self.acquisition_cost - self.accumulated_depreciation
+
+    @property
+    def annual_depreciation(self) -> Decimal:
+        if self.useful_life_years == 0:
+            return Decimal("0")
+        return (self.acquisition_cost - self.salvage_value) / Decimal(str(self.useful_life_years))
+
+
+class TaxRecord(models.Model):
+    """EBM Fiscalization & VAT audit trail record. ROADMAP '9. Finance'."""
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="tax_records"
+    )
+    receipt_number = models.CharField(max_length=50, unique=True)
+    sdc_id = models.CharField(max_length=50, blank=True, default="")
+    mrc_number = models.CharField(max_length=50, blank=True, default="")
+    taxable_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    vat_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    tax_class_a = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # Exempt
+    tax_class_b = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # 18% Standard VAT
+    tax_class_c = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # Zero Rated
+    qr_code_payload = models.TextField(blank=True, default="")
+    fiscalized_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fiscalized_at"]
+
+    def __str__(self) -> str:
+        return f"EBM-{self.receipt_number} ({self.vat_amount} VAT)"
+
+
+class Budget(models.Model):
+    """Departmental budget vs actual variance tracking. ROADMAP '9. Finance'."""
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="budgets"
+    )
+    department = models.ForeignKey(
+        "iam.Department", on_delete=models.CASCADE, related_name="budgets"
+    )
+    financial_year = models.PositiveIntegerField(default=2026)
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="budgets")
+    budgeted_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    actual_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["financial_year", "department"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "department", "financial_year", "account"],
+                name="uniq_budget_line",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"Budget FY{self.financial_year} · {self.department.name} · {self.account.code}"
+
+    @property
+    def variance(self) -> Decimal:
+        return self.budgeted_amount - self.actual_amount
+
+
+class TaxCode(models.Model):
+    """A Rwanda VAT tax class (A/B/C/D) with its effective-dated rate and an
+    optional withholding-tax flag. Versions are rows, not code: a new Finance
+    Law = one new row with effective_from set, never a migration.
+
+    Rwanda 2025:
+      A — Exempt (e.g. certain medical services)
+      B — Standard 18% (e.g. cosmetics, non-medical sundries)
+      C — Zero-rated (e.g. medicines, medical supplies)
+      D — Special handling (e.g. exported services)
+    """
+
+    class Class(models.TextChoices):
+        A = "A", "Class A — Exempt"
+        B = "B", "Class B — Standard 18%"
+        C = "C", "Class C — Zero-rated"
+        D = "D", "Class D — Special"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="tax_codes"
+    )
+    code = models.CharField(max_length=4, choices=Class.choices)
+    description = models.CharField(max_length=255, blank=True, default="")
+    rate_pct = models.DecimalField(max_digits=5, decimal_places=2)
+    withholding_pct = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0,
+        help_text="Withholding tax rate applied to this class (0 if not subject to WHT).",
+    )
+    effective_from = models.DateField()
+    effective_to = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    source_reference = models.CharField(
+        max_length=255, blank=True, default="",
+        help_text="RRA circular / Finance Law / Gazette reference that justifies the rate.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["code", "-effective_from"]
+        constraints = [
+            # A given code's effective-from dates must be unique per org — you
+            # can't have two "B @ 18%" both starting 2025-01-01.
+            models.UniqueConstraint(
+                fields=["organization", "code", "effective_from"],
+                name="uniq_tax_code_per_effective_from",
+            ),
+        ]
+        indexes = [models.Index(fields=["organization", "code", "effective_from"])]
+
+    def __str__(self) -> str:
+        span = f"{self.effective_from}" + (f"→{self.effective_to}" if self.effective_to else "→open")
+        return f"{self.code} {self.rate_pct}% ({span})"
+
+
+class TaxPayment(models.Model):
+    """A remittance to RRA — pays down the outstanding VAT Output / withholding
+    liability. Approval-gated because money leaves the bank."""
+
+    class Method(models.TextChoices):
+        BANK_TRANSFER = "BANK_TRANSFER", "Bank transfer"
+        MOBILE_MONEY = "MOBILE_MONEY", "Mobile money"
+        CHEQUE = "CHEQUE", "Cheque"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="tax_payments"
+    )
+    payment_number = models.CharField(max_length=30, blank=True, default="")
+    paid_on = models.DateField()
+    period_start = models.DateField()
+    period_end = models.DateField()
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    method = models.CharField(max_length=20, choices=Method.choices, default=Method.BANK_TRANSFER)
+    rra_reference = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="RRA e-Tax receipt / bank confirmation reference.",
+    )
+    notes = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        "iam.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-paid_on"]
+        indexes = [models.Index(fields=["organization", "paid_on"])]
+
+    def __str__(self) -> str:
+        return f"{self.payment_number or f'TAX#{self.pk}'} · {self.amount}"
+

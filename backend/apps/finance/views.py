@@ -21,18 +21,28 @@ from apps.finance.models import (
     Account,
     AccountingPeriod,
     BankAccount,
+    Budget,
     CreditProfile,
+    FixedAsset,
     JournalEntry,
     JournalLine,
     SupplierBill,
+    TaxCode,
+    TaxPayment,
+    TaxRecord,
 )
 from apps.finance.serializers import (
     AccountingPeriodSerializer,
     AccountSerializer,
     BankAccountSerializer,
+    BudgetSerializer,
     CreditProfileSerializer,
+    FixedAssetSerializer,
     JournalEntrySerializer,
     SupplierBillSerializer,
+    TaxCodeSerializer,
+    TaxPaymentSerializer,
+    TaxRecordSerializer,
 )
 from apps.finance.services import (
     cash_book_lines,
@@ -461,6 +471,22 @@ class FinanceReportsView(viewsets.ViewSet):
             raise ValidationError("No organizations are visible to you.")
         return Response(_money_safe(reports.consolidated(orgs, start=start, end=end)))
 
+    @action(detail=False, methods=["get"], url_path="inventory-valuation")
+    def inventory_valuation(self, request: Request) -> Response:
+        """Live on-hand × wholesale cost by product. Powers the inventory-
+        valuation statement tab and the Finance home KPI."""
+        org = _resolve_org(request, cast(User, request.user))
+        return Response(_money_safe(reports.inventory_valuation(org)))
+
+    @action(detail=False, methods=["get"], url_path="vat-return")
+    def vat_return(self, request: Request) -> Response:
+        """Rwanda VAT return draft for the period: per-class Output/Input,
+        withholding, net payable, paid in period, amount due, plus a CSV body
+        ready for the accountant to file via RRA e-Tax."""
+        org = _resolve_org(request, cast(User, request.user))
+        start, end = self._period(request)
+        return Response(_money_safe(reports.vat_return(org, start=start, end=end)))
+
 
 class AccountingPeriodViewSet(viewsets.ModelViewSet):
     """EOD/EOM/annual closeouts. Closing freezes the window against new postings."""
@@ -536,3 +562,91 @@ class CashFlowForecastView(viewsets.ViewSet):
         ):
             raise PermissionDenied("You may not view this organization's cash-flow forecast.")
         return Response(_money_safe(cash_flow_forecast(organization)))
+
+
+class FixedAssetViewSet(viewsets.ModelViewSet):
+    serializer_class = FixedAssetSerializer
+    queryset = FixedAsset.objects.select_related("organization")
+
+    def get_queryset(self) -> QuerySet[FixedAsset]:
+        user = cast(User, self.request.user)
+        qs = FixedAsset.objects.select_related("organization")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            qs = qs.filter(organization__in=organizations_visible_to(user))
+        return qs
+
+    def perform_create(self, serializer: BaseSerializer[Any]) -> None:
+        user = cast(User, self.request.user)
+        _require_finance_manage(user)
+        serializer.save()
+
+
+class TaxRecordViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = TaxRecordSerializer
+    queryset = TaxRecord.objects.select_related("organization")
+
+    def get_queryset(self) -> QuerySet[TaxRecord]:
+        user = cast(User, self.request.user)
+        qs = TaxRecord.objects.select_related("organization")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            qs = qs.filter(organization__in=organizations_visible_to(user))
+        return qs
+
+
+class TaxCodeViewSet(viewsets.ModelViewSet):
+    """Rwanda VAT tax codes (A/B/C/D). Versions are rows, not code: a new
+    Finance Law = one new row with effective_from set, never a migration."""
+
+    serializer_class = TaxCodeSerializer
+    queryset = TaxCode.objects.select_related("organization")
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_queryset(self) -> QuerySet[TaxCode]:
+        user = cast(User, self.request.user)
+        qs = TaxCode.objects.select_related("organization")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            qs = qs.filter(organization__in=organizations_visible_to(user))
+        return qs
+
+    def perform_create(self, serializer: BaseSerializer[Any]) -> None:
+        _require_finance_manage(cast(User, self.request.user))
+        serializer.save()
+
+    def perform_update(self, serializer: BaseSerializer[Any]) -> None:
+        _require_finance_manage(cast(User, self.request.user))
+        serializer.save()
+
+
+class TaxPaymentViewSet(viewsets.ModelViewSet):
+    """Register of RRA remittances. Direct write is admin-only (rare); the
+    normal path is ``request_tax_payment`` which routes via the approvals
+    inbox (no self-approval)."""
+
+    serializer_class = TaxPaymentSerializer
+    queryset = TaxPayment.objects.select_related("organization")
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self) -> QuerySet[TaxPayment]:
+        user = cast(User, self.request.user)
+        qs = TaxPayment.objects.select_related("organization")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            qs = qs.filter(organization__in=organizations_visible_to(user))
+        return qs
+
+
+class BudgetViewSet(viewsets.ModelViewSet):
+    serializer_class = BudgetSerializer
+    queryset = Budget.objects.select_related("organization", "department", "account")
+
+    def get_queryset(self) -> QuerySet[Budget]:
+        user = cast(User, self.request.user)
+        qs = Budget.objects.select_related("organization", "department", "account")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            qs = qs.filter(organization__in=organizations_visible_to(user))
+        return qs
+
+    def perform_create(self, serializer: BaseSerializer[Any]) -> None:
+        user = cast(User, self.request.user)
+        _require_finance_manage(user)
+        serializer.save()
+

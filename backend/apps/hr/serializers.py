@@ -4,7 +4,16 @@ from typing import Any
 
 from rest_framework import serializers
 
-from apps.hr.models import Employee, EmployeeDocument, PayrollRecord, PayrollRun, StatutoryRate
+from apps.hr.models import (
+    AttendanceLog,
+    Employee,
+    EmployeeDocument,
+    LeaveRequest,
+    PayrollRecord,
+    PayrollRun,
+    ShiftRoster,
+    StatutoryRate,
+)
 from apps.hr.services import allocate_employee_number
 
 
@@ -49,6 +58,15 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "bank_account",
             "momo_number",
             "rssb_number",
+            "tin",
+            "pay_group",
+            "pay_frequency",
+            "gender",
+            "dob",
+            "photo",
+            "probation_end",
+            "contract_end",
+            "supervisor",
             "license",
             "license_number",
             "next_of_kin_name",
@@ -156,3 +174,68 @@ class PayrollRunSerializer(serializers.ModelSerializer):
 
     def get_total_net_pay(self, obj: PayrollRun) -> str:
         return str(sum((r.net_pay for r in obj.records.all()), 0))
+
+
+class AttendanceLogSerializer(serializers.ModelSerializer):
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    employee_number = serializers.CharField(source="employee.employee_number", read_only=True)
+
+    class Meta:
+        model = AttendanceLog
+        fields = [
+            "id",
+            "employee",
+            "employee_name",
+            "employee_number",
+            "date",
+            "clock_in",
+            "clock_out",
+            "overtime_hours",
+            "status",
+            "notes",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+
+class ShiftRosterSerializer(serializers.ModelSerializer):
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+
+    class Meta:
+        model = ShiftRoster
+        fields = [
+            "id",
+            "organization",
+            "organization_name",
+            "employee",
+            "employee_name",
+            "date",
+            "shift_type",
+            "requires_pharmacist_license",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+
+class LeaveRequestSerializer(serializers.ModelSerializer):
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    approved_by_name = serializers.CharField(source="approved_by.username", read_only=True, default=None)
+
+    class Meta:
+        model = LeaveRequest
+        fields = [
+            "id",
+            "employee",
+            "employee_name",
+            "leave_type",
+            "start_date",
+            "end_date",
+            "days_count",
+            "status",
+            "reason",
+            "approved_by",
+            "approved_by_name",
+            "created_at",
+        ]
+        read_only_fields = ["id", "status", "approved_by", "created_at"]
