@@ -4,6 +4,7 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
+from apps.iam.authentication import VersionedTokenRefreshSerializer
 from apps.iam.views import (
     AuditLogViewSet,
     ChangePasswordView,
@@ -38,7 +39,11 @@ router.register("audit-logs", AuditLogViewSet, basename="audit-log")
 
 urlpatterns = [
     path("auth/login", LoginView.as_view(), name="login"),
-    path("auth/refresh", TokenRefreshView.as_view(), name="token-refresh"),
+    path(
+        "auth/refresh",
+        TokenRefreshView.as_view(serializer_class=VersionedTokenRefreshSerializer),
+        name="token-refresh",
+    ),
     path("auth/me", MeView.as_view(), name="me"),
     path("auth/change-password", ChangePasswordView.as_view(), name="change-password"),
     path("auth/impersonate", ImpersonateView.as_view(), name="impersonate"),

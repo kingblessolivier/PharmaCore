@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, BadgeCheck, Eye, FileText, KeyRound, Plus, Trash2 } from "lucide-react";
+import { Activity, BadgeCheck, Eye, FileText, KeyRound, LogOut, Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
@@ -15,6 +15,7 @@ import type {
 import {
   Badge,
   Button,
+  ConfirmModal,
   Modal,
   PageHeader,
   SelectField,
@@ -393,6 +394,7 @@ export function UsersPage() {
   const [activityFor, setActivityFor] = useState<number | null>(null);
   const [docsFor, setDocsFor] = useState<UserAdmin | null>(null);
   const [resetFor, setResetFor] = useState<UserAdmin | null>(null);
+  const [logoutFor, setLogoutFor] = useState<UserAdmin | null>(null);
   const [busyViewAs, setBusyViewAs] = useState<number | null>(null);
 
   const users = useQuery({
@@ -414,6 +416,11 @@ export function UsersPage() {
         body: JSON.stringify({ is_active: !u.is_active }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["all-users"] }),
+  });
+  const forceLogout = useMutation({
+    mutationFn: (id: number) =>
+      api<{ detail: string }>(`/api/users/${id}/force-logout/`, { method: "POST" }),
+    onSuccess: () => setLogoutFor(null),
   });
 
   async function viewAs(u: UserAdmin) {
@@ -510,6 +517,14 @@ export function UsersPage() {
                       <Button variant="secondary" onClick={() => toggleActive.mutate(u)}>
                         {u.is_active ? "Suspend" : "Activate"}
                       </Button>
+                      <button
+                        onClick={() => setLogoutFor(u)}
+                        className="rounded-md p-1.5 text-ink-500 hover:bg-amber-50 hover:text-amber-700"
+                        aria-label={`Force logout ${u.username}`}
+                        title="End all this user's sessions"
+                      >
+                        <LogOut className="h-4 w-4" />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -546,6 +561,16 @@ export function UsersPage() {
           userId={resetFor.id}
           username={resetFor.username}
           onClose={() => setResetFor(null)}
+        />
+      )}
+      {logoutFor && (
+        <ConfirmModal
+          title="Force logout"
+          message={`End all active sessions for "${logoutFor.username}"? Their current tokens stop working immediately and they must sign in again.`}
+          confirmLabel="End sessions"
+          busy={forceLogout.isPending}
+          onConfirm={() => forceLogout.mutate(logoutFor.id)}
+          onClose={() => setLogoutFor(null)}
         />
       )}
     </div>

@@ -18,6 +18,11 @@ Maintenance rules:
 ## [Unreleased]
 
 ### Added
+- **Force-logout / session revocation (Admin).** An admin can end all of a user's
+  sessions instantly — a token-version stamped on every JWT is bumped, so all their
+  outstanding access **and** refresh tokens are rejected at once (audited); a
+  **Force logout** action was added to the Users page. Tokens issued before the
+  feature are grandfathered until they expire.
 - **Admin oversight analytics.** The audit-log explorer gains a **per-branch filter**
   and a **CSV export** (respecting the active filters), plus **per-user and per-branch
   performance** endpoints (sales rung, items dispensed, returns, voids, logins; branch

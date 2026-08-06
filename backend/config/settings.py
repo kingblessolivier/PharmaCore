@@ -140,7 +140,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # --- Django REST Framework ---
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        # Token-version aware JWT auth so an admin can force-logout a user.
+        "apps.iam.authentication.VersionedJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
