@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Card, PageHeader, Spinner } from "../components/ui";
+import { PageHeader } from "../components/ui";
+import { DataGrid } from "../components/DataGrid";
 import { api } from "../lib/api";
 import type { InTransitStock, Paginated } from "../lib/types";
 
@@ -27,51 +28,42 @@ export function InTransitPage() {
         Real-time tracking of medicine batches currently en-route on delivery trucks between wholesale depots and retail pharmacies.
       </p>
 
-      {inTransitQuery.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
-
-      {inTransitQuery.data && (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-3">Medicine Product</th>
-                <th className="px-4 py-3">Batch Number</th>
-                <th className="px-4 py-3">Origin Depot</th>
-                <th className="px-4 py-3">Destination Branch</th>
-                <th className="px-4 py-3 text-right">Quantity</th>
-                <th className="px-4 py-3">Dispatch Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              {inTransitQuery.data.results.map((t) => (
-                <tr key={t.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                  <td className="px-4 py-3 font-semibold text-ink-900">{t.product_name}</td>
-                  <td className="px-4 py-3 font-mono text-ink-700">{t.batch_number}</td>
-                  <td className="px-4 py-3 text-ink-900">{t.source_name}</td>
-                  <td className="px-4 py-3 text-ink-900">{t.destination_name}</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-ink-900">
-                    {t.quantity.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 text-ink-700">
-                    {new Date(t.dispatched_at).toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-              {inTransitQuery.data.results.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-ink-500">
-                    No active stock currently in transit.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      <DataGrid<InTransitStock>
+        rows={inTransitQuery.data?.results ?? []}
+        loading={inTransitQuery.isLoading}
+        getRowId={(t) => t.id}
+        storageKey="in-transit"
+        exportName="in-transit-stock"
+        searchPlaceholder="Search by medicine, batch, depot or branch…"
+        emptyMessage="No active stock currently in transit."
+        columns={[
+          {
+            key: "product_name",
+            header: "Medicine Product",
+            render: (t) => <span className="font-semibold text-ink-900">{t.product_name}</span>,
+          },
+          {
+            key: "batch_number",
+            header: "Batch Number",
+            render: (t) => <span className="font-mono text-ink-700">{t.batch_number}</span>,
+          },
+          { key: "source_name", header: "Origin Depot" },
+          { key: "destination_name", header: "Destination Branch" },
+          {
+            key: "quantity",
+            header: "Quantity",
+            align: "right",
+            numeric: true,
+            render: (t) => <span className="font-semibold">{t.quantity.toLocaleString()}</span>,
+          },
+          {
+            key: "dispatched_at",
+            header: "Dispatch Time",
+            value: (t) => t.dispatched_at,
+            render: (t) => new Date(t.dispatched_at).toLocaleString(),
+          },
+        ]}
+      />
     </div>
   );
 }
