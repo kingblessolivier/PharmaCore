@@ -554,6 +554,8 @@ export interface Account {
   parent: number | null;
   is_system: boolean;
   is_active: boolean;
+  /** Current balance, signed so the account's own normal side reads positive. */
+  balance: string;
   created_at: string;
   updated_at: string;
 }

@@ -17,6 +17,12 @@ from apps.finance.models import (
 
 
 class AccountSerializer(serializers.ModelSerializer):
+    """A chart-of-accounts line, with its current balance — signed so the account's
+    own normal side (debit or credit) always reads as a positive number, the way
+    every real chart of accounts presents it."""
+
+    balance = serializers.SerializerMethodField()
+
     class Meta:
         model = Account
         fields = [
@@ -29,10 +35,32 @@ class AccountSerializer(serializers.ModelSerializer):
             "parent",
             "is_system",
             "is_active",
+            "balance",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "is_system", "created_at", "updated_at"]
+
+    def get_balance(self, obj: Account) -> str:
+        # AccountViewSet.get_queryset() annotates these to avoid N+1; fall back to a
+        # direct aggregate for any Account instance reached another way.
+        debit_total = getattr(obj, "_debit_total", None)
+        credit_total = getattr(obj, "_credit_total", None)
+        if debit_total is None or credit_total is None:
+            from django.db.models import Sum
+
+            debit_total = obj.lines.filter(side=JournalLine.Side.DEBIT).aggregate(t=Sum("amount"))[
+                "t"
+            ] or Decimal("0")
+            credit_total = obj.lines.filter(side=JournalLine.Side.CREDIT).aggregate(
+                t=Sum("amount")
+            )["t"] or Decimal("0")
+        signed = (
+            debit_total - credit_total
+            if obj.normal_balance == Account.Balance.DEBIT
+            else credit_total - debit_total
+        )
+        return str(signed)
 
 
 class JournalLineSerializer(serializers.ModelSerializer):

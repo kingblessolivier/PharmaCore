@@ -5,7 +5,8 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import cast
 
-from django.db.models import Q, QuerySet
+from django.db.models import Case, DecimalField, Q, QuerySet, Sum, When
+from django.db.models.functions import Coalesce
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -13,7 +14,14 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 
-from apps.finance.models import Account, BankAccount, CreditProfile, JournalEntry, SupplierBill
+from apps.finance.models import (
+    Account,
+    BankAccount,
+    CreditProfile,
+    JournalEntry,
+    JournalLine,
+    SupplierBill,
+)
 from apps.finance.serializers import (
     AccountSerializer,
     BankAccountSerializer,
@@ -40,6 +48,36 @@ def _require_finance_manage(user: User) -> None:
         raise PermissionDenied("You may not manage finance records.")
 
 
+def _with_balances(qs: QuerySet[Account]) -> QuerySet[Account]:
+    """Annotate each account with its total debit/credit turnover in one query,
+    so AccountSerializer.get_balance() never has to hit the DB per row."""
+    money: DecimalField = DecimalField(max_digits=14, decimal_places=2)
+    return qs.annotate(
+        _debit_total=Coalesce(
+            Sum(
+                Case(
+                    When(lines__side=JournalLine.Side.DEBIT, then="lines__amount"),
+                    output_field=money,
+                )
+            ),
+            0,
+            output_field=money,
+        ),
+        _credit_total=Coalesce(
+            Sum(
+                Case(
+                    When(lines__side=JournalLine.Side.CREDIT, then="lines__amount"),
+                    output_field=money,
+                )
+            ),
+            0,
+            output_field=money,
+        ),
+        # The aggregate's GROUP BY drops Meta.ordering, which would make pagination
+        # non-deterministic — restore it explicitly.
+    ).order_by("code")
+
+
 class AccountViewSet(viewsets.ModelViewSet):
     serializer_class = AccountSerializer
     queryset = Account.objects.select_related("organization", "parent")
@@ -53,7 +91,7 @@ class AccountViewSet(viewsets.ModelViewSet):
         org_param = self.request.query_params.get("organization")
         if org_param and org_param.isdigit():
             qs = qs.filter(organization_id=int(org_param))
-        return qs
+        return _with_balances(qs)
 
     def perform_create(self, serializer: BaseSerializer) -> None:
         _require_finance_manage(cast(User, self.request.user))

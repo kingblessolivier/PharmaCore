@@ -85,6 +85,43 @@ def test_post_journal_balanced_ok(depot: Organization) -> None:
 
 
 @pytest.mark.django_db
+def test_account_api_reports_balances_signed_to_normal_side(
+    depot: Organization, accountant: User
+) -> None:
+    """A chart of accounts without balances isn't a chart of accounts. Each row
+    carries its balance, signed so the account's own normal side reads positive:
+    a debit-normal asset and a credit-normal equity account both show +100 for
+    the two halves of the same entry."""
+    accounts = ensure_default_accounts(depot)
+    post_journal(
+        organization=depot,
+        description="opening",
+        lines=[
+            {"account": accounts["1000"], "side": "DEBIT", "amount": Decimal("100"), "memo": ""},
+            {"account": accounts["3000"], "side": "CREDIT", "amount": Decimal("100"), "memo": ""},
+        ],
+    )
+    resp = _auth(accountant).get(f"/api/finance/accounts/?organization={depot.pk}")
+    assert resp.status_code == 200, resp.content
+    by_code = {a["code"]: a for a in resp.json()["results"]}
+
+    assert Decimal(by_code["1000"]["balance"]) == Decimal("100")  # debit-normal asset
+    assert Decimal(by_code["3000"]["balance"]) == Decimal("100")  # credit-normal equity
+    assert Decimal(by_code["1100"]["balance"]) == Decimal("0")  # untouched
+
+    # The accounting identity holds across the whole chart: A = L + E + (Rev - Exp).
+    def total(kind: str) -> Decimal:
+        return sum(
+            (Decimal(a["balance"]) for a in by_code.values() if a["account_type"] == kind),
+            Decimal("0"),
+        )
+
+    assert total("ASSET") == total("LIABILITY") + total("EQUITY") + total("REVENUE") - total(
+        "EXPENSE"
+    )
+
+
+@pytest.mark.django_db
 def test_b2b_payment_auto_posts_both_books(
     depot: Organization, retail: Organization, accountant: User
 ) -> None:
