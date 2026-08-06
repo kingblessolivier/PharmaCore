@@ -18,6 +18,12 @@ Maintenance rules:
 ## [Unreleased]
 
 ### Added
+- **Retail Pharmacy & Advanced Point of Sale (POS) Engine (ROADMAP §6):**
+  - **Prescription Lifecycle & Digital Refill Intake (`Prescription`, `PrescriptionsPage`)**: Digital prescription intake, prescriber licence verification, patient medication history, remaining refill counters, and automated refill-due notifications (`/retail/prescriptions`).
+  - **Statutory Controlled-Drug Audit Logbook (`ControlledSubstanceRegister`, `ControlledSubstancesPage`)**: Statutory running balance ledger, witness sign-off capture, quarterly audit report generation, and receipt-to-dispensing trail for narcotics & controlled substances (`/retail/controlled-drugs`).
+  - **POS Promotions, Coupons & Loyalty Discount Rules (`POSPromotion`, `PromotionsPage`)**: Seasonal campaigns, coupon redemption codes, BOGO bundles, percentage/flat discounts, and min-spend thresholds at POS checkout (`/retail/promotions`).
+  - **Billable Pharmacy Clinical Services (`ClinicalService`, `ClinicalServiceRecord`, `ClinicalServicesPage`)**: Clinical service catalog (Vaccinations, Blood Pressure & Glucose Screenings, Consultations) with patient encounter notes, fee tracking, and billing integration (`/retail/clinical-services`).
+  - **Frontend UI & App Shell**: Built interactive pages with creation modals and product dropdowns. Registered routes in `App.tsx` and added Retail subnavigation items in `AppShell.tsx`.
 - **Advanced B2B Distribution & Route-to-Market Engine (ROADMAP §5):**
   - **Depot Offered Listings vs. Physical On-Hand Stock (`DepotProductListing`)**: Decoupled depot physical warehouse inventory (`on_hand`) from public retailer-facing offered quantities (`offered_qty`, `buffer_qty`, and custom listing prices). Receiving stock lands in on-hand without auto-publishing; depot managers explicitly control exposed inventory.
   - **Controlled Substance Compliance & Trading Partner Guard**: Trading partner pharmacy licence validation (Rwanda Board of Pharmacy / Rwanda FDA) prior to B2B order submission, auto-flagging suspicious order volume spikes (>3x average or restricted substances).

@@ -2,16 +2,29 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "frontend",
+      "name": "finance-hr-frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "frontend"],
-      "port": 5173
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "C:/Users/nseng/Documents/PROJECTS/Medlink-finance-hr/frontend",
+        "--",
+        "--port",
+        "5175",
+        "--strictPort"
+      ],
+      "port": 5175
     },
     {
-      "name": "backend",
-      "runtimeExecutable": "backend/.venv/Scripts/python.exe",
-      "runtimeArgs": ["backend/manage.py", "runserver", "8000"],
-      "port": 8000
+      "name": "finance-hr-backend",
+      "runtimeExecutable": "C:/Users/nseng/Documents/PROJECTS/Medlink/backend/.venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "C:/Users/nseng/Documents/PROJECTS/Medlink-finance-hr/backend/manage.py",
+        "runserver",
+        "8001"
+      ],
+      "port": 8001
     }
   ]
 }

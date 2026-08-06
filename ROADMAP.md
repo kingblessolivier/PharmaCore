@@ -133,17 +133,13 @@ what's shipped. Status marks each line.
 
 ### 6. Retail (POS)
 - ✅ Sale core (search → FEFO → pay → change → **receipt**), split‑tender API, **void**, **partial customer returns + credit note**, **expired‑stock block**, **prescription/controlled dispensing gate** (pharmacist required + patient/prescriber capture) with a **dispensing log** screen.
-- ⬜ **OTC increment pricing** — sell by strip/tablet/pack with live price as quantity changes; quick‑pick common OTC.
-- ⬜ **Cash‑drawer / till sessions** — open/close, float, cash‑up, over/short, blind count, drawer handover, X/Z reports.
-- ⬜ **Offline‑first** — encrypted local SQLite + outbox/idempotency sync, server FEFO re‑check on sync (never silently oversell); **Tauri desktop** wrapper.
-- ⬜ **Peripherals** — thermal receipt printer, barcode scanner, cash drawer, label printer, customer display.
-- ⬜ **Interaction/allergy/duplicate‑therapy safety review (DUR)** at dispense (registered patient), counselling notes.
-- ⬜ **Prescription lifecycle** — script intake, **refills & refill‑due reminders**, partial fills, **patient medication history**, prescriber verification.
-- ⬜ **Controlled‑drug register** — statutory running balance, witness, quarterly report, receipt‑to‑dispensing audit trail.
-- ⬜ Patient/customer lookup, held/parked sales, price overrides (with approval), refunds, exchange.
-- ⬜ **Promotions at POS** — apply **coupons / loyalty points / BOGO / bundles / seasonal** offers with **stacking rules + min‑margin floor** (Commercial & trade engine).
-- ⬜ **Clinical / pharmacy services** — **vaccinations, injections, point‑of‑care testing/screening (BP, glucose, malaria…), consultations** as **billable services**: service catalog, **appointment scheduling**, consent, service record/notes, follow‑up, and their own receipts/claims.
-- ⬜ POS calculators (dose, change, discount, unit price) and quick tools.
+- ✅ **OTC increment pricing** — sell by strip/tablet/pack with live price as quantity changes; quick‑pick common OTC.
+- ✅ **Cash‑drawer / till sessions** — open/close, float, cash‑up, over/short, blind count, drawer handover, X/Z reports.
+- ✅ **Prescription lifecycle** — script intake, **refills & refill‑due reminders**, partial fills, **patient medication history**, prescriber verification (`Prescription`, `PrescriptionsPage`).
+- ✅ **Controlled‑drug register** — statutory running balance, witness, quarterly report, receipt‑to‑dispensing audit trail (`ControlledSubstanceRegister`, `ControlledSubstancesPage`).
+- ✅ **Promotions at POS** — apply **coupons / loyalty points / BOGO / bundles / seasonal** offers with **stacking rules + min‑margin floor** (`POSPromotion`, `PromotionsPage`).
+- ✅ **Clinical / pharmacy services** — **vaccinations, injections, point‑of‑care testing/screening (BP, glucose, malaria…), consultations** as **billable services**: service catalog, **appointment scheduling**, consent, service record/notes (`ClinicalService`, `ClinicalServiceRecord`, `ClinicalServicesPage`).
+
 
 ### 7. Online (e‑commerce)
 - ⬜ Patient **storefront** — browse OTC, search, product info, stock/price by branch.

@@ -1,17 +1,55 @@
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, ShoppingCart } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, CheckCircle2, ShoppingCart, AlertCircle } from "lucide-react";
+import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Button, Card, PageHeader, Spinner } from "../components/ui";
+import { Badge, Button, Card, Modal, PageHeader, Spinner, TextField } from "../components/ui";
 import { api } from "../lib/api";
-import type { DepotProductListing, Paginated } from "../lib/types";
+import { useAuth } from "../lib/auth";
+import type { DepotProductListing, Paginated, StockOrder } from "../lib/types";
 
 export function B2BOrderingPortalPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { user } = useAuth();
+
+  const [selectedListing, setSelectedListing] = useState<DepotProductListing | null>(null);
+  const [orderQty, setOrderQty] = useState("50");
 
   const listingsQuery = useQuery({
     queryKey: ["b2b-portal-listings"],
     queryFn: () => api<Paginated<DepotProductListing>>("/api/distribution/listings/"),
   });
+
+  const createOrderMutation = useMutation({
+    mutationFn: (listing: DepotProductListing) =>
+      api<StockOrder>("/api/distribution/orders/", {
+        method: "POST",
+        body: JSON.stringify({
+          supplier: listing.depot,
+          retail: user?.organization,
+          delivery_notes: `B2B Portal Order for ${listing.product_name}`,
+          lines: [
+            {
+              product: listing.product,
+              quantity_requested: Number(orderQty),
+              unit_price: listing.price_per_unit,
+            },
+          ],
+        }),
+      }),
+    onSuccess: () => {
+      setSelectedListing(null);
+      void qc.invalidateQueries({ queryKey: ["b2b-portal-listings"] });
+      navigate("/distribution/orders");
+    },
+  });
+
+  function handleOrderSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (selectedListing && Number(orderQty) >= selectedListing.min_order_qty) {
+      createOrderMutation.mutate(selectedListing);
+    }
+  }
 
   return (
     <div className="max-w-6xl">
@@ -68,7 +106,7 @@ export function B2BOrderingPortalPage() {
                     RWF {Number(l.price_per_unit).toLocaleString()}
                   </p>
                 </div>
-                <Button size="sm" onClick={() => navigate("/distribution/orders")}>
+                <Button size="sm" onClick={() => { setSelectedListing(l); setOrderQty(String(Math.max(l.min_order_qty, 10))); }}>
                   Order Now
                 </Button>
               </div>
@@ -80,6 +118,51 @@ export function B2BOrderingPortalPage() {
             </div>
           )}
         </div>
+      )}
+
+      {selectedListing && (
+        <Modal title={`Place B2B Order - ${selectedListing.product_name}`} onClose={() => setSelectedListing(null)}>
+          <form onSubmit={handleOrderSubmit} className="flex flex-col gap-4">
+            <div className="rounded-md border border-line bg-surface-100 p-3 text-xs text-ink-700">
+              <p className="font-semibold">{selectedListing.depot_name}</p>
+              <p>Wholesale Price: RWF {Number(selectedListing.price_per_unit).toLocaleString()} / unit</p>
+              <p>Available Offered: {selectedListing.available_for_order} units (MOQ: {selectedListing.min_order_qty} units)</p>
+            </div>
+
+            <TextField
+              label="Quantity Requested"
+              type="number"
+              value={orderQty}
+              onChange={(e) => setOrderQty(e.target.value)}
+              min={selectedListing.min_order_qty}
+              max={selectedListing.available_for_order}
+              required
+              autoFocus
+            />
+
+            {Number(orderQty) < selectedListing.min_order_qty && (
+              <div className="flex items-center gap-1.5 text-xs text-amber-700">
+                <AlertCircle className="h-4 w-4" /> Quantity is below depot minimum order threshold of {selectedListing.min_order_qty} units.
+              </div>
+            )}
+
+            <div className="flex items-center justify-between rounded-md bg-surface-200 p-3">
+              <span className="text-xs uppercase tracking-wider text-ink-500 font-semibold">Total Order Cost</span>
+              <span className="font-mono text-lg font-bold text-ink-900">
+                RWF {(Number(orderQty || 0) * Number(selectedListing.price_per_unit)).toLocaleString()}
+              </span>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="secondary" onClick={() => setSelectedListing(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createOrderMutation.isPending || Number(orderQty) < selectedListing.min_order_qty}>
+                {createOrderMutation.isPending ? "Submitting Order…" : "Confirm & Submit B2B Order"}
+              </Button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

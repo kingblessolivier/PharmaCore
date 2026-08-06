@@ -48,6 +48,10 @@ import { B2BOrderingPortalPage } from "./pages/B2BOrderingPortalPage";
 import { FieldSalesPage } from "./pages/FieldSalesPage";
 import { InstitutionalTendersPage } from "./pages/InstitutionalTendersPage";
 import { CustomerReturnsPage } from "./pages/CustomerReturnsPage";
+import { PrescriptionsPage } from "./pages/PrescriptionsPage";
+import { ControlledSubstancesPage } from "./pages/ControlledSubstancesPage";
+import { PromotionsPage } from "./pages/PromotionsPage";
+import { ClinicalServicesPage } from "./pages/ClinicalServicesPage";
 import { AdminHome } from "./pages/apps/AdminHome";
 import { RetailHome } from "./pages/apps/RetailHome";
 import { CatalogHome } from "./pages/apps/CatalogHome";
@@ -136,6 +140,10 @@ function App() {
             <Route element={<Protected />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/retail" element={<RetailHome />} />
+              <Route path="/retail/prescriptions" element={forPharmacy(<PrescriptionsPage />)} />
+              <Route path="/retail/controlled-drugs" element={forPharmacy(<ControlledSubstancesPage />)} />
+              <Route path="/retail/promotions" element={forPharmacy(<PromotionsPage />)} />
+              <Route path="/retail/clinical-services" element={forPharmacy(<ClinicalServicesPage />)} />
               <Route path="/catalog" element={forPharmacy(<CatalogHome />)} />
               <Route path="/catalog/low-stock" element={forPharmacy(<LowStockPage />)} />
               <Route path="/catalog/expiry" element={forPharmacy(<ExpiryPage />)} />

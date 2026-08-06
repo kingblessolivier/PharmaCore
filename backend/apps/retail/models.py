@@ -259,3 +259,143 @@ class DrawerSession(models.Model):
 
     def __str__(self) -> str:
         return f"Drawer #{self.pk} · {self.get_status_display()}"
+
+
+class Prescription(models.Model):
+    """Prescription lifecycle & refill management. ROADMAP '6. Retail (POS)'."""
+
+    class Status(models.TextChoices):
+        ACTIVE = "ACTIVE", "Active"
+        FULFILLED = "FULFILLED", "Fulfilled"
+        EXPIRED = "EXPIRED", "Expired"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    prescription_number = models.CharField(max_length=50, unique=True)
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="prescriptions"
+    )
+    patient_name = models.CharField(max_length=150)
+    patient_id_number = models.CharField(max_length=50, blank=True, default="")
+    patient_phone = models.CharField(max_length=20, blank=True, default="")
+    prescriber_name = models.CharField(max_length=150)
+    prescriber_license = models.CharField(max_length=100, blank=True, default="")
+    issue_date = models.DateField()
+    expiry_date = models.DateField()
+    refills_allowed = models.PositiveIntegerField(default=1)
+    refills_used = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Rx #{self.prescription_number} · {self.patient_name}"
+
+    @property
+    def remaining_refills(self) -> int:
+        return max(0, self.refills_allowed - self.refills_used)
+
+
+class ControlledSubstanceRegister(models.Model):
+    """Statutory controlled drug logbook & audit trail. ROADMAP '6. Retail (POS)'."""
+
+    class MovementType(models.TextChoices):
+        RECEIPT = "RECEIPT", "Receipt from Supplier/Depot"
+        DISPENSING = "DISPENSING", "Dispensing to Patient"
+        DISPOSAL = "DISPOSAL", "Witnessed Disposal"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="controlled_drug_logs"
+    )
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT)
+    batch_number = models.CharField(max_length=100)
+    movement_type = models.CharField(max_length=20, choices=MovementType.choices)
+    quantity = models.IntegerField()
+    running_balance = models.PositiveIntegerField()
+    patient_name = models.CharField(max_length=150, blank=True, default="")
+    prescriber_name = models.CharField(max_length=150, blank=True, default="")
+    witness_name = models.CharField(max_length=150, blank=True, default="")
+    rx_reference = models.CharField(max_length=100, blank=True, default="")
+    logged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    logged_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-logged_at"]
+
+    def __str__(self) -> str:
+        return f"CD-LOG #{self.id} · {self.product.generic_name} ({self.movement_type})"
+
+
+class POSPromotion(models.Model):
+    """Retail promotional campaigns & coupon engine. ROADMAP '6. Retail (POS)'."""
+
+    class PromoType(models.TextChoices):
+        PERCENT_DISCOUNT = "PERCENT", "Percentage Discount (%)"
+        FLAT_DISCOUNT = "FLAT", "Flat Amount Off (RWF)"
+        BOGO = "BOGO", "Buy One Get One"
+
+    code = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=150)
+    promo_type = models.CharField(max_length=20, choices=PromoType.choices, default=PromoType.PERCENT_DISCOUNT)
+    discount_value = models.DecimalField(max_digits=14, decimal_places=2)
+    min_spend = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valid_from = models.DateField()
+    valid_until = models.DateField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Promo {self.code} · {self.name}"
+
+
+class ClinicalService(models.Model):
+    """Billable pharmacy clinical services catalog. ROADMAP '6. Retail (POS)'."""
+
+    class Category(models.TextChoices):
+        VACCINATION = "VACCINATION", "Vaccination / Immunization"
+        SCREENING = "SCREENING", "Point-of-Care Testing (BP, Glucose, Malaria)"
+        CONSULTATION = "CONSULTATION", "Pharmacist Consultation"
+        PROCEDURE = "PROCEDURE", "Minor Clinical Procedure"
+
+    service_code = models.CharField(max_length=30, unique=True)
+    name = models.CharField(max_length=150)
+    category = models.CharField(max_length=30, choices=Category.choices, default=Category.SCREENING)
+    fee_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return f"{self.service_code} · {self.name} (RWF {self.fee_amount})"
+
+
+class ClinicalServiceRecord(models.Model):
+    """Patient clinical service encounter log. ROADMAP '6. Retail (POS)'."""
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="clinical_encounters"
+    )
+    service = models.ForeignKey(ClinicalService, on_delete=models.PROTECT, related_name="encounters")
+    patient_name = models.CharField(max_length=150)
+    patient_phone = models.CharField(max_length=20, blank=True, default="")
+    performed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    clinical_notes = models.TextField(blank=True, default="")
+    fee_charged = models.DecimalField(max_digits=14, decimal_places=2)
+    performed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-performed_at"]
+
+    def __str__(self) -> str:
+        return f"Service #{self.id} · {self.service.name} for {self.patient_name}"
+

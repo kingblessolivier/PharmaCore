@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, CheckCircle2, EyeOff, Plus } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Badge, Button, Card, Modal, PageHeader, Spinner, TextField } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import type { DepotProductListing, Paginated } from "../lib/types";
+import type { DepotProductListing, Paginated, Product } from "../lib/types";
 
 export function DepotListingsPage() {
   const navigate = useNavigate();
@@ -23,6 +23,11 @@ export function DepotListingsPage() {
     queryFn: () => api<Paginated<DepotProductListing>>("/api/distribution/listings/"),
   });
 
+  const productsQuery = useQuery({
+    queryKey: ["catalog-products-for-listings"],
+    queryFn: () => api<Paginated<Product>>("/api/catalog/products/"),
+  });
+
   const createListingMutation = useMutation({
     mutationFn: () =>
       api<DepotProductListing>("/api/distribution/listings/", {
@@ -38,6 +43,18 @@ export function DepotListingsPage() {
       }),
     onSuccess: () => {
       setCreating(false);
+      setProductId("");
+      void qc.invalidateQueries({ queryKey: ["depot-listings"] });
+    },
+  });
+
+  const togglePublishMutation = useMutation({
+    mutationFn: ({ id, is_published }: { id: number; is_published: boolean }) =>
+      api<DepotProductListing>(`/api/distribution/listings/${id}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_published: !is_published }),
+      }),
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["depot-listings"] });
     },
   });
@@ -60,12 +77,12 @@ export function DepotListingsPage() {
         title="Depot Offered Stock Listings & Pricing Cockpit"
         action={
           <Button onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4" /> Publish Listing
+            <Plus className="h-4 w-4" /> Publish New Listing
           </Button>
         }
       />
       <p className="mb-4 text-sm text-ink-500">
-        Control exposed inventory (`offered_qty`) independently from physical warehouse stock (`on_hand`), with buffer holdbacks and listing price overrides.
+        Expose inventory offered for sale (`offered_qty`) independently from physical warehouse stock (`on_hand`). Retailers can only view and order published listings.
       </p>
 
       {listingsQuery.isLoading && (
@@ -85,12 +102,16 @@ export function DepotListingsPage() {
                 <th className="px-4 py-3 text-right">Retailer Available</th>
                 <th className="px-4 py-3 text-right">Listing Price (RWF)</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {listingsQuery.data.results.map((l) => (
                 <tr key={l.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                  <td className="px-4 py-3 font-medium text-ink-900">{l.product_name}</td>
+                  <td className="px-4 py-3 font-medium text-ink-900">
+                    {l.product_name}
+                    {l.product_brand && <span className="ml-1.5 text-xs text-ink-500">({l.product_brand})</span>}
+                  </td>
                   <td className="px-4 py-3 text-right font-mono text-ink-900">{l.offered_qty} units</td>
                   <td className="px-4 py-3 text-right font-mono text-ink-500">{l.buffer_qty} units</td>
                   <td className="px-4 py-3 text-right font-mono font-bold text-emerald-700">
@@ -104,12 +125,30 @@ export function DepotListingsPage() {
                       {l.is_published ? "Published" : "Draft / Hold"}
                     </Badge>
                   </td>
+                  <td className="px-4 py-3 text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => togglePublishMutation.mutate({ id: l.id, is_published: l.is_published })}
+                      disabled={togglePublishMutation.isPending}
+                    >
+                      {l.is_published ? (
+                        <>
+                          <EyeOff className="h-3.5 w-3.5" /> Unpublish
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Publish
+                        </>
+                      )}
+                    </Button>
+                  </td>
                 </tr>
               ))}
               {listingsQuery.data.results.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-ink-500">
-                    No depot product listings published yet.
+                  <td colSpan={7} className="px-4 py-8 text-center text-ink-500">
+                    No depot product listings published yet. Click "Publish New Listing" above to offer products.
                   </td>
                 </tr>
               )}
@@ -121,15 +160,25 @@ export function DepotListingsPage() {
       {creating && (
         <Modal title="Publish Depot Stock Listing" onClose={() => setCreating(false)}>
           <form onSubmit={submitCreate} className="flex flex-col gap-4">
-            <TextField
-              label="Product ID"
-              type="number"
-              value={productId}
-              onChange={(e) => setProductId(e.target.value)}
-              placeholder="e.g. 1"
-              required
-              autoFocus
-            />
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-ink-500">
+                Select Medicine / Product
+              </label>
+              <select
+                className="w-full rounded-md border border-line bg-surface-50 px-3 py-2 text-sm text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                value={productId}
+                onChange={(e) => setProductId(e.target.value)}
+                required
+              >
+                <option value="">-- Choose Product from Catalog --</option>
+                {productsQuery.data?.results.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.generic_name} {p.brand_name ? `(${p.brand_name})` : ""} - {p.dosage_form} {p.strength}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <TextField
                 label="Offered Quantity"
@@ -157,7 +206,7 @@ export function DepotListingsPage() {
               <Button variant="secondary" onClick={() => setCreating(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={createListingMutation.isPending}>
+              <Button type="submit" disabled={createListingMutation.isPending || !productId}>
                 {createListingMutation.isPending ? "Publishing…" : "Publish Listing"}
               </Button>
             </div>

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, CalendarClock, Receipt, ShoppingCart } from "lucide-react";
+import { FileText, Receipt, ShieldAlert, ShoppingCart, Stethoscope, Tag } from "lucide-react";
 import { api } from "../../lib/api";
 import type { DashboardSummary } from "../../lib/types";
 import {
@@ -22,8 +22,8 @@ export function RetailHome() {
       <AppHeader
         icon={ShoppingCart}
         hue="#0D9488"
-        title="Retail"
-        subtitle="Sell over the counter, dispense prescriptions, and reconcile the till."
+        title="Retail Pharmacy & Point of Sale (POS)"
+        subtitle="OTC & prescription dispensing, cash-drawer till reconciliation, controlled-substance register, promotions, and clinical services."
       />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -34,33 +34,45 @@ export function RetailHome() {
       </div>
 
       <QuickActions>
-        <QuickAction to="/pos" icon={ShoppingCart} label="Open point of sale" primary />
+        <QuickAction to="/pos" icon={ShoppingCart} label="Open Point of Sale Counter" primary />
       </QuickActions>
 
       <SectionGrid>
         <SectionCard
           icon={ShoppingCart}
-          title="Point of sale"
-          description="Ring up OTC + prescriptions, take payment, and run the cash drawer."
+          title="Point of sale counter"
+          description="Ring up OTC + prescriptions, split-tender, FEFO auto-allocation, and cash-drawer till session reconciliation."
           to="/pos"
+        />
+        <SectionCard
+          icon={FileText}
+          title="Prescriptions & refills"
+          description="Intake digital prescriptions, verify prescribers, track remaining refills, and set automated refill-due reminders."
+          to="/retail/prescriptions"
+        />
+        <SectionCard
+          icon={ShieldAlert}
+          title="Controlled drugs register"
+          description="Statutory running balance ledger, witness sign-offs, quarterly audit report, and receipt-to-dispensing trail."
+          to="/retail/controlled-drugs"
+        />
+        <SectionCard
+          icon={Tag}
+          title="Promotions & coupons"
+          description="Configure seasonal campaigns, coupon codes, BOGO bundles, and min-spend discount rules."
+          to="/retail/promotions"
+        />
+        <SectionCard
+          icon={Stethoscope}
+          title="Clinical pharmacy services"
+          description="Billable clinical services (Vaccinations, BP/Glucose screening, consultations) with patient documentation."
+          to="/retail/clinical-services"
         />
         <SectionCard
           icon={Receipt}
-          title="Sales & returns"
-          description="Review recent sales, void, and process customer returns with credit notes."
+          title="Sales & void returns"
+          description="Review recent sales transactions, void invalid sales, and process customer returns with credit notes."
           to="/pos"
-        />
-        <SectionCard
-          icon={CalendarClock}
-          title="Expiry watch"
-          description="Near-expiry and expired stock that must not reach the counter."
-          to="/"
-        />
-        <SectionCard
-          icon={AlertTriangle}
-          title="Low stock"
-          description="Products below their minimum — reorder before they run out."
-          to="/"
         />
       </SectionGrid>
     </div>

@@ -406,7 +406,11 @@ const NAV: NavGroup[] = [
     match: ["/retail", "/pos"],
     items: [
       { to: "/retail", label: "Retail Overview", icon: ShoppingCart, end: true },
-      { to: "/pos", label: "Point of sale", icon: ShoppingCart },
+      { to: "/pos", label: "Point of sale counter", icon: ShoppingCart },
+      { to: "/retail/prescriptions", label: "Prescriptions & Refills", icon: FileText },
+      { to: "/retail/controlled-drugs", label: "Controlled Drugs Log", icon: Shield },
+      { to: "/retail/promotions", label: "Promotions & Coupons", icon: CreditCard },
+      { to: "/retail/clinical-services", label: "Clinical Services", icon: ClipboardList },
     ],
   },
   {

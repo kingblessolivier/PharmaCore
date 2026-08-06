@@ -2078,3 +2078,79 @@ export interface CustomerReturn {
   credit_note_amount: string;
   created_at: string;
 }
+
+export interface Prescription {
+  id: number;
+  prescription_number: string;
+  organization: number;
+  organization_name?: string;
+  patient_name: string;
+  patient_id_number: string;
+  patient_phone: string;
+  prescriber_name: string;
+  prescriber_license: string;
+  issue_date: string;
+  expiry_date: string;
+  refills_allowed: number;
+  refills_used: number;
+  remaining_refills: number;
+  status: "ACTIVE" | "FULFILLED" | "EXPIRED" | "CANCELLED";
+  notes: string;
+  created_at: string;
+}
+
+export interface ControlledSubstanceRegister {
+  id: number;
+  organization: number;
+  organization_name?: string;
+  product: number;
+  product_name?: string;
+  batch_number: string;
+  movement_type: "RECEIPT" | "DISPENSING" | "DISPOSAL";
+  quantity: number;
+  running_balance: number;
+  patient_name: string;
+  prescriber_name: string;
+  witness_name: string;
+  rx_reference: string;
+  logged_by?: number;
+  logged_by_name?: string;
+  logged_at: string;
+}
+
+export interface POSPromotion {
+  id: number;
+  code: string;
+  name: string;
+  promo_type: "PERCENT" | "FLAT" | "BOGO";
+  discount_value: string;
+  min_spend: string;
+  valid_from: string;
+  valid_until: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface ClinicalService {
+  id: number;
+  service_code: string;
+  name: string;
+  category: "VACCINATION" | "SCREENING" | "CONSULTATION" | "PROCEDURE";
+  fee_amount: string;
+  is_active: boolean;
+}
+
+export interface ClinicalServiceRecord {
+  id: number;
+  organization: number;
+  organization_name?: string;
+  service: number;
+  service_name?: string;
+  patient_name: string;
+  patient_phone: string;
+  performed_by?: number;
+  performed_by_name?: string;
+  clinical_notes: string;
+  fee_charged: string;
+  performed_at: string;
+}

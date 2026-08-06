@@ -7,12 +7,133 @@ from rest_framework import serializers
 
 from apps.retail.models import (
     TAX_RATES,
+    ClinicalService,
+    ClinicalServiceRecord,
+    ControlledSubstanceRegister,
     Dispensing,
     DrawerSession,
+    POSPromotion,
     Payment,
+    Prescription,
     Sale,
     SaleItem,
 )
+
+
+class PrescriptionSerializer(serializers.ModelSerializer):
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+    remaining_refills = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Prescription
+        fields = [
+            "id",
+            "prescription_number",
+            "organization",
+            "organization_name",
+            "patient_name",
+            "patient_id_number",
+            "patient_phone",
+            "prescriber_name",
+            "prescriber_license",
+            "issue_date",
+            "expiry_date",
+            "refills_allowed",
+            "refills_used",
+            "remaining_refills",
+            "status",
+            "notes",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at", "remaining_refills"]
+
+
+class ControlledSubstanceRegisterSerializer(serializers.ModelSerializer):
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+    product_name = serializers.CharField(source="product.generic_name", read_only=True)
+    logged_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ControlledSubstanceRegister
+        fields = [
+            "id",
+            "organization",
+            "organization_name",
+            "product",
+            "product_name",
+            "batch_number",
+            "movement_type",
+            "quantity",
+            "running_balance",
+            "patient_name",
+            "prescriber_name",
+            "witness_name",
+            "rx_reference",
+            "logged_by",
+            "logged_by_name",
+            "logged_at",
+        ]
+        read_only_fields = ["id", "logged_at"]
+
+    def get_logged_by_name(self, obj: ControlledSubstanceRegister) -> str | None:
+        if not obj.logged_by:
+            return None
+        return obj.logged_by.get_full_name() or obj.logged_by.username
+
+
+class POSPromotionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = POSPromotion
+        fields = [
+            "id",
+            "code",
+            "name",
+            "promo_type",
+            "discount_value",
+            "min_spend",
+            "valid_from",
+            "valid_until",
+            "is_active",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+
+class ClinicalServiceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClinicalService
+        fields = ["id", "service_code", "name", "category", "fee_amount", "is_active"]
+        read_only_fields = ["id"]
+
+
+class ClinicalServiceRecordSerializer(serializers.ModelSerializer):
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+    service_name = serializers.CharField(source="service.name", read_only=True)
+    performed_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ClinicalServiceRecord
+        fields = [
+            "id",
+            "organization",
+            "organization_name",
+            "service",
+            "service_name",
+            "patient_name",
+            "patient_phone",
+            "performed_by",
+            "performed_by_name",
+            "clinical_notes",
+            "fee_charged",
+            "performed_at",
+        ]
+        read_only_fields = ["id", "performed_at"]
+
+    def get_performed_by_name(self, obj: ClinicalServiceRecord) -> str | None:
+        if not obj.performed_by:
+            return None
+        return obj.performed_by.get_full_name() or obj.performed_by.username
+
 
 
 class DrawerSessionSerializer(serializers.ModelSerializer):
