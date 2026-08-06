@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
+import { Download } from "lucide-react";
 import { useState } from "react";
-import { api } from "../lib/api";
-import type { AuditLogEntry, Paginated, UserAdmin } from "../lib/types";
-import { PageHeader, SelectField, Spinner, TextField } from "../components/ui";
+import { api, downloadFile } from "../lib/api";
+import type { AuditLogEntry, Organization, Paginated, UserAdmin } from "../lib/types";
+import { Button, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
 
 export function ActivityPage() {
+  const [org, setOrg] = useState("");
   const [userId, setUserId] = useState("");
   const [action, setAction] = useState("");
   const [entity, setEntity] = useState("");
@@ -15,8 +17,13 @@ export function ActivityPage() {
     queryKey: ["all-users"],
     queryFn: () => api<Paginated<UserAdmin>>("/api/users/"),
   });
+  const orgs = useQuery({
+    queryKey: ["organizations"],
+    queryFn: () => api<Paginated<Organization>>("/api/organizations/"),
+  });
 
   const params = new URLSearchParams();
+  if (org) params.set("organization", org);
   if (userId) params.set("user", userId);
   if (action) params.set("action", action);
   if (entity) params.set("entity_type", entity);
@@ -31,13 +38,31 @@ export function ActivityPage() {
 
   return (
     <div>
-      <PageHeader title="Activity &amp; logs" />
+      <PageHeader
+        title="Activity &amp; logs"
+        action={
+          <Button
+            variant="secondary"
+            onClick={() => void downloadFile(`/api/audit-logs/export/${qs ? `?${qs}` : ""}`, "audit-log.csv")}
+          >
+            <Download className="h-4 w-4" /> Export CSV
+          </Button>
+        }
+      />
       <p className="mb-4 -mt-2 text-sm text-ink-500">
         The immutable audit trail — every login, create, update, delete, and view-as across the
         system. Filter to see what a specific user or branch has been doing.
       </p>
 
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-6">
+        <SelectField label="Branch" value={org} onChange={(e) => setOrg(e.target.value)}>
+          <option value="">All branches</option>
+          {(orgs.data?.results ?? []).map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+            </option>
+          ))}
+        </SelectField>
         <SelectField label="User" value={userId} onChange={(e) => setUserId(e.target.value)}>
           <option value="">Everyone</option>
           {(users.data?.results ?? []).map((u) => (

@@ -292,11 +292,30 @@ function UserModal({
   );
 }
 
+interface UserPerf {
+  sales_count: number;
+  dispensing_count: number;
+  returns: number;
+  voids: number;
+  logins: number;
+}
+
 function ActivityModal({ userId, onClose }: { userId: number; onClose: () => void }) {
   const { data, isLoading } = useQuery({
     queryKey: ["user-activity", userId],
     queryFn: () => api<UserActivity>(`/api/users/${userId}/activity/`),
   });
+  const perf = useQuery({
+    queryKey: ["user-performance", userId],
+    queryFn: () => api<UserPerf>(`/api/users/${userId}/performance/`),
+  });
+  const PERF: [keyof UserPerf, string][] = [
+    ["sales_count", "Sales"],
+    ["dispensing_count", "Dispensed"],
+    ["returns", "Returns"],
+    ["voids", "Voids"],
+    ["logins", "Logins"],
+  ];
   return (
     <Modal title="User activity" onClose={onClose}>
       {isLoading && (
@@ -313,6 +332,17 @@ function ActivityModal({ userId, onClose }: { userId: number; onClose: () => voi
               Last login: {data.last_login ? new Date(data.last_login).toLocaleString() : "never"}
             </span>
           </div>
+
+          {perf.data && (
+            <div className="grid grid-cols-5 gap-2">
+              {PERF.map(([k, label]) => (
+                <div key={k} className="rounded-lg border border-line bg-surface-0 px-2 py-2 text-center">
+                  <div className="text-lg font-semibold text-ink-900">{perf.data![k]}</div>
+                  <div className="text-[11px] uppercase tracking-wide text-ink-500">{label}</div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
             {Object.entries(data.counts).map(([action, n]) => (
               <span key={action} className="rounded-md bg-surface-100 px-2 py-1 text-xs text-ink-700">
