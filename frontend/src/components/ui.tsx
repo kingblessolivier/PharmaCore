@@ -89,9 +89,32 @@ export function TextArea({
   );
 }
 
-export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
+/** A surface panel. With `title`, it renders a titled card (header + padded body);
+ * without one it is a bare surface the caller pads itself. */
+export function Card({
+  children,
+  className = "",
+  title,
+  action,
+}: {
+  children: ReactNode;
+  className?: string;
+  title?: ReactNode;
+  action?: ReactNode;
+}) {
+  if (!title) {
+    return (
+      <div className={`rounded-lg border border-line bg-surface-0 ${className}`}>{children}</div>
+    );
+  }
   return (
-    <div className={`rounded-lg border border-line bg-surface-0 ${className}`}>{children}</div>
+    <div className={`rounded-lg border border-line bg-surface-0 ${className}`}>
+      <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+        <h3 className="text-sm font-semibold text-ink-900">{title}</h3>
+        {action}
+      </div>
+      <div className="p-4">{children}</div>
+    </div>
   );
 }
 
