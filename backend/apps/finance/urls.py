@@ -9,6 +9,10 @@ from apps.finance.views import (
     BudgetViewSet,
     CashFlowForecastView,
     CreditProfileViewSet,
+    CustomerCreditViewSet,
+    CustomerInvoiceViewSet,
+    CustomerReceiptViewSet,
+    DunningNoticeViewSet,
     FinanceReportsView,
     FixedAssetViewSet,
     JournalEntryViewSet,
@@ -23,6 +27,10 @@ router.register("accounts", AccountViewSet, basename="finance-account")
 router.register("journal-entries", JournalEntryViewSet, basename="journal-entry")
 router.register("credit-profiles", CreditProfileViewSet, basename="credit-profile")
 router.register("supplier-bills", SupplierBillViewSet, basename="supplier-bill")
+router.register("customer-invoices", CustomerInvoiceViewSet, basename="customer-invoice")
+router.register("customer-receipts", CustomerReceiptViewSet, basename="customer-receipt")
+router.register("customer-credits", CustomerCreditViewSet, basename="customer-credit")
+router.register("dunning-notices", DunningNoticeViewSet, basename="dunning-notice")
 router.register("bank-accounts", BankAccountViewSet, basename="bank-account")
 router.register("cash-flow-forecast", CashFlowForecastView, basename="cash-flow-forecast")
 router.register("reports", FinanceReportsView, basename="finance-reports")

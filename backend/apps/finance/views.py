@@ -23,6 +23,10 @@ from apps.finance.models import (
     BankAccount,
     Budget,
     CreditProfile,
+    CustomerCredit,
+    CustomerInvoice,
+    CustomerReceipt,
+    DunningNotice,
     FixedAsset,
     JournalEntry,
     JournalLine,
@@ -37,6 +41,10 @@ from apps.finance.serializers import (
     BankAccountSerializer,
     BudgetSerializer,
     CreditProfileSerializer,
+    CustomerCreditSerializer,
+    CustomerInvoiceSerializer,
+    CustomerReceiptSerializer,
+    DunningNoticeSerializer,
     FixedAssetSerializer,
     JournalEntrySerializer,
     SupplierBillSerializer,
@@ -45,11 +53,15 @@ from apps.finance.serializers import (
     TaxRecordSerializer,
 )
 from apps.finance.services import (
+    CreditHoldError,
+    apply_dunning,
     cash_book_lines,
     cash_flow_forecast,
     close_period,
     create_bank_account,
     reconcile_lines,
+    record_customer_invoice,
+    record_customer_receipt,
     record_supplier_bill,
     record_supplier_bill_payment,
     reopen_period,
@@ -478,6 +490,30 @@ class FinanceReportsView(viewsets.ViewSet):
         org = _resolve_org(request, cast(User, request.user))
         return Response(_money_safe(reports.inventory_valuation(org)))
 
+    @action(detail=False, methods=["get"], url_path="ar-aging")
+    def ar_aging(self, request: Request) -> Response:
+        """Open receivables bucketed by how far past due they are, per customer."""
+        org = _resolve_org(request, cast(User, request.user))
+        as_of = _date_param(request, "as_of", timezone.now().date())
+        return Response(_money_safe(reports.ar_aging(org, as_of=as_of)))
+
+    @action(detail=False, methods=["get"], url_path="statement")
+    def statement(self, request: Request) -> Response:
+        """A printable statement of account for one customer over a period."""
+        user = cast(User, request.user)
+        org = _resolve_org(request, user)
+        customer_param = request.query_params.get("customer")
+        if not (customer_param and customer_param.isdigit()):
+            raise ValidationError("A 'customer' query param is required.")
+        try:
+            customer = Organization.objects.get(pk=int(customer_param))
+        except Organization.DoesNotExist as exc:
+            raise ValidationError("Customer not found.") from exc
+        start, end = self._period(request)
+        return Response(
+            _money_safe(reports.statement_of_account(org, customer, start=start, end=end))
+        )
+
     @action(detail=False, methods=["get"], url_path="vat-return")
     def vat_return(self, request: Request) -> Response:
         """Rwanda VAT return draft for the period: per-class Output/Input,
@@ -650,3 +686,172 @@ class BudgetViewSet(viewsets.ModelViewSet):
         _require_finance_manage(user)
         serializer.save()
 
+
+class CustomerInvoiceViewSet(viewsets.ModelViewSet):
+    """AR: invoices raised on B2B customers, plus the receipts against them.
+
+    Creation and receipting both go through the service layer so the GL entry,
+    the credit-limit guard, and the numbering sequence stay in one place.
+    """
+
+    serializer_class = CustomerInvoiceSerializer
+    queryset = CustomerInvoice.objects.select_related("organization", "customer")
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self) -> QuerySet[CustomerInvoice]:
+        user = cast(User, self.request.user)
+        qs = CustomerInvoice.objects.select_related("organization", "customer").prefetch_related(
+            "receipts"
+        )
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            # Both sides of the trade can see the invoice — the seller because
+            # they raised it, the buyer because they owe it.
+            qs = qs.filter(Q(organization__in=visible) | Q(customer__in=visible))
+        params = self.request.query_params
+        for field in ("organization", "customer"):
+            value = params.get(field)
+            if value and value.isdigit():
+                qs = qs.filter(**{f"{field}_id": int(value)})
+        status_param = params.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param.upper())
+        if params.get("outstanding") in {"1", "true", "True"}:
+            qs = qs.exclude(
+                status__in=[CustomerInvoice.Status.PAID, CustomerInvoice.Status.CANCELLED]
+            )
+        return qs
+
+    def create(self, request: Request, *args: object, **kwargs: object) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        serializer = CustomerInvoiceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        try:
+            invoice = record_customer_invoice(
+                organization=data["organization"],
+                customer=data["customer"],
+                invoice_date=data["invoice_date"],
+                due_date=data["due_date"],
+                total_amount=data["total_amount"],
+                vat_amount=data.get("vat_amount") or Decimal("0"),
+                tax_class=data.get("tax_class", "B"),
+                reference_type=data.get("reference_type", ""),
+                reference_id=data.get("reference_id", ""),
+                notes=data.get("notes", ""),
+                user=user,
+            )
+        except CreditHoldError as exc:
+            # 409, not 400: the request is well-formed; the customer's credit
+            # state is what refuses it.
+            return Response({"detail": str(exc)}, status=409)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        return Response(CustomerInvoiceSerializer(invoice).data, status=201)
+
+    @action(detail=True, methods=["post"], url_path="record-receipt")
+    def record_receipt(self, request: Request, pk: str | None = None) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        invoice = self.get_object()
+        try:
+            receipt = record_customer_receipt(
+                invoice=invoice,
+                amount=Decimal(str(request.data.get("amount", 0))),
+                method=str(request.data.get("method", "CASH")),
+                reference=str(request.data.get("reference", "")),
+                user=user,
+            )
+        except (ValueError, ArithmeticError) as exc:
+            raise ValidationError(str(exc)) from exc
+        record_audit(
+            action="PAYMENT",
+            user=user,
+            organization=invoice.organization,
+            entity_type="customer_invoice",
+            entity_id=str(invoice.pk),
+            changes={"amount": str(receipt.amount), "method": receipt.method},
+            request=request,
+        )
+        invoice.refresh_from_db()
+        return Response(CustomerInvoiceSerializer(invoice).data, status=201)
+
+
+class CustomerReceiptViewSet(viewsets.ReadOnlyModelViewSet):
+    """Receipt register. Receipts are created via the invoice's
+    ``record-receipt`` action so they can never exist without a GL entry."""
+
+    serializer_class = CustomerReceiptSerializer
+    queryset = CustomerReceipt.objects.select_related("invoice__customer", "invoice__organization")
+
+    def get_queryset(self) -> QuerySet[CustomerReceipt]:
+        user = cast(User, self.request.user)
+        qs = CustomerReceipt.objects.select_related("invoice__customer", "invoice__organization")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(Q(invoice__organization__in=visible) | Q(invoice__customer__in=visible))
+        invoice_param = self.request.query_params.get("invoice")
+        if invoice_param and invoice_param.isdigit():
+            qs = qs.filter(invoice_id=int(invoice_param))
+        return qs
+
+
+class CustomerCreditViewSet(viewsets.ReadOnlyModelViewSet):
+    """On-account credits (overpayments, credit notes, returns) held for a customer."""
+
+    serializer_class = CustomerCreditSerializer
+    queryset = CustomerCredit.objects.select_related("organization", "customer")
+
+    def get_queryset(self) -> QuerySet[CustomerCredit]:
+        user = cast(User, self.request.user)
+        qs = CustomerCredit.objects.select_related("organization", "customer")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(Q(organization__in=visible) | Q(customer__in=visible))
+        customer_param = self.request.query_params.get("customer")
+        if customer_param and customer_param.isdigit():
+            qs = qs.filter(customer_id=int(customer_param))
+        return qs
+
+
+class DunningNoticeViewSet(viewsets.ReadOnlyModelViewSet):
+    """The collections queue. ``run`` walks the ladder for an organization and
+    issues whatever step each overdue invoice has newly earned."""
+
+    serializer_class = DunningNoticeSerializer
+    queryset = DunningNotice.objects.select_related("invoice__customer")
+
+    def get_queryset(self) -> QuerySet[DunningNotice]:
+        user = cast(User, self.request.user)
+        qs = DunningNotice.objects.select_related("invoice__customer", "invoice__organization")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            visible = organizations_visible_to(user)
+            qs = qs.filter(Q(invoice__organization__in=visible) | Q(invoice__customer__in=visible))
+        org_param = self.request.query_params.get("organization")
+        if org_param and org_param.isdigit():
+            qs = qs.filter(invoice__organization_id=int(org_param))
+        level = self.request.query_params.get("level")
+        if level:
+            qs = qs.filter(level=level.upper())
+        return qs
+
+    @action(detail=False, methods=["post"], url_path="run")
+    def run(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        organization = _resolve_org(request, user)
+        issued = apply_dunning(organization=organization)
+        record_audit(
+            action="UPDATE",
+            user=user,
+            organization=organization,
+            entity_type="dunning_run",
+            entity_id=str(organization.pk),
+            changes={"issued": str(len(issued))},
+            request=request,
+        )
+        return Response(
+            {"issued": len(issued), "notices": DunningNoticeSerializer(issued, many=True).data},
+            status=201,
+        )

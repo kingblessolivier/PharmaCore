@@ -11,6 +11,10 @@ from apps.finance.models import (
     BankAccount,
     Budget,
     CreditProfile,
+    CustomerCredit,
+    CustomerInvoice,
+    CustomerReceipt,
+    DunningNotice,
     FixedAsset,
     JournalEntry,
     JournalLine,
@@ -379,3 +383,117 @@ class BudgetSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "variance", "created_at"]
+
+
+class CustomerReceiptSerializer(serializers.ModelSerializer):
+    """Money received against an invoice. Posting is done by the service layer,
+    so everything but the payment details is read-only."""
+
+    invoice_number = serializers.CharField(source="invoice.invoice_number", read_only=True)
+    customer_name = serializers.CharField(source="invoice.customer.name", read_only=True)
+
+    class Meta:
+        model = CustomerReceipt
+        fields = [
+            "id",
+            "invoice",
+            "invoice_number",
+            "customer_name",
+            "receipt_number",
+            "amount",
+            "method",
+            "reference",
+            "received_on",
+            "created_at",
+        ]
+        read_only_fields = ["id", "receipt_number", "created_at"]
+
+
+class CustomerInvoiceSerializer(serializers.ModelSerializer):
+    customer_name = serializers.CharField(source="customer.name", read_only=True)
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+    amount_due = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    receipts = CustomerReceiptSerializer(many=True, read_only=True)
+    days_past_due = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CustomerInvoice
+        fields = [
+            "id",
+            "organization",
+            "organization_name",
+            "customer",
+            "customer_name",
+            "invoice_number",
+            "invoice_date",
+            "due_date",
+            "total_amount",
+            "vat_amount",
+            "tax_class",
+            "amount_paid",
+            "amount_due",
+            "status",
+            "days_past_due",
+            "reference_type",
+            "reference_id",
+            "notes",
+            "receipts",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "invoice_number",
+            "amount_paid",
+            "amount_due",
+            "status",
+            "days_past_due",
+            "receipts",
+            "created_at",
+        ]
+
+    def get_days_past_due(self, obj: CustomerInvoice) -> int:
+        """Negative until the due date passes — the sign tells you which side of
+        the deadline the invoice sits on."""
+        from django.utils import timezone
+
+        return (timezone.now().date() - obj.due_date).days
+
+
+class CustomerCreditSerializer(serializers.ModelSerializer):
+    customer_name = serializers.CharField(source="customer.name", read_only=True)
+
+    class Meta:
+        model = CustomerCredit
+        fields = [
+            "id",
+            "organization",
+            "customer",
+            "customer_name",
+            "amount",
+            "balance",
+            "source",
+            "source_receipt",
+            "notes",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class DunningNoticeSerializer(serializers.ModelSerializer):
+    invoice_number = serializers.CharField(source="invoice.invoice_number", read_only=True)
+    customer_name = serializers.CharField(source="invoice.customer.name", read_only=True)
+
+    class Meta:
+        model = DunningNotice
+        fields = [
+            "id",
+            "invoice",
+            "invoice_number",
+            "customer_name",
+            "level",
+            "days_past_due",
+            "amount_due",
+            "sent_on",
+            "created_at",
+        ]
+        read_only_fields = fields

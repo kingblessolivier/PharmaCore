@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
 
@@ -664,3 +665,159 @@ class TenantSettings(models.Model):
     def __str__(self) -> str:
         return f"TenantSettings({self.organization.name})"
 
+
+
+# ---------------------------------------------------------------------------
+# Accounts receivable (§9 AR): customer invoices, receipts, on-account credit
+# and the dunning ladder. Every money movement posts to the GL, which stays the
+# single source of truth — these rows are the sub-ledger that explains it.
+# ---------------------------------------------------------------------------
+
+
+class CustomerInvoice(models.Model):
+    """A B2B invoice raised on a customer (usually a retail buyer)."""
+
+    class Status(models.TextChoices):
+        OPEN = "OPEN", "Open"
+        PARTIAL = "PARTIAL", "Partially paid"
+        PAID = "PAID", "Paid"
+        OVERDUE = "OVERDUE", "Overdue"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.PROTECT, related_name="customer_invoices"
+    )
+    customer = models.ForeignKey(
+        "iam.Organization", on_delete=models.PROTECT, related_name="invoices_received"
+    )
+    invoice_number = models.CharField(max_length=30, unique=True)
+    invoice_date = models.DateField()
+    due_date = models.DateField()
+    total_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    vat_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    tax_class = models.CharField(max_length=1, default="B")
+    amount_paid = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
+    reference_type = models.CharField(max_length=40, blank=True, default="")
+    reference_id = models.CharField(max_length=40, blank=True, default="")
+    notes = models.CharField(max_length=255, blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-invoice_date", "-id"]
+        indexes = [
+            models.Index(fields=["organization", "status"]),
+            models.Index(fields=["customer", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.invoice_number
+
+    @property
+    def amount_due(self) -> Decimal:
+        return (self.total_amount - self.amount_paid).quantize(Decimal("0.01"))
+
+    @property
+    def is_settled(self) -> bool:
+        return self.amount_paid >= self.total_amount
+
+
+class CustomerReceipt(models.Model):
+    """Cash/bank/MoMo received against a customer invoice."""
+
+    class Method(models.TextChoices):
+        CASH = "CASH", "Cash"
+        BANK_TRANSFER = "BANK_TRANSFER", "Bank transfer"
+        MOBILE_MONEY = "MOBILE_MONEY", "Mobile money"
+        CHEQUE = "CHEQUE", "Cheque"
+
+    invoice = models.ForeignKey(
+        CustomerInvoice, on_delete=models.PROTECT, related_name="receipts"
+    )
+    receipt_number = models.CharField(max_length=30, unique=True)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    method = models.CharField(max_length=20, choices=Method.choices, default=Method.CASH)
+    reference = models.CharField(max_length=100, blank=True, default="")
+    received_on = models.DateField()
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-received_on", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.receipt_number} · {self.amount}"
+
+
+class CustomerCredit(models.Model):
+    """On-account credit owed back to a customer (e.g. an overpayment).
+
+    Held as a liability until it is applied to a future invoice or refunded.
+    """
+
+    class Source(models.TextChoices):
+        OVERPAYMENT = "OVERPAYMENT", "Overpayment"
+        CREDIT_NOTE = "CREDIT_NOTE", "Credit note"
+        RETURN = "RETURN", "Return"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.PROTECT, related_name="customer_credits_issued"
+    )
+    customer = models.ForeignKey(
+        "iam.Organization", on_delete=models.PROTECT, related_name="customer_credits"
+    )
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    balance = models.DecimalField(max_digits=14, decimal_places=2)
+    source = models.CharField(max_length=20, choices=Source.choices, default=Source.OVERPAYMENT)
+    source_receipt = models.ForeignKey(
+        CustomerReceipt, null=True, blank=True, on_delete=models.SET_NULL, related_name="credits"
+    )
+    notes = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Credit {self.balance} · {self.customer.name}"
+
+
+class DunningNotice(models.Model):
+    """One step of the collections ladder against an overdue invoice.
+
+    Levels escalate with days past due; the final level puts the customer's
+    credit profile on hold so no further B2B orders can be placed.
+    """
+
+    class Level(models.TextChoices):
+        REMINDER = "REMINDER", "Reminder (7 days)"
+        SECOND = "SECOND", "Second notice (14 days)"
+        FINAL = "FINAL", "Final demand (30 days)"
+        LEGAL = "LEGAL", "Legal / hold (60 days)"
+
+    invoice = models.ForeignKey(
+        CustomerInvoice, on_delete=models.CASCADE, related_name="dunning_notices"
+    )
+    level = models.CharField(max_length=10, choices=Level.choices)
+    days_past_due = models.IntegerField()
+    amount_due = models.DecimalField(max_digits=14, decimal_places=2)
+    sent_on = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-sent_on", "-id"]
+        constraints = [
+            # One notice per level per invoice — makes the ladder idempotent.
+            models.UniqueConstraint(
+                fields=["invoice", "level"], name="uniq_dunning_level_per_invoice"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.level} · {self.invoice.invoice_number}"

@@ -716,3 +716,150 @@ def _payroll_liability_balance(organization: Organization, code: str) -> Decimal
     rows = account_balances(organization, end=date.today())
     match = next((r for r in rows if r.code == code), None)
     return match.signed if match else Decimal("0")
+
+
+# ---------------------------------------------------------------------------
+# Accounts receivable reporting: aging + statement of account
+# ---------------------------------------------------------------------------
+
+# Upper bound (days past due) for each bucket; None means "everything older".
+_AGING_BUCKETS: list[tuple[str, int | None]] = [
+    ("current", 0),
+    ("days_1_30", 30),
+    ("days_31_60", 60),
+    ("days_61_90", 90),
+    ("days_90_plus", None),
+]
+
+
+def _bucket_for(days_past_due: int) -> str:
+    """Name the aging bucket a given overdue age falls into."""
+    if days_past_due <= 0:
+        return "current"
+    for name, upper in _AGING_BUCKETS[1:]:
+        if upper is None or days_past_due <= upper:
+            return name
+    return "days_90_plus"
+
+
+def ar_aging(organization: Organization, *, as_of: date | None = None) -> dict[str, Any]:
+    """Age every open customer invoice for ``organization`` into buckets.
+
+    Returns per-customer rows plus org-wide totals. Only the unpaid balance
+    counts, so a part-paid invoice ages only what is still owed.
+    """
+    from apps.finance.models import CustomerInvoice  # local: avoids an import cycle
+
+    as_of = as_of or date.today()
+    zero = Decimal("0.00")
+    totals: dict[str, Decimal] = {name: zero for name, _ in _AGING_BUCKETS}
+    totals["outstanding"] = zero
+    by_customer: dict[int, dict[str, Any]] = {}
+
+    open_invoices = (
+        CustomerInvoice.objects.filter(organization=organization)
+        .exclude(
+            status__in=[CustomerInvoice.Status.PAID, CustomerInvoice.Status.CANCELLED]
+        )
+        .select_related("customer")
+    )
+    for invoice in open_invoices:
+        due = (invoice.total_amount - invoice.amount_paid).quantize(Decimal("0.01"))
+        if due <= 0:
+            continue
+        bucket = _bucket_for((as_of - invoice.due_date).days)
+
+        row = by_customer.setdefault(
+            invoice.customer_id,
+            {
+                "customer_id": invoice.customer_id,
+                "customer_name": invoice.customer.name,
+                **{name: zero for name, _ in _AGING_BUCKETS},
+                "outstanding": zero,
+            },
+        )
+        row[bucket] += due
+        row["outstanding"] += due
+        totals[bucket] += due
+        totals["outstanding"] += due
+
+    return {
+        "organization_id": organization.pk,
+        "as_of": as_of,
+        "customers": sorted(
+            by_customer.values(), key=lambda r: r["outstanding"], reverse=True
+        ),
+        "totals": totals,
+    }
+
+
+def statement_of_account(
+    organization: Organization,
+    customer: Organization,
+    *,
+    start: date,
+    end: date,
+) -> dict[str, Any]:
+    """A running statement of what a customer was invoiced and what they paid.
+
+    ``opening_balance`` is everything owed before ``start``; each line then
+    moves the running balance, and ``closing_balance`` is where it lands.
+    """
+    from apps.finance.models import CustomerInvoice, CustomerReceipt
+
+    zero = Decimal("0.00")
+    invoices = CustomerInvoice.objects.filter(
+        organization=organization, customer=customer
+    ).exclude(status=CustomerInvoice.Status.CANCELLED)
+    receipts = CustomerReceipt.objects.filter(
+        invoice__organization=organization, invoice__customer=customer
+    ).select_related("invoice")
+
+    # Opening: invoices raised before the window, less receipts before it.
+    opening = zero
+    for inv in invoices.filter(invoice_date__lt=start):
+        opening += inv.total_amount
+    for rcp in receipts.filter(received_on__lt=start):
+        opening -= rcp.amount
+    opening = opening.quantize(Decimal("0.01"))
+
+    lines: list[dict[str, Any]] = []
+    for inv in invoices.filter(invoice_date__gte=start, invoice_date__lte=end):
+        lines.append(
+            {
+                "date": inv.invoice_date,
+                "kind": "INVOICE",
+                "reference": inv.invoice_number,
+                "debit": inv.total_amount,
+                "credit": zero,
+                "description": f"Invoice due {inv.due_date}",
+            }
+        )
+    for rcp in receipts.filter(received_on__gte=start, received_on__lte=end):
+        lines.append(
+            {
+                "date": rcp.received_on,
+                "kind": "RECEIPT",
+                "reference": rcp.receipt_number,
+                "debit": zero,
+                "credit": rcp.amount,
+                "description": f"Receipt ({rcp.method}) on {rcp.invoice.invoice_number}",
+            }
+        )
+
+    lines.sort(key=lambda ln: (ln["date"], ln["kind"]))
+    running = opening
+    for line in lines:
+        running = (running + line["debit"] - line["credit"]).quantize(Decimal("0.01"))
+        line["balance"] = running
+
+    return {
+        "organization_id": organization.pk,
+        "customer_id": customer.pk,
+        "customer_name": customer.name,
+        "start": start,
+        "end": end,
+        "opening_balance": opening,
+        "closing_balance": running.quantize(Decimal("0.01")),
+        "lines": lines,
+    }
