@@ -21,10 +21,20 @@ import { UsersPage } from "./pages/UsersPage";
 import { ActivityPage } from "./pages/ActivityPage";
 import { CompaniesPage } from "./pages/CompaniesPage";
 import { PermissionMatrixPage } from "./pages/PermissionMatrixPage";
+import { ApprovalsInboxPage } from "./pages/ApprovalsInboxPage";
+import { ChartOfAccountsPage } from "./pages/ChartOfAccountsPage";
+import { JournalPage } from "./pages/JournalPage";
+import { CreditProfilesPage } from "./pages/CreditProfilesPage";
+import { EmployeesPage } from "./pages/EmployeesPage";
+import { EmployeeDetailPage } from "./pages/EmployeeDetailPage";
+import { PayrollPage } from "./pages/PayrollPage";
+import { SupplierBillsPage } from "./pages/SupplierBillsPage";
 import { AdminHome } from "./pages/apps/AdminHome";
 import { RetailHome } from "./pages/apps/RetailHome";
 import { CatalogHome } from "./pages/apps/CatalogHome";
 import { DistributionHome } from "./pages/apps/DistributionHome";
+import { FinanceHome } from "./pages/apps/FinanceHome";
+import { PeopleHome } from "./pages/apps/PeopleHome";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
@@ -52,6 +62,8 @@ function RequireRoles({ roles, children }: { roles: string[]; children: ReactNod
 }
 const adminOnly = (el: ReactNode) => <RequireRoles roles={[]}>{el}</RequireRoles>;
 const forPharmacy = (el: ReactNode) => <RequireRoles roles={["PHARMACIST"]}>{el}</RequireRoles>;
+const forFinance = (el: ReactNode) => <RequireRoles roles={["ACCOUNTANT"]}>{el}</RequireRoles>;
+const forHR = (el: ReactNode) => <RequireRoles roles={["HR_MANAGER"]}>{el}</RequireRoles>;
 
 function App() {
   return (
@@ -78,7 +90,17 @@ function App() {
               <Route path="/suppliers" element={adminOnly(<SuppliersPage />)} />
               <Route path="/orders" element={forPharmacy(<OrdersPage />)} />
               <Route path="/pos" element={<PosPage />} />
-              <Route path="/finance" element={adminOnly(<FinancePage />)} />
+              <Route path="/finance" element={forFinance(<FinanceHome />)} />
+              <Route path="/finance/aging" element={forFinance(<FinancePage />)} />
+              <Route path="/finance/accounts" element={forFinance(<ChartOfAccountsPage />)} />
+              <Route path="/finance/journal" element={forFinance(<JournalPage />)} />
+              <Route path="/finance/credit" element={forFinance(<CreditProfilesPage />)} />
+              <Route path="/finance/payables" element={forFinance(<SupplierBillsPage />)} />
+              <Route path="/people" element={forHR(<PeopleHome />)} />
+              <Route path="/people/employees" element={forHR(<EmployeesPage />)} />
+              <Route path="/people/employees/:id" element={forHR(<EmployeeDetailPage />)} />
+              <Route path="/people/payroll" element={forHR(<PayrollPage />)} />
+              <Route path="/approvals" element={<ApprovalsInboxPage />} />
               <Route path="/documents" element={<DocumentsPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

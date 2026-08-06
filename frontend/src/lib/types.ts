@@ -516,6 +516,132 @@ export interface Payment {
   created_at?: string;
 }
 
+export interface ApprovalRequest {
+  id: number;
+  resource_type: string;
+  resource_id: string;
+  organization: number;
+  organization_name: string;
+  requested_by: number;
+  requested_by_name: string;
+  payload: Record<string, unknown>;
+  reason: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  claimed_by: number | null;
+  claimed_by_name: string | null;
+  claimed_at: string | null;
+  sla_hours: number;
+  sla_deadline: string;
+  sla_breached: boolean;
+  is_overdue: boolean;
+  decided_by: number | null;
+  decided_by_name: string | null;
+  decided_at: string | null;
+  decision_note: string;
+  created_at: string;
+}
+
+export type AccountType = "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE";
+export type BalanceSide = "DEBIT" | "CREDIT";
+
+export interface Account {
+  id: number;
+  organization: number;
+  code: string;
+  name: string;
+  account_type: AccountType;
+  normal_balance: BalanceSide;
+  parent: number | null;
+  is_system: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JournalLine {
+  id?: number;
+  account: number;
+  account_code?: string;
+  account_name?: string;
+  side: BalanceSide;
+  amount: string;
+  memo?: string;
+}
+
+export interface JournalEntry {
+  id: number;
+  organization: number;
+  organization_name: string;
+  entry_number: string;
+  entry_date: string;
+  description: string;
+  reference_type: string;
+  reference_id: string;
+  status: "POSTED" | "REVERSED";
+  total_debit: number;
+  total_credit: number;
+  lines: JournalLine[];
+  created_at: string;
+}
+
+export interface CreditProfile {
+  id: number;
+  creditor: number;
+  creditor_name: string;
+  debtor: number;
+  debtor_name: string;
+  credit_limit: string;
+  terms_days: number;
+  status: "ACTIVE" | "HOLD";
+  hold_reason: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeDocument {
+  id: number;
+  doc_type: string;
+  document_url: string;
+  uploaded_at: string;
+}
+
+export type EmploymentType = "FULL_TIME" | "PART_TIME" | "CONTRACT";
+export type EmploymentStatus = "PROBATION" | "ACTIVE" | "SUSPENDED" | "TERMINATED";
+
+export interface Employee {
+  id: number;
+  user: number | null;
+  user_username: string | null;
+  organization: number;
+  organization_name: string;
+  department: number | null;
+  department_name: string | null;
+  employee_number: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  national_id: string;
+  job_title: string;
+  employment_type: EmploymentType;
+  employment_status: EmploymentStatus;
+  hire_date: string;
+  end_date: string | null;
+  base_salary: string;
+  bank_account: string;
+  momo_number: string;
+  rssb_number: string;
+  license: number | null;
+  license_number: string | null;
+  next_of_kin_name: string;
+  next_of_kin_relation: string;
+  next_of_kin_phone: string;
+  emergency_contact_phone: string;
+  address: string;
+  documents: EmployeeDocument[];
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Sale {
   id: number;
   sale_number: string;
@@ -533,5 +659,85 @@ export interface Sale {
   items: SaleItem[];
   payments: Payment[];
   completed_at: string | null;
+  created_at: string;
+}
+
+export interface StatutoryRate {
+  id: number;
+  country: string;
+  rate_type: string;
+  band_min: string;
+  band_max: string | null;
+  rate_pct: string;
+  effective_from: string;
+  effective_to: string | null;
+}
+
+export interface PayrollRecord {
+  id: number;
+  employee: number;
+  employee_name: string;
+  employee_number: string;
+  base_salary: string;
+  allowances: string;
+  overtime_amount: string;
+  bonus_commission: string;
+  shift_premium: string;
+  gross: string;
+  paye: string;
+  pension_employee: string;
+  pension_employer: string;
+  maternity_employee: string;
+  maternity_employer: string;
+  cbhi: string;
+  loans_advances: string;
+  other_deductions: string;
+  net_pay: string;
+  payslip_document_id: string;
+}
+
+export type PayrollRunStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "PAID";
+
+export interface PayrollRun {
+  id: number;
+  organization: number;
+  organization_name: string;
+  period_start: string;
+  period_end: string;
+  status: PayrollRunStatus;
+  created_by: number | null;
+  created_by_name: string | null;
+  approved_by: number | null;
+  approved_by_name: string | null;
+  created_at: string;
+  approved_at: string | null;
+  records: PayrollRecord[];
+  total_net_pay: string;
+}
+
+export interface SupplierBillPayment {
+  id: number;
+  amount: string;
+  method: OrderPaymentMethod;
+  reference: string;
+  paid_at: string;
+}
+
+export interface SupplierBill {
+  id: number;
+  organization: number;
+  supplier: number;
+  supplier_name: string;
+  bill_number: string;
+  bill_date: string;
+  due_date: string | null;
+  total_amount: string;
+  amount_paid: string;
+  amount_due: string;
+  status: "UNPAID" | "PARTIAL" | "PAID";
+  reference_type: string;
+  reference_id: string;
+  notes: string;
+  payments: SupplierBillPayment[];
   created_at: string;
 }

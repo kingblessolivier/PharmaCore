@@ -3,10 +3,12 @@ import {
   Activity,
   BarChart3,
   Bell,
+  BookOpen,
   Boxes,
   Building2,
   ChevronDown,
   ClipboardList,
+  CreditCard,
   Eye,
   FileText,
   Globe,
@@ -16,11 +18,13 @@ import {
   MessageSquare,
   Network,
   Pill,
+  ScrollText,
   Search,
   Shield,
   ShieldCheck,
   ShoppingCart,
   Truck,
+  UserCog,
   Users,
   Wallet,
 } from "lucide-react";
@@ -62,7 +66,7 @@ const APPS: AppTile[] = [
   { label: "Insights", hue: "#DB2777", icon: BarChart3, to: "/", roles: "all" },
   { label: "Admin", hue: "#475569", icon: ShieldCheck, to: "/admin", roles: ["ORG_ADMIN"] },
   { label: "Insurance", hue: "#7C3AED", icon: Shield, to: null, roles: "all" },
-  { label: "People", hue: "#EA580C", icon: Users, to: null, roles: "all" },
+  { label: "People", hue: "#EA580C", icon: Users, to: "/people", roles: ["HR_MANAGER"] },
   { label: "Online", hue: "#0EA5E9", icon: Globe, to: null, roles: "all" },
   { label: "Connect", hue: "#2563EB", icon: MessageSquare, to: null, roles: "all" },
 ];
@@ -312,7 +316,32 @@ const NAV: NavGroup[] = [
     ],
   },
   { label: "Retail", roles: "all", items: [{ to: "/pos", label: "Point of sale", icon: ShoppingCart }] },
-  { label: "Finance", roles: ["ORG_ADMIN"], items: [{ to: "/finance", label: "Finance", icon: Wallet }] },
+  {
+    label: "Finance",
+    roles: ["ACCOUNTANT"],
+    items: [
+      { to: "/finance", label: "Overview", icon: Wallet, end: true },
+      { to: "/finance/aging", label: "Receivables & payables", icon: CreditCard },
+      { to: "/finance/accounts", label: "Chart of accounts", icon: BookOpen },
+      { to: "/finance/journal", label: "Journal", icon: ScrollText },
+      { to: "/finance/credit", label: "Customer credit", icon: Wallet },
+      { to: "/finance/payables", label: "Supplier bills (AP)", icon: CreditCard },
+    ],
+  },
+  {
+    label: "People",
+    roles: ["HR_MANAGER"],
+    items: [
+      { to: "/people", label: "Overview", icon: Users, end: true },
+      { to: "/people/employees", label: "Employees", icon: UserCog },
+      { to: "/people/payroll", label: "Payroll", icon: Wallet },
+    ],
+  },
+  {
+    label: "",
+    roles: "all",
+    items: [{ to: "/approvals", label: "Approvals", icon: ShieldCheck }],
+  },
   { label: "Insights", roles: ["ORG_ADMIN"], items: [{ to: "/documents", label: "Documents", icon: FileText }] },
   {
     label: "Admin",
@@ -447,7 +476,7 @@ export function AppShell() {
               <div className="mt-4 px-3 text-[11px] uppercase tracking-wide text-ink-500">
                 More modules
               </div>
-              {["Insurance", "People (HR)", "Online store"].map((m) => (
+              {["Insurance", "Online store"].map((m) => (
                 <div key={m} className="px-3 py-1.5 text-sm text-ink-500/60">
                   {m} <span className="text-[10px]">soon</span>
                 </div>
