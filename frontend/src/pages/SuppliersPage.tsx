@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { Button, ConfirmModal, Modal, PageHeader, Spinner, TextField } from "../components/ui";
+import { Button, ConfirmModal, Modal, PageHeader, TextField } from "../components/ui";
+import { DataGrid } from "../components/DataGrid";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { isAdmin } from "../lib/roles";
@@ -70,44 +71,56 @@ export function SuppliersPage() {
         title="Suppliers"
         action={admin && <Button onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> New supplier</Button>}
       />
-      {isLoading && <div className="flex justify-center py-10"><Spinner /></div>}
-      {data && (
-        <div className="overflow-hidden rounded-lg border border-line bg-surface-0">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-2.5">Name</th>
-                <th className="px-4 py-2.5">TIN</th>
-                <th className="px-4 py-2.5">Phone</th>
-                <th className="px-4 py-2.5 text-right">Lead time</th>
-                {admin && <th className="px-4 py-2.5 text-right">Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {data.results.map((s) => (
-                <tr key={s.id} className="border-b border-line last:border-0 hover:bg-surface-100">
-                  <td className="px-4 py-2.5 font-medium">{s.name}</td>
-                  <td className="px-4 py-2.5 font-mono text-ink-700">{s.tin || "—"}</td>
-                  <td className="px-4 py-2.5 text-ink-700">{s.phone || "—"}</td>
-                  <td className="px-4 py-2.5 text-right">{s.lead_time_days}d</td>
-                  {admin && (
-                    <td className="px-4 py-2.5">
-                      <div className="flex justify-end">
-                        <button onClick={() => setDeleting(s)} className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600" aria-label={`Delete ${s.name}`}>
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-              {data.results.length === 0 && (
-                <tr><td colSpan={admin ? 5 : 4} className="px-4 py-8 text-center text-ink-500">No suppliers yet.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataGrid<Supplier>
+        rows={data?.results ?? []}
+        loading={isLoading}
+        getRowId={(s) => s.id}
+        storageKey="suppliers"
+        exportName="suppliers"
+        searchPlaceholder="Search suppliers by name, TIN, phone…"
+        emptyMessage="No suppliers yet."
+        columns={[
+          { key: "name", header: "Name", render: (s) => <span className="font-medium">{s.name}</span> },
+          {
+            key: "tin",
+            header: "TIN",
+            value: (s) => s.tin || "—",
+            render: (s) => <span className="font-mono text-ink-700">{s.tin || "—"}</span>,
+          },
+          { key: "phone", header: "Phone", value: (s) => s.phone || "—" },
+          {
+            key: "lead_time_days",
+            header: "Lead time",
+            align: "right",
+            numeric: true,
+            value: (s) => s.lead_time_days,
+            render: (s) => <>{s.lead_time_days}d</>,
+          },
+          ...(admin
+            ? [
+                {
+                  key: "actions",
+                  header: "Actions",
+                  align: "right" as const,
+                  fixed: true,
+                  sortable: false,
+                  render: (s: Supplier) => (
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => setDeleting(s)}
+                        className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
+                        aria-label={`Delete ${s.name}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ),
+                },
+              ]
+            : []),
+        ]}
+      />
+
       {adding && <SupplierModal onClose={() => setAdding(false)} />}
       {deleting && (
         <ConfirmModal title="Delete supplier" message={`Delete "${deleting.name}"?`} busy={del.isPending} onConfirm={() => del.mutate(deleting.id)} onClose={() => setDeleting(null)} />

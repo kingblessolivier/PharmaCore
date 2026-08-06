@@ -9,9 +9,9 @@ import {
   Modal,
   PageHeader,
   SelectField,
-  Spinner,
   TextField,
 } from "../components/ui";
+import { DataGrid } from "../components/DataGrid";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { isAdmin } from "../lib/roles";
@@ -554,93 +554,94 @@ export function ProductsPage() {
         />
       </div>
 
-      {isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
-      {isError && <p className="text-sm text-red-600">Failed to load products.</p>}
-
-      {data && (
-        <div className="overflow-hidden rounded-lg border border-line bg-surface-0">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-2.5">Medicine</th>
-                <th className="px-4 py-2.5">Form</th>
-                <th className="px-4 py-2.5">Strength</th>
-                <th className="px-4 py-2.5">Tax</th>
-                <th className="px-4 py-2.5">Rx</th>
-                {admin && <th className="px-4 py-2.5 text-right">Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {data.results.map((p) => (
-                <tr key={p.id} className="border-b border-line last:border-0 hover:bg-surface-100">
-                  <td className="px-4 py-2.5">
-                    <div className="flex items-center gap-3">
-                      {p.image_url ? (
-                        <img
-                          src={p.image_url}
-                          alt=""
-                          className="h-9 w-9 shrink-0 rounded-md border border-line object-contain"
-                          onError={(e) => (e.currentTarget.style.visibility = "hidden")}
-                        />
-                      ) : (
-                        <div className="h-9 w-9 shrink-0 rounded-md border border-line bg-surface-100" />
-                      )}
-                      <div>
-                        <Link
-                          to={`/products/${p.id}`}
-                          className="font-medium text-ink-900 hover:text-brand-700 hover:underline"
-                        >
-                          {p.generic_name}
-                        </Link>
-                        {p.brand_name && (
-                          <div className="text-xs text-ink-500">{p.brand_name}</div>
-                        )}
-                      </div>
+      <DataGrid<Product>
+        rows={data?.results ?? []}
+        loading={isLoading}
+        getRowId={(p) => p.id}
+        storageKey="products"
+        exportName="products"
+        searchPlaceholder="Filter loaded medicines…"
+        emptyMessage={search ? "No medicines match your search." : "No medicines yet."}
+        columns={[
+          {
+            key: "generic_name",
+            header: "Medicine",
+            value: (p) => `${p.generic_name} ${p.brand_name}`.trim(),
+            render: (p) => (
+              <div className="flex items-center gap-3">
+                {p.image_url ? (
+                  <img
+                    src={p.image_url}
+                    alt=""
+                    className="h-9 w-9 shrink-0 rounded-md border border-line object-contain"
+                    onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+                  />
+                ) : (
+                  <div className="h-9 w-9 shrink-0 rounded-md border border-line bg-surface-100" />
+                )}
+                <div>
+                  <Link
+                    to={`/products/${p.id}`}
+                    className="font-medium text-ink-900 hover:text-brand-700 hover:underline"
+                  >
+                    {p.generic_name}
+                  </Link>
+                  {p.brand_name && <div className="text-xs text-ink-500">{p.brand_name}</div>}
+                </div>
+              </div>
+            ),
+          },
+          { key: "dosage_form", header: "Form", value: (p) => p.dosage_form },
+          {
+            key: "strength",
+            header: "Strength",
+            value: (p) => p.strength || "—",
+            render: (p) => <span className="font-mono text-ink-700">{p.strength || "—"}</span>,
+          },
+          {
+            key: "tax_class",
+            header: "Tax",
+            value: (p) => p.tax_class,
+            render: (p) => <span className="font-mono">{p.tax_class}</span>,
+          },
+          {
+            key: "requires_prescription",
+            header: "Rx",
+            value: (p) => (p.requires_prescription ? "Rx" : ""),
+            render: (p) => (p.requires_prescription ? <Badge>Rx</Badge> : null),
+          },
+          ...(admin
+            ? [
+                {
+                  key: "actions",
+                  header: "Actions",
+                  align: "right" as const,
+                  fixed: true,
+                  sortable: false,
+                  render: (p: Product) => (
+                    <div className="flex justify-end gap-1">
+                      <button
+                        onClick={() => setEditing(p)}
+                        className="rounded-md p-1.5 text-ink-500 hover:bg-surface-100 hover:text-ink-900"
+                        aria-label={`Edit ${p.generic_name}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setDeleting(p)}
+                        className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
+                        aria-label={`Delete ${p.generic_name}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
-                  </td>
-                  <td className="px-4 py-2.5 text-ink-700">{p.dosage_form}</td>
-                  <td className="px-4 py-2.5 font-mono text-ink-700">{p.strength || "—"}</td>
-                  <td className="px-4 py-2.5 font-mono">{p.tax_class}</td>
-                  <td className="px-4 py-2.5">
-                    {p.requires_prescription && <Badge>Rx</Badge>}
-                  </td>
-                  {admin && (
-                    <td className="px-4 py-2.5">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          onClick={() => setEditing(p)}
-                          className="rounded-md p-1.5 text-ink-500 hover:bg-surface-100 hover:text-ink-900"
-                          aria-label={`Edit ${p.generic_name}`}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeleting(p)}
-                          className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
-                          aria-label={`Delete ${p.generic_name}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-              {data.results.length === 0 && (
-                <tr>
-                  <td colSpan={admin ? 6 : 5} className="px-4 py-8 text-center text-ink-500">
-                    {search ? "No medicines match your search." : "No medicines yet."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+                  ),
+                },
+              ]
+            : []),
+        ]}
+      />
+      {isError && <p className="text-sm text-red-600">Failed to load products.</p>}
 
       {importing && <ImportModal onClose={() => setImporting(false)} />}
       {creating && <ProductFormModal onClose={() => setCreating(false)} />}

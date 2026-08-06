@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { api, ApiError } from "../lib/api";
 import type { Company, Organization, Paginated } from "../lib/types";
 import { Badge, Button, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
+import { DataGrid } from "../components/DataGrid";
 
 function CompanyModal({ company, onClose }: { company?: Company; onClose: () => void }) {
   const qc = useQueryClient();
@@ -201,65 +202,58 @@ export function CompaniesPage() {
         company with one branch; a chain is a company with an HQ and several branches.
       </p>
 
-      {companies.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
-      {companies.data && (
-        <div className="overflow-hidden rounded-lg border border-line bg-surface-0">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-2.5">Company</th>
-                <th className="px-4 py-2.5">TIN</th>
-                <th className="px-4 py-2.5">Reg no.</th>
-                <th className="px-4 py-2.5">Branches</th>
-                <th className="px-4 py-2.5">Status</th>
-                <th className="px-4 py-2.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {companies.data.results.map((c) => (
-                <tr key={c.id} className="border-b border-line last:border-0 hover:bg-surface-100">
-                  <td className="px-4 py-2.5">
-                    <span className="flex items-center gap-2 font-medium">
-                      <Building2 className="h-4 w-4 text-ink-500" /> {c.name}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-ink-700">{c.tin || "—"}</td>
-                  <td className="px-4 py-2.5 text-ink-700">{c.registration_number || "—"}</td>
-                  <td className="px-4 py-2.5 text-ink-700">{c.branch_count}</td>
-                  <td className="px-4 py-2.5">
-                    {c.is_active ? (
-                      <span className="text-success">Active</span>
-                    ) : (
-                      <span className="text-ink-500">Inactive</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="secondary" onClick={() => setViewing(c)}>
-                        <Network className="h-3.5 w-3.5" /> Branches
-                      </Button>
-                      <Button variant="secondary" onClick={() => setEditing(c)}>
-                        Edit
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {companies.data.results.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-ink-500">
-                    No companies yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataGrid<Company>
+        rows={companies.data?.results ?? []}
+        loading={companies.isLoading}
+        getRowId={(c) => c.id}
+        storageKey="companies"
+        exportName="companies"
+        searchPlaceholder="Search companies by name, TIN, reg no…"
+        emptyMessage="No companies yet."
+        columns={[
+          {
+            key: "name",
+            header: "Company",
+            render: (c) => (
+              <span className="flex items-center gap-2 font-medium">
+                <Building2 className="h-4 w-4 text-ink-500" /> {c.name}
+              </span>
+            ),
+          },
+          { key: "tin", header: "TIN", value: (c) => c.tin || "—" },
+          { key: "registration_number", header: "Reg no.", value: (c) => c.registration_number || "—" },
+          { key: "branch_count", header: "Branches", align: "right", numeric: true, value: (c) => c.branch_count },
+          {
+            key: "is_active",
+            header: "Status",
+            value: (c) => (c.is_active ? "Active" : "Inactive"),
+            render: (c) =>
+              c.is_active ? (
+                <span className="text-success">Active</span>
+              ) : (
+                <span className="text-ink-500">Inactive</span>
+              ),
+          },
+          {
+            key: "actions",
+            header: "Actions",
+            align: "right",
+            fixed: true,
+            sortable: false,
+            render: (c) => (
+              <div className="flex justify-end gap-1">
+                <Button variant="secondary" onClick={() => setViewing(c)}>
+                  <Network className="h-3.5 w-3.5" /> Branches
+                </Button>
+                <Button variant="secondary" onClick={() => setEditing(c)}>
+                  Edit
+                </Button>
+              </div>
+            ),
+          },
+        ]}
+      />
+
 
       {adding && <CompanyModal onClose={() => setAdding(false)} />}
       {editing && <CompanyModal company={editing} onClose={() => setEditing(null)} />}
