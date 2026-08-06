@@ -23,6 +23,7 @@ from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from apps.iam.audit import _client_ip, record_audit
+from apps.iam.authentication import VersionedTokenObtainPairSerializer
 from apps.iam.models import (
     AuditLog,
     Company,
@@ -88,6 +89,8 @@ class LoginView(TokenObtainPairView):
     The ``username`` field accepts either a username or a PF/staff number.
     """
 
+    serializer_class = VersionedTokenObtainPairSerializer  # type: ignore[assignment]
+
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         identifier = request.data.get("username", "")
         try:
@@ -148,6 +151,7 @@ class ImpersonateView(APIView):
         token = AccessToken.for_user(target)
         token["act_as_admin_id"] = actor.pk
         token["imp"] = session.pk
+        token["tv"] = target.token_version
         record_audit(
             action="IMPERSONATE_START",
             user=actor,
@@ -668,6 +672,23 @@ class UserViewSet(viewsets.ModelViewSet):
             request=request,
         )
         return Response({"detail": "Password reset. The user must change it on next sign-in."})
+
+    @action(detail=True, methods=["post"], url_path="force-logout")
+    def force_logout(self, request: Request, pk: str | None = None) -> Response:
+        """Revoke all of a user's sessions: bump token_version so every outstanding
+        token (access + refresh) is rejected on next use. Audited."""
+        target = self.get_object()
+        target.token_version += 1
+        target.save(update_fields=["token_version"])
+        record_audit(
+            action="FORCE_LOGOUT",
+            user=cast(User, request.user),
+            organization=target.organization,
+            entity_type="user",
+            entity_id=str(target.pk),
+            request=request,
+        )
+        return Response({"detail": "All of this user's sessions have been ended."})
 
     @action(detail=True, methods=["get"])
     def performance(self, request: Request, pk: str | None = None) -> Response:

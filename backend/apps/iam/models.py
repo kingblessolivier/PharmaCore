@@ -242,6 +242,8 @@ class User(AbstractUser):
     roles = models.ManyToManyField(Role, related_name="users", blank=True)
     # Set True when an admin resets the password; the user must set a new one.
     must_change_password = models.BooleanField(default=False)
+    # Bumped to invalidate all outstanding tokens (force-logout / session revocation).
+    token_version = models.PositiveIntegerField(default=0)
 
     class Meta(AbstractUser.Meta):  # type: ignore[name-defined]
         constraints = [
