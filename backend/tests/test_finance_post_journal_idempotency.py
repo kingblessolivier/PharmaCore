@@ -107,7 +107,6 @@ def test_post_journal_same_reference_different_org_is_allowed(organization, org_
     other = Organization.objects.create(
         name="Other Pharmacy Ltd",
         type=Organization.OrgType.RETAIL,
-        currency="RWF",
     )
     a = post_journal(
         organization=organization,

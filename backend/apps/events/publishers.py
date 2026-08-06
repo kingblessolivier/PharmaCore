@@ -177,3 +177,98 @@ def publish_fiscal_period_event(
         organization_id=organization.pk,
         user=user,
     )
+
+
+def publish_inventory_adjusted(
+    *,
+    organization: Organization,
+    user: User | None,
+    batch_id: int | str,
+    product_id: int | str | None,
+    delta: int,
+    amount: Decimal | None,
+    reason: str,
+    reference_type: str,
+    reference_id: str,
+) -> None:
+    """An approved stock-count variance has been reconciled into the books.
+
+    Emitted from the same call site that posts the journal leg so the
+    downstream Reporting / Insights rebuild gets the same picture.
+    """
+    publish(
+        event_type=EventType.INVENTORY_ADJUSTED,
+        payload={
+            "batch_id": str(batch_id),
+            "product_id": str(product_id) if product_id else None,
+            "delta": int(delta),
+            "amount": str(amount) if amount is not None else None,
+            "reason": reason,
+            "reference_type": reference_type,
+            "reference_id": str(reference_id),
+        },
+        source_doc_type=reference_type or "stock_count",
+        source_doc_id=reference_id,
+        organization_id=organization.pk,
+        user=user,
+    )
+
+
+def publish_stock_disposed(
+    *,
+    organization: Organization,
+    user: User | None,
+    batch_id: int | str,
+    product_id: int | str | None,
+    quantity: int,
+    amount: Decimal | None,
+    reason: str,
+    reference_type: str,
+    reference_id: str,
+) -> None:
+    """Wastage / destruction / recall-driven writeoff posted to the GL."""
+    publish(
+        event_type=EventType.STOCK_DISPOSED,
+        payload={
+            "batch_id": str(batch_id),
+            "product_id": str(product_id) if product_id else None,
+            "quantity": int(quantity),
+            "amount": str(amount) if amount is not None else None,
+            "reason": reason,
+            "reference_type": reference_type,
+            "reference_id": str(reference_id),
+        },
+        source_doc_type=reference_type or "wastage",
+        source_doc_id=reference_id,
+        organization_id=organization.pk,
+        user=user,
+    )
+
+
+def publish_statutory_payment_confirmed(
+    *,
+    organization: Organization,
+    user: User | None,
+    payment_id: int | str,
+    amount: Decimal,
+    period_start: str,
+    period_end: str,
+    rra_reference: str = "",
+) -> None:
+    """An RRA remittance (or other statutory liability payment) was applied
+    successfully and posted Dr Statutory Payable / Cr Cash & Bank.
+    """
+    publish(
+        event_type=EventType.STATUTORY_PAYMENT_CONFIRMED,
+        payload={
+            "payment_id": str(payment_id),
+            "amount": str(amount),
+            "period_start": period_start,
+            "period_end": period_end,
+            "rra_reference": rra_reference,
+        },
+        source_doc_type="finance.TaxPayment",
+        source_doc_id=payment_id,
+        organization_id=organization.pk,
+        user=user,
+    )

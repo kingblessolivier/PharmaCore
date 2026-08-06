@@ -39,18 +39,23 @@ def test_one_tenant_one_settings_row(organization):
 
 
 def test_settings_are_editable_independently_by_tenant(organization):
-    """Tenant A and Tenant B have separate settings rows."""
+    """Tenant A and Tenant B have separate settings rows. Editing one
+    tenant's settings must not bleed into the other."""
     from apps.iam.models import Organization
 
     other = Organization.objects.create(
         name="Other",
         type=Organization.OrgType.RETAIL,
-        currency="USD",
     )
     a = tenant_settings_for(organization)
     b = tenant_settings_for(other)
     assert a.pk != b.pk
-    assert b.base_currency == "USD"
+
+    # Tenant A picks USD; Tenant B stays on the default.
+    a.base_currency = "USD"
+    a.save(update_fields=["base_currency", "updated_at"])
+    b.refresh_from_db()
+    assert b.base_currency == "RWF"
 
 
 def test_costing_method_choices_include_fefo_lot(organization):

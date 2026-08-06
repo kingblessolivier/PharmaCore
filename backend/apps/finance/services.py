@@ -709,6 +709,26 @@ def close_period(
         entity_id=str(period.pk),
         changes=period.closing_totals,
     )
+
+    # F2 — emit FISCAL_PERIOD_CLOSED (or EOM_CLOSE_FINALISED for MONTH-end
+    # closes) on the bus. HQ consolidation in PR F8 consumes these to drive
+    # intercompany eliminations; idempotent on (org, fiscal_period, period.pk).
+    from apps.events.events import EventType
+    from apps.events.publishers import publish_fiscal_period_event
+
+    period_event = (
+        EventType.EOM_CLOSE_FINALISED if kind == AccountingPeriod.Kind.MONTH
+        else EventType.FISCAL_PERIOD_CLOSED
+    )
+    publish_fiscal_period_event(
+        event=period_event,
+        period_id=period.pk,
+        organization=organization,
+        user=user,
+        kind=kind,
+        start_date=str(start_date),
+        end_date=str(end_date),
+    )
     return period
 
 
@@ -731,6 +751,21 @@ def reopen_period(*, period: AccountingPeriod, user: User | None, reason: str) -
         entity_type="accounting_period",
         entity_id=str(period.pk),
         changes={"reason": reason},
+    )
+
+    # F2 — emit PERIOD_REOPENED on the bus so any cached period-closed
+    # reports invalidate and HQ consolidation re-runs.
+    from apps.events.events import EventType
+    from apps.events.publishers import publish_fiscal_period_event
+
+    publish_fiscal_period_event(
+        event=EventType.PERIOD_REOPENED,
+        period_id=period.pk,
+        organization=period.organization,
+        user=user,
+        kind=period.kind,
+        start_date=str(period.start_date),
+        end_date=str(period.end_date),
     )
     return period
 
@@ -920,6 +955,24 @@ def post_inventory_adjustment(
         entity_id=str(batch.pk),
         changes={"delta": delta, "amount": str(amount), "reason": reason},
     )
+
+    # F2 — emit INVENTORY_ADJUSTED on the bus. Reporting / Insights rebuild
+    # the variance event from the same source tuple so a transient dispatcher
+    # failure doesn't block the GL post (which is already idempotent on
+    # (org, reference_type, reference_id)).
+    from apps.events.publishers import publish_inventory_adjusted
+
+    publish_inventory_adjusted(
+        organization=batch.organization,
+        user=user,
+        batch_id=batch.pk,
+        product_id=batch.product_id,
+        delta=delta,
+        amount=amount,
+        reason=reason,
+        reference_type=reference_type,
+        reference_id=reference_id,
+    )
     return entry
 
 
@@ -969,6 +1022,23 @@ def post_writeoff(
         entity_type="inventory_batch",
         entity_id=str(batch.pk),
         changes={"quantity": quantity, "amount": str(amount), "reason": reason},
+    )
+
+    # F2 — emit STOCK_DISPOSED on the bus. Reporting / Insights rebuild the
+    # writeoff-driven shrink event from the same source tuple so a transient
+    # dispatcher failure doesn't block the GL post.
+    from apps.events.publishers import publish_stock_disposed
+
+    publish_stock_disposed(
+        organization=batch.organization,
+        user=user,
+        batch_id=batch.pk,
+        product_id=batch.product_id,
+        quantity=quantity,
+        amount=amount,
+        reason=reason,
+        reference_type=reference_type,
+        reference_id=reference_id,
     )
     return entry
 
@@ -1057,6 +1127,22 @@ def record_tax_payment(
             "period_end": str(period_end),
             "rra_reference": rra_reference,
         },
+    )
+
+    # F2 — emit STATUTORY_PAYMENT_CONFIRMED on the bus. The two-line GL post
+    # above is the source of truth; this event lets Reporting / Insights /
+    # HQ consolidation rebuild the stat-payable cleared report from the same
+    # source tuple (idempotent on (org, tax_payment, payment.pk)).
+    from apps.events.publishers import publish_statutory_payment_confirmed
+
+    publish_statutory_payment_confirmed(
+        organization=organization,
+        user=user,
+        payment_id=payment.pk,
+        amount=amount,
+        period_start=str(period_start),
+        period_end=str(period_end),
+        rra_reference=rra_reference,
     )
     return payment
 
@@ -1204,7 +1290,7 @@ def tenant_settings_for(organization: Organization) -> TenantSettings:
     settings, _created = TenantSettings.objects.get_or_create(
         organization=organization,
         defaults={
-            "base_currency": organization.currency or "RWF",
+            "base_currency": "RWF",
             "fx_provider": "",
             "costing_method": TenantSettings.CostingMethod.FEFO_LOT,
             "pay_period": TenantSettings.PayPeriod.MONTHLY,
