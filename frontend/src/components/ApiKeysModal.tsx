@@ -56,7 +56,7 @@ export function ApiKeysModal({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <Modal title="API keys &amp; service accounts" onClose={onClose}>
+    <Modal title="API keys &amp; service accounts" size="lg" onClose={onClose}>
       <div className="flex flex-col gap-4">
         <p className="text-sm text-ink-500">
           A key authenticates machine/integration requests <strong>as the chosen user</strong>

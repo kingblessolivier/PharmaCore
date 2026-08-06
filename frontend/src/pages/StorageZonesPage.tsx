@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Layers, Plus, Trash2, Warehouse } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Button, Card, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
+import { Badge, Button, Modal, PageHeader, SelectField, TextField } from "../components/ui";
+import { DataGrid } from "../components/DataGrid";
 import { api } from "../lib/api";
 import type { BinLocation, Paginated, StorageZone } from "../lib/types";
 
@@ -109,97 +110,108 @@ export function StorageZonesPage() {
         Climate-controlled storage zones (Ambient, Cold Room 2–8°C, Freezer, Safe) and bin locations.
       </p>
 
-      {zonesQuery.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
+      <div className="flex flex-col gap-6">
+        <div>
+          <h2 className="mb-2 text-sm font-semibold text-ink-900">Climate Storage Zones</h2>
+          <DataGrid<StorageZone>
+            rows={zonesQuery.data?.results ?? []}
+            loading={zonesQuery.isLoading}
+            getRowId={(z) => z.id}
+            storageKey="storage-zones"
+            exportName="storage-zones"
+            searchPlaceholder="Search zones by name or climate type…"
+            emptyMessage="No storage zones configured yet."
+            columns={[
+              {
+                key: "name",
+                header: "Zone Name",
+                render: (z) => (
+                  <span className="flex items-center gap-2 font-semibold text-ink-900">
+                    <Warehouse className="h-4 w-4 text-brand-600" />
+                    {z.name}
+                  </span>
+                ),
+              },
+              {
+                key: "zone_type",
+                header: "Climate Type",
+                render: (z) => (
+                  <Badge tone={z.zone_type === "COLD_CHAIN" ? "warning" : "neutral"}>
+                    {z.zone_type}
+                  </Badge>
+                ),
+              },
+              {
+                key: "temp_range",
+                header: "Temp Range",
+                value: (z) => Number(z.temp_min_celsius),
+                render: (z) => (
+                  <span className="font-mono text-ink-700">
+                    {z.temp_min_celsius}°C to {z.temp_max_celsius}°C
+                  </span>
+                ),
+              },
+              {
+                key: "bins_count",
+                header: "Bins Count",
+                align: "center",
+                numeric: true,
+                value: (z) => z.bins_count,
+              },
+              {
+                key: "actions",
+                header: "Actions",
+                align: "right",
+                fixed: true,
+                sortable: false,
+                render: (z) => (
+                  <button
+                    onClick={() => deleteZoneMutation.mutate(z.id)}
+                    className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
+                    aria-label="Delete zone"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                ),
+              },
+            ]}
+          />
         </div>
-      )}
 
-      {zonesQuery.data && (
-        <div className="flex flex-col gap-6">
-          <Card className="overflow-hidden">
-            <div className="flex items-center justify-between border-b border-line bg-surface-100 px-4 py-3">
-              <span className="text-sm font-semibold text-ink-900">Climate Storage Zones</span>
-            </div>
-            <table className="w-full text-sm">
-              <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
-                <tr>
-                  <th className="px-4 py-3">Zone Name</th>
-                  <th className="px-4 py-3">Climate Type</th>
-                  <th className="px-4 py-3">Temp Range</th>
-                  <th className="px-4 py-3 text-center">Bins Count</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {zonesQuery.data.results.map((z) => (
-                  <tr key={z.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                    <td className="px-4 py-3 font-semibold text-ink-900 flex items-center gap-2">
-                      <Warehouse className="h-4 w-4 text-brand-600" />
-                      {z.name}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge tone={z.zone_type === "COLD_CHAIN" ? "warning" : "neutral"}>{z.zone_type}</Badge>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-ink-700">
-                      {z.temp_min_celsius}°C to {z.temp_max_celsius}°C
-                    </td>
-                    <td className="px-4 py-3 text-center font-mono">{z.bins_count}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => deleteZoneMutation.mutate(z.id)}
-                        className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
-                        aria-label="Delete zone"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
-
-          <Card className="overflow-hidden">
-            <div className="flex items-center justify-between border-b border-line bg-surface-100 px-4 py-3">
-              <span className="text-sm font-semibold text-ink-900">Bin Locations</span>
-            </div>
-            <table className="w-full text-sm">
-              <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
-                <tr>
-                  <th className="px-4 py-3">Bin Code</th>
-                  <th className="px-4 py-3">Storage Zone</th>
-                  <th className="px-4 py-3">Aisle</th>
-                  <th className="px-4 py-3">Shelf</th>
-                  <th className="px-4 py-3 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(binsQuery.data?.results ?? []).map((b) => (
-                  <tr key={b.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                    <td className="px-4 py-3 font-mono font-semibold text-ink-900">{b.bin_code}</td>
-                    <td className="px-4 py-3 text-ink-700">{b.zone_name}</td>
-                    <td className="px-4 py-3 text-ink-700">{b.aisle || "—"}</td>
-                    <td className="px-4 py-3 text-ink-700">{b.shelf || "—"}</td>
-                    <td className="px-4 py-3 text-center">
-                      <Badge tone={b.is_occupied ? "warning" : "success"}>
-                        {b.is_occupied ? "Occupied" : "Available"}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-                {(binsQuery.data?.results.length ?? 0) === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-ink-500">
-                      No bin locations created yet. Click "Add Bin Location" to configure one.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </Card>
+        <div>
+          <h2 className="mb-2 text-sm font-semibold text-ink-900">Bin Locations</h2>
+          <DataGrid<BinLocation>
+            rows={binsQuery.data?.results ?? []}
+            loading={binsQuery.isLoading}
+            getRowId={(b) => b.id}
+            storageKey="bin-locations"
+            exportName="bin-locations"
+            searchPlaceholder="Search bins by code, zone, aisle or shelf…"
+            emptyMessage={'No bin locations created yet. Click "Add Bin Location" to configure one.'}
+            columns={[
+              {
+                key: "bin_code",
+                header: "Bin Code",
+                render: (b) => <span className="font-mono font-semibold">{b.bin_code}</span>,
+              },
+              { key: "zone_name", header: "Storage Zone" },
+              { key: "aisle", header: "Aisle", value: (b) => b.aisle || "—" },
+              { key: "shelf", header: "Shelf", value: (b) => b.shelf || "—" },
+              {
+                key: "is_occupied",
+                header: "Status",
+                align: "center",
+                value: (b) => (b.is_occupied ? "Occupied" : "Available"),
+                render: (b) => (
+                  <Badge tone={b.is_occupied ? "warning" : "success"}>
+                    {b.is_occupied ? "Occupied" : "Available"}
+                  </Badge>
+                ),
+              },
+            ]}
+          />
         </div>
-      )}
+      </div>
 
       {creatingZone && (
         <Modal title="Create Climate Storage Zone" onClose={() => setCreatingZone(false)}>
@@ -215,7 +227,7 @@ export function StorageZonesPage() {
             <SelectField
               label="Zone Type"
               value={zoneType}
-              onChange={(e) => setZoneType(e.target.value as any)}
+              onChange={(e) => setZoneType(e.target.value as typeof zoneType)}
             >
               <option value="AMBIENT">Ambient (15–25 °C)</option>
               <option value="COLD_CHAIN">Cold Chain (2–8 °C)</option>

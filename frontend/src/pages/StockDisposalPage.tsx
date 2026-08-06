@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Button, Card, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
+import { Badge, Button, Modal, PageHeader, SelectField, TextField } from "../components/ui";
+import { DataGrid } from "../components/DataGrid";
 import { api } from "../lib/api";
 import type { Paginated, StockDisposal } from "../lib/types";
 
@@ -73,66 +74,63 @@ export function StockDisposalPage() {
         Expired/damaged stock write-offs with mandatory dual-witness signatures & destruction certificates.
       </p>
 
-      {disposalsQuery.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
-
-      {disposalsQuery.data && (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-3">Disposal No</th>
-                <th className="px-4 py-3">Reason</th>
-                <th className="px-4 py-3">Primary Witness</th>
-                <th className="px-4 py-3">Secondary Witness</th>
-                <th className="px-4 py-3">Method</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {disposalsQuery.data.results.map((d) => (
-                <tr key={d.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                  <td className="px-4 py-3 font-mono font-semibold text-ink-900 flex items-center gap-2">
-                    <Trash2 className="h-4 w-4 text-red-600" />
-                    {d.disposal_no}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge tone="critical">{d.reason}</Badge>
-                  </td>
-                  <td className="px-4 py-3 text-ink-700">{d.primary_witness_username}</td>
-                  <td className="px-4 py-3 text-ink-700">{d.secondary_witness_name || "—"}</td>
-                  <td className="px-4 py-3 text-ink-700">{d.destruction_method}</td>
-                  <td className="px-4 py-3">
-                    <Badge tone={d.status === "DESTROYED" ? "success" : "warning"}>{d.status}</Badge>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {d.status !== "DESTROYED" && (
-                      <Button
-                        variant="secondary"
-                        onClick={() => confirmMutation.mutate(d.id)}
-                        disabled={confirmMutation.isPending}
-                      >
-                        <Check className="h-3.5 w-3.5" /> Confirm Destruction
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {disposalsQuery.data.results.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-ink-500">
-                    No stock disposal certificates recorded.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      <DataGrid<StockDisposal>
+        rows={disposalsQuery.data?.results ?? []}
+        loading={disposalsQuery.isLoading}
+        getRowId={(d) => d.id}
+        storageKey="stock-disposals"
+        exportName="stock-disposals"
+        searchPlaceholder="Search by disposal no, reason or witness…"
+        emptyMessage="No stock disposal certificates recorded."
+        columns={[
+          {
+            key: "disposal_no",
+            header: "Disposal No",
+            render: (d) => (
+              <span className="flex items-center gap-2 font-mono font-semibold text-ink-900">
+                <Trash2 className="h-4 w-4 text-red-600" />
+                {d.disposal_no}
+              </span>
+            ),
+          },
+          {
+            key: "reason",
+            header: "Reason",
+            render: (d) => <Badge tone="critical">{d.reason}</Badge>,
+          },
+          { key: "primary_witness_username", header: "Primary Witness" },
+          {
+            key: "secondary_witness_name",
+            header: "Secondary Witness",
+            value: (d) => d.secondary_witness_name || "—",
+          },
+          { key: "destruction_method", header: "Method" },
+          {
+            key: "status",
+            header: "Status",
+            render: (d) => (
+              <Badge tone={d.status === "DESTROYED" ? "success" : "warning"}>{d.status}</Badge>
+            ),
+          },
+          {
+            key: "actions",
+            header: "Action",
+            align: "right",
+            fixed: true,
+            sortable: false,
+            render: (d) =>
+              d.status !== "DESTROYED" ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => confirmMutation.mutate(d.id)}
+                  disabled={confirmMutation.isPending}
+                >
+                  <Check className="h-3.5 w-3.5" /> Confirm Destruction
+                </Button>
+              ) : null,
+          },
+        ]}
+      />
 
       {creating && (
         <Modal title="Register Stock Disposal & Witness Certificate" onClose={() => setCreating(false)}>
@@ -145,7 +143,7 @@ export function StockDisposalPage() {
               required
               autoFocus
             />
-            <SelectField label="Reason" value={reason} onChange={(e) => setReason(e.target.value as any)}>
+            <SelectField label="Reason" value={reason} onChange={(e) => setReason(e.target.value as typeof reason)}>
               <option value="EXPIRED">Expired Medicine Write-off</option>
               <option value="DAMAGED">Physically Damaged Stock</option>
               <option value="RECALLED">Regulatory Batch Recall</option>

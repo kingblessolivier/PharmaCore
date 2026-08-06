@@ -89,6 +89,19 @@ class JournalEntry(models.Model):
             models.Index(fields=["organization", "entry_date"]),
             models.Index(fields=["reference_type", "reference_id"]),
         ]
+        constraints = [
+            # ADR-011 idempotency contract: every handler in
+            # JournalPostingService is idempotent on (source_doc,
+            # source_line). For top-level journal entries that means a unique
+            # (org, reference_type, reference_id) per posted entry. Conditional
+            # because manual / adjustment entries legitimately share a single
+            # empty reference.
+            models.UniqueConstraint(
+                fields=["organization", "reference_type", "reference_id"],
+                condition=models.Q(reference_type__gt=""),
+                name="uniq_journal_reference_per_org",
+            )
+        ]
 
     def __str__(self) -> str:
         return self.entry_number or f"JE#{self.pk}"
@@ -511,4 +524,143 @@ class TaxPayment(models.Model):
 
     def __str__(self) -> str:
         return f"{self.payment_number or f'TAX#{self.pk}'} · {self.amount}"
+
+
+class OpeningBalance(models.Model):
+    """A single line of an opening-balance import.
+
+    Onboarding a new tenant, or migrating from a legacy system, requires
+    loading the *opening* position of every balance sheet account, every
+    AR/AP open item with its aging, every inventory lot on hand, and every
+    employee leave balance. Rather than one model per kind, we model it as
+    a single typed row whose ``payload`` JSON document carries the kind-
+    specific fields. Importing then becomes a single atomic transaction
+    that can validate totals tie out before any commit.
+
+    Kinds (see :class:`OpeningBalance.Kind`):
+
+    * ``GL_TRIAL_BALANCE`` — one row per account, payload carries
+      ``debit`` / ``credit``. Import validates Σdebits = Σcredits and
+      that equity = assets − liabilities.
+    * ``AR_AGING`` — one row per customer invoice, payload carries
+      ``customer_id``, ``invoice_number``, ``invoice_date``, ``due_date``,
+      ``amount``, ``aging_bucket``. Cash and Credit sub-ledger.
+    * ``AP_AGING`` — symmetric to AR for supplier bills.
+    * ``STOCK_BATCH`` — one row per inventory lot, payload carries
+      ``product_code``, ``batch_number``, ``expiry_date``,
+      ``quantity``, ``unit_cost``. Creates an InventoryBatch and
+      StockMovement so the on-hand ledger is correct from day one.
+    * ``EMPLOYEE_LEAVE`` — one row per employee, payload carries
+      ``employee_id``, ``leave_type``, ``days_accrued``,
+      ``days_taken``.
+    """
+
+    class Kind(models.TextChoices):
+        GL_TRIAL_BALANCE = "GL_TRIAL_BALANCE", "GL trial balance"
+        AR_AGING = "AR_AGING", "AR aging"
+        AP_AGING = "AP_AGING", "AP aging"
+        STOCK_BATCH = "STOCK_BATCH", "Inventory batch"
+        EMPLOYEE_LEAVE = "EMPLOYEE_LEAVE", "Employee leave"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="opening_balances"
+    )
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    # The natural key for the row — e.g. account code, customer id +
+    # invoice number, employee id + leave type. Uniqueness per org/kind
+    # so re-running an import does not duplicate rows.
+    reference_key = models.CharField(max_length=200)
+    payload = models.JSONField(default=dict, blank=True)
+    # Whether this row has been promoted from "import draft" to "applied"
+    # (i.e. drove the creation of the downstream JournalEntry / Invoice /
+    # InventoryBatch / LeaveBalance). Applied rows are immutable.
+    applied_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["organization", "kind", "reference_key"]
+        indexes = [
+            models.Index(fields=["organization", "kind"]),
+            models.Index(fields=["organization", "kind", "applied_at"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "kind", "reference_key"],
+                name="uniq_opening_balance_per_org_kind",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.kind} · {self.reference_key}"
+
+
+class TenantSettings(models.Model):
+    """Per-tenant configuration that lives **in the database, not in code**.
+
+    ADR-014 makes these first-class. Everything that varies by tenant —
+    inventory costing method, FX provider, pay-period cadence, statutory
+    remittance day, PIT filing deadline — is read by the service layer
+    via :func:`apps.finance.services.tenant_settings_for`. There is exactly
+    one row per organization, lazily created the first time it's needed.
+    """
+
+    class CostingMethod(models.TextChoices):
+        WAC = "WAC", "Weighted average cost"
+        FEFO_LOT = "FEFO_LOT", "FEFO at the lot level (batch cost)"
+
+    class PayPeriod(models.TextChoices):
+        DAILY = "DAILY", "Daily"
+        WEEKLY = "WEEKLY", "Weekly"
+        FORTNIGHTLY = "FORTNIGHTLY", "Fortnightly"
+        MONTHLY = "MONTHLY", "Monthly"
+
+    organization = models.OneToOneField(
+        "iam.Organization",
+        on_delete=models.CASCADE,
+        related_name="tenant_settings",
+    )
+
+    # Money & FX
+    base_currency = models.CharField(max_length=3, default="RWF")
+    fx_provider = models.CharField(
+        max_length=30,
+        blank=True,
+        default="",
+        help_text="Identifier for the FX rate provider (e.g. 'BNR', 'manual').",
+    )
+
+    # Inventory valuation
+    costing_method = models.CharField(
+        max_length=10,
+        choices=CostingMethod.choices,
+        default=CostingMethod.FEFO_LOT,
+    )
+
+    # HR / payroll
+    pay_period = models.CharField(
+        max_length=12,
+        choices=PayPeriod.choices,
+        default=PayPeriod.MONTHLY,
+    )
+    statutory_remittance_day = models.PositiveSmallIntegerField(
+        default=15,
+        help_text="Day-of-month statutory remittances are paid (Rwanda default: 15).",
+    )
+
+    # PIT filing deadline — Rwanda personal-income-tax declaration
+    pit_filing_deadline_month = models.PositiveSmallIntegerField(default=3)  # March
+    pit_filing_deadline_day = models.PositiveSmallIntegerField(default=31)
+
+    # Locale & display
+    default_country = models.CharField(max_length=2, default="RW")
+    timezone = models.CharField(max_length=50, default="Africa/Kigali")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["organization__name"]
+
+    def __str__(self) -> str:
+        return f"TenantSettings({self.organization.name})"
 
