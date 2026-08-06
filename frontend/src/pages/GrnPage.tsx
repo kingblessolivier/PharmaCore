@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Card, PageHeader, Spinner } from "../components/ui";
+import { Badge, PageHeader } from "../components/ui";
+import { DataGrid } from "../components/DataGrid";
 import { api } from "../lib/api";
 import type { GoodsReceivedNote, Paginated } from "../lib/types";
 
@@ -27,61 +28,59 @@ export function GrnPage() {
         Immutable reception logs, batch line verification, and discrepancy tracking for all retail inventory landings.
       </p>
 
-      {grnQuery.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
-
-      {grnQuery.data && (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-3">GRN Number</th>
-                <th className="px-4 py-3">Retail Branch</th>
-                <th className="px-4 py-3">Order Ref</th>
-                <th className="px-4 py-3">Discrepancy Status</th>
-                <th className="px-4 py-3">Reception Date</th>
-                <th className="px-4 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {grnQuery.data.results.map((g) => (
-                <tr key={g.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                  <td className="px-4 py-3 font-mono font-semibold text-ink-900">{g.grn_number}</td>
-                  <td className="px-4 py-3 font-medium text-ink-900">{g.retail_name}</td>
-                  <td className="px-4 py-3 font-mono text-ink-700">PO-{g.order}</td>
-                  <td className="px-4 py-3">
-                    {g.has_discrepancy ? (
-                      <Badge tone="danger">
-                        <AlertTriangle className="h-3 w-3 inline mr-1" /> Discrepancy Found
-                      </Badge>
-                    ) : (
-                      <Badge tone="success">
-                        <CheckCircle2 className="h-3 w-3 inline mr-1" /> Fully Matched
-                      </Badge>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-ink-700">
-                    {new Date(g.received_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge tone="success">{g.status}</Badge>
-                  </td>
-                </tr>
-              ))}
-              {grnQuery.data.results.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-ink-500">
-                    No Goods Received Notes found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      <DataGrid<GoodsReceivedNote>
+        rows={grnQuery.data?.results ?? []}
+        loading={grnQuery.isLoading}
+        getRowId={(g) => g.id}
+        storageKey="grn"
+        exportName="goods-received-notes"
+        searchPlaceholder="Search by GRN number, branch or order…"
+        emptyMessage="No Goods Received Notes found."
+        columns={[
+          {
+            key: "grn_number",
+            header: "GRN Number",
+            render: (g) => <span className="font-mono font-semibold">{g.grn_number}</span>,
+          },
+          {
+            key: "retail_name",
+            header: "Retail Branch",
+            render: (g) => <span className="font-medium">{g.retail_name}</span>,
+          },
+          {
+            key: "order",
+            header: "Order Ref",
+            value: (g) => `PO-${g.order}`,
+            render: (g) => <span className="font-mono text-ink-700">PO-{g.order}</span>,
+          },
+          {
+            key: "has_discrepancy",
+            header: "Discrepancy Status",
+            value: (g) => (g.has_discrepancy ? "Discrepancy Found" : "Fully Matched"),
+            render: (g) =>
+              g.has_discrepancy ? (
+                <Badge tone="danger">
+                  <AlertTriangle className="mr-1 inline h-3 w-3" /> Discrepancy Found
+                </Badge>
+              ) : (
+                <Badge tone="success">
+                  <CheckCircle2 className="mr-1 inline h-3 w-3" /> Fully Matched
+                </Badge>
+              ),
+          },
+          {
+            key: "received_at",
+            header: "Reception Date",
+            value: (g) => g.received_at,
+            render: (g) => new Date(g.received_at).toLocaleDateString(),
+          },
+          {
+            key: "status",
+            header: "Status",
+            render: (g) => <Badge tone="success">{g.status}</Badge>,
+          },
+        ]}
+      />
     </div>
   );
 }

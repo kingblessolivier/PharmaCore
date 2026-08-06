@@ -3,7 +3,8 @@ import { Download } from "lucide-react";
 import { useState } from "react";
 import { api, downloadFile } from "../lib/api";
 import type { AuditLogEntry, Organization, Paginated, UserAdmin } from "../lib/types";
-import { Button, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
+import { Button, PageHeader, SelectField, TextField } from "../components/ui";
+import { DataGrid } from "../components/DataGrid";
 
 export function ActivityPage() {
   const [org, setOrg] = useState("");
@@ -77,47 +78,41 @@ export function ActivityPage() {
         <TextField label="Until" type="date" value={until} onChange={(e) => setUntil(e.target.value)} />
       </div>
 
-      {logs.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
-      {logs.data && (
-        <div className="overflow-hidden rounded-lg border border-line bg-surface-0">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-2.5">When</th>
-                <th className="px-4 py-2.5">User</th>
-                <th className="px-4 py-2.5">Action</th>
-                <th className="px-4 py-2.5">Entity</th>
-                <th className="px-4 py-2.5">IP</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.data.results.map((r) => (
-                <tr key={r.id} className="border-b border-line last:border-0 hover:bg-surface-100">
-                  <td className="px-4 py-2 text-ink-500">{new Date(r.created_at).toLocaleString()}</td>
-                  <td className="px-4 py-2 font-medium">{r.user ?? "—"}</td>
-                  <td className="px-4 py-2">{r.action}</td>
-                  <td className="px-4 py-2 text-ink-700">
-                    {r.entity_type}
-                    {r.entity_id ? ` #${r.entity_id}` : ""}
-                  </td>
-                  <td className="px-4 py-2 text-ink-500">{r.ip_address ?? "—"}</td>
-                </tr>
-              ))}
-              {logs.data.results.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-ink-500">
-                    No activity matches these filters.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataGrid<AuditLogEntry>
+        rows={logs.data?.results ?? []}
+        loading={logs.isLoading}
+        getRowId={(r) => r.id}
+        storageKey="audit-log"
+        exportName="audit-log"
+        initialDensity="compact"
+        searchPlaceholder="Filter these results…"
+        emptyMessage="No activity matches these filters."
+        columns={[
+          {
+            key: "created_at",
+            header: "When",
+            value: (r) => r.created_at,
+            render: (r) => (
+              <span className="whitespace-nowrap text-ink-500">
+                {new Date(r.created_at).toLocaleString()}
+              </span>
+            ),
+          },
+          {
+            key: "user",
+            header: "User",
+            value: (r) => r.user ?? "—",
+            render: (r) => <span className="font-medium">{r.user ?? "—"}</span>,
+          },
+          { key: "action", header: "Action" },
+          {
+            key: "entity_type",
+            header: "Entity",
+            value: (r) => `${r.entity_type}${r.entity_id ? ` #${r.entity_id}` : ""}`,
+          },
+          { key: "ip_address", header: "IP", value: (r) => r.ip_address ?? "—" },
+        ]}
+      />
     </div>
   );
 }
