@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
-import type { FinancePerformance } from "../../lib/types";
+import type { FinancePerformance, VatReturn } from "../../lib/types";
 import { AppHeader, SectionCard, SectionGrid, StatTile } from "../../components/AppHome";
 import { Spinner } from "../../components/ui";
 
@@ -116,6 +116,17 @@ export function FinanceHome() {
     enabled: orgId > 0,
   });
   const p = perfQ.data;
+
+  // VAT payable this period — drives the leader's RRA-filing trigger.
+  const vatQ = useQuery({
+    queryKey: ["vat-return", orgId, period.start, period.end],
+    queryFn: () =>
+      api<VatReturn>(
+        `/api/finance/reports/vat-return/?organization=${orgId}&start=${period.start}&end=${period.end}`,
+      ),
+    enabled: orgId > 0,
+  });
+  const vat = vatQ.data;
 
   return (
     <div>
@@ -226,6 +237,36 @@ export function FinanceHome() {
             />
           </div>
 
+          {/* VAT: the trigger for the RRA filing. */}
+          {vat && (
+            <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatTile
+                label="VAT payable this period"
+                value={`RWF ${money(vat.net_payable)}`}
+                hint={`Output ${money(vat.output_total)} − Input ${money(vat.input_total)}`}
+              />
+              <StatTile
+                label="VAT Output (18% sales)"
+                value={`RWF ${money(vat.output_total)}`}
+                hint="On Class B sales only"
+              />
+              <StatTile
+                label="VAT Input (recoverable)"
+                value={`RWF ${money(vat.input_total)}`}
+                hint="From VAT-bearing supplier bills"
+              />
+              <StatTile
+                label="Remitted in period"
+                value={`RWF ${money(vat.paid_in_period)}`}
+                hint={
+                  Number(vat.amount_due_after_payments) > 0
+                    ? `RWF ${money(vat.amount_due_after_payments)} still due`
+                    : "Up to date"
+                }
+              />
+            </div>
+          )}
+
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatTile
               label="Net profit"
@@ -307,9 +348,9 @@ export function FinanceHome() {
         />
         <SectionCard
           icon={ScrollText}
-          title="Tax & EBM audit"
-          description="RRA EBM OSDC receipt fiscalization logs and 18% VAT return calculations."
-          to="/finance/tax-ebm"
+          title="VAT return (Rwanda)"
+          description="Per-class Output / Input / withholding with a CSV draft for the RRA e-Tax filing."
+          to="/finance/tax"
         />
         <SectionCard
           icon={FileBarChart}

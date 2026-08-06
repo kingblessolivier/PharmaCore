@@ -13,6 +13,8 @@ from apps.finance.views import (
     FixedAssetViewSet,
     JournalEntryViewSet,
     SupplierBillViewSet,
+    TaxCodeViewSet,
+    TaxPaymentViewSet,
     TaxRecordViewSet,
 )
 
@@ -27,6 +29,8 @@ router.register("reports", FinanceReportsView, basename="finance-reports")
 router.register("periods", AccountingPeriodViewSet, basename="accounting-period")
 router.register("fixed-assets", FixedAssetViewSet, basename="fixed-asset")
 router.register("tax-records", TaxRecordViewSet, basename="tax-record")
+router.register("tax-codes", TaxCodeViewSet, basename="tax-code")
+router.register("tax-payments", TaxPaymentViewSet, basename="tax-payment")
 router.register("budgets", BudgetViewSet, basename="budget")
 
 urlpatterns = router.urls

@@ -595,3 +595,124 @@ def inventory_valuation(organization: Organization) -> dict[str, Any]:
             for v in sorted(per_product.values(), key=lambda x: x["value"], reverse=True)
         ],
     }
+
+
+def vat_return(organization: Organization, *, start: date, end: date) -> dict[str, Any]:
+    """Rwanda VAT return draft for the period.
+
+    Splits the period's GL movement on the VAT Output (2050) and VAT Input
+    (1300) control accounts per tax class — derived from posted journal
+    entries, never stored twice. The accountant exports this for the RRA
+    e-Tax filing; the liability carried forward is the running balance on
+    the VAT Output control account.
+
+    Returns a dict with output (per class + total), input (per class + total),
+    withholding, net_payable, and a CSV-ready ``lines`` list.
+    """
+    from apps.finance.models import TaxPayment
+
+    # Output side: every credit on VAT Output (2050) for the period, summed
+    # per class. Memo text on the journal line carries the class letter (the
+    # post_sale_journal path stores B-class on its own lines; A/C fall through
+    # to Sales Revenue without a VAT Output line — they contribute 0).
+    output_total = Decimal("0")
+    output_by_class: dict[str, Decimal] = {"A": ZERO, "B": ZERO, "C": ZERO, "D": ZERO}
+    output_lines = JournalLine.objects.filter(
+        account__organization=organization,
+        account__code="2050",
+        side=JournalLine.Side.CREDIT,
+        entry__organization=organization,
+        entry__status=JournalEntry.Status.POSTED,
+        entry__entry_date__gte=start,
+        entry__entry_date__lte=end,
+    ).select_related("entry")
+    for ln in output_lines:
+        output_total += ln.amount
+        # Memo looks like "VAT Output (18% on standard-rated lines)" — we
+        # treat any VAT Output credit as B-class (18%) for now since the
+        # retail POS only emits B-class VAT. Multi-class is supported in
+        # the model; future SL splits can tag class here.
+        output_by_class["B"] += ln.amount
+
+    # Input side: every debit on VAT Input (1300) for the period.
+    input_total = Decimal("0")
+    input_by_class: dict[str, Decimal] = {"A": ZERO, "B": ZERO, "C": ZERO, "D": ZERO}
+    input_lines = JournalLine.objects.filter(
+        account__organization=organization,
+        account__code="1300",
+        side=JournalLine.Side.DEBIT,
+        entry__organization=organization,
+        entry__status=JournalEntry.Status.POSTED,
+        entry__entry_date__gte=start,
+        entry__entry_date__lte=end,
+    ).select_related("entry")
+    for ln in input_lines:
+        input_total += ln.amount
+        # Memo is "VAT Input (class X)" — read the class from the memo.
+        memo = ln.memo or ""
+        for cls in ("A", "B", "C", "D"):
+            if f"class {cls}" in memo:
+                input_by_class[cls] += ln.amount
+                break
+
+    # Withholding: debits on WHT Payable (2060) for the period.
+    wht_total = Decimal("0")
+    wht_lines = JournalLine.objects.filter(
+        account__organization=organization,
+        account__code="2060",
+        side=JournalLine.Side.DEBIT,
+        entry__organization=organization,
+        entry__status=JournalEntry.Status.POSTED,
+        entry__entry_date__gte=start,
+        entry__entry_date__lte=end,
+    )
+    for ln in wht_lines:
+        wht_total += ln.amount
+
+    net_payable = output_total - input_total - wht_total
+    running_carry = (
+        _payroll_liability_balance(organization, "2050") - _payroll_liability_balance(organization, "1300")
+    )
+
+    # Remittances in the period (for the register).
+    payments = TaxPayment.objects.filter(
+        organization=organization,
+        paid_on__gte=start,
+        paid_on__lte=end,
+    )
+    paid_in_period = sum((p.amount for p in payments), Decimal("0"))
+    amount_due_after_payments = net_payable - paid_in_period
+
+    csv_lines = [
+        ["Section", "Class", "Taxable / Net", "VAT"],
+    ]
+    for cls in ("A", "B", "C", "D"):
+        csv_lines.append(["Output", cls, "0.00", str(_q(output_by_class[cls]))])
+        csv_lines.append(["Input", cls, "0.00", str(_q(input_by_class[cls]))])
+    csv_lines.append(["Withholding", "-", "0.00", str(_q(wht_total))])
+    csv_lines.append(["Net payable", "-", "0.00", str(_q(net_payable))])
+    csv_lines.append(["Remitted in period", "-", "0.00", str(_q(paid_in_period))])
+    csv_lines.append(["Amount due after remittances", "-", "0.00", str(_q(amount_due_after_payments))])
+
+    return {
+        "start": start,
+        "end": end,
+        "output_by_class": {k: _q(v) for k, v in output_by_class.items()},
+        "input_by_class": {k: _q(v) for k, v in input_by_class.items()},
+        "output_total": _q(output_total),
+        "input_total": _q(input_total),
+        "withholding_total": _q(wht_total),
+        "net_payable": _q(net_payable),
+        "paid_in_period": _q(paid_in_period),
+        "amount_due_after_payments": _q(amount_due_after_payments),
+        "running_carry_forward": _q(running_carry),
+        "csv": csv_lines,
+    }
+
+
+def _payroll_liability_balance(organization: Organization, code: str) -> Decimal:
+    """Signed balance of one control account (used by vat_return for the
+    period-end carry-forward)."""
+    rows = account_balances(organization, end=date.today())
+    match = next((r for r in rows if r.code == code), None)
+    return match.signed if match else Decimal("0")

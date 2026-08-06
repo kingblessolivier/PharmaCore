@@ -1290,3 +1290,54 @@ export interface LeaveRequest {
   created_at: string;
 }
 
+/** Rwanda VAT tax class (A/B/C/D) with effective-dated rate. */
+export interface TaxCode {
+  id: number;
+  organization: number;
+  code: "A" | "B" | "C" | "D";
+  description: string;
+  rate_pct: string;
+  withholding_pct: string;
+  effective_from: string;
+  effective_to: string | null;
+  is_active: boolean;
+  source_reference: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A remittance to RRA — pays down VAT Output / withholding. */
+export interface TaxPayment {
+  id: number;
+  organization: number;
+  organization_name: string;
+  payment_number: string;
+  paid_on: string;
+  period_start: string;
+  period_end: string;
+  amount: string;
+  method: string;
+  rra_reference: string;
+  notes: string;
+  created_by: number | null;
+  created_by_name: string | null;
+  created_at: string;
+}
+
+/** Output of GET /api/finance/reports/vat-return/ — Rwanda VAT return draft. */
+export interface VatReturn {
+  start: string;
+  end: string;
+  output_by_class: { A: string; B: string; C: string; D: string };
+  input_by_class: { A: string; B: string; C: string; D: string };
+  output_total: string;
+  input_total: string;
+  withholding_total: string;
+  net_payable: string;
+  paid_in_period: string;
+  amount_due_after_payments: string;
+  running_carry_forward: string;
+  /** CSV-ready body in the order [Section, Class, Taxable/Net, VAT]. */
+  csv: string[][];
+}
+

@@ -273,6 +273,12 @@ class SupplierBill(models.Model):
     bill_date = models.DateField()
     due_date = models.DateField(null=True, blank=True)
     total_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    # VAT-inclusive default for backwards compatibility. If vat_amount is set,
+    # the bill posts to the GL as: Dr Expense(net) + Dr VAT Input(vat_amount) /
+    # Cr AP(total_amount). If vat_amount is 0, the whole amount posts to Dr
+    # Expense / Cr AP (zero-rated supplier or non-VAT-able import).
+    vat_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    tax_class = models.CharField(max_length=4, blank=True, default="")
     amount_paid = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.UNPAID)
     reference_type = models.CharField(max_length=50, blank=True, default="")
@@ -414,4 +420,95 @@ class Budget(models.Model):
     @property
     def variance(self) -> Decimal:
         return self.budgeted_amount - self.actual_amount
+
+
+class TaxCode(models.Model):
+    """A Rwanda VAT tax class (A/B/C/D) with its effective-dated rate and an
+    optional withholding-tax flag. Versions are rows, not code: a new Finance
+    Law = one new row with effective_from set, never a migration.
+
+    Rwanda 2025:
+      A — Exempt (e.g. certain medical services)
+      B — Standard 18% (e.g. cosmetics, non-medical sundries)
+      C — Zero-rated (e.g. medicines, medical supplies)
+      D — Special handling (e.g. exported services)
+    """
+
+    class Class(models.TextChoices):
+        A = "A", "Class A — Exempt"
+        B = "B", "Class B — Standard 18%"
+        C = "C", "Class C — Zero-rated"
+        D = "D", "Class D — Special"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="tax_codes"
+    )
+    code = models.CharField(max_length=4, choices=Class.choices)
+    description = models.CharField(max_length=255, blank=True, default="")
+    rate_pct = models.DecimalField(max_digits=5, decimal_places=2)
+    withholding_pct = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0,
+        help_text="Withholding tax rate applied to this class (0 if not subject to WHT).",
+    )
+    effective_from = models.DateField()
+    effective_to = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    source_reference = models.CharField(
+        max_length=255, blank=True, default="",
+        help_text="RRA circular / Finance Law / Gazette reference that justifies the rate.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["code", "-effective_from"]
+        constraints = [
+            # A given code's effective-from dates must be unique per org — you
+            # can't have two "B @ 18%" both starting 2025-01-01.
+            models.UniqueConstraint(
+                fields=["organization", "code", "effective_from"],
+                name="uniq_tax_code_per_effective_from",
+            ),
+        ]
+        indexes = [models.Index(fields=["organization", "code", "effective_from"])]
+
+    def __str__(self) -> str:
+        span = f"{self.effective_from}" + (f"→{self.effective_to}" if self.effective_to else "→open")
+        return f"{self.code} {self.rate_pct}% ({span})"
+
+
+class TaxPayment(models.Model):
+    """A remittance to RRA — pays down the outstanding VAT Output / withholding
+    liability. Approval-gated because money leaves the bank."""
+
+    class Method(models.TextChoices):
+        BANK_TRANSFER = "BANK_TRANSFER", "Bank transfer"
+        MOBILE_MONEY = "MOBILE_MONEY", "Mobile money"
+        CHEQUE = "CHEQUE", "Cheque"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="tax_payments"
+    )
+    payment_number = models.CharField(max_length=30, blank=True, default="")
+    paid_on = models.DateField()
+    period_start = models.DateField()
+    period_end = models.DateField()
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    method = models.CharField(max_length=20, choices=Method.choices, default=Method.BANK_TRANSFER)
+    rra_reference = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="RRA e-Tax receipt / bank confirmation reference.",
+    )
+    notes = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        "iam.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-paid_on"]
+        indexes = [models.Index(fields=["organization", "paid_on"])]
+
+    def __str__(self) -> str:
+        return f"{self.payment_number or f'TAX#{self.pk}'} · {self.amount}"
 

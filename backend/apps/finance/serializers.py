@@ -16,6 +16,8 @@ from apps.finance.models import (
     JournalLine,
     SupplierBill,
     SupplierBillPayment,
+    TaxCode,
+    TaxPayment,
     TaxRecord,
 )
 
@@ -186,6 +188,8 @@ class SupplierBillSerializer(serializers.ModelSerializer):
             "bill_date",
             "due_date",
             "total_amount",
+            "vat_amount",
+            "tax_class",
             "amount_paid",
             "amount_due",
             "status",
@@ -196,6 +200,55 @@ class SupplierBillSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "amount_paid", "amount_due", "status", "payments", "created_at"]
+
+
+class TaxCodeSerializer(serializers.ModelSerializer):
+    """A Rwanda VAT tax class (A/B/C/D) with its effective-dated rate."""
+
+    class Meta:
+        model = TaxCode
+        fields = [
+            "id",
+            "organization",
+            "code",
+            "description",
+            "rate_pct",
+            "withholding_pct",
+            "effective_from",
+            "effective_to",
+            "is_active",
+            "source_reference",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class TaxPaymentSerializer(serializers.ModelSerializer):
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+    created_by_name = serializers.CharField(
+        source="created_by.username", read_only=True, default=None
+    )
+
+    class Meta:
+        model = TaxPayment
+        fields = [
+            "id",
+            "organization",
+            "organization_name",
+            "payment_number",
+            "paid_on",
+            "period_start",
+            "period_end",
+            "amount",
+            "method",
+            "rra_reference",
+            "notes",
+            "created_by",
+            "created_by_name",
+            "created_at",
+        ]
+        read_only_fields = ["id", "payment_number", "created_by", "created_by_name", "created_at"]
 
 
 class AccountingPeriodSerializer(serializers.ModelSerializer):

@@ -33,6 +33,8 @@ import { BankingPage } from "./pages/BankingPage";
 import { FinanceStatementsPage } from "./pages/FinanceStatementsPage";
 import { FixedAssetsPage } from "./pages/FixedAssetsPage";
 import { TaxEbmPage } from "./pages/TaxEbmPage";
+import { VatPage } from "./pages/VatPage";
+import { TaxPaymentsPage } from "./pages/TaxPaymentsPage";
 import { BudgetsPage } from "./pages/BudgetsPage";
 import { AttendancePage } from "./pages/AttendancePage";
 import { ShiftRosterPage } from "./pages/ShiftRosterPage";
@@ -148,6 +150,8 @@ function App() {
               <Route path="/finance/statements" element={forFinance(<FinanceStatementsPage />)} />
               <Route path="/finance/assets" element={forFinance(<FixedAssetsPage />)} />
               <Route path="/finance/tax-ebm" element={forFinance(<TaxEbmPage />)} />
+              <Route path="/finance/tax" element={forFinance(<VatPage />)} />
+              <Route path="/finance/tax/payments" element={forFinance(<TaxPaymentsPage />)} />
               <Route path="/finance/budgets" element={forFinance(<BudgetsPage />)} />
               <Route path="/people" element={forHR(<PeopleHome />)} />
               <Route path="/people/employees" element={forHR(<EmployeesPage />)} />
