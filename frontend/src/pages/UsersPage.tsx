@@ -76,7 +76,7 @@ function DocumentsModal({ user, onClose }: { user: UserAdmin; onClose: () => voi
   });
 
   return (
-    <Modal title={`${user.username} — identity documents`} onClose={onClose}>
+    <Modal title={`${user.username} — identity documents`} size="lg" onClose={onClose}>
       <div className="flex flex-col gap-4">
         <div className="overflow-hidden rounded-lg border border-line">
           <table className="w-full text-sm">
@@ -319,7 +319,7 @@ function ActivityModal({ userId, onClose }: { userId: number; onClose: () => voi
     ["logins", "Logins"],
   ];
   return (
-    <Modal title="User activity" onClose={onClose}>
+    <Modal title="User activity" size="lg" onClose={onClose}>
       {isLoading && (
         <div className="flex justify-center py-8">
           <Spinner />

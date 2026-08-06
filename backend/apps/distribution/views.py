@@ -133,9 +133,8 @@ class StockOrderViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("You can only create orders for your own organization.")
         if not serializer.validated_data.get("items"):
             raise ValidationError("An order needs at least one item.")
+        # order_number is stamped inside the serializer's atomic create().
         order = serializer.save(ordered_by=user, status=StockOrder.Status.DRAFT)
-        order.order_number = f"PO-{order.pk:05d}"
-        order.save(update_fields=["order_number"])
         record_audit(
             action="CREATE",
             user=user,

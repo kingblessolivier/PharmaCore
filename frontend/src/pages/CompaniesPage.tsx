@@ -109,7 +109,7 @@ function BranchesModal({ company, onClose }: { company: Company; onClose: () => 
   });
 
   return (
-    <Modal title={`${company.name} — branches`} onClose={onClose}>
+    <Modal title={`${company.name} — branches`} size="lg" onClose={onClose}>
       <div className="flex flex-col gap-4">
         {orgs.isLoading && (
           <div className="flex justify-center py-6">

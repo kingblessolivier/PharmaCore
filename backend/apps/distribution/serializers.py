@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.db import transaction
 from rest_framework import serializers
 
 from apps.distribution.models import (
@@ -177,11 +178,16 @@ class StockOrderSerializer(serializers.ModelSerializer):
             "created_at",
         ]
 
+    @transaction.atomic
     def create(self, validated_data: dict[str, Any]) -> StockOrder:
         from apps.inventory.models import PharmacyProduct
 
         items = validated_data.pop("items", [])
         order = StockOrder.objects.create(**validated_data)
+        # Stamp the human-readable number immediately. ``order_number`` is unique, so
+        # leaving it at its "" default (even briefly) makes the *next* order collide.
+        order.order_number = f"PO-{order.pk:05d}"
+        order.save(update_fields=["order_number"])
         for item in items:
             product = item["product"]
             listing = PharmacyProduct.objects.filter(

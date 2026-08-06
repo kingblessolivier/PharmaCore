@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CreditCard, PackageCheck, Plus, Truck } from "lucide-react";
+import { ArrowLeft, CreditCard, PackageCheck, Plus, Trash2, Truck } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Badge, Button, Card, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
-import { api } from "../lib/api";
+import { Badge, Button, Modal, PageHeader, SelectField, TextField } from "../components/ui";
+import { DataGrid } from "../components/DataGrid";
+import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import type { Organization, Paginated, Product, StockOrder } from "../lib/types";
+import type { Organization, Paginated, PharmacyProduct, StockOrder } from "../lib/types";
 
 export function PurchaseOrdersPage() {
   const navigate = useNavigate();
@@ -16,10 +17,72 @@ export function PurchaseOrdersPage() {
   const [payingOrderId, setPayingOrderId] = useState<number | null>(null);
 
   const [depotId, setDepotId] = useState<number>(0);
-  const [productId, setProductId] = useState<number>(0);
-  const [quantity, setQuantity] = useState("10");
-  const [unitPrice, setUnitPrice] = useState("500.00");
   const [notes, setNotes] = useState("");
+
+  // --- Order builder (cart): add many lines before submitting the PO ---
+  interface DraftLine {
+    key: number;
+    product: number;
+    product_label: string;
+    quantity: number;
+    price_per_unit: string;
+    on_hand?: number;
+  }
+  const [lines, setLines] = useState<DraftLine[]>([]);
+  const [pickProduct, setPickProduct] = useState<number>(0);
+  const [pickQty, setPickQty] = useState("10");
+  const [pickPrice, setPickPrice] = useState("500.00");
+  const [lineError, setLineError] = useState<string | null>(null);
+
+  const lineTotal = (l: DraftLine) => l.quantity * Number(l.price_per_unit || 0);
+  const orderTotal = lines.reduce((sum, l) => sum + lineTotal(l), 0);
+  const totalUnits = lines.reduce((sum, l) => sum + l.quantity, 0);
+
+  function addLine() {
+    setLineError(null);
+    const offer = offerings.find((o) => o.product === pickProduct);
+    if (!offer) return setLineError("Choose a medicine to add.");
+    const qty = Number(pickQty);
+    if (!Number.isFinite(qty) || qty <= 0) return setLineError("Quantity must be greater than zero.");
+    if (Number(pickPrice) < 0) return setLineError("Unit price cannot be negative.");
+    if (lines.some((l) => l.product === offer.product)) {
+      return setLineError(`${offer.product_name} is already on this order — edit its quantity instead.`);
+    }
+    setLines((ls) => [
+      ...ls,
+      {
+        key: Date.now(),
+        product: offer.product,
+        product_label: offer.product_name,
+        quantity: qty,
+        price_per_unit: pickPrice,
+        on_hand: offer.on_hand,
+      },
+    ]);
+    setPickProduct(0);
+    setPickQty("10");
+  }
+
+  /** Selecting a medicine auto-fills the depot's wholesale price. */
+  function choosePickProduct(productId: number) {
+    setPickProduct(productId);
+    const offer = offerings.find((o) => o.product === productId);
+    if (offer?.wholesale_price) setPickPrice(String(offer.wholesale_price));
+  }
+
+  function updateLine(key: number, patch: Partial<DraftLine>) {
+    setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  }
+
+  function resetBuilder() {
+    setLines([]);
+    setPickProduct(0);
+    setPickQty("10");
+    setPickPrice("500.00");
+    setNotes("");
+    setDepotId(0);
+    setLineError(null);
+  }
 
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState("BANK_TRANSFER");
@@ -40,10 +103,19 @@ export function PurchaseOrdersPage() {
     queryFn: () => api<Paginated<Organization>>("/api/organizations/"),
   });
 
-  const productsQuery = useQuery({
-    queryKey: ["products-select"],
-    queryFn: () => api<Paginated<Product>>("/api/catalog/products/?page_size=200"),
+  // What this depot actually offers (with its wholesale price). The backend rejects
+  // anything the depot hasn't listed, so the picker must mirror that.
+  const offeringsQuery = useQuery({
+    queryKey: ["depot-offerings", depotId],
+    enabled: depotId > 0,
+    queryFn: () =>
+      api<Paginated<PharmacyProduct>>(
+        `/api/inventory/pharmacy-products/?organization=${depotId}&page_size=500`,
+      ),
   });
+  const offerings = (offeringsQuery.data?.results ?? []).filter(
+    (o) => o.wholesale_price !== null && o.wholesale_price !== undefined,
+  );
 
   const createOrderMutation = useMutation({
     mutationFn: () =>
@@ -53,19 +125,20 @@ export function PurchaseOrdersPage() {
           depot: depotId,
           retail: user?.organization,
           notes,
-          items: [
-            {
-              product: productId,
-              quantity_ordered: Number(quantity),
-              price_per_unit: unitPrice,
-            },
-          ],
+          items: lines.map((l) => ({
+            product: l.product,
+            quantity_ordered: l.quantity,
+            price_per_unit: l.price_per_unit,
+          })),
         }),
       }),
     onSuccess: () => {
       setCreating(false);
+      resetBuilder();
       void qc.invalidateQueries({ queryKey: ["orders"] });
     },
+    onError: (e) =>
+      setLineError(e instanceof ApiError ? e.message : "Could not create the purchase order."),
   });
 
   const submitOrderMutation = useMutation({
@@ -104,7 +177,10 @@ export function PurchaseOrdersPage() {
 
   function submitCreate(e: FormEvent) {
     e.preventDefault();
-    if (depotId && productId && Number(quantity) > 0) createOrderMutation.mutate();
+    setLineError(null);
+    if (!depotId) return setLineError("Choose the wholesale depot you're ordering from.");
+    if (lines.length === 0) return setLineError("Add at least one medicine to the order.");
+    createOrderMutation.mutate();
   }
 
   function submitPay(e: FormEvent) {
@@ -135,111 +211,151 @@ export function PurchaseOrdersPage() {
         B2B stock procurement between wholesale depots and retail branches with automated FEFO approval & receipt stock landing.
       </p>
 
-      {ordersQuery.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
-
-      {ordersQuery.data && (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-3">PO Number</th>
-                <th className="px-4 py-3">Wholesale Depot</th>
-                <th className="px-4 py-3">Retail Branch</th>
-                <th className="px-4 py-3 text-right">Total Amount</th>
-                <th className="px-4 py-3">Order Status</th>
-                <th className="px-4 py-3">Payment</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ordersQuery.data.results.map((o) => (
-                <tr key={o.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                  <td className="px-4 py-3 font-mono font-semibold text-ink-900">{o.order_number}</td>
-                  <td className="px-4 py-3 text-ink-900 font-medium">{o.depot_name}</td>
-                  <td className="px-4 py-3 text-ink-700">{o.retail_name}</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-ink-900">
-                    RWF {o.total_amount.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge
-                      tone={
-                        o.status === "DELIVERED"
-                          ? "success"
-                          : o.status === "IN_TRANSIT"
-                          ? "warning"
-                          : o.status === "APPROVED"
-                          ? "brand"
-                          : "neutral"
-                      }
-                    >
-                      {o.status}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge tone={o.payment_status === "PAID" ? "success" : "warning"}>
-                      {o.payment_status}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-right flex items-center justify-end gap-1.5">
-                    {o.status === "DRAFT" && (
-                      <Button
-                        variant="secondary"
-                        onClick={() => submitOrderMutation.mutate(o.id)}
-                        disabled={submitOrderMutation.isPending}
-                      >
-                        Submit PO
-                      </Button>
-                    )}
-                    {o.status === "PENDING" && (
-                      <Button
-                        onClick={() => approveOrderMutation.mutate(o.id)}
-                        disabled={approveOrderMutation.isPending}
-                      >
-                        <Truck className="h-3.5 w-3.5" /> Approve & Ship
-                      </Button>
-                    )}
-                    {o.status === "IN_TRANSIT" && (
-                      <Button
-                        onClick={() => receiveOrderMutation.mutate(o.id)}
-                        disabled={receiveOrderMutation.isPending}
-                      >
-                        <PackageCheck className="h-3.5 w-3.5" /> Receive Stock
-                      </Button>
-                    )}
-                    {o.payment_status !== "PAID" && (
-                      <button
-                        onClick={() => setPayingOrderId(o.id)}
-                        className="flex items-center gap-1 rounded bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
-                      >
-                        <CreditCard className="h-3.5 w-3.5" /> Record Payment
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {ordersQuery.data.results.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-ink-500">
-                    No purchase orders found matching current filter.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      <DataGrid<StockOrder>
+        rows={ordersQuery.data?.results ?? []}
+        loading={ordersQuery.isLoading}
+        getRowId={(o) => o.id}
+        storageKey="purchase-orders"
+        exportName="purchase-orders"
+        searchPlaceholder="Search by PO number, depot or branch…"
+        emptyMessage="No purchase orders found matching current filter."
+        columns={[
+          {
+            key: "order_number",
+            header: "PO Number",
+            render: (o) => <span className="font-mono font-semibold">{o.order_number}</span>,
+          },
+          {
+            key: "depot_name",
+            header: "Wholesale Depot",
+            render: (o) => <span className="font-medium">{o.depot_name}</span>,
+          },
+          { key: "retail_name", header: "Retail Branch" },
+          {
+            key: "items",
+            header: "Items",
+            align: "right",
+            numeric: true,
+            value: (o) => o.items?.length ?? 0,
+            render: (o) => {
+              const n = o.items?.length ?? 0;
+              const units = (o.items ?? []).reduce((s, i) => s + (i.quantity_ordered ?? 0), 0);
+              return (
+                <span
+                  className="whitespace-nowrap text-ink-700"
+                  title={(o.items ?? []).map((i) => `${i.product_name} × ${i.quantity_ordered}`).join("\n")}
+                >
+                  {n} {n === 1 ? "line" : "lines"}
+                  {units ? ` · ${units.toLocaleString()} u` : ""}
+                </span>
+              );
+            },
+          },
+          {
+            key: "total_amount",
+            header: "Total Amount",
+            align: "right",
+            numeric: true,
+            value: (o) => o.total_amount,
+            render: (o) => (
+              <span className="font-semibold">RWF {o.total_amount.toLocaleString()}</span>
+            ),
+          },
+          {
+            key: "status",
+            header: "Order Status",
+            render: (o) => (
+              <Badge
+                tone={
+                  o.status === "DELIVERED"
+                    ? "success"
+                    : o.status === "IN_TRANSIT"
+                      ? "warning"
+                      : o.status === "APPROVED"
+                        ? "brand"
+                        : "neutral"
+                }
+              >
+                {o.status}
+              </Badge>
+            ),
+          },
+          {
+            key: "payment_status",
+            header: "Payment",
+            render: (o) => (
+              <Badge tone={o.payment_status === "PAID" ? "success" : "warning"}>
+                {o.payment_status}
+              </Badge>
+            ),
+          },
+          {
+            key: "actions",
+            header: "Actions",
+            align: "right",
+            fixed: true,
+            sortable: false,
+            render: (o) => (
+              <div className="flex items-center justify-end gap-1.5">
+                {o.status === "DRAFT" && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => submitOrderMutation.mutate(o.id)}
+                    disabled={submitOrderMutation.isPending}
+                  >
+                    Submit PO
+                  </Button>
+                )}
+                {o.status === "PENDING" && (
+                  <Button
+                    onClick={() => approveOrderMutation.mutate(o.id)}
+                    disabled={approveOrderMutation.isPending}
+                  >
+                    <Truck className="h-3.5 w-3.5" /> Approve &amp; Ship
+                  </Button>
+                )}
+                {o.status === "IN_TRANSIT" && (
+                  <Button
+                    onClick={() => receiveOrderMutation.mutate(o.id)}
+                    disabled={receiveOrderMutation.isPending}
+                  >
+                    <PackageCheck className="h-3.5 w-3.5" /> Receive Stock
+                  </Button>
+                )}
+                {o.payment_status !== "PAID" && (
+                  <button
+                    onClick={() => setPayingOrderId(o.id)}
+                    className="flex items-center gap-1 rounded bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+                  >
+                    <CreditCard className="h-3.5 w-3.5" /> Record Payment
+                  </button>
+                )}
+              </div>
+            ),
+          },
+        ]}
+      />
 
       {creating && (
-        <Modal title="Create B2B Purchase Order" onClose={() => setCreating(false)}>
+        <Modal
+          title="New B2B Purchase Order"
+          size="xl"
+          onClose={() => {
+            setCreating(false);
+            resetBuilder();
+          }}
+        >
           <form onSubmit={submitCreate} className="flex flex-col gap-4">
             <SelectField
               label="Wholesale Depot"
               value={depotId}
-              onChange={(e) => setDepotId(Number(e.target.value))}
+              onChange={(e) => {
+                // Prices/offerings are depot-specific, so switching clears the cart.
+                setDepotId(Number(e.target.value));
+                setLines([]);
+                setPickProduct(0);
+                setLineError(null);
+              }}
             >
               <option value={0}>— Select Supplier Depot —</option>
               {depots.map((d) => (
@@ -248,46 +364,178 @@ export function PurchaseOrdersPage() {
                 </option>
               ))}
             </SelectField>
-            <SelectField
-              label="Medicine Product"
-              value={productId}
-              onChange={(e) => setProductId(Number(e.target.value))}
-            >
-              <option value={0}>— Select Medicine —</option>
-              {(productsQuery.data?.results ?? []).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.generic_name} ({p.strength} {p.dosage_form})
-                </option>
-              ))}
-            </SelectField>
-            <div className="grid grid-cols-2 gap-3">
-              <TextField
-                label="Quantity Ordered"
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                required
-              />
-              <TextField
-                label="Unit Wholesale Price (RWF)"
-                value={unitPrice}
-                onChange={(e) => setUnitPrice(e.target.value)}
-                required
-              />
+
+            {/* Add-a-line row */}
+            <div className="rounded-lg border border-line bg-surface-50 p-3">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">
+                Add medicines to this order
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_110px_150px_auto] sm:items-end">
+                <SelectField
+                  label="Medicine"
+                  value={pickProduct}
+                  disabled={!depotId}
+                  onChange={(e) => choosePickProduct(Number(e.target.value))}
+                >
+                  <option value={0}>
+                    {!depotId
+                      ? "— Select a depot first —"
+                      : offeringsQuery.isLoading
+                        ? "Loading depot catalogue…"
+                        : offerings.length === 0
+                          ? "— This depot lists no priced medicines —"
+                          : "— Select Medicine —"}
+                  </option>
+                  {offerings.map((o) => (
+                    <option key={o.id} value={o.product}>
+                      {o.product_name} — RWF {Number(o.wholesale_price).toLocaleString()} (
+                      {o.on_hand} in stock)
+                    </option>
+                  ))}
+                </SelectField>
+                <TextField
+                  label="Quantity"
+                  type="number"
+                  min="1"
+                  value={pickQty}
+                  onChange={(e) => setPickQty(e.target.value)}
+                />
+                <TextField
+                  label="Unit price (RWF)"
+                  type="number"
+                  value={pickPrice}
+                  onChange={(e) => setPickPrice(e.target.value)}
+                />
+                <Button type="button" variant="secondary" onClick={addLine}>
+                  <Plus className="h-4 w-4" /> Add
+                </Button>
+              </div>
             </div>
+
+            {/* Order lines */}
+            <div className="overflow-hidden rounded-lg border border-line">
+              <table className="w-full text-sm">
+                <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
+                  <tr>
+                    <th className="px-3 py-2">Medicine</th>
+                    <th className="w-28 px-3 py-2 text-right">Qty</th>
+                    <th className="w-36 px-3 py-2 text-right">Unit price</th>
+                    <th className="w-32 px-3 py-2 text-right">Line total</th>
+                    <th className="w-12 px-3 py-2 text-right" aria-label="Remove" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((l) => (
+                    <tr key={l.key} className="border-b border-line last:border-0">
+                      <td className="px-3 py-2">
+                        <div className="font-medium text-ink-900">{l.product_label}</div>
+                        {l.on_hand !== undefined && l.quantity > l.on_hand && (
+                          <div className="text-xs text-amber-700">
+                            Only {l.on_hand.toLocaleString()} in depot stock
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <input
+                          type="number"
+                          min={1}
+                          value={l.quantity}
+                          onChange={(e) =>
+                            updateLine(l.key, { quantity: Math.max(1, Number(e.target.value)) })
+                          }
+                          className="w-20 rounded border border-line bg-surface-0 px-2 py-1 text-right text-sm tabular-nums outline-none focus:border-brand-600"
+                          aria-label={`Quantity for ${l.product_label}`}
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <input
+                          type="number"
+                          value={l.price_per_unit}
+                          onChange={(e) => updateLine(l.key, { price_per_unit: e.target.value })}
+                          className="w-28 rounded border border-line bg-surface-0 px-2 py-1 text-right text-sm tabular-nums outline-none focus:border-brand-600"
+                          aria-label={`Unit price for ${l.product_label}`}
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold tabular-nums text-ink-900">
+                        {lineTotal(l).toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}
+                          className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
+                          aria-label={`Remove ${l.product_label}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {lines.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-6 text-center text-ink-500">
+                        No medicines added yet — pick one above and click <strong>Add</strong>.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                {lines.length > 0 && (
+                  <tfoot className="border-t border-line bg-surface-50">
+                    <tr>
+                      <td colSpan={3} className="px-3 py-2 text-ink-700">
+                        <span className="font-semibold text-ink-900">
+                          {lines.length} {lines.length === 1 ? "line" : "lines"}
+                        </span>{" "}
+                        · {totalUnits.toLocaleString()} units
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right">
+                        <div className="text-xs uppercase tracking-wide text-ink-500">
+                          Order total
+                        </div>
+                        <div className="text-base font-bold tabular-nums text-ink-900">
+                          RWF {orderTotal.toLocaleString()}
+                        </div>
+                      </td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+
             <TextField
               label="Order Notes / Delivery Instructions"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="e.g. Urgent cold chain delivery requested"
             />
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setCreating(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createOrderMutation.isPending}>
-                {createOrderMutation.isPending ? "Creating…" : "Create Order"}
-              </Button>
+
+            {lineError && <p className="text-sm text-danger">{lineError}</p>}
+
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm text-ink-500">
+                {lines.length === 0
+                  ? "Add medicines to continue"
+                  : `Ordering ${totalUnits.toLocaleString()} units · RWF ${orderTotal.toLocaleString()}`}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setCreating(false);
+                    resetBuilder();
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createOrderMutation.isPending || lines.length === 0 || !depotId}
+                >
+                  {createOrderMutation.isPending ? "Creating…" : "Create Order"}
+                </Button>
+              </div>
             </div>
           </form>
         </Modal>

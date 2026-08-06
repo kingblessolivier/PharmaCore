@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Plus, ShieldAlert, Snowflake } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Button, Card, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
+import { Badge, Button, Modal, PageHeader, SelectField, TextField } from "../components/ui";
+import { DataGrid } from "../components/DataGrid";
 import { api } from "../lib/api";
 import type { BatchRecall, Paginated, Product } from "../lib/types";
 
@@ -81,60 +82,65 @@ export function BatchRecallsPage() {
         Emergency recall directory and 1-click multi-branch batch freeze engine across all branches & depots.
       </p>
 
-      {recallsQuery.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
-
-      {recallsQuery.data && (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-3">Recall Ref</th>
-                <th className="px-4 py-3">Medicine</th>
-                <th className="px-4 py-3">Batch Number</th>
-                <th className="px-4 py-3">Reason</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Emergency Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recallsQuery.data.results.map((r) => (
-                <tr key={r.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                  <td className="px-4 py-3 font-mono font-semibold text-ink-900 flex items-center gap-2">
-                    <ShieldAlert className="h-4 w-4 text-red-600" />
-                    {r.recall_reference}
-                  </td>
-                  <td className="px-4 py-3 font-medium text-ink-900">{r.product_name}</td>
-                  <td className="px-4 py-3 font-mono text-ink-700">{r.batch_number}</td>
-                  <td className="px-4 py-3 text-ink-600 max-w-xs truncate">{r.reason}</td>
-                  <td className="px-4 py-3">
-                    <Badge tone={r.status === "IN_PROGRESS" ? "critical" : "warning"}>{r.status}</Badge>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Button
-                      variant="danger"
-                      onClick={() => freezeMutation.mutate(r.id)}
-                      disabled={freezeMutation.isPending}
-                    >
-                      <Snowflake className="h-3.5 w-3.5" /> 1-Click Freeze
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-              {recallsQuery.data.results.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-ink-500">
-                    No emergency batch recalls registered.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      <DataGrid<BatchRecall>
+        rows={recallsQuery.data?.results ?? []}
+        loading={recallsQuery.isLoading}
+        getRowId={(r) => r.id}
+        storageKey="batch-recalls"
+        exportName="batch-recalls"
+        searchPlaceholder="Search by recall ref, medicine or batch…"
+        emptyMessage="No emergency batch recalls registered."
+        columns={[
+          {
+            key: "recall_reference",
+            header: "Recall Ref",
+            render: (r) => (
+              <span className="flex items-center gap-2 font-mono font-semibold text-ink-900">
+                <ShieldAlert className="h-4 w-4 text-red-600" />
+                {r.recall_reference}
+              </span>
+            ),
+          },
+          {
+            key: "product_name",
+            header: "Medicine",
+            render: (r) => <span className="font-medium">{r.product_name}</span>,
+          },
+          {
+            key: "batch_number",
+            header: "Batch Number",
+            render: (r) => <span className="font-mono text-ink-700">{r.batch_number}</span>,
+          },
+          {
+            key: "reason",
+            header: "Reason",
+            render: (r) => <span className="block max-w-xs truncate text-ink-600">{r.reason}</span>,
+          },
+          {
+            key: "status",
+            header: "Status",
+            render: (r) => (
+              <Badge tone={r.status === "IN_PROGRESS" ? "critical" : "warning"}>{r.status}</Badge>
+            ),
+          },
+          {
+            key: "actions",
+            header: "Emergency Action",
+            align: "right",
+            fixed: true,
+            sortable: false,
+            render: (r) => (
+              <Button
+                variant="danger"
+                onClick={() => freezeMutation.mutate(r.id)}
+                disabled={freezeMutation.isPending}
+              >
+                <Snowflake className="h-3.5 w-3.5" /> 1-Click Freeze
+              </Button>
+            ),
+          },
+        ]}
+      />
 
       {creating && (
         <Modal title="Initiate Emergency Batch Recall" onClose={() => setCreating(false)}>

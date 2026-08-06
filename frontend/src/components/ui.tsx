@@ -123,6 +123,10 @@ export function Badge({ children, tone = "neutral" }: { children: ReactNode; ton
     neutral: "bg-surface-100 text-ink-700",
     depot: "bg-brand-50 text-brand-700",
     retail: "bg-brand-50 text-brand-700",
+    success: "bg-green-50 text-green-700",
+    warning: "bg-amber-50 text-amber-800",
+    danger: "bg-red-50 text-red-700",
+    info: "bg-sky-50 text-sky-700",
   };
   return (
     <span
@@ -143,18 +147,31 @@ export function Spinner() {
   );
 }
 
+/** Dialog width. Use `md` for simple forms, `lg`/`xl` for tables, line-item
+ * builders, or anything with side-by-side fields that would otherwise overflow. */
+export type ModalSize = "md" | "lg" | "xl";
+const MODAL_WIDTH: Record<ModalSize, string> = {
+  md: "max-w-md",
+  lg: "max-w-2xl",
+  xl: "max-w-4xl",
+};
+
 export function Modal({
   title,
   onClose,
   children,
+  size = "md",
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  size?: ModalSize;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4 sm:items-center">
-      <Card className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden shadow-xl">
+      <Card
+        className={`flex max-h-[calc(100dvh-2rem)] w-full ${MODAL_WIDTH[size]} flex-col overflow-hidden shadow-xl`}
+      >
         <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3">
           <h2 className="text-base font-semibold text-ink-900">{title}</h2>
           <button

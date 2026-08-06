@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Boxes, CheckCircle2, Plus } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Button, Card, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
+import { Badge, Button, Modal, PageHeader, SelectField, TextField } from "../components/ui";
+import { DataGrid } from "../components/DataGrid";
 import { api } from "../lib/api";
 import type { Paginated, StockCount } from "../lib/types";
 
@@ -67,63 +68,57 @@ export function StockCountsPage() {
         Cycle counts, physical stock audits, variance reconciliation, and automated stock movement adjustment ledger.
       </p>
 
-      {countsQuery.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
-
-      {countsQuery.data && (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-3">Audit Ref No</th>
-                <th className="px-4 py-3">Audit Type</th>
-                <th className="px-4 py-3">Counter</th>
-                <th className="px-4 py-3">Approver</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {countsQuery.data.results.map((c) => (
-                <tr key={c.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                  <td className="px-4 py-3 font-mono font-semibold text-ink-900 flex items-center gap-2">
-                    <Boxes className="h-4 w-4 text-brand-600" />
-                    {c.reference_no}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge tone="neutral">{c.count_type}</Badge>
-                  </td>
-                  <td className="px-4 py-3 text-ink-700">{c.counter_username}</td>
-                  <td className="px-4 py-3 text-ink-700">{c.approver_username || "—"}</td>
-                  <td className="px-4 py-3">
-                    <Badge tone={c.status === "APPROVED" ? "success" : "warning"}>{c.status}</Badge>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {c.status !== "APPROVED" && (
-                      <Button
-                        onClick={() => approveMutation.mutate(c.id)}
-                        disabled={approveMutation.isPending}
-                      >
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Approve & Adjust
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {countsQuery.data.results.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-ink-500">
-                    No physical stock count sessions recorded.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      <DataGrid<StockCount>
+        rows={countsQuery.data?.results ?? []}
+        loading={countsQuery.isLoading}
+        getRowId={(c) => c.id}
+        storageKey="stock-counts"
+        exportName="stock-counts"
+        searchPlaceholder="Search by reference, type or counter…"
+        emptyMessage="No physical stock count sessions recorded."
+        columns={[
+          {
+            key: "reference_no",
+            header: "Audit Ref No",
+            render: (c) => (
+              <span className="flex items-center gap-2 font-mono font-semibold text-ink-900">
+                <Boxes className="h-4 w-4 text-brand-600" />
+                {c.reference_no}
+              </span>
+            ),
+          },
+          {
+            key: "count_type",
+            header: "Audit Type",
+            render: (c) => <Badge tone="neutral">{c.count_type}</Badge>,
+          },
+          { key: "counter_username", header: "Counter" },
+          { key: "approver_username", header: "Approver", value: (c) => c.approver_username || "—" },
+          {
+            key: "status",
+            header: "Status",
+            render: (c) => (
+              <Badge tone={c.status === "APPROVED" ? "success" : "warning"}>{c.status}</Badge>
+            ),
+          },
+          {
+            key: "actions",
+            header: "Action",
+            align: "right",
+            fixed: true,
+            sortable: false,
+            render: (c) =>
+              c.status !== "APPROVED" ? (
+                <Button
+                  onClick={() => approveMutation.mutate(c.id)}
+                  disabled={approveMutation.isPending}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Approve &amp; Adjust
+                </Button>
+              ) : null,
+          },
+        ]}
+      />
 
       {creating && (
         <Modal title="Create Stock Count Session" onClose={() => setCreating(false)}>
@@ -139,7 +134,7 @@ export function StockCountsPage() {
             <SelectField
               label="Audit Count Type"
               value={countType}
-              onChange={(e) => setCountType(e.target.value as any)}
+              onChange={(e) => setCountType(e.target.value as typeof countType)}
             >
               <option value="CYCLE_COUNT">Cycle Count</option>
               <option value="FULL_PHYSICAL">Full Physical Inventory Audit</option>

@@ -94,7 +94,7 @@ export function OrgOnboardingModal({ org, onClose }: { org: OnboardingOrg; onClo
   const verifiedCount = (docs.data?.results ?? []).filter((d) => d.is_verified).length;
 
   return (
-    <Modal title={`${org.name} — onboarding`} onClose={onClose}>
+    <Modal title={`${org.name} — onboarding`} size="lg" onClose={onClose}>
       <div className="flex flex-col gap-4">
         {/* Activation gate */}
         <div className="flex items-center justify-between rounded-lg border border-line bg-surface-50 p-3">
