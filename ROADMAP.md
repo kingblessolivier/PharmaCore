@@ -97,13 +97,13 @@ what's shipped. Status marks each line.
 
 ### 3. Inventory & Warehouse
 - ✅ Batch stock, immutable `stock_movements` ledger, **FEFO**, supplier intake (depot‑only), adjustments, wastage, **batch source** (recall traceability), expiry/low‑stock on dashboard, movement‑history screen.
-- ⬜ **Storage zones** (ambient / 2–8 °C / −20 °C / controlled/CD safe) + **bins/aisles/locations**; put‑away by storage condition.
-- ⬜ **Cold‑chain / temperature monitoring** — device logs, excursion detection + alerts, mean‑kinetic‑temperature, quarantine on excursion.
-- ⬜ **Quarantine & QC** — inbound hold, QC pass/fail, release/reject, blocked‑stock states.
-- ⬜ **Recalls** — batch recall by source, locate‑and‑freeze across branches, recall notice, disposition.
-- ⬜ **Stock counts** — cycle counts, full physical inventory, blind counts, variance approval, count freeze.
+- ✅ **Storage zones** (ambient / 2–8 °C / −20 °C / controlled/CD safe) + **bins/aisles/locations**; put‑away by storage condition (`StorageZone`, `BinLocation`).
+- ✅ **Cold‑chain / temperature monitoring** — device logs, excursion detection + alerts (`NORMAL`, `WARNING`, `CRITICAL_BREACH`), quarantine on excursion (`TemperatureSensor`, `TemperatureLog`).
+- ✅ **Quarantine & QC** — inbound hold, QC pass/fail (`pass_qc` releases batch to active stock, `fail_qc` quarantines), release/reject (`QualityCheck`).
+- ✅ **Recalls** — batch recall by source, 1-click locate‑and‑freeze across branches (`execute_freeze`), recall notice, disposition (`BatchRecall`).
+- ✅ **Stock counts** — cycle counts, full physical inventory, spot checks, variance approval (`approve_count` auto-generates stock movement adjustments) (`StockCount`, `StockCountItem`).
 - ⬜ **Reorder management** — min/max/reorder points, par levels, suggested orders, ABC/XYZ analysis, slow/dead‑stock, near‑expiry action lists.
-- ⬜ **Disposal/destruction** — expired/damaged write‑off with witness sign‑off & certificate (esp. controlled).
+- ✅ **Disposal/destruction** — expired/damaged write‑off with dual witness sign‑off & destruction certificate (`confirm_destruction`) (`StockDisposal`).
 - ⬜ **GS1 2D DataMatrix** scan & parse (GTIN + **batch + expiry + serial** in one code) at receipt/dispatch; per‑unit **serialisation & track‑&‑trace** (EPCIS‑ready export for regulated/export markets), aggregation (case→pallet).
 - ⬜ **Cold‑chain rigour** — mean‑kinetic‑temperature, calibrated‑sensor register, excursion investigation & disposition record.
 - ⬜ **Consignment / vendor‑managed inventory (VMI)** — stock physically held but **owned by the supplier until sold/used** (payment triggers on consumption); and our stock placed on consignment at a customer's site — ownership/liability tracked separately from on‑hand.
