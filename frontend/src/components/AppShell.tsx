@@ -7,6 +7,7 @@ import {
   Boxes,
   Building2,
   ChevronDown,
+  ChevronLeft,
   ClipboardList,
   CreditCard,
   Eye,
@@ -37,7 +38,7 @@ import {
   PackageCheck,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { isAdmin } from "../lib/roles";
@@ -303,6 +304,10 @@ interface NavGroup {
   label: string; // "" = ungrouped (rendered without a header)
   roles: "all" | string[]; // "all" = everyone; else visible to admins + these roles
   items: NavItem[];
+  /** Route prefixes that belong to this app. When the user is inside one of these,
+   * the side nav shows ONLY this group (Oracle/Workspace behaviour: pick an app,
+   * see that app's contents). Omit for always-visible groups (e.g. Dashboard). */
+  match?: string[];
 }
 
 // Side nav grouped by subsystem, per docs/design/04-navigation.md §3.1 — Company,
@@ -313,11 +318,25 @@ const NAV: NavGroup[] = [
   {
     label: "Catalog",
     roles: ["ORG_ADMIN", "PHARMACIST"],
-    items: [{ to: "/products", label: "Products", icon: Pill }],
+    match: ["/catalog", "/products"],
+    items: [
+      { to: "/catalog", label: "Catalog Overview", icon: Pill, end: true },
+      { to: "/products", label: "Products", icon: Pill },
+      { to: "/catalog/price-lists", label: "Price Lists", icon: CreditCard },
+      { to: "/catalog/formularies", label: "Formularies", icon: ShieldCheck },
+      { to: "/catalog/interactions", label: "Drug Interactions", icon: Shield },
+      { to: "/catalog/substitutes", label: "Substitutes", icon: Pill },
+      { to: "/catalog/uom", label: "UoM Conversions", icon: Boxes },
+      { to: "/catalog/manufacturers", label: "Manufacturers", icon: Building2 },
+      { to: "/catalog/ingredients", label: "Active Ingredients", icon: FileText },
+      { to: "/catalog/low-stock", label: "Low Stock", icon: ClipboardList },
+      { to: "/catalog/expiry", label: "Expiry Forecast", icon: Clock },
+    ],
   },
   {
     label: "Distribution",
     roles: ["ORG_ADMIN", "PHARMACIST"],
+    match: ["/distribution", "/suppliers"],
     items: [
       { to: "/distribution", label: "Distribution Overview", icon: Truck, end: true },
       { to: "/distribution/orders", label: "B2B Purchase Orders", icon: ClipboardList },
@@ -329,6 +348,7 @@ const NAV: NavGroup[] = [
   {
     label: "Inventory",
     roles: ["ORG_ADMIN", "PHARMACIST"],
+    match: ["/inventory"],
     items: [
       { to: "/inventory", label: "Warehouse Overview", icon: Warehouse, end: true },
       { to: "/inventory/zones", label: "Zones & Bins", icon: Boxes },
@@ -339,10 +359,19 @@ const NAV: NavGroup[] = [
       { to: "/inventory/disposal", label: "Stock Disposal", icon: ScrollText },
     ],
   },
-  { label: "Retail", roles: "all", items: [{ to: "/pos", label: "Point of sale", icon: ShoppingCart }] },
+  {
+    label: "Retail",
+    roles: "all",
+    match: ["/retail", "/pos"],
+    items: [
+      { to: "/retail", label: "Retail Overview", icon: ShoppingCart, end: true },
+      { to: "/pos", label: "Point of sale", icon: ShoppingCart },
+    ],
+  },
   {
     label: "Finance",
     roles: ["ACCOUNTANT"],
+    match: ["/finance"],
     items: [
       { to: "/finance", label: "Overview", icon: Wallet, end: true },
       { to: "/finance/aging", label: "Receivables & payables", icon: CreditCard },
@@ -360,6 +389,7 @@ const NAV: NavGroup[] = [
   {
     label: "People",
     roles: ["HR_MANAGER"],
+    match: ["/people"],
     items: [
       { to: "/people", label: "Overview", icon: Users, end: true },
       { to: "/people/employees", label: "Employees", icon: UserCog },
@@ -374,11 +404,18 @@ const NAV: NavGroup[] = [
     roles: "all",
     items: [{ to: "/approvals", label: "Approvals", icon: ShieldCheck }],
   },
-  { label: "Insights", roles: ["ORG_ADMIN"], items: [{ to: "/documents", label: "Documents", icon: FileText }] },
+  {
+    label: "Insights",
+    roles: ["ORG_ADMIN"],
+    match: ["/documents"],
+    items: [{ to: "/documents", label: "Documents", icon: FileText }],
+  },
   {
     label: "Admin",
     roles: ["ORG_ADMIN"],
+    match: ["/admin", "/companies", "/organizations", "/departments", "/users", "/permissions", "/activity"],
     items: [
+      { to: "/admin", label: "Admin Overview", icon: ShieldCheck, end: true },
       { to: "/companies", label: "Organizations & branches", icon: Building2 },
       { to: "/organizations", label: "Organizations", icon: Network },
       { to: "/departments", label: "Departments", icon: Boxes },
@@ -420,10 +457,21 @@ export function AppShell() {
   const userRoles = user?.roles ?? [];
   const canSee = (roles: "all" | string[] | undefined) =>
     roles === undefined || roles === "all" || admin || roles.some((r) => userRoles.includes(r));
-  const nav = NAV.filter((g) => canSee(g.roles)).map((g) => ({
+  const visible = NAV.filter((g) => canSee(g.roles)).map((g) => ({
     ...g,
     items: g.items.filter((i) => canSee(i.roles ?? g.roles)),
   }));
+
+  // App-scoped side nav (Oracle Fusion / Workspace behaviour): once you're inside an
+  // app, show ONLY that app's contents — not every subsystem at once. Outside any app
+  // (e.g. the dashboard) show the full menu so users can still get anywhere.
+  const path = useLocation().pathname;
+  const activeApp = visible.find((g) =>
+    (g.match ?? []).some((p) => path === p || path.startsWith(p + "/")),
+  );
+  const nav = activeApp
+    ? visible.filter((g) => g === activeApp || (g.match ?? []).length === 0)
+    : visible;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -475,10 +523,23 @@ export function AppShell() {
 
       <div className="flex">
         <nav className="min-h-[calc(100vh-3.5rem)] w-56 border-r border-line bg-surface-0 p-2">
+          {activeApp && (
+            <div className="mb-2 border-b border-line pb-2">
+              <NavLink
+                to="/"
+                className="flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-ink-500 hover:bg-surface-100 hover:text-ink-700"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" /> All apps
+              </NavLink>
+              <div className="mt-1 flex items-center gap-2 px-3">
+                <span className="text-sm font-semibold text-ink-900">{activeApp.label}</span>
+              </div>
+            </div>
+          )}
           {nav.map((group, gi) =>
             group.items.length === 0 ? null : (
               <div key={group.label || `g${gi}`} className={group.label ? "mb-1 mt-3 first:mt-0" : ""}>
-                {group.label && (
+                {group.label && group !== activeApp && (
                   <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
                     {group.label}
                   </div>
