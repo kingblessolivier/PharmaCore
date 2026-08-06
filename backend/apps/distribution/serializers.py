@@ -6,13 +6,19 @@ from django.db import transaction
 from rest_framework import serializers
 
 from apps.distribution.models import (
+    CustomerReturn,
+    DepotProductListing,
     GoodsReceivedNote,
     GRNLine,
     InTransitStock,
+    JourneyPlan,
     OrderItem,
     OrderPayment,
+    SalesRepresentative,
+    SalesVisitLog,
     Shipment,
     StockOrder,
+    TenderContract,
 )
 
 
