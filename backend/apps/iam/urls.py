@@ -6,6 +6,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.iam.authentication import VersionedTokenRefreshSerializer
 from apps.iam.views import (
+    ApiKeyViewSet,
     AuditLogViewSet,
     ChangePasswordView,
     CompanyViewSet,
@@ -31,6 +32,7 @@ router.register(
 )
 router.register("departments", DepartmentViewSet, basename="department")
 router.register("users", UserViewSet, basename="user")
+router.register("api-keys", ApiKeyViewSet, basename="api-key")
 router.register("user-documents", UserDocumentViewSet, basename="user-document")
 router.register("roles", RoleViewSet, basename="role")
 router.register("permissions", PermissionViewSet, basename="permission")

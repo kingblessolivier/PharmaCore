@@ -8,6 +8,7 @@ from typing import Any
 from rest_framework import serializers
 
 from apps.iam.models import (
+    ApiKey,
     AuditLog,
     Company,
     Department,
@@ -42,6 +43,24 @@ class OrganizationDocumentSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "is_verified", "verified_by_name", "created_at"]
+
+
+class ApiKeySerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source="user.username", read_only=True)
+
+    class Meta:
+        model = ApiKey
+        fields = [
+            "id",
+            "name",
+            "user",
+            "user_name",
+            "prefix",
+            "is_active",
+            "last_used_at",
+            "created_at",
+        ]
+        read_only_fields = ["id", "user_name", "prefix", "is_active", "last_used_at", "created_at"]
 
 
 class UserDocumentSerializer(serializers.ModelSerializer):

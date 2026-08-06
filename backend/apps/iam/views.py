@@ -23,8 +23,12 @@ from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from apps.iam.audit import _client_ip, record_audit
-from apps.iam.authentication import VersionedTokenObtainPairSerializer
+from apps.iam.authentication import (
+    VersionedTokenObtainPairSerializer,
+    generate_api_key,
+)
 from apps.iam.models import (
+    ApiKey,
     AuditLog,
     Company,
     Department,
@@ -40,6 +44,7 @@ from apps.iam.models import (
 from apps.iam.permissions import CanManageOrg, IsAdminRole, IsSysAdmin
 from apps.iam.scoping import organizations_visible_to
 from apps.iam.serializers import (
+    ApiKeySerializer,
     AuditLogSerializer,
     CompanySerializer,
     DepartmentSerializer,
@@ -55,11 +60,12 @@ from apps.iam.serializers import (
 
 
 def _token_claim(request: Request, key: str) -> Any:
-    """Read a custom claim off the request's validated JWT (None if absent)."""
+    """Read a custom claim off the request's validated JWT (None if absent or if the
+    request was authenticated by something else, e.g. an API key)."""
     token = request.auth
-    if token is None:
+    if token is None or not hasattr(token, "get"):
         return None
-    return token.get(key)  # type: ignore[union-attr]
+    return token.get(key)
 
 
 def _check_password_strength(password: str, user: User | None = None) -> None:
@@ -751,6 +757,65 @@ class UserViewSet(viewsets.ModelViewSet):
             user=cast(User, self.request.user),
             organization=instance.organization,
             entity_type="user",
+            entity_id=str(instance.pk),
+            request=self.request,
+        )
+        instance.delete()
+
+
+class ApiKeyViewSet(viewsets.ModelViewSet):
+    """Service-account API keys. Admin-gated, org-scoped (a key acts as its user).
+    Creating one returns the raw key **once**; only its hash is stored. Filter by
+    ``?user=<id>``."""
+
+    serializer_class = ApiKeySerializer
+    permission_classes = [IsAuthenticated, IsAdminRole]
+    http_method_names = ["get", "post", "delete", "head", "options"]
+    queryset = ApiKey.objects.select_related("user")
+
+    def _visible_users(self) -> QuerySet[User]:
+        actor = cast(User, self.request.user)
+        if actor.is_superuser or actor.has_role("SYS_ADMIN"):
+            return User.objects.all()
+        return User.objects.filter(organization__in=organizations_visible_to(actor))
+
+    def get_queryset(self) -> QuerySet[ApiKey]:
+        qs = ApiKey.objects.select_related("user").filter(user__in=self._visible_users())
+        if user_id := self.request.query_params.get("user"):
+            qs = qs.filter(user_id=user_id)
+        return qs
+
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        actor = cast(User, request.user)
+        name = str(request.data.get("name", "")).strip()
+        target = get_object_or_404(User, pk=request.data.get("user"))
+        if not name:
+            raise ValidationError("Give the key a name.")
+        if not self._visible_users().filter(pk=target.pk).exists():
+            raise PermissionDenied("That user is outside your organization.")
+        raw, prefix, key_hash = generate_api_key()
+        key = ApiKey.objects.create(
+            name=name, user=target, prefix=prefix, key_hash=key_hash, created_by=actor
+        )
+        record_audit(
+            action="API_KEY_CREATE",
+            user=actor,
+            organization=target.organization,
+            entity_type="api_key",
+            entity_id=str(key.pk),
+            changes={"name": name, "for_user": target.username},
+            request=request,
+        )
+        data = dict(ApiKeySerializer(key).data)
+        data["key"] = raw  # shown once
+        return Response(data, status=status.HTTP_201_CREATED)
+
+    def perform_destroy(self, instance: ApiKey) -> None:
+        record_audit(
+            action="API_KEY_REVOKE",
+            user=cast(User, self.request.user),
+            organization=instance.user.organization,
+            entity_type="api_key",
             entity_id=str(instance.pk),
             request=self.request,
         )

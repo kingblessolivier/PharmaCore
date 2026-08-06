@@ -18,6 +18,10 @@ Maintenance rules:
 ## [Unreleased]
 
 ### Added
+- **API keys / service accounts (Admin).** Machine/integration requests can authenticate
+  with an `X-API-Key` header that acts **as a chosen user** (reusing that user's roles &
+  pharmacy). Keys are hashed at rest (raw key shown once), admin-managed, org-scoped, and
+  revocable; create/revoke are audited. Managed from an **API keys** panel on the Admin home.
 - **Force-logout / session revocation (Admin).** An admin can end all of a user's
   sessions instantly — a token-version stamped on every JWT is bumped, so all their
   outstanding access **and** refresh tokens are rejected at once (audited); a
