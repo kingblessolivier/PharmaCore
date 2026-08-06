@@ -3,6 +3,9 @@ auto-posting from B2B settlement, and the credit-override approval handler."""
 
 from __future__ import annotations
 
+import csv
+import io
+from collections.abc import Sequence
 from decimal import Decimal
 from typing import Any, TypedDict
 
@@ -14,17 +17,19 @@ from apps.approvals.models import ApprovalRequest
 from apps.approvals.services import request_approval
 from apps.core.sequences import next_number
 from apps.finance.models import (
-    CustomerCredit,
-    CustomerInvoice,
-    CustomerReceipt,
-    DunningNotice,
     Account,
     AccountingPeriod,
     BankAccount,
     CreditProfile,
+    CustomerCredit,
+    CustomerInvoice,
+    CustomerReceipt,
+    DunningNotice,
     JournalEntry,
     JournalLine,
     OpeningBalance,
+    PaymentRun,
+    PaymentRunLine,
     SupplierBill,
     SupplierBillPayment,
     TenantSettings,
@@ -41,6 +46,9 @@ _CONTROL_ACCOUNTS: list[tuple[str, str, str, str]] = [
     ("1100", "Cash on Hand", Account.Type.ASSET, Account.Balance.DEBIT),
     ("1200", "Bank", Account.Type.ASSET, Account.Balance.DEBIT),
     ("1300", "Mobile Money", Account.Type.ASSET, Account.Balance.DEBIT),
+    # VAT charged by suppliers, recoverable from the RRA on the next return —
+    # an asset, and the input side of every VAT return.
+    ("1350", "VAT Input — Recoverable", Account.Type.ASSET, Account.Balance.DEBIT),
     ("1400", "Accounts Receivable — Trade", Account.Type.ASSET, Account.Balance.DEBIT),
     ("1500", "Inventory on Hand", Account.Type.ASSET, Account.Balance.DEBIT),
     ("1700", "Fixed Assets (cost)", Account.Type.ASSET, Account.Balance.DEBIT),
@@ -50,7 +58,8 @@ _CONTROL_ACCOUNTS: list[tuple[str, str, str, str]] = [
     # Money held for a customer but not yet earned (overpayments, credit notes,
     # returns). Kept out of 2100 so the AP ageing is purely supplier debt.
     (
-        "2150",
+        # 2150 is taken by Procurement's GRNI control account.
+        "2160",
         "Customer Deposits & On-Account Credits",
         Account.Type.LIABILITY,
         Account.Balance.CREDIT,
@@ -424,6 +433,7 @@ def post_payroll_journal(
         payable_account=accounts["2210"],
         amount=total_pension_employer,
         memo="RSSB pension (employer)",
+        statute="RSSB_PENSION",
         reference_id=reference_id,
         user=user,
     )
@@ -435,6 +445,7 @@ def post_payroll_journal(
         payable_account=accounts["2220"],
         amount=total_maternity_employer,
         memo="RSSB maternity (employer)",
+        statute="RSSB_MATERNITY",
         reference_id=reference_id,
         user=user,
     )
@@ -447,6 +458,7 @@ def post_payroll_journal(
             payable_account=accounts["2240"],
             amount=total_occupational_hazard,
             memo="Occupational hazards (employer)",
+            statute="OCCUPATIONAL_HAZARDS",
             reference_id=reference_id,
             user=user,
         )
@@ -459,6 +471,7 @@ def post_payroll_journal(
             payable_account=accounts["2250"],
             amount=total_rama,
             memo="RAMA (employer)",
+            statute="RAMA",
             reference_id=reference_id,
             user=user,
         )
@@ -473,12 +486,19 @@ def _employer_post(
     payable_account: Account,
     amount: Decimal,
     memo: str,
+    statute: str,
     reference_id: str,
     user: User | None,
 ) -> None:
     """Post a single employer-side statutory contribution as its own balanced
     entry (Dr expense / Cr payable). Caller filters on ``amount > 0`` to avoid
-    posting zero-valued journals that would clutter the GL."""
+    posting zero-valued journals that would clutter the GL.
+
+    ``statute`` keeps each contribution's idempotency reference distinct.
+    post_journal deduplicates on (organization, reference_type, reference_id),
+    so sharing one reference across the whole run meant only the first of the
+    five payroll entries ever reached the ledger.
+    """
     if amount <= 0:
         return
     post_journal(
@@ -498,8 +518,8 @@ def _employer_post(
                 "memo": memo,
             },
         ],
-        reference_type="payroll_run",
-        reference_id=reference_id,
+        reference_type="payroll_employer",
+        reference_id=f"{reference_id}:{statute}",
         user=user,
     )
 
@@ -632,7 +652,7 @@ def record_supplier_bill(
         lines.insert(
             1,
             {
-                "account": accounts["1300"],
+                "account": accounts["1350"],
                 "side": JournalLine.Side.DEBIT,
                 "amount": vat_amount,
                 "memo": f"VAT Input (class {tax_class or '?'})",
@@ -655,10 +675,10 @@ def record_supplier_bill_payment(
     *, bill: SupplierBill, amount: Decimal, method: str, reference: str, user: User | None
 ) -> SupplierBill:
     """Record a payment against a supplier bill and roll up its settlement status;
-    posts Dr Accounts Payable / Cr Cash & Bank."""
+    posts Dr Accounts Payable / Cr the account matching the tender."""
     if amount <= 0:
         raise ValueError("Payment amount must be positive.")
-    SupplierBillPayment.objects.create(
+    payment = SupplierBillPayment.objects.create(
         bill=bill, amount=amount, method=method, reference=reference, recorded_by=user
     )
     bill.amount_paid = bill.amount_paid + amount
@@ -677,20 +697,33 @@ def record_supplier_bill_payment(
                 "account": accounts["2100"],
                 "side": JournalLine.Side.DEBIT,
                 "amount": amount,
-                "memo": "",
+                "memo": reference,
             },
             {
-                "account": accounts["1100"],
+                "account": accounts[_RECEIPT_ACCOUNT.get(method, "1100")],
                 "side": JournalLine.Side.CREDIT,
                 "amount": amount,
-                "memo": "",
+                "memo": method,
             },
         ],
-        reference_type="supplier_bill",
-        reference_id=str(bill.pk),
+        # Keyed on the payment, not the bill: post_journal deduplicates on the
+        # reference pair, and the bill's own Dr expense / Cr AP entry already
+        # owns ("supplier_bill", bill.pk) — sharing it silently swallowed every
+        # payment entry, so AP was never relieved.
+        reference_type="supplier_bill_payment",
+        reference_id=str(payment.pk),
         user=user,
     )
     return bill
+
+
+# Which cash control account a wallet's sub-ledger hangs under.
+_BANK_ACCOUNT_PARENT = {
+    "CASH": "1100",
+    "BANK": "1200",
+    "MOMO": "1300",
+    "AIRTEL": "1300",
+}
 
 
 @transaction.atomic
@@ -706,17 +739,25 @@ def create_bank_account(
     user: User | None = None,
 ) -> BankAccount:
     """Open a bank/MoMo/Airtel/cash account — creates its own GL sub-account under
-    the "1000 Cash & Bank" control account so its cash-book is tracked separately,
-    and posts an opening-balance entry if one is given."""
+    the matching cash control account so its cash-book is tracked separately,
+    and posts an opening-balance entry if one is given.
+
+    The parent follows the tender: a MoMo wallet belongs under 1300, not under
+    the bank control, so the cash-flow statement and the trial balance both see
+    it in the right place.
+    """
     control = ensure_default_accounts(organization)
-    existing = BankAccount.objects.filter(organization=organization).count()
+    parent_code = _BANK_ACCOUNT_PARENT.get(kind, "1200")
+    existing = Account.objects.filter(
+        organization=organization, code__startswith=f"{parent_code}-"
+    ).count()
     gl_account = Account.objects.create(
         organization=organization,
-        code=f"1000-{existing + 1:02d}",
+        code=f"{parent_code}-{existing + 1:02d}",
         name=name,
         account_type=Account.Type.ASSET,
         normal_balance=Account.Balance.DEBIT,
-        parent=control["1000"],
+        parent=control[parent_code],
     )
     account = BankAccount.objects.create(
         organization=organization,
@@ -927,7 +968,8 @@ def close_period(
     from apps.events.publishers import publish_fiscal_period_event
 
     period_event = (
-        EventType.EOM_CLOSE_FINALISED if kind == AccountingPeriod.Kind.MONTH
+        EventType.EOM_CLOSE_FINALISED
+        if kind == AccountingPeriod.Kind.MONTH
         else EventType.FISCAL_PERIOD_CLOSED
     )
     publish_fiscal_period_event(
@@ -1091,7 +1133,11 @@ def post_sale_journal(*, sale: Any, user: User | None) -> JournalEntry | None:
                     "memo": "Inventory on hand (FEFO allocations)",
                 },
             ],
-            reference_type="sale",
+            # Its own reference: post_journal deduplicates on the reference
+            # pair, and the revenue leg already owns ("sale", sale.pk) — sharing
+            # it meant the COGS entry was silently dropped and every sale looked
+            # like pure margin.
+            reference_type="sale_cogs",
             reference_id=str(sale.pk),
             user=user,
         )
@@ -1115,8 +1161,14 @@ def post_sale_journal(*, sale: Any, user: User | None) -> JournalEntry | None:
 
 @transaction.atomic
 def post_inventory_adjustment(
-    *, batch: Any, delta: int, unit_cost: Decimal | None, reason: str,
-    reference_type: str, reference_id: str, user: User | None,
+    *,
+    batch: Any,
+    delta: int,
+    unit_cost: Decimal | None,
+    reason: str,
+    reference_type: str,
+    reference_id: str,
+    user: User | None,
 ) -> JournalEntry | None:
     """Auto-post a stock-count variance (approved StockCount) to the GL.
 
@@ -1137,17 +1189,33 @@ def post_inventory_adjustment(
 
     if delta > 0:
         lines: list[JournalLineInput] = [
-            {"account": accounts["1500"], "side": JournalLine.Side.DEBIT, "amount": amount,
-             "memo": "Stock found (variance surplus)"},
-            {"account": accounts["5000"], "side": JournalLine.Side.CREDIT, "amount": amount,
-             "memo": "COGS reversal on found stock"},
+            {
+                "account": accounts["1500"],
+                "side": JournalLine.Side.DEBIT,
+                "amount": amount,
+                "memo": "Stock found (variance surplus)",
+            },
+            {
+                "account": accounts["5000"],
+                "side": JournalLine.Side.CREDIT,
+                "amount": amount,
+                "memo": "COGS reversal on found stock",
+            },
         ]
     else:
         lines = [
-            {"account": accounts["5000"], "side": JournalLine.Side.DEBIT, "amount": amount,
-             "memo": "COGS — stock shrinkage"},
-            {"account": accounts["1500"], "side": JournalLine.Side.CREDIT, "amount": amount,
-             "memo": "Inventory written off (variance loss)"},
+            {
+                "account": accounts["5000"],
+                "side": JournalLine.Side.DEBIT,
+                "amount": amount,
+                "memo": "COGS — stock shrinkage",
+            },
+            {
+                "account": accounts["1500"],
+                "side": JournalLine.Side.CREDIT,
+                "amount": amount,
+                "memo": "Inventory written off (variance loss)",
+            },
         ]
 
     entry = post_journal(
@@ -1189,8 +1257,13 @@ def post_inventory_adjustment(
 
 @transaction.atomic
 def post_writeoff(
-    *, batch: Any, quantity: int, reason: str,
-    reference_type: str, reference_id: str, user: User | None,
+    *,
+    batch: Any,
+    quantity: int,
+    reason: str,
+    reference_type: str,
+    reference_id: str,
+    user: User | None,
 ) -> JournalEntry | None:
     """Auto-post a StockDisposal (destruction / writeoff) at the batch's cost.
 
@@ -1216,7 +1289,9 @@ def post_writeoff(
                 "memo": f"{quantity} units disposed",
             },
             {
-                "account": accounts["1200"],
+                # 1500 under the statutory chart. 1200 is Bank now, so this was
+                # crediting the bank balance for every stock write-off.
+                "account": accounts["1500"],
                 "side": JournalLine.Side.CREDIT,
                 "amount": amount,
                 "memo": "Inventory on hand removed",
@@ -1310,13 +1385,15 @@ def record_tax_payment(
         description=f"RRA remittance — {payment.payment_number}",
         lines=[
             {
-                "account": accounts["2050"],
+                # 2300/1100 under the statutory chart of accounts — the old
+                # 2050/1000 codes were renamed by the F3 migration.
+                "account": accounts["2300"],
                 "side": JournalLine.Side.DEBIT,
                 "amount": amount,
                 "memo": f"VAT Output paid ({period_start}–{period_end})",
             },
             {
-                "account": accounts["1000"],
+                "account": accounts[_RECEIPT_ACCOUNT.get(method, "1100")],
                 "side": JournalLine.Side.CREDIT,
                 "amount": amount,
                 "memo": method,
@@ -1386,13 +1463,16 @@ def mirror_ebm_to_ledger(*, tax_record: Any, user: User | None) -> JournalEntry:
         description=f"EBM mirror — receipt {tax_record.receipt_number}",
         lines=[
             {
-                "account": accounts["1100"],
+                # 1400/2300 under the statutory chart of accounts — the old
+                # 1100 (receivables) and 2050 (VAT output) codes were renamed
+                # by the F3 migration.
+                "account": accounts["1400"],
                 "side": JournalLine.Side.DEBIT,
                 "amount": vat_total,
                 "memo": "EBM-fiscalized VAT receivable from RRA reconciliation",
             },
             {
-                "account": accounts["2050"],
+                "account": accounts["2300"],
                 "side": JournalLine.Side.CREDIT,
                 "amount": vat_total,
                 "memo": f"EBM {tax_record.receipt_number} (A:{tax_record.tax_class_a} B:{tax_record.tax_class_b} C:{tax_record.tax_class_c})",
@@ -1423,7 +1503,6 @@ def _apply_tax_payment(approval: ApprovalRequest) -> None:
     """Apply an approved tax-payment request: call ``record_tax_payment`` with
     the payload values. No self-approval by design — the registry decorator
     enforces the segregation."""
-    from apps.finance.models import TaxPayment
 
     organization = approval.organization
     payload = approval.payload
@@ -1550,7 +1629,9 @@ def _validate_gl_trial_balance(organization: Organization, rows: list[OpeningBal
         raise OpeningBalanceValidationError(errors)
 
 
-def _validate_ar_ap_aging(organization: Organization, rows: list[OpeningBalance], kind: str) -> None:
+def _validate_ar_ap_aging(
+    organization: Organization, rows: list[OpeningBalance], kind: str
+) -> None:
     """AR/AP aging rows must reference a known partner (catalog.Supplier or a
     downstream Customer model — fall back to raw reference_id if the model is
     absent). Each row must carry a positive amount and a valid aging bucket."""
@@ -1587,9 +1668,7 @@ def _validate_stock_batches(organization: Organization, rows: list[OpeningBalanc
     for row in rows:
         pid = row.payload.get("product_id")
         if pid is None or int(pid) not in valid_ids:
-            errors.append(
-                f"STOCK_BATCH row {row.reference_key}: unknown product_id {pid!r}"
-            )
+            errors.append(f"STOCK_BATCH row {row.reference_key}: unknown product_id {pid!r}")
         qty = int(row.payload.get("quantity", 0) or 0)
         if qty <= 0:
             errors.append(f"STOCK_BATCH row {row.reference_key}: quantity must be > 0")
@@ -1611,9 +1690,7 @@ def _validate_employee_leave(organization: Organization, rows: list[OpeningBalan
     for row in rows:
         emp_id = str(row.payload.get("employee_id", ""))
         if emp_id not in employee_ids:
-            errors.append(
-                f"EMPLOYEE_LEAVE row {row.reference_key}: unknown employee_id {emp_id!r}"
-            )
+            errors.append(f"EMPLOYEE_LEAVE row {row.reference_key}: unknown employee_id {emp_id!r}")
         leave_type = row.payload.get("leave_type", "")
         if leave_type not in valid_types:
             errors.append(
@@ -1653,9 +1730,7 @@ def validate_opening_balance_rows(
             )
         dedupe_key = (kind, ref_key)
         if dedupe_key in seen_keys:
-            raise OpeningBalanceValidationError(
-                [f"Duplicate row within import: {kind}/{ref_key}"]
-            )
+            raise OpeningBalanceValidationError([f"Duplicate row within import: {kind}/{ref_key}"])
         seen_keys.add(dedupe_key)
         by_kind.setdefault(kind, []).append(
             OpeningBalance(
@@ -1669,13 +1744,9 @@ def validate_opening_balance_rows(
     if OpeningBalance.Kind.GL_TRIAL_BALANCE in by_kind:
         _validate_gl_trial_balance(organization, by_kind[OpeningBalance.Kind.GL_TRIAL_BALANCE])
     if OpeningBalance.Kind.AR_AGING in by_kind:
-        _validate_ar_ap_aging(
-            organization, by_kind[OpeningBalance.Kind.AR_AGING], "AR_AGING"
-        )
+        _validate_ar_ap_aging(organization, by_kind[OpeningBalance.Kind.AR_AGING], "AR_AGING")
     if OpeningBalance.Kind.AP_AGING in by_kind:
-        _validate_ar_ap_aging(
-            organization, by_kind[OpeningBalance.Kind.AP_AGING], "AP_AGING"
-        )
+        _validate_ar_ap_aging(organization, by_kind[OpeningBalance.Kind.AP_AGING], "AP_AGING")
     if OpeningBalance.Kind.STOCK_BATCH in by_kind:
         _validate_stock_batches(organization, by_kind[OpeningBalance.Kind.STOCK_BATCH])
     if OpeningBalance.Kind.EMPLOYEE_LEAVE in by_kind:
@@ -1714,9 +1785,7 @@ def import_opening_balances(
     if apply:
         _apply_opening_balances(organization=organization, user=user)
     return list(
-        OpeningBalance.objects.filter(organization=organization).order_by(
-            "kind", "reference_key"
-        )
+        OpeningBalance.objects.filter(organization=organization).order_by("kind", "reference_key")
     )
 
 
@@ -2017,7 +2086,7 @@ def record_customer_receipt(
         # Money held but not earned - a liability until applied or refunded.
         lines.append(
             {
-                "account": accounts["2150"],
+                "account": accounts["2160"],
                 "side": "CREDIT",
                 "amount": overpaid,
                 "memo": f"On-account credit for {invoice.customer.name}",
@@ -2164,3 +2233,273 @@ def assert_may_order_on_credit(
                 f"{buyer.name} credit limit breached: exposure would be {projected} "
                 f"against a limit of {profile.credit_limit}."
             )
+
+
+# ---------------------------------------------------------------------------
+# Payment runs (ROADMAP 9): batch supplier settlement with a disbursement file
+# ---------------------------------------------------------------------------
+
+
+# Above this total a run needs two sign-offs rather than one. Set in RWF; the
+# figure is deliberately conservative — a second pair of eyes costs a minute,
+# a mis-keyed batch costs a month.
+DUAL_APPROVAL_THRESHOLD = Decimal("5000000")
+
+
+class PaymentRunError(ValueError):
+    """Raised when a payment run is asked to do something its state forbids."""
+
+
+def _payee_details(bill: SupplierBill, method: str) -> tuple[str, str]:
+    """Where the money for this bill should go: (payee name, account/MSISDN).
+
+    Settlement details live on the procurement supplier profile when that app
+    is installed; a bare catalog supplier still has a phone number, which is
+    what a MoMo payout needs anyway.
+    """
+    supplier = bill.supplier
+    account = ""
+    try:
+        from apps.procurement.models import SupplierProfile
+
+        profile = SupplierProfile.objects.filter(supplier=supplier).first()
+    except Exception:  # pragma: no cover - procurement not installed
+        profile = None
+    if profile is not None:
+        account = (
+            profile.mobile_money_number
+            if method == PaymentRun.Method.MOBILE_MONEY
+            else profile.bank_account_number
+        )
+    if not account and method == PaymentRun.Method.MOBILE_MONEY:
+        account = getattr(supplier, "phone", "") or ""
+    return supplier.name, account
+
+
+@transaction.atomic
+def create_payment_run(
+    *,
+    organization: Organization,
+    bills: Sequence[SupplierBill],
+    method: str = PaymentRun.Method.BANK_TRANSFER,
+    scheduled_for: Any = None,
+    notes: str = "",
+    user: User | None = None,
+) -> PaymentRun:
+    """Open a draft run over the given bills, one line each for what is still due."""
+    if not bills:
+        raise PaymentRunError("A payment run needs at least one bill.")
+
+    seq = next_number(organization=organization, domain="FINANCE", kind="PRUN")
+    run = PaymentRun.objects.create(
+        organization=organization,
+        run_number=f"PRUN-{organization.pk}-{seq:05d}",
+        method=method,
+        scheduled_for=scheduled_for,
+        notes=notes,
+        created_by=user,
+    )
+
+    total = Decimal("0.00")
+    for bill in bills:
+        if bill.organization_id != organization.pk:
+            raise PaymentRunError(f"{bill} belongs to another organization.")
+        if bill.status == SupplierBill.Status.PAID:
+            raise PaymentRunError(f"{bill} is already paid in full.")
+        # A bill sitting in another live run is already spoken for.
+        if PaymentRunLine.objects.filter(
+            bill=bill,
+            payment_run__status__in=[
+                PaymentRun.Status.DRAFT,
+                PaymentRun.Status.AWAITING_APPROVAL,
+                PaymentRun.Status.APPROVED,
+            ],
+        ).exists():
+            raise PaymentRunError(f"{bill} is already in an open payment run.")
+
+        amount = Decimal(bill.amount_due).quantize(Decimal("0.01"))
+        payee_name, payee_account = _payee_details(bill, method)
+        PaymentRunLine.objects.create(
+            payment_run=run,
+            bill=bill,
+            amount=amount,
+            payee_name=payee_name,
+            payee_account=payee_account,
+        )
+        total += amount
+
+    run.total_amount = total
+    run.approvals_required = 2 if total > DUAL_APPROVAL_THRESHOLD else 1
+    run.save(update_fields=["total_amount", "approvals_required", "updated_at"])
+    record_audit(
+        action="CREATE",
+        user=user,
+        organization=organization,
+        entity_type="payment_run",
+        entity_id=str(run.pk),
+        changes={"total": str(total), "lines": str(len(bills))},
+    )
+    return run
+
+
+def build_disbursement_file(run: PaymentRun) -> tuple[str, str]:
+    """Render the run as the CSV its channel expects: (filename, body).
+
+    Every row carries an idempotency key of ``run_id:bill_id`` so a file that
+    gets uploaded twice — which happens — settles once.
+    """
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    if run.method == PaymentRun.Method.MOBILE_MONEY:
+        writer.writerow(["msisdn", "amount", "reference", "idempotency_key"])
+        for line in run.lines.select_related("bill__supplier"):
+            writer.writerow(
+                [
+                    line.payee_account,
+                    f"{line.amount:.2f}",
+                    line.bill.bill_number or f"BILL-{line.bill_id}",
+                    line.idempotency_key,
+                ]
+            )
+        name = f"{run.run_number}-momo.csv"
+    else:
+        writer.writerow(
+            ["account_number", "account_name", "amount", "reference", "idempotency_key"]
+        )
+        for line in run.lines.select_related("bill__supplier"):
+            writer.writerow(
+                [
+                    line.payee_account,
+                    line.payee_name,
+                    f"{line.amount:.2f}",
+                    line.bill.bill_number or f"BILL-{line.bill_id}",
+                    line.idempotency_key,
+                ]
+            )
+        name = f"{run.run_number}-bank.csv"
+    return name, buffer.getvalue()
+
+
+@transaction.atomic
+def submit_payment_run(*, run: PaymentRun, user: User) -> ApprovalRequest:
+    """Send a draft run for sign-off. Nothing moves until it comes back approved."""
+    if run.status != PaymentRun.Status.DRAFT:
+        raise PaymentRunError("Only a draft run can be submitted for approval.")
+    if not run.lines.exists():
+        raise PaymentRunError("A payment run needs at least one line.")
+
+    run.status = PaymentRun.Status.AWAITING_APPROVAL
+    run.save(update_fields=["status", "updated_at"])
+    return request_approval(
+        resource_type="finance.payment_run",
+        resource_id=str(run.pk),
+        organization=run.organization,
+        requested_by=user,
+        payload={"total_amount": str(run.total_amount), "method": run.method},
+        reason=f"Payment run {run.run_number} · {run.line_count} bills · {run.total_amount}",
+    )
+
+
+@registry.register("finance.payment_run")
+def _apply_payment_run_approval(approval: ApprovalRequest) -> None:
+    """One sign-off landed. Below the threshold that is the whole story; above
+    it, raise a second request in this approver's name so the engine's
+    no-self-approval rule guarantees a different second signature."""
+    run = PaymentRun.objects.get(pk=int(approval.resource_id))
+    run.approvals_received += 1
+
+    if run.approvals_received < run.approvals_required:
+        run.save(update_fields=["approvals_received", "updated_at"])
+        request_approval(
+            resource_type="finance.payment_run",
+            resource_id=str(run.pk),
+            organization=run.organization,
+            requested_by=approval.decided_by or approval.requested_by,
+            payload=approval.payload,
+            reason=(
+                f"Second approval for {run.run_number} "
+                f"({run.total_amount} exceeds the dual-approval threshold)"
+            ),
+        )
+        return
+
+    run.status = PaymentRun.Status.APPROVED
+    run.approved_at = timezone.now()
+    filename, body = build_disbursement_file(run)
+    run.disbursement_filename = filename
+    run.disbursement_file = body
+    run.save(
+        update_fields=[
+            "status",
+            "approvals_received",
+            "approved_at",
+            "disbursement_filename",
+            "disbursement_file",
+            "updated_at",
+        ]
+    )
+
+
+@transaction.atomic
+def disburse_payment_run(*, run: PaymentRun, user: User | None = None) -> PaymentRun:
+    """Money has left the building — post a payment against every line.
+
+    Idempotent per line, so re-running after a partial failure settles only what
+    is still outstanding.
+    """
+    if run.status not in {PaymentRun.Status.APPROVED, PaymentRun.Status.DISBURSED}:
+        raise PaymentRunError("Only an approved run can be disbursed.")
+
+    for line in run.lines.select_related("bill").select_for_update():
+        if line.paid:
+            continue
+        record_supplier_bill_payment(
+            bill=line.bill,
+            amount=line.amount,
+            method=run.method,
+            reference=f"{run.run_number}#{line.idempotency_key}",
+            user=user,
+        )
+        line.paid = True
+        line.save(update_fields=["paid"])
+
+    if run.status != PaymentRun.Status.DISBURSED:
+        run.status = PaymentRun.Status.DISBURSED
+        run.disbursed_at = timezone.now()
+        run.save(update_fields=["status", "disbursed_at", "updated_at"])
+    record_audit(
+        action="PAYMENT",
+        user=user,
+        organization=run.organization,
+        entity_type="payment_run",
+        entity_id=str(run.pk),
+        changes={"total": str(run.total_amount)},
+    )
+    return run
+
+
+@transaction.atomic
+def lock_payment_run(*, run: PaymentRun, user: User | None = None) -> PaymentRun:
+    """Close the run once the bank statement agrees with it. Nothing further
+    can be added, re-disbursed, or cancelled."""
+    if run.status != PaymentRun.Status.DISBURSED:
+        raise PaymentRunError("Only a disbursed run can be locked.")
+    run.status = PaymentRun.Status.LOCKED
+    run.locked_at = timezone.now()
+    run.save(update_fields=["status", "locked_at", "updated_at"])
+    return run
+
+
+@transaction.atomic
+def cancel_payment_run(
+    *, run: PaymentRun, user: User | None = None, reason: str = ""
+) -> PaymentRun:
+    """Abandon a run that has not paid anything yet."""
+    if run.status in {PaymentRun.Status.DISBURSED, PaymentRun.Status.LOCKED}:
+        raise PaymentRunError("Money has already moved — this run cannot be cancelled.")
+    run.status = PaymentRun.Status.CANCELLED
+    run.notes = (f"{run.notes} · Cancelled: {reason}" if run.notes else f"Cancelled: {reason}")[
+        :255
+    ]
+    run.save(update_fields=["status", "notes", "updated_at"])
+    return run

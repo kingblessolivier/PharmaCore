@@ -51,8 +51,9 @@ def test_create_bank_account_opens_gl_subaccount_and_posts_opening_balance(
         opening_balance=Decimal("500000"),
         user=accountant,
     )
-    assert account.gl_account.code == "1000-01"
-    assert account.gl_account.parent.code == "1000"
+    # A bank wallet hangs under 1200 Bank; MoMo would sit under 1300.
+    assert account.gl_account.code == "1200-01"
+    assert account.gl_account.parent.code == "1200"
     rows = cash_book_lines(account)
     assert len(rows) == 1
     assert rows[0]["running_balance"] == Decimal("500000.00")
@@ -66,7 +67,9 @@ def test_second_bank_account_gets_distinct_subaccount(org: Organization, account
     second = create_bank_account(
         organization=org, name="MoMo", kind=BankAccount.Kind.MOMO, user=accountant
     )
-    assert second.gl_account.code == "1000-02"
+    # Numbering runs per control account, so the MoMo wallet is 1300-01 even
+    # though a bank account already exists at 1200-01.
+    assert second.gl_account.code == "1300-01"
 
 
 @pytest.mark.django_db

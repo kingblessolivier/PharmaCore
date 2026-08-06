@@ -56,7 +56,7 @@ def traded(org: Organization) -> dict[str, Account]:
         entry_date=JAN,
         description="Capital introduced",
         lines=[
-            {"account": acc["1000"], "side": "DEBIT", "amount": Decimal("1000000"), "memo": ""},
+            {"account": acc["1100"], "side": "DEBIT", "amount": Decimal("1000000"), "memo": ""},
             {"account": acc["3000"], "side": "CREDIT", "amount": Decimal("1000000"), "memo": ""},
         ],
     )
@@ -66,8 +66,8 @@ def traded(org: Organization) -> dict[str, Account]:
         entry_date=date(2026, 1, 10),
         description="Sale",
         lines=[
-            {"account": acc["1100"], "side": "DEBIT", "amount": Decimal("400000"), "memo": ""},
-            {"account": acc["4000"], "side": "CREDIT", "amount": Decimal("400000"), "memo": ""},
+            {"account": acc["1400"], "side": "DEBIT", "amount": Decimal("400000"), "memo": ""},
+            {"account": acc["4100"], "side": "CREDIT", "amount": Decimal("400000"), "memo": ""},
         ],
     )
     # Its cost of goods, 250,000.
@@ -77,7 +77,7 @@ def traded(org: Organization) -> dict[str, Account]:
         description="COGS",
         lines=[
             {"account": acc["5000"], "side": "DEBIT", "amount": Decimal("250000"), "memo": ""},
-            {"account": acc["2000"], "side": "CREDIT", "amount": Decimal("250000"), "memo": ""},
+            {"account": acc["2100"], "side": "CREDIT", "amount": Decimal("250000"), "memo": ""},
         ],
     )
     # Salaries paid in cash, 50,000 (an operating expense).
@@ -86,8 +86,8 @@ def traded(org: Organization) -> dict[str, Account]:
         entry_date=date(2026, 1, 25),
         description="Salaries",
         lines=[
-            {"account": acc["6000"], "side": "DEBIT", "amount": Decimal("50000"), "memo": ""},
-            {"account": acc["1000"], "side": "CREDIT", "amount": Decimal("50000"), "memo": ""},
+            {"account": acc["6100"], "side": "DEBIT", "amount": Decimal("50000"), "memo": ""},
+            {"account": acc["1100"], "side": "CREDIT", "amount": Decimal("50000"), "memo": ""},
         ],
     )
     return acc
@@ -171,8 +171,8 @@ def test_consolidation_sums_branches_and_keeps_each_visible(
         entry_date=date(2026, 1, 5),
         description="Sale",
         lines=[
-            {"account": acc2["1000"], "side": "DEBIT", "amount": Decimal("100000"), "memo": ""},
-            {"account": acc2["4000"], "side": "CREDIT", "amount": Decimal("100000"), "memo": ""},
+            {"account": acc2["1100"], "side": "DEBIT", "amount": Decimal("100000"), "memo": ""},
+            {"account": acc2["4100"], "side": "CREDIT", "amount": Decimal("100000"), "memo": ""},
         ],
     )
     group = reports.consolidated([org, other], start=JAN, end=JAN_END)
@@ -204,7 +204,7 @@ def test_closed_period_refuses_new_postings(
             entry_date=date(2026, 1, 15),
             description="Late entry into a closed month",
             lines=[
-                {"account": traded["1000"], "side": "DEBIT", "amount": Decimal("1"), "memo": ""},
+                {"account": traded["1100"], "side": "DEBIT", "amount": Decimal("1"), "memo": ""},
                 {"account": traded["3000"], "side": "CREDIT", "amount": Decimal("1"), "memo": ""},
             ],
         )
@@ -215,7 +215,7 @@ def test_closed_period_refuses_new_postings(
         entry_date=date(2026, 2, 1),
         description="February entry",
         lines=[
-            {"account": traded["1000"], "side": "DEBIT", "amount": Decimal("1"), "memo": ""},
+            {"account": traded["1100"], "side": "DEBIT", "amount": Decimal("1"), "memo": ""},
             {"account": traded["3000"], "side": "CREDIT", "amount": Decimal("1"), "memo": ""},
         ],
     )
@@ -241,7 +241,7 @@ def test_reopen_requires_a_reason_and_restores_posting(
         entry_date=date(2026, 1, 15),
         description="Now allowed",
         lines=[
-            {"account": traded["1000"], "side": "DEBIT", "amount": Decimal("1"), "memo": ""},
+            {"account": traded["1100"], "side": "DEBIT", "amount": Decimal("1"), "memo": ""},
             {"account": traded["3000"], "side": "CREDIT", "amount": Decimal("1"), "memo": ""},
         ],
     )

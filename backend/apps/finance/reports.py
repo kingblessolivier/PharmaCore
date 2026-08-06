@@ -232,7 +232,9 @@ def balance_sheet(organization: Organization, *, as_of: date | None = None) -> d
 def _receivable_and_payable(organization: Organization, as_of: date) -> tuple[Decimal, Decimal]:
     """Outstanding AR (from the ledger's control account) and AP (from open bills)."""
     balances = {b.code: b for b in account_balances(organization, end=as_of)}
-    ar = balances["1100"].signed if "1100" in balances else ZERO
+    # 1400 under the statutory chart — 1100 is now Cash on Hand, so reading it
+    # here reported the cash balance as money customers owed us.
+    ar = balances["1400"].signed if "1400" in balances else ZERO
     payable = sum(
         (
             b.amount_due
@@ -273,10 +275,12 @@ def performance(organization: Organization, *, start: date, end: date) -> dict[s
     payroll_liability = _payroll_liability(organization)
     inventory_value = _inventory_value(organization)
     annualiser = Decimal("365") / Decimal(str(days)) if days else Decimal("0")
-    stock_turns = (
-        _q(current["cogs"] / inventory_value * annualiser) if inventory_value else ZERO
+    stock_turns = _q(current["cogs"] / inventory_value * annualiser) if inventory_value else ZERO
+    gmroi = (
+        _q(current["gross_margin_pct"] * stock_turns)
+        if current["gross_margin_pct"] and stock_turns
+        else ZERO
     )
-    gmroi = _q(current["gross_margin_pct"] * stock_turns) if current["gross_margin_pct"] and stock_turns else ZERO
 
     def delta_pct(now: Decimal, before: Decimal) -> Decimal | None:
         """Percentage change vs the previous period; None when there is no base to
@@ -339,10 +343,13 @@ def _cash_on_hand(organization: Organization) -> Decimal:
 
 def _payroll_liability(organization: Organization) -> Decimal:
     """Outstanding payroll liabilities: net pay payable + statutory payables.
-    Sums the signed balance of the four payroll control accounts (2100/2200/
-    2300/2400). Liabilities carry a credit normal balance, so their signed
-    value is already positive when owed."""
-    codes = {"2100", "2200", "2300", "2400"}
+
+    Sums the signed balance of the statutory sub-ledger (PAYE, RSSB pension and
+    maternity, CBHI, occupational hazards, RAMA) plus net pay payable.
+    Liabilities carry a credit normal balance, so their signed value is already
+    positive when owed. 2100 is trade payables, not payroll — including it
+    double-counted supplier debt as a payroll liability."""
+    codes = {"2200", "2210", "2220", "2230", "2240", "2250", "2600"}
     rows = account_balances(organization, end=date.today())
     total = sum((r.signed for r in rows if r.code in codes), Decimal("0"))
     return _q(total)
@@ -354,30 +361,28 @@ def _inventory_value(organization: Organization) -> Decimal:
     physically, but the GL can't value what has no cost stamp)."""
     from apps.inventory.models import InventoryBatch
 
-    total = (
-        InventoryBatch.objects.filter(
-            organization=organization,
-            status=InventoryBatch.Status.ACTIVE,
-            quantity_available__gt=0,
+    total = InventoryBatch.objects.filter(
+        organization=organization,
+        status=InventoryBatch.Status.ACTIVE,
+        quantity_available__gt=0,
+    ).aggregate(
+        v=Coalesce(
+            Sum(
+                Case(
+                    When(
+                        wholesale_cost__isnull=False,
+                        then=(F("quantity_available") * F("wholesale_cost")),
+                    ),
+                    output_field=_MONEY,
+                )
+            ),
+            0,
+            output_field=_MONEY,
         )
-        .aggregate(
-            v=Coalesce(
-                Sum(
-                    Case(
-                        When(
-                            wholesale_cost__isnull=False,
-                            then=(
-                                F("quantity_available") * F("wholesale_cost")
-                            ),
-                        ),
-                        output_field=_MONEY,
-                    )
-                ),
-                0,
-                output_field=_MONEY,
-            )
-        )["v"]
-        or Decimal("0")
+    )[
+        "v"
+    ] or Decimal(
+        "0"
     )
     return _q(total)
 
@@ -394,10 +399,17 @@ def cash_flow_statement(organization: Organization, *, start: date, end: date) -
     than a relabelled bank list: the same 10,000 leaving the bank is an operating
     outflow if it paid a supplier and a financing outflow if it repaid the owner.
     """
+    # Cash, bank and mobile money, plus any per-account sub-ledger children
+    # (e.g. "1200-EQUITY-001"). Under the statutory chart these are 11xx-13xx;
+    # the old single "1000" code no longer exists, which silently made every
+    # cash-flow statement read zero.
     cash_codes = set(
         Account.objects.filter(
             Q(organization=organization),
-            Q(code="1000") | Q(code__startswith="1000-"),
+            Q(code__in=["1100", "1200", "1300"])
+            | Q(code__startswith="1100-")
+            | Q(code__startswith="1200-")
+            | Q(code__startswith="1300-"),
         ).values_list("code", flat=True)
     )
 
@@ -556,14 +568,11 @@ def inventory_valuation(organization: Organization) -> dict[str, Any]:
     total = Decimal("0")
     total_units = 0
     per_product: dict[int, dict[str, Any]] = {}
-    rows = (
-        InventoryBatch.objects.filter(
-            organization=organization,
-            status=InventoryBatch.Status.ACTIVE,
-            quantity_available__gt=0,
-        )
-        .select_related("product", "storage_location")
-    )
+    rows = InventoryBatch.objects.filter(
+        organization=organization,
+        status=InventoryBatch.Status.ACTIVE,
+        quantity_available__gt=0,
+    ).select_related("product", "storage_location")
     for b in rows:
         cost = b.wholesale_cost or Decimal("0")
         line_value = _q(cost * b.quantity_available)
@@ -600,8 +609,8 @@ def inventory_valuation(organization: Organization) -> dict[str, Any]:
 def vat_return(organization: Organization, *, start: date, end: date) -> dict[str, Any]:
     """Rwanda VAT return draft for the period.
 
-    Splits the period's GL movement on the VAT Output (2050) and VAT Input
-    (1300) control accounts per tax class — derived from posted journal
+    Splits the period's GL movement on the VAT Output (2300) and VAT Input
+    (1350) control accounts per tax class — derived from posted journal
     entries, never stored twice. The accountant exports this for the RRA
     e-Tax filing; the liability carried forward is the running balance on
     the VAT Output control account.
@@ -611,7 +620,7 @@ def vat_return(organization: Organization, *, start: date, end: date) -> dict[st
     """
     from apps.finance.models import TaxPayment
 
-    # Output side: every credit on VAT Output (2050) for the period, summed
+    # Output side: every credit on VAT Output (2300) for the period, summed
     # per class. Memo text on the journal line carries the class letter (the
     # post_sale_journal path stores B-class on its own lines; A/C fall through
     # to Sales Revenue without a VAT Output line — they contribute 0).
@@ -619,7 +628,7 @@ def vat_return(organization: Organization, *, start: date, end: date) -> dict[st
     output_by_class: dict[str, Decimal] = {"A": ZERO, "B": ZERO, "C": ZERO, "D": ZERO}
     output_lines = JournalLine.objects.filter(
         account__organization=organization,
-        account__code="2050",
+        account__code="2300",
         side=JournalLine.Side.CREDIT,
         entry__organization=organization,
         entry__status=JournalEntry.Status.POSTED,
@@ -634,12 +643,12 @@ def vat_return(organization: Organization, *, start: date, end: date) -> dict[st
         # the model; future SL splits can tag class here.
         output_by_class["B"] += ln.amount
 
-    # Input side: every debit on VAT Input (1300) for the period.
+    # Input side: every debit on VAT Input (1350) for the period.
     input_total = Decimal("0")
     input_by_class: dict[str, Decimal] = {"A": ZERO, "B": ZERO, "C": ZERO, "D": ZERO}
     input_lines = JournalLine.objects.filter(
         account__organization=organization,
-        account__code="1300",
+        account__code="1350",
         side=JournalLine.Side.DEBIT,
         entry__organization=organization,
         entry__status=JournalEntry.Status.POSTED,
@@ -655,11 +664,11 @@ def vat_return(organization: Organization, *, start: date, end: date) -> dict[st
                 input_by_class[cls] += ln.amount
                 break
 
-    # Withholding: debits on WHT Payable (2060) for the period.
+    # Withholding: debits on WHT Payable (2500) for the period.
     wht_total = Decimal("0")
     wht_lines = JournalLine.objects.filter(
         account__organization=organization,
-        account__code="2060",
+        account__code="2500",
         side=JournalLine.Side.DEBIT,
         entry__organization=organization,
         entry__status=JournalEntry.Status.POSTED,
@@ -670,8 +679,8 @@ def vat_return(organization: Organization, *, start: date, end: date) -> dict[st
         wht_total += ln.amount
 
     net_payable = output_total - input_total - wht_total
-    running_carry = (
-        _payroll_liability_balance(organization, "2050") - _payroll_liability_balance(organization, "1300")
+    running_carry = _payroll_liability_balance(organization, "2300") - _payroll_liability_balance(
+        organization, "1350"
     )
 
     # Remittances in the period (for the register).
@@ -692,7 +701,9 @@ def vat_return(organization: Organization, *, start: date, end: date) -> dict[st
     csv_lines.append(["Withholding", "-", "0.00", str(_q(wht_total))])
     csv_lines.append(["Net payable", "-", "0.00", str(_q(net_payable))])
     csv_lines.append(["Remitted in period", "-", "0.00", str(_q(paid_in_period))])
-    csv_lines.append(["Amount due after remittances", "-", "0.00", str(_q(amount_due_after_payments))])
+    csv_lines.append(
+        ["Amount due after remittances", "-", "0.00", str(_q(amount_due_after_payments))]
+    )
 
     return {
         "start": start,
@@ -758,9 +769,7 @@ def ar_aging(organization: Organization, *, as_of: date | None = None) -> dict[s
 
     open_invoices = (
         CustomerInvoice.objects.filter(organization=organization)
-        .exclude(
-            status__in=[CustomerInvoice.Status.PAID, CustomerInvoice.Status.CANCELLED]
-        )
+        .exclude(status__in=[CustomerInvoice.Status.PAID, CustomerInvoice.Status.CANCELLED])
         .select_related("customer")
     )
     for invoice in open_invoices:
@@ -786,9 +795,7 @@ def ar_aging(organization: Organization, *, as_of: date | None = None) -> dict[s
     return {
         "organization_id": organization.pk,
         "as_of": as_of,
-        "customers": sorted(
-            by_customer.values(), key=lambda r: r["outstanding"], reverse=True
-        ),
+        "customers": sorted(by_customer.values(), key=lambda r: r["outstanding"], reverse=True),
         "totals": totals,
     }
 
@@ -808,9 +815,9 @@ def statement_of_account(
     from apps.finance.models import CustomerInvoice, CustomerReceipt
 
     zero = Decimal("0.00")
-    invoices = CustomerInvoice.objects.filter(
-        organization=organization, customer=customer
-    ).exclude(status=CustomerInvoice.Status.CANCELLED)
+    invoices = CustomerInvoice.objects.filter(organization=organization, customer=customer).exclude(
+        status=CustomerInvoice.Status.CANCELLED
+    )
     receipts = CustomerReceipt.objects.filter(
         invoice__organization=organization, invoice__customer=customer
     ).select_related("invoice")

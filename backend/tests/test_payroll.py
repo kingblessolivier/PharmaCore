@@ -103,10 +103,17 @@ def test_payroll_run_requires_approval_no_self_approval_and_posts_journal(
     record.refresh_from_db()
     assert record.payslip_document_id
 
-    # Journal posted: gross expense, statutory payables, net-pay payable — plus
-    # a second entry for the employer-side RSSB contribution.
+    # Journal posted: one employee-side entry (gross expense, statutory
+    # payables, net-pay payable) plus one entry per employer-side contribution,
+    # each under its own reference so none of them deduplicate each other away.
     entries = JournalEntry.objects.filter(organization=org, reference_type="payroll_run")
-    assert entries.count() == 2
+    assert entries.count() == 1
+    employer_entries = JournalEntry.objects.filter(
+        organization=org, reference_type="payroll_employer"
+    )
+    assert employer_entries.count() >= 2  # RSSB pension + maternity at minimum
+    for entry in employer_entries:
+        assert entry.total_debit == entry.total_credit
     main_entry = (
         entries.filter(description__icontains="Payroll —")
         .exclude(description__icontains="employer")

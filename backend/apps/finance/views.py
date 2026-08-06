@@ -8,6 +8,7 @@ from typing import Any, cast
 
 from django.db.models import Case, DecimalField, Q, QuerySet, Sum, When
 from django.db.models.functions import Coalesce
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -30,6 +31,7 @@ from apps.finance.models import (
     FixedAsset,
     JournalEntry,
     JournalLine,
+    PaymentRun,
     SupplierBill,
     TaxCode,
     TaxPayment,
@@ -47,6 +49,7 @@ from apps.finance.serializers import (
     DunningNoticeSerializer,
     FixedAssetSerializer,
     JournalEntrySerializer,
+    PaymentRunSerializer,
     SupplierBillSerializer,
     TaxCodeSerializer,
     TaxPaymentSerializer,
@@ -54,11 +57,16 @@ from apps.finance.serializers import (
 )
 from apps.finance.services import (
     CreditHoldError,
+    PaymentRunError,
     apply_dunning,
+    cancel_payment_run,
     cash_book_lines,
     cash_flow_forecast,
     close_period,
     create_bank_account,
+    create_payment_run,
+    disburse_payment_run,
+    lock_payment_run,
     reconcile_lines,
     record_customer_invoice,
     record_customer_receipt,
@@ -66,6 +74,7 @@ from apps.finance.services import (
     record_supplier_bill_payment,
     reopen_period,
     request_credit_override,
+    submit_payment_run,
 )
 from apps.iam.audit import record_audit
 from apps.iam.models import Organization, User
@@ -855,3 +864,116 @@ class DunningNoticeViewSet(viewsets.ReadOnlyModelViewSet):
             {"issued": len(issued), "notices": DunningNoticeSerializer(issued, many=True).data},
             status=201,
         )
+
+
+class PaymentRunViewSet(viewsets.ModelViewSet):
+    """Batch supplier settlement: build a run, get it signed off, hand the file
+    to the bank, then post the payments.
+
+    Every state change is a named action rather than a PATCH — a payment run's
+    status is the audit trail, not a field anyone gets to set.
+    """
+
+    serializer_class = PaymentRunSerializer
+    queryset = PaymentRun.objects.select_related("organization").prefetch_related(
+        "lines__bill__supplier"
+    )
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self) -> QuerySet[PaymentRun]:
+        user = cast(User, self.request.user)
+        qs = PaymentRun.objects.select_related("organization").prefetch_related(
+            "lines__bill__supplier"
+        )
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            qs = qs.filter(organization__in=organizations_visible_to(user))
+        org_param = self.request.query_params.get("organization")
+        if org_param and org_param.isdigit():
+            qs = qs.filter(organization_id=int(org_param))
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param.upper())
+        return qs
+
+    def create(self, request: Request, *args: object, **kwargs: object) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        organization = _resolve_org(request, user)
+        bill_ids = request.data.get("bills") or []
+        if not isinstance(bill_ids, list) or not bill_ids:
+            raise ValidationError("Provide a non-empty 'bills' list.")
+        bills = list(SupplierBill.objects.filter(pk__in=bill_ids, organization=organization))
+        if len(bills) != len(set(bill_ids)):
+            raise ValidationError("One or more bills were not found in this organization.")
+        try:
+            run = create_payment_run(
+                organization=organization,
+                bills=bills,
+                method=str(request.data.get("method", PaymentRun.Method.BANK_TRANSFER)),
+                scheduled_for=request.data.get("scheduled_for") or None,
+                notes=str(request.data.get("notes", "")),
+                user=user,
+            )
+        except PaymentRunError as exc:
+            raise ValidationError(str(exc)) from exc
+        return Response(PaymentRunSerializer(run).data, status=201)
+
+    @action(detail=True, methods=["post"])
+    def submit(self, request: Request, pk: str | None = None) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        run = self.get_object()
+        try:
+            approval = submit_payment_run(run=run, user=user)
+        except PaymentRunError as exc:
+            raise ValidationError(str(exc)) from exc
+        run.refresh_from_db()
+        data = PaymentRunSerializer(run).data
+        data["approval_request"] = approval.pk
+        return Response(data, status=201)
+
+    @action(detail=True, methods=["post"])
+    def disburse(self, request: Request, pk: str | None = None) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        run = self.get_object()
+        try:
+            disburse_payment_run(run=run, user=user)
+        except PaymentRunError as exc:
+            raise ValidationError(str(exc)) from exc
+        run.refresh_from_db()
+        return Response(PaymentRunSerializer(run).data)
+
+    @action(detail=True, methods=["post"])
+    def lock(self, request: Request, pk: str | None = None) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        run = self.get_object()
+        try:
+            lock_payment_run(run=run, user=user)
+        except PaymentRunError as exc:
+            raise ValidationError(str(exc)) from exc
+        run.refresh_from_db()
+        return Response(PaymentRunSerializer(run).data)
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request: Request, pk: str | None = None) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        run = self.get_object()
+        try:
+            cancel_payment_run(run=run, user=user, reason=str(request.data.get("reason", "")))
+        except PaymentRunError as exc:
+            raise ValidationError(str(exc)) from exc
+        run.refresh_from_db()
+        return Response(PaymentRunSerializer(run).data)
+
+    @action(detail=True, methods=["get"], url_path="disbursement-file")
+    def disbursement_file(self, request: Request, pk: str | None = None) -> HttpResponse:
+        """Download the CSV the bank or MoMo aggregator expects."""
+        run = self.get_object()
+        if not run.disbursement_file:
+            raise ValidationError("This run has no disbursement file yet — approve it first.")
+        response = HttpResponse(run.disbursement_file, content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="{run.disbursement_filename}"'
+        return response

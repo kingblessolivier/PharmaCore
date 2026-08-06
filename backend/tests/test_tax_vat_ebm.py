@@ -144,8 +144,8 @@ def test_supplier_bill_with_vat_splits_three_lines(
     entry = JournalEntry.objects.get(reference_type="supplier_bill", reference_id=str(bill.pk))
     lines = {ln.account.code: (ln.side, ln.amount) for ln in entry.lines.all()}
     assert lines["5000"] == ("DEBIT", Decimal("100000.00"))
-    assert lines["1300"] == ("DEBIT", Decimal("18000.00"))
-    assert lines["2000"] == ("CREDIT", Decimal("118000.00"))
+    assert lines["1350"] == ("DEBIT", Decimal("18000.00"))
+    assert lines["2100"] == ("CREDIT", Decimal("118000.00"))
 
 
 @pytest.mark.django_db
@@ -162,8 +162,8 @@ def test_supplier_bill_without_vat_posts_one_line(
     )
     entry = JournalEntry.objects.filter(reference_type="supplier_bill").latest("id")
     codes = {ln.account.code for ln in entry.lines.all()}
-    assert "1300" not in codes  # no VAT Input line
-    assert {"5000", "2000"}.issubset(codes)
+    assert "1350" not in codes  # no VAT Input line
+    assert {"5000", "2100"}.issubset(codes)
 
 
 @pytest.mark.django_db
@@ -203,7 +203,7 @@ def test_vat_output_accumulates_across_sales(
         complete_sale(sale=sale, payments=[{"method": "CASH", "amount": "1180.00"}], user=cashier)
 
     output_total = sum(
-        ln.amount for ln in JournalLine.objects.filter(account__code="2050", side="CREDIT")
+        ln.amount for ln in JournalLine.objects.filter(account__code="2300", side="CREDIT")
     )
     assert output_total == Decimal("540.00")  # 3 × 180
 
@@ -264,8 +264,9 @@ def test_tax_payment_posts_balanced_entry(org: Organization) -> None:
     assert payment.payment_number.startswith("TAX-")
     entry = JournalEntry.objects.get(reference_type="tax_payment", reference_id=str(payment.pk))
     lines = {ln.account.code: (ln.side, ln.amount) for ln in entry.lines.all()}
-    assert lines["2050"] == ("DEBIT", Decimal("50000.00"))
-    assert lines["1000"] == ("CREDIT", Decimal("50000.00"))
+    assert lines["2300"] == ("DEBIT", Decimal("50000.00"))
+    # BANK_TRANSFER settles out of 1200 Bank, not the cash drawer.
+    assert lines["1200"] == ("CREDIT", Decimal("50000.00"))
 
 
 @pytest.mark.django_db
@@ -302,8 +303,8 @@ def test_ebm_mirror_posts_vat_to_ledger(org: Organization) -> None:
     )
     entry = mirror_ebm_to_ledger(tax_record=record, user=None)
     lines = {ln.account.code: (ln.side, ln.amount) for ln in entry.lines.all()}
-    assert lines["1100"] == ("DEBIT", Decimal("180.00"))
-    assert lines["2050"] == ("CREDIT", Decimal("180.00"))
+    assert lines["1400"] == ("DEBIT", Decimal("180.00"))
+    assert lines["2300"] == ("CREDIT", Decimal("180.00"))
 
 
 @pytest.mark.django_db

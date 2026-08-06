@@ -18,6 +18,8 @@ from apps.finance.models import (
     FixedAsset,
     JournalEntry,
     JournalLine,
+    PaymentRun,
+    PaymentRunLine,
     SupplierBill,
     SupplierBillPayment,
     TaxCode,
@@ -497,3 +499,75 @@ class DunningNoticeSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+
+class PaymentRunLineSerializer(serializers.ModelSerializer):
+    supplier_name = serializers.CharField(source="bill.supplier.name", read_only=True)
+    bill_number = serializers.CharField(source="bill.bill_number", read_only=True)
+    idempotency_key = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = PaymentRunLine
+        fields = [
+            "id",
+            "bill",
+            "bill_number",
+            "supplier_name",
+            "amount",
+            "payee_name",
+            "payee_account",
+            "paid",
+            "idempotency_key",
+        ]
+        read_only_fields = fields
+
+
+class PaymentRunSerializer(serializers.ModelSerializer):
+    lines = PaymentRunLineSerializer(many=True, read_only=True)
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+    line_count = serializers.IntegerField(read_only=True)
+    # The file body can be large; the list view only needs to know it exists.
+    has_disbursement_file = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PaymentRun
+        fields = [
+            "id",
+            "organization",
+            "organization_name",
+            "run_number",
+            "method",
+            "status",
+            "scheduled_for",
+            "total_amount",
+            "approvals_required",
+            "approvals_received",
+            "approved_at",
+            "disbursed_at",
+            "locked_at",
+            "disbursement_filename",
+            "has_disbursement_file",
+            "notes",
+            "line_count",
+            "lines",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "run_number",
+            "status",
+            "total_amount",
+            "approvals_required",
+            "approvals_received",
+            "approved_at",
+            "disbursed_at",
+            "locked_at",
+            "disbursement_filename",
+            "has_disbursement_file",
+            "line_count",
+            "lines",
+            "created_at",
+        ]
+
+    def get_has_disbursement_file(self, obj: PaymentRun) -> bool:
+        return bool(obj.disbursement_file)

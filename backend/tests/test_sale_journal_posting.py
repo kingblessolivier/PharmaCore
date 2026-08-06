@@ -128,13 +128,13 @@ def test_sale_with_vat_posts_balanced_entries(
 
     revenue_entry, cogs_entry = entries
     rev_lines = {ln.account.code: (ln.side, ln.amount) for ln in revenue_entry.lines.all()}
-    assert rev_lines["1000"] == ("DEBIT", Decimal("1180.00"))
-    assert rev_lines["4000"] == ("CREDIT", Decimal("1000.00"))
-    assert rev_lines["2050"] == ("CREDIT", Decimal("180.00"))
+    assert rev_lines["1100"] == ("DEBIT", Decimal("1180.00"))
+    assert rev_lines["4100"] == ("CREDIT", Decimal("1000.00"))
+    assert rev_lines["2300"] == ("CREDIT", Decimal("180.00"))
 
     cogs_lines = {ln.account.code: (ln.side, ln.amount) for ln in cogs_entry.lines.all()}
     assert cogs_lines["5000"] == ("DEBIT", Decimal("700.00"))
-    assert cogs_lines["1200"] == ("CREDIT", Decimal("700.00"))
+    assert cogs_lines["1500"] == ("CREDIT", Decimal("700.00"))
 
 
 @pytest.mark.django_db
@@ -154,8 +154,8 @@ def test_zero_rated_sale_posts_no_vat_line(
     assert len(entries) == 2
     revenue_lines = {ln.account.code for ln in entries[0].lines.all()}
     # 2050 VAT Output must NOT appear for a zero-rated line.
-    assert "2050" not in revenue_lines
-    assert {"1000", "4000"}.issubset(revenue_lines)
+    assert "2300" not in revenue_lines
+    assert {"1100", "4100"}.issubset(revenue_lines)
 
 
 @pytest.mark.django_db
@@ -219,7 +219,7 @@ def test_positive_variance_reverses_cogs(
 
     entry = JournalEntry.objects.get(organization=org, reference_type="stock_count")
     lines = {ln.account.code: (ln.side, ln.amount) for ln in entry.lines.all()}
-    assert lines["1200"] == ("DEBIT", Decimal("1400.00"))
+    assert lines["1500"] == ("DEBIT", Decimal("1400.00"))
     assert lines["5000"] == ("CREDIT", Decimal("1400.00"))
 
 
@@ -237,7 +237,7 @@ def test_negative_variance_books_shrinkage(
     entry = JournalEntry.objects.get(organization=org, reference_type="stock_count")
     lines = {ln.account.code: (ln.side, ln.amount) for ln in entry.lines.all()}
     assert lines["5000"] == ("DEBIT", Decimal("2100.00"))
-    assert lines["1200"] == ("CREDIT", Decimal("2100.00"))
+    assert lines["1500"] == ("CREDIT", Decimal("2100.00"))
 
 
 # ---------------------------------------------------------------------------
@@ -260,8 +260,8 @@ def test_wastage_auto_posts_writeoff(
 
     entry = JournalEntry.objects.get(organization=org, reference_type="wastage")
     lines = {ln.account.code: (ln.side, ln.amount) for ln in entry.lines.all()}
-    assert lines["2500"] == ("DEBIT", Decimal("1400.00"))
-    assert lines["1200"] == ("CREDIT", Decimal("1400.00"))
+    assert lines["5100"] == ("DEBIT", Decimal("1400.00"))
+    assert lines["1500"] == ("CREDIT", Decimal("1400.00"))
 
 
 # ---------------------------------------------------------------------------
