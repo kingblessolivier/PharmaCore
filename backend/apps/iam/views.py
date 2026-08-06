@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import csv
 from typing import Any, cast
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Count, QuerySet
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -335,6 +337,22 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         """Suspend an organization (stops it trading) — reversible via activate."""
         return self._set_status(request, Organization.OnboardingStatus.SUSPENDED, "ORG_SUSPEND")
 
+    @action(detail=True, methods=["get"])
+    def performance(self, request: Request, pk: str | None = None) -> Response:
+        """How a branch is performing: sales, dispensing, and its staff headcount."""
+        org = self.get_object()
+        from apps.retail.models import Dispensing, Sale
+
+        completed = Sale.objects.filter(organization=org, status=Sale.Status.COMPLETED)
+        return Response(
+            {
+                "sales_count": completed.count(),
+                "dispensing_count": Dispensing.objects.filter(sale__organization=org).count(),
+                "users": User.objects.filter(organization=org).count(),
+                "active_users": User.objects.filter(organization=org, is_active=True).count(),
+            }
+        )
+
 
 class OrganizationDocumentViewSet(viewsets.ModelViewSet):
     """Registration / compliance documents for organizations. Admin-gated, org-scoped;
@@ -559,6 +577,29 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(created_at__date__lte=until)
         return qs.order_by("-created_at")
 
+    @action(detail=False, methods=["get"])
+    def export(self, request: Request) -> HttpResponse:
+        """Download the (filtered) audit trail as CSV — same filters as the list."""
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="audit-log.csv"'
+        writer = csv.writer(response)
+        writer.writerow(
+            ["when", "user", "action", "entity_type", "entity_id", "organization", "ip"]
+        )
+        for row in self.filter_queryset(self.get_queryset())[:10000]:
+            writer.writerow(
+                [
+                    row.created_at.isoformat(),
+                    row.user.username if row.user else "",
+                    row.action,
+                    row.entity_type,
+                    row.entity_id,
+                    row.organization_id or "",
+                    row.ip_address or "",
+                ]
+            )
+        return response
+
 
 class UserViewSet(viewsets.ModelViewSet):
     """Admin management of users, org-scoped. Admins only; every write audited.
@@ -627,6 +668,31 @@ class UserViewSet(viewsets.ModelViewSet):
             request=request,
         )
         return Response({"detail": "Password reset. The user must change it on next sign-in."})
+
+    @action(detail=True, methods=["get"])
+    def performance(self, request: Request, pk: str | None = None) -> Response:
+        """How a person is performing: sales rung, items dispensed, returns/voids,
+        logins, last login. Org-scoped via ``get_object``."""
+        user = self.get_object()
+        from apps.retail.models import Dispensing, Sale
+
+        completed = Sale.objects.filter(cashier=user, status=Sale.Status.COMPLETED)
+        counts = {
+            row["action"]: row["n"]
+            for row in AuditLog.objects.filter(user=user)
+            .values("action")
+            .annotate(n=Count("id"))
+        }
+        return Response(
+            {
+                "sales_count": completed.count(),
+                "dispensing_count": Dispensing.objects.filter(dispensed_by=user).count(),
+                "returns": counts.get("SALE_RETURN", 0),
+                "voids": counts.get("SALE_VOID", 0),
+                "logins": counts.get("LOGIN", 0),
+                "last_login": user.last_login,
+            }
+        )
 
     def _guard_org(self, serializer: BaseSerializer[Any]) -> None:
         actor = cast(User, self.request.user)

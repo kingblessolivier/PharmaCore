@@ -18,6 +18,10 @@ Maintenance rules:
 ## [Unreleased]
 
 ### Added
+- **Admin oversight analytics.** The audit-log explorer gains a **per-branch filter**
+  and a **CSV export** (respecting the active filters), plus **per-user and per-branch
+  performance** endpoints (sales rung, items dispensed, returns, voids, logins; branch
+  headcount) surfaced as a KPI strip in the user-activity view.
 - **Password controls (Admin).** Admins can **reset a user's password** (forcing a
   change on next sign-in), users can **change their own** password, both **strength-
   validated** and audited; `/api/auth/me` exposes `must_change_password`. A **Reset pw**
