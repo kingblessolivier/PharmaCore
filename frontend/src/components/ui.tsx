@@ -15,15 +15,27 @@ const buttonStyles: Record<ButtonVariant, string> = {
   danger: "bg-red-600 text-white hover:bg-red-700",
 };
 
+/** `sm` is for buttons that live inside a table row or a dense toolbar, where a
+ * full-height control would push the row out of rhythm. */
+type ButtonSize = "sm" | "md";
+const buttonSizes: Record<ButtonSize, string> = {
+  sm: "px-2 py-1 text-xs gap-1.5",
+  md: "px-3 py-2 text-sm gap-2",
+};
+
 export function Button({
   variant = "primary",
+  size = "md",
   className = "",
   children,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+}) {
   return (
     <button
-      className={`inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-40 ${buttonStyles[variant]} ${className}`}
+      className={`inline-flex items-center justify-center rounded-md font-semibold transition-colors disabled:opacity-40 ${buttonSizes[size]} ${buttonStyles[variant]} ${className}`}
       {...props}
     >
       {children}
