@@ -31,6 +31,7 @@ import {
   Wallet,
   Thermometer,
   Warehouse,
+  PackageCheck,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
@@ -315,8 +316,11 @@ const NAV: NavGroup[] = [
     label: "Distribution",
     roles: ["ORG_ADMIN", "PHARMACIST"],
     items: [
-      { to: "/orders", label: "Purchase orders", icon: ClipboardList },
-      { to: "/suppliers", label: "Suppliers", icon: Truck },
+      { to: "/distribution", label: "Distribution Overview", icon: Truck, end: true },
+      { to: "/distribution/orders", label: "B2B Purchase Orders", icon: ClipboardList },
+      { to: "/distribution/in-transit", label: "In-Transit Stock", icon: Truck },
+      { to: "/distribution/grn", label: "Goods Received Notes", icon: PackageCheck },
+      { to: "/suppliers", label: "Suppliers", icon: Building2 },
     ],
   },
   {

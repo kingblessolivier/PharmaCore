@@ -318,6 +318,10 @@ export interface Product {
   leaflet_url: string;
   min_temp_c: string | null;
   max_temp_c: string | null;
+  ddd?: string;
+  is_essential?: boolean;
+  rxnorm_id?: string;
+  lifecycle_status?: "ACTIVE" | "PENDING_APPROVAL" | "DISCONTINUED" | "OBSOLETE";
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -936,6 +940,7 @@ export interface AccountingPeriod {
 }
 
 export interface StorageZone {
+  id: number;
   organization: number;
   organization_name: string;
   name: string;
@@ -946,6 +951,101 @@ export interface StorageZone {
   is_active: boolean;
   bins_count: number;
   created_at: string;
+}
+
+export interface PriceList {
+  id: number;
+  organization: number;
+  organization_name: string;
+  name: string;
+  kind: "WHOLESALE" | "RETAIL" | "CONTRACT" | "PROMOTIONAL";
+  list_type: "WHOLESALE" | "RETAIL" | "CONTRACT" | "PROMOTIONAL";
+  currency: string;
+  effective_from: string;
+  effective_to: string | null;
+  is_active: boolean;
+  items_count: number;
+}
+
+export interface FormularyItem {
+  id: number;
+  organization: number;
+  organization_name: string;
+  product: number;
+  product_name: string;
+  product_generic_name: string;
+  scheme_name: string;
+  insurer_name: string;
+  coverage_tier: string;
+  copay_percentage: string;
+  max_reimbursable_price: string;
+  requires_prior_auth: boolean;
+  is_covered: boolean;
+  is_active: boolean;
+}
+
+export interface ProductInteraction {
+  id: number;
+  product_a: number;
+  product_a_name: string;
+  product_b: number;
+  product_b_name: string;
+  ingredient_a_name: string;
+  ingredient_b_name: string;
+  severity: "MINOR" | "MODERATE" | "MAJOR";
+  effect: string;
+  management: string;
+  clinical_warning: string;
+}
+
+export interface ProductContraindication {
+  id: number;
+  product: number;
+  product_name: string;
+  icd10_code: string;
+  condition_name: string;
+  condition: string;
+  risk_level: string;
+  severity: string;
+  message: string;
+}
+
+export interface ProductSubstitute {
+  id: number;
+  product: number;
+  product_name: string;
+  substitute_product: number;
+  substitute_name: string;
+  substitute_generic_name: string;
+  substitute_strength: string;
+  substitute_type: "GENERIC_EQUIVALENT" | "THERAPEUTIC_ALTERNATIVE";
+  bioequivalence_rating: string;
+  notes: string;
+}
+
+export interface ProductUomConversion {
+  id: number;
+  product: number;
+  product_name: string;
+  from_uom: string;
+  to_uom: string;
+  unit_name: string;
+  conversion_factor: string;
+  price_per_unit: string;
+  is_default_dispensing: boolean;
+}
+
+export interface Manufacturer {
+  id: number;
+  name: string;
+  country: string;
+  gmp_certified: boolean;
+}
+
+export interface ActiveIngredient {
+  id: number;
+  inn_name: string;
+  cas_number: string;
 }
 
 export interface BinLocation {
@@ -1048,5 +1148,45 @@ export interface StockDisposal {
   certificate_no: string;
   destroyed_at: string | null;
   created_at: string;
+}
+
+export interface InTransitStock {
+  id: number;
+  order: number;
+  order_number: string;
+  source_org: number;
+  source_name: string;
+  destination_org: number;
+  destination_name: string;
+  product: number;
+  product_name: string;
+  batch_number: string;
+  expiry_date: string;
+  quantity: number;
+  dispatched_at: string;
+}
+
+export interface GRNLine {
+  id: number;
+  product: number;
+  product_name: string;
+  batch_number: string;
+  expiry_date: string;
+  quantity_expected: number;
+  quantity_received: number;
+  quantity_damaged: number;
+  has_discrepancy: boolean;
+}
+
+export interface GoodsReceivedNote {
+  id: number;
+  grn_number: string;
+  order: number;
+  order_number: string;
+  retail_name?: string;
+  status: string;
+  has_discrepancy: boolean;
+  received_at: string;
+  lines: GRNLine[];
 }
 

@@ -55,6 +55,9 @@ import { QualityControlPage } from "./pages/QualityControlPage";
 import { BatchRecallsPage } from "./pages/BatchRecallsPage";
 import { StockCountsPage } from "./pages/StockCountsPage";
 import { StockDisposalPage } from "./pages/StockDisposalPage";
+import { PurchaseOrdersPage } from "./pages/PurchaseOrdersPage";
+import { GrnPage } from "./pages/GrnPage";
+import { InTransitPage } from "./pages/InTransitPage";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
@@ -113,6 +116,9 @@ function App() {
               <Route path="/inventory/counts" element={forPharmacy(<StockCountsPage />)} />
               <Route path="/inventory/disposal" element={forPharmacy(<StockDisposalPage />)} />
               <Route path="/distribution" element={forPharmacy(<DistributionHome />)} />
+              <Route path="/distribution/orders" element={forPharmacy(<PurchaseOrdersPage />)} />
+              <Route path="/distribution/grn" element={forPharmacy(<GrnPage />)} />
+              <Route path="/distribution/in-transit" element={forPharmacy(<InTransitPage />)} />
               <Route path="/admin" element={adminOnly(<AdminHome />)} />
               <Route path="/companies" element={adminOnly(<CompaniesPage />)} />
               <Route path="/organizations" element={adminOnly(<OrganizationsPage />)} />
