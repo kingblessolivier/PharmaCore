@@ -156,6 +156,21 @@ def test_payroll_run_api_build_submit(
 
 
 @pytest.mark.django_db
+def test_duplicate_payroll_period_returns_clean_400(
+    org: Organization, employee: Employee, hr_officer: User
+) -> None:
+    """Regression: a duplicate (org, period) run used to hit the DB's unique
+    constraint directly and surface as an unhandled 500."""
+    payload = {"organization": org.pk, "period_start": "2026-04-01", "period_end": "2026-04-30"}
+    first = _auth(hr_officer).post("/api/hr/payroll-runs/", payload, format="json")
+    assert first.status_code == 201, first.content
+
+    second = _auth(hr_officer).post("/api/hr/payroll-runs/", payload, format="json")
+    assert second.status_code == 400
+    assert "already exists" in second.json()[0]
+
+
+@pytest.mark.django_db
 def test_statutory_rates_endpoint_lists_seeded_rates(hr_officer: User) -> None:
     resp = _auth(hr_officer).get("/api/hr/statutory-rates/")
     assert resp.status_code == 200

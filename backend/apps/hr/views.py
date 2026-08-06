@@ -151,6 +151,10 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
         period_end = request.data.get("period_end")
         if not period_start or not period_end:
             raise ValidationError("'period_start' and 'period_end' are required.")
+        if PayrollRun.objects.filter(
+            organization=organization, period_start=period_start, period_end=period_end
+        ).exists():
+            raise ValidationError("A payroll run already exists for this organization and period.")
         run = build_payroll_run(
             organization=organization,
             period_start=period_start,
