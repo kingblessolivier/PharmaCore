@@ -18,6 +18,24 @@ Maintenance rules:
 ## [Unreleased]
 
 ### Added
+- **Accounts receivable, collections and payment runs (ROADMAP §9) — finance F5–F7.**
+  - **Customer invoices & receipts** — raising an invoice posts Dr AR / Cr revenue / Cr VAT output and is refused outright when the buyer is on credit hold or the invoice would breach their limit. Receipts debit the account matching the tender (cash, bank, MoMo) and park any overpayment as an on-account credit instead of over-crediting AR.
+  - **Collections ladder** — 7/14/30/60 days past due issue reminder → second notice → final demand → legal, one notice per step per invoice so a re-run changes nothing. The legal step puts the customer's credit profile on hold.
+  - **Credit hold now bites** — the limit used to be advisory. B2B order creation and submission are refused with HTTP 409 when the buyer is on hold, has an invoice more than 30 days past due, or the order would push their exposure over the limit. Admins do not bypass it: this is a business rule, not a permission.
+  - **Payment runs** — batch supplier settlement with one approval for the whole batch (two above the dual-approval threshold, the second necessarily from a different person), a bank or MoMo disbursement CSV whose every row carries a run:bill idempotency key, and payments that post only once the money has moved.
+  - **Pages** — `/finance/receivables` (aging strip + invoice grid + receipting), `/finance/dunning`, `/finance/statement` (aged receivables → printable statement of account), `/finance/payment-runs`.
+
+### Fixed
+
+- **The F3 statutory chart of accounts left call sites on the old codes**, each a silent wrong answer rather than a crash: cash-flow statements read zero, the performance cockpit reported the cash balance as customer debt, stock write-offs credited the bank instead of inventory, payroll liabilities double-counted supplier debt, and VAT remittance and the EBM mirror raised KeyError. VAT input gained a home (1350) and bank sub-accounts now hang under the control matching their tender.
+- **Three journal postings shared a reference pair with an entry already posted**, and `post_journal` deduplicates on that pair — so they were dropped in silence: every supplier payment (AP was never relieved), every sale's COGS leg (all sales looked like pure margin), and four of the five payroll entries.
+- **Advanced B2B Distribution & Route-to-Market Engine (ROADMAP §5):**
+  - **Depot Offered Listings vs. Physical On-Hand Stock (`DepotProductListing`)**: Decoupled depot physical warehouse inventory (`on_hand`) from public retailer-facing offered quantities (`offered_qty`, `buffer_qty`, and custom listing prices). Receiving stock lands in on-hand without auto-publishing; depot managers explicitly control exposed inventory.
+  - **Controlled Substance Compliance & Trading Partner Guard**: Trading partner pharmacy licence validation (Rwanda Board of Pharmacy / Rwanda FDA) prior to B2B order submission, auto-flagging suspicious order volume spikes (>3x average or restricted substances).
+  - **Field Sales Reps & Route-to-Market (Van Sales / Pre-Sales)**: Sales rep profiles, territory beats, daily journey plans, call logs, van-stock sell-from-vehicle, and rep commission ledgers.
+  - **Institutional & B2G Customer Tenders**: Awarded tender contract price locks, committed volume tracking, and scheduled call-off delivery schedules for hospitals and NGOs.
+  - **Customer Returns & Account Statements**: Retailer return-to-depot requests with RFDA inspection verification, credit note issuance, and automated monthly B2B customer financial statement generation.
+  - **Frontend UI & App Shell**: Built `DepotListingsPage.tsx` (`/distribution/listings`), `B2BOrderingPortalPage.tsx` (`/distribution/portal`), `FieldSalesPage.tsx` (`/distribution/sales-reps`), `InstitutionalTendersPage.tsx` (`/distribution/tenders`), and `CustomerReturnsPage.tsx` (`/distribution/returns`). Defined type interfaces in `types.ts` and updated subnavigation in `AppShell.tsx`.
 - **Procurement & imports (ROADMAP §4) — new `apps/procurement` app, API + UI.** Closes the buy side end to end:
   - **Supplier master** — `SupplierProfile` (standing preferred→blacklisted, trade terms, banking, rolling scorecard), `SupplierLicence` with a **GDP qualification gate** (a missing, unverified or expired *required* licence blocks PO approval), `SupplierPriceAgreement` (effective-dated contract prices with volume breaks, MOQ, pack multiples) and `SupplierEvaluation` (delivery/quality scored from posted receipts, not self-reported).
   - **Requisitions → consolidated purchasing** — branches raise `PurchaseRequisition`, an approver signs it off through the **approvals engine** (claim-to-lock, no self-approval, SLA), then HQ consolidates several into one PO per supplier with the same product merged onto one line.

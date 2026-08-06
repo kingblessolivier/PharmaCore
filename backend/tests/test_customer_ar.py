@@ -18,14 +18,11 @@ from decimal import Decimal
 
 import pytest
 from apps.finance.models import (
-    Account,
     CreditProfile,
     CustomerCredit,
     CustomerInvoice,
-    CustomerReceipt,
     DunningNotice,
     JournalEntry,
-    JournalLine,
 )
 from apps.finance.reports import ar_aging, statement_of_account
 from apps.finance.services import (
@@ -35,7 +32,6 @@ from apps.finance.services import (
     record_customer_receipt,
 )
 from apps.iam.models import Organization, User
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

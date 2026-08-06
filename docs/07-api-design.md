@@ -170,6 +170,45 @@ movements and returns per-event ACK or CONFLICT (e.g. OVERSELL).
 
 ---
 
+## 13b. Procurement & imports (`/api/procurement/`) — shipped
+
+```
+GET|POST      /supplier-profiles/            PATCH|DELETE /supplier-profiles/{id}/
+POST          /supplier-profiles/{id}/set_standing/   {standing, reason}
+POST          /supplier-profiles/{id}/score/          {period_start, period_end, …}
+GET|POST      /supplier-licences/            POST /supplier-licences/{id}/verify/
+GET|POST      /price-agreements/             GET  /evaluations/
+
+GET|POST      /requisitions/                 POST /requisitions/{id}/submit/
+POST          /requisitions/consolidate/     {organization, supplier, requisitions[]}
+
+GET|POST      /rfqs/                         POST /rfqs/{id}/send/
+GET           /rfqs/{id}/comparison/         → quotes normalised to RWF, best flagged
+GET|POST      /quotes/                       POST /quotes/{id}/shortlist/ | /award/
+
+GET|POST      /orders/                       POST /orders/{id}/submit/   → approvals inbox
+POST          /orders/{id}/send/             POST /orders/{id}/cancel/ | /close/
+POST          /orders/{id}/start_receipt/    → draft GRN prefilled from what's outstanding
+
+GET|POST      /consignments/                 POST /consignments/{id}/attach_order/ | /detach_order/
+POST          /consignments/{id}/allocate_costs/   {allocation_basis: VALUE|QUANTITY}
+GET|POST      /landed-costs/
+
+GET|POST      /receipts/                     POST /receipts/{id}/post/ | /cancel/
+GET|POST      /invoices/                     POST /invoices/{id}/match/ | /submit/
+GET|POST      /supplier-notes/               POST /supplier-notes/{id}/issue/ | /settle/
+
+GET           /statement/?supplier=&organization=&from=&to=
+GET           /overview/                     → buyer's workload counters
+```
+
+Documents are written **header + nested `lines` in one payload**; a PATCH without
+`lines` leaves them alone, a PATCH with `lines` replaces them. Permissions:
+`procurement.view / manage / receive / invoice`; approving anything is
+`approval.decide` on the central inbox, so no-self-approval and claim-to-lock hold.
+
+---
+
 ## 14. Standard error codes
 | HTTP | Meaning (PharmaCore) |
 |---|---|

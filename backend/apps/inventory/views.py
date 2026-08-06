@@ -38,6 +38,18 @@ from apps.inventory.models import (
     StorageZone,
     TemperatureLog,
     TemperatureSensor,
+    ConsignmentAgreement,
+    ConsignmentConsumption,
+    ConsignmentSettlement,
+    EpcisEvent,
+    ExcursionInvestigation,
+    PickTask,
+    PickWave,
+    PutawayRule,
+    ReorderRule,
+    SensorCalibration,
+    SerialUnit,
+    Warehouse,
 )
 from apps.inventory.serializers import (
     BatchRecallSerializer,
@@ -52,6 +64,18 @@ from apps.inventory.serializers import (
     StorageZoneSerializer,
     TemperatureLogSerializer,
     TemperatureSensorSerializer,
+    ConsignmentAgreementSerializer,
+    ConsignmentConsumptionSerializer,
+    ConsignmentSettlementSerializer,
+    EpcisEventSerializer,
+    ExcursionInvestigationSerializer,
+    PickTaskSerializer,
+    PickWaveSerializer,
+    PutawayRuleSerializer,
+    ReorderRuleSerializer,
+    SensorCalibrationSerializer,
+    SerialUnitSerializer,
+    WarehouseSerializer,
 )
 from apps.inventory.services import adjust_stock, log_wastage, receive_intake
 
@@ -425,3 +449,130 @@ class IntakeView(APIView):
             request=request,
         )
         return Response(InventoryBatchSerializer(batch).data, status=status.HTTP_201_CREATED)
+
+
+# ---------------------------------------------------------------------------
+# Warehouse depth: warehouses, put-away, picking, serialisation, cold-chain
+# investigations, and consignment (supplier-owned) stock.
+# Each queryset is tenant-scoped through its own path to the owning org.
+# ---------------------------------------------------------------------------
+
+
+class WarehouseViewSet(_AuditedAdminViewSet):
+    serializer_class = WarehouseSerializer
+    queryset = Warehouse.objects.all()
+
+    def get_queryset(self) -> QuerySet[Warehouse]:
+        user = cast(User, self.request.user)
+        return Warehouse.objects.filter(organization__in=organizations_visible_to(user))
+
+
+class PutawayRuleViewSet(_AuditedAdminViewSet):
+    serializer_class = PutawayRuleSerializer
+    queryset = PutawayRule.objects.all()
+
+    def get_queryset(self) -> QuerySet[PutawayRule]:
+        user = cast(User, self.request.user)
+        return PutawayRule.objects.filter(organization__in=organizations_visible_to(user))
+
+
+class ReorderRuleViewSet(_AuditedAdminViewSet):
+    serializer_class = ReorderRuleSerializer
+    queryset = ReorderRule.objects.all()
+
+    def get_queryset(self) -> QuerySet[ReorderRule]:
+        user = cast(User, self.request.user)
+        return ReorderRule.objects.filter(organization__in=organizations_visible_to(user))
+
+
+class PickWaveViewSet(_AuditedAdminViewSet):
+    serializer_class = PickWaveSerializer
+    queryset = PickWave.objects.all()
+
+    def get_queryset(self) -> QuerySet[PickWave]:
+        user = cast(User, self.request.user)
+        return PickWave.objects.filter(organization__in=organizations_visible_to(user))
+
+
+class PickTaskViewSet(_AuditedAdminViewSet):
+    serializer_class = PickTaskSerializer
+    queryset = PickTask.objects.all()
+
+    def get_queryset(self) -> QuerySet[PickTask]:
+        user = cast(User, self.request.user)
+        return PickTask.objects.filter(wave__organization__in=organizations_visible_to(user))
+
+
+class SerialUnitViewSet(_AuditedAdminViewSet):
+    serializer_class = SerialUnitSerializer
+    queryset = SerialUnit.objects.all()
+
+    def get_queryset(self) -> QuerySet[SerialUnit]:
+        user = cast(User, self.request.user)
+        return SerialUnit.objects.filter(organization__in=organizations_visible_to(user))
+
+
+class EpcisEventViewSet(_AuditedAdminViewSet):
+    serializer_class = EpcisEventSerializer
+    queryset = EpcisEvent.objects.all()
+
+    def get_queryset(self) -> QuerySet[EpcisEvent]:
+        user = cast(User, self.request.user)
+        return EpcisEvent.objects.filter(organization__in=organizations_visible_to(user))
+
+
+class SensorCalibrationViewSet(_AuditedAdminViewSet):
+    serializer_class = SensorCalibrationSerializer
+    queryset = SensorCalibration.objects.all()
+
+    def get_queryset(self) -> QuerySet[SensorCalibration]:
+        user = cast(User, self.request.user)
+        return SensorCalibration.objects.filter(
+            sensor__zone__organization__in=organizations_visible_to(user)
+        )
+
+
+class ExcursionInvestigationViewSet(_AuditedAdminViewSet):
+    serializer_class = ExcursionInvestigationSerializer
+    queryset = ExcursionInvestigation.objects.all()
+
+    def get_queryset(self) -> QuerySet[ExcursionInvestigation]:
+        user = cast(User, self.request.user)
+        return ExcursionInvestigation.objects.filter(
+            organization__in=organizations_visible_to(user)
+        )
+
+
+class ConsignmentAgreementViewSet(_AuditedAdminViewSet):
+    """Supplier-owned stock held on our shelves: ownership only transfers on use."""
+
+    serializer_class = ConsignmentAgreementSerializer
+    queryset = ConsignmentAgreement.objects.all()
+
+    def get_queryset(self) -> QuerySet[ConsignmentAgreement]:
+        user = cast(User, self.request.user)
+        return ConsignmentAgreement.objects.filter(
+            organization__in=organizations_visible_to(user)
+        )
+
+
+class ConsignmentConsumptionViewSet(_AuditedAdminViewSet):
+    serializer_class = ConsignmentConsumptionSerializer
+    queryset = ConsignmentConsumption.objects.all()
+
+    def get_queryset(self) -> QuerySet[ConsignmentConsumption]:
+        user = cast(User, self.request.user)
+        return ConsignmentConsumption.objects.filter(
+            agreement__organization__in=organizations_visible_to(user)
+        )
+
+
+class ConsignmentSettlementViewSet(_AuditedAdminViewSet):
+    serializer_class = ConsignmentSettlementSerializer
+    queryset = ConsignmentSettlement.objects.all()
+
+    def get_queryset(self) -> QuerySet[ConsignmentSettlement]:
+        user = cast(User, self.request.user)
+        return ConsignmentSettlement.objects.filter(
+            agreement__organization__in=organizations_visible_to(user)
+        )

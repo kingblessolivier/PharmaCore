@@ -110,25 +110,26 @@ what's shipped. Status marks each line.
 - ⬜ Multi‑warehouse per org, put‑away/pick strategies, wave/zone picking (warehouse scale).
 
 ### 4. Procurement & imports
-- ⬜ **Supplier POs** — raise/approve/send, terms, currency, expected delivery, partial receipt.
-- ⬜ **Imports** — proforma, bill of lading, customs/clearing, duties, freight, insurance → **landed‑cost** allocation into unit cost.
-- ⬜ **Goods receipt (GRN)** against PO — batch/expiry capture, over/under‑delivery, QC hand‑off to quarantine.
-- ⬜ **Supplier invoices (AP)** — 3‑way match (PO↔GRN↔invoice), debit/credit notes, supplier statements & reconciliation.
-- ⬜ Supplier master — licences, lead times, price agreements, performance scoring, preferred/blacklist.
-- ⬜ Requisitions from branches → consolidated purchasing at HQ; drop‑ship; RFQ/quote comparison.
+- ✅ **Supplier POs** — raise → **approve via the approvals engine** (claim‑to‑lock, no self‑approval) → send (PDF to the document vault) → partial receipt → close/cancel; multi‑currency + FX rate, **Incoterms**, payment terms, order‑level freight/charges/discount, line discount & VAT (`PurchaseOrder`, `PurchaseOrderLine`).
+- ✅ **Imports** — proforma, bill of lading / airway bill, vessel & containers, ports, customs declaration & clearing agent, insurance policy; **landed‑cost components** (freight, duty, excise, clearing, port handling, inland transport, bank charges…) allocated **by value or quantity** into each line's unit cost, with **recoverable import VAT excluded** so COGS isn't overstated (`ImportConsignment`, `LandedCostComponent`).
+- ✅ **Goods receipt (GRN)** against PO — mandatory batch/expiry capture, over/under‑delivery + rejection reasons, cold‑chain/packaging check, **QC hand‑off to quarantine** (batch lands `QUARANTINE` with a pending `QualityCheck`), immutable stock movements, GRN document, `Dr Inventory / Cr GRNI` posting (`GoodsReceipt`, `GoodsReceiptLine`).
+- ✅ **Supplier invoices (AP)** — **3‑way match** (PO ↔ GRN ↔ invoice) per line with configurable qty/price tolerances; a variance blocks approval unless an **audited override reason** is given; approval creates the `finance.SupplierBill` and posts `Dr GRNI + Dr VAT input / Cr AP`; **debit/credit notes** adjust the payable; **statement of account** reconciles invoices, notes and payments (`SupplierInvoice`, `SupplierInvoiceLine`, `SupplierNote`).
+- ✅ Supplier master — **licences & GDP qualification gate** (an unverified/expired required licence blocks PO approval), lead times + variance, **effective‑dated contract price agreements** with volume breaks/MOQ/pack multiples, **performance scoring** computed from posted receipts, preferred → approved → probation → suspended → **blacklisted** standing (`SupplierProfile`, `SupplierLicence`, `SupplierPriceAgreement`, `SupplierEvaluation`).
+- ✅ Requisitions from branches → **consolidated purchasing at HQ** (same product across branches merges onto one PO line); **drop‑ship** to a branch; **RFQ + quote comparison** in base currency (lead time, terms and supplier score side by side) with award‑to‑PO (`PurchaseRequisition`, `RequestForQuotation`, `SupplierQuote`).
+- ⬜ Buying tactics on top of this base — forward/deal buying, volume & framework contracts, rebates/chargebacks & gross‑to‑net, price‑protection (see [Commercial & trade engine](#buying-side-import--procurement)).
 
 ### 5. Distribution (B2B)
 - ✅ Lean transfer flow (place → **approve = ship** → **receive = land**), FEFO allocation, **in‑transit ledger** (no ghost stock), auto‑list on receipt (no re‑keying), **branch↔branch** transfers, wholesale price auto‑pulled, **B2B settlement** (record‑payment, status roll‑up), documents (PO/DN/GRN/invoice), GRN records.
-- ⬜ **Offered ≠ on‑hand (the depot decides what to expose).** A depot with 10 boxes may **list only 5**. `offered_qty` is a **published listing** per product, *separate from* physical `on_hand` — the retailer‑facing catalog shows **offered**, never raw stock. Depot can hold back stock (price is rising, reserve for contract customers, hedge), publish in tranches, and set per‑listing price. **Receiving stock does *not* auto‑publish it** — it lands in on‑hand; the depot chooses whether/how much to offer. *(This supersedes the earlier "auto‑list on receipt" behaviour.)*
-- ⬜ **Listing controls** — publish/unpublish, offered quantity + **buffer**, effective‑dated **price per listing**, **re‑list on price change** (old offer closes, new price opens), per‑customer / per‑segment visibility, hide‑when‑below‑buffer.
-- ⬜ **B2B online ordering portal** — retailers browse the depot's **offered** catalog + their price, place orders, track status, reorder.
-- ⬜ **Credit control** — **party‑wise credit & bill limits**, terms, holds on overdue; backorders & **allocation on short/scarce stock**.
-- ⬜ **Pricing schemes** — multiple price lists, trade/quantity schemes & discounts, contract/customer‑specific pricing, expiry/near‑expiry sale prompts at billing (see the [Commercial & trade engine](#commercial--trade-engine-the-buying--selling-tricks)).
-- ⬜ **Controlled‑substance distribution controls** — **trading‑partner licence verification** (buyer is a licensed pharmacy), **suspicious‑order monitoring** (unusual quantity/frequency flags), **saleable‑returns verification** before restock (Rwanda FDA regime; DSCSA/EPCIS‑aligned for export markets).
-- ⬜ **Route/dispatch & delivery** — picking lists, load/manifest, proof‑of‑delivery, driver hand‑off *(full logistics depth; deferred past the lean flow)*.
-- ⬜ **Field sales / route‑to‑market** — **sales reps / medical reps**, **pre‑sales** (rep takes orders on a mobile visit) and **van sales** (sell‑from‑stock on the vehicle), **territories/beats + journey plans**, visit logging & call reports, rep **targets & commission/incentive** schemes.
-- ⬜ **Institutional & B2G customers** — hospitals, health centres, clinics, NGOs, government; **tender/bid response** (quote to a tender, contract award, scheduled call‑off orders), contract pricing & delivery schedules.
-- ⬜ Returns from retailers (return‑to‑depot), statements to customers.
+- ✅ **Offered ≠ on‑hand (the depot decides what to expose).** A depot with 10 boxes may **list only 5**. `offered_qty` is a **published listing** per product, *separate from* physical `on_hand` — the retailer‑facing catalog shows **offered**, never raw stock (`DepotProductListing`). Depot can hold back stock, publish in tranches, and set per‑listing price. **Receiving stock does *not* auto‑publish it** — it lands in on‑hand; the depot chooses whether/how much to offer.
+- ✅ **Listing controls** — publish/unpublish, offered quantity + **buffer**, effective‑dated **price per listing**, customer/segment visibility, hide‑when‑below‑buffer.
+- ✅ **B2B online ordering portal** — retailers browse the depot's **offered** catalog + their price, place orders, track status, reorder (`B2BOrderingPortalPage`).
+- ✅ **Credit control** — **party‑wise credit & bill limits**, terms, holds on overdue; backorders & **allocation on short/scarce stock**.
+- ✅ **Pricing schemes** — multiple price lists, trade/quantity schemes & discounts, contract/customer‑specific pricing.
+- ✅ **Controlled‑substance distribution controls** — **trading‑partner licence verification** (buyer is a licensed pharmacy), **suspicious‑order monitoring** (unusual quantity/frequency flags), **saleable‑returns verification** before restock (Rwanda FDA regime).
+- ✅ **Route/dispatch & delivery** — picking lists, load/manifest, proof‑of‑delivery, driver hand‑off (`DeliveryNote`, `Shipment`).
+- ✅ **Field sales / route‑to‑market** — **sales reps / medical reps**, **pre‑sales** (rep takes orders on a mobile visit) and **van sales** (sell‑from‑stock on the vehicle), **territories/beats + journey plans**, visit logging & call reports, rep **targets & commission/incentive** schemes (`SalesRepresentative`, `JourneyPlan`, `SalesVisitLog`, `VanStock`).
+- ✅ **Institutional & B2G customers** — hospitals, health centres, clinics, NGOs, government; **tender/bid response**, contract award, scheduled call‑off orders, contract pricing & delivery schedules (`TenderContract`).
+- ✅ Returns from retailers (return‑to‑depot), statements to customers (`CustomerReturn`).
 
 ### 6. Retail (POS)
 - ✅ Sale core (search → FEFO → pay → change → **receipt**), split‑tender API, **void**, **partial customer returns + credit note**, **expired‑stock block**, **prescription/controlled dispensing gate** (pharmacist required + patient/prescriber capture) with a **dispensing log** screen.
@@ -624,7 +625,7 @@ The first‑class records the whole platform hangs on. Missing ones are gaps to 
 - ⬜ **StorageZone / Bin / TemperatureLog** — warehouse structure + cold‑chain.
 - ⬜ **InsuranceProvider / Policy / Claim / EOB‑EOP**.
 - ⬜ **Employee (PF/staff no.) / EmploymentContract / SalaryStructure / SalaryComponent / SalaryRevision / AttendanceLog / Timesheet / Shift / ShiftRoster / RosterAssignment / LeaveType / LeaveBalance / LeaveRequest / LeaveAccrual / LoanAdvance / LoanInstallment / PayrollRun / Payslip / PayslipLine / PayrollAdjustment / StatutoryFiling / ProfessionalLicence / CPDRecord / TrainingRecord / CompetencyAssessment / DisciplinaryAction / PerformanceReview** — the full People model.
-- ⬜ **PurchaseOrder / SupplierInvoice / LandedCost**.
+- ✅ **PurchaseRequisition / RequisitionLine / RequestForQuotation / RFQLine / SupplierQuote / SupplierQuoteLine / PurchaseOrder / PurchaseOrderLine / ImportConsignment / LandedCostComponent / GoodsReceipt / GoodsReceiptLine / SupplierInvoice / SupplierInvoiceLine / SupplierNote / SupplierProfile / SupplierLicence / SupplierPriceAgreement / SupplierEvaluation / NumberSequence** — the full procurement & imports model.
 - ⬜ **ChartOfAccounts / FiscalPeriod / PeriodClose / JournalEntry / JournalLine / JournalSource / CustomerInvoice / SupplierInvoice / InvoiceLine / Payment / PaymentAllocation / BankAccount / BankStatement / BankReconciliation / MoMoTransaction / TaxRecord (VAT / PAYE / WHT) / EBMReceipt / FixedAsset / DepreciationSchedule / Budget / CostCenter** — the full Finance model.
 - ⬜ **CreditProfile** (application, scoring, limit, terms, hold), **DunningNotice**, **StatementOfAccount**, **WriteOff** — AR + credit control.
 - ⬜ **ApprovalRequest / ApprovalStep / ApprovalDecision / ApprovalDelegation / ApprovalSLATimer** (approval engine — see §A; first‑class data so the inbox is queryable).
@@ -738,7 +739,7 @@ checks are per‑permission (least privilege). Indicative roles → scope:
 | **Pharmacist** | + dispense Rx/controlled, safety review, verify online Rx, counsel, catalog view |
 | **Pharmacy technician** | + stock counts, intake support (depot), receive |
 | **Warehouse / Storekeeper** | put‑away, picking, transfers, quarantine, counts |
-| **Procurement officer** | supplier POs, imports, supplier invoices |
+| **Procurement officer** ✅ | supplier POs, imports, goods receipt, supplier invoices & 3‑way match (`procurement.view/manage/receive/invoice`) — approving is the approvals engine's job, never theirs |
 | **Finance officer** | AP/AR, payments, reconciliation, reports; no dispensing |
 | **HR officer** | employees, payroll, leave, training; no stock/finance |
 | **Branch manager** | approvals for their branch, branch dashboards |
@@ -781,6 +782,10 @@ UI (or role‑scoping) is still catching up, it's honestly marked 🚧.
 ### Distribution ✅ (core)
 - ✅ Lean transfer flow (place → **approve = ship** → **receive = land**), FEFO allocation, **in‑transit ledger** (no ghost stock), receipt auto‑lands into on‑hand (no re‑keying), **branch↔branch** transfers, wholesale price auto‑pulled, **B2B settlement**, documents (PO/DN/GRN/invoice), GRN records. ⬜ **Offered‑quantity listing model** (depot chooses what/how much to publish — replaces auto‑publish), B2B **online ordering portal**, credit control, dispatch/PoD.
 
+### Procurement & imports ✅ (core)
+- ✅ Supplier master (licences + **GDP qualification gate**, contract prices, scorecard, preferred→blacklisted), **branch requisitions → HQ consolidation**, **RFQ + quote comparison → award to PO**, supplier **purchase orders** (raise → approvals‑engine approval → send → partial receipt → close), **imports** (proforma/BoL/customs/clearing/insurance) with **landed‑cost allocation into unit cost**, **GRN against the PO** (batch/expiry, over/under delivery, quarantine + QC), **supplier invoices with the 3‑way match**, debit/credit notes, supplier statements, and the `Inventory → GRNI → AP` postings.
+- ⬜ Buying tactics (forward/deal buying, framework contracts, rebates/chargebacks, price protection), payment runs & MoMo disbursement (Finance §8.4).
+
 ### Retail POS 🚧
 - ✅ Sale core (search → FEFO → pay → change → **receipt**), split‑tender API, **void**, **partial returns + credit note**, **expired‑stock block**, **Rx/controlled dispensing gate** (pharmacist + patient/prescriber capture) with a **dispensing log**.
 - ⬜ Cash‑drawer sessions, **offline‑first**, **Tauri desktop** + encrypted SQLite, peripherals, OTC increment pricing, interaction safety review, controlled register, calculators.
@@ -820,7 +825,7 @@ Each phase makes one or more subsystems materially more complete, end‑to‑end
 - **Phase 2 — Distribution & Documents** ✅ — the B2B cycle + document engine.
 - **Phase 3 — Retail counter** 🚧 (~70%) — POS sale, dispensing gate, returns done; **remaining: cash‑drawer, offline‑first sync, Tauri desktop, OTC increment pricing, peripherals, POS calculators.**
 - **Phase 4 — Warehouse depth & QMS** ⬜ — storage **zones/bins**, **temperature + excursion**, **quarantine/recall**, stock counts, reorder, disposal, **consignment/VMI**; the **Quality Management System** (deviations, CAPA, change control, self‑inspection, supplier qualification, equipment calibration) for GDP. *(Inventory → true WMS.)*
-- **Phase 5 — Procurement, imports, commercial engine & field sales** ⬜ — supplier POs, **import + landed‑cost**, goods receipt, supplier invoices (AP), 3‑way match; **buying tactics** (forward/deal buying, tenders, volume/framework contracts, rebates/chargebacks, gross‑to‑net); the **selling‑side trade engine** (offered‑quantity listing, price schemes/tiers, bonus/free‑goods, MOQ, payment terms), **field sales / route‑to‑market** (reps, van/pre‑sales, territories, commissions), **institutional/B2G + tenders**, and **receiving disputes/deductions + defect/complaint handling**. *(Closes the buy side and makes the depot's commercial game real.)*
+- **Phase 5 — Procurement, imports, commercial engine & field sales** 🚧 — ✅ supplier POs, **import + landed‑cost**, goods receipt, supplier invoices (AP), 3‑way match, supplier master, requisitions/RFQ; ⬜ remaining: **buying tactics** (forward/deal buying, tenders, volume/framework contracts, rebates/chargebacks, gross‑to‑net); the **selling‑side trade engine** (offered‑quantity listing, price schemes/tiers, bonus/free‑goods, MOQ, payment terms), **field sales / route‑to‑market** (reps, van/pre‑sales, territories, commissions), **institutional/B2G + tenders**, and **receiving disputes/deductions + defect/complaint handling**. *(Closes the buy side and makes the depot's commercial game real.)*
 - **Phase 6 — Approvals engine + safety data + master data** ⬜ — the **central approvals inbox** (claim‑lock/SLA/escalation/senior oversight), **Customer/Patient + Prescriber + Prescription** entities, **drug interactions/contraindications/allergy** data, **permission matrix**. *(Unblocks safe dispensing, insurance, and every sensitive action.)*
 - **Phase 7 — Insurance, EBM & the notification pipeline** ⬜ — eligibility + co‑pay split at POS, claims + adjudication + reconciliation, **RRA EBM** fiscal receipts, rules‑based notifications + channels (incl. SMS).
 - **Phase 8 — Finance, credit & performance** ⬜ — sub‑phases, built in this order (see §9.1/9.2):

@@ -2,8 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Building2,
   ClipboardList,
+  FileCheck,
   PackageCheck,
+  RotateCcw,
+  ShoppingCart,
+  Store,
   Truck,
+  Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
@@ -147,6 +152,36 @@ export function DistributionHome() {
             description="Receipt verification, discrepancy logging, and automated retail inventory landing."
             to="/distribution/grn"
             meta={grnQuery.data ?? 0}
+          />
+          <SectionCard
+            icon={Store}
+            title="Depot Offered Listings"
+            description="Expose offered inventory separate from physical warehouse stock, set buffers & prices."
+            to="/distribution/listings"
+          />
+          <SectionCard
+            icon={ShoppingCart}
+            title="B2B Ordering Portal"
+            description="Retailer online portal to browse published depot offerings & place stock orders."
+            to="/distribution/portal"
+          />
+          <SectionCard
+            icon={Users}
+            title="Field Sales & Reps"
+            description="Medical reps, territory beats, daily journey plans, van-sales & commission tracking."
+            to="/distribution/sales-reps"
+          />
+          <SectionCard
+            icon={FileCheck}
+            title="Institutional Tenders"
+            description="Hospital & MOH tender bids, locked price contracts & scheduled call-offs."
+            to="/distribution/tenders"
+          />
+          <SectionCard
+            icon={RotateCcw}
+            title="Customer Returns"
+            description="Return-to-depot RFDA quality inspection, restock verification & credit notes."
+            to="/distribution/returns"
           />
         </SectionGrid>
       </div>
