@@ -2100,3 +2100,67 @@ def apply_dunning(*, organization: Organization, today: Any = None) -> list[Dunn
                 profile.hold_reason = f"Auto-hold: {invoice.invoice_number} is 60+ days overdue."
                 profile.save(update_fields=["status", "hold_reason", "updated_at"])
     return issued
+
+
+# A customer who has let an invoice run this far past its due date stops being
+# able to place new orders on credit, whatever their limit says. The dunning
+# ladder issues the FINAL demand at the same age.
+ORDER_BLOCK_DAYS_OVERDUE = 30
+
+
+def days_overdue(organization: Organization, customer: Organization, *, today: Any = None) -> int:
+    """Age of the customer's oldest unsettled invoice, in days past its due date.
+
+    Zero when nothing is overdue.
+    """
+    today = today or timezone.now().date()
+    oldest = (
+        CustomerInvoice.objects.filter(organization=organization, customer=customer)
+        .exclude(status__in=[CustomerInvoice.Status.PAID, CustomerInvoice.Status.CANCELLED])
+        .order_by("due_date")
+        .first()
+    )
+    if oldest is None:
+        return 0
+    return max(0, (today - oldest.due_date).days)
+
+
+def assert_may_order_on_credit(
+    *,
+    seller: Organization,
+    buyer: Organization,
+    order_amount: Decimal = Decimal("0"),
+    today: Any = None,
+) -> None:
+    """Gate a B2B order against the buyer's credit standing with this seller.
+
+    Raises :class:`CreditHoldError` when the buyer is on hold, has an invoice
+    too far past due, or the order would push them over their limit. Callers in
+    the API layer turn that into an HTTP 409 — the request is well-formed, it is
+    the buyer's account that refuses it.
+
+    No credit profile means the pair trades cash-on-delivery, which nothing here
+    needs to block.
+    """
+    profile = CreditProfile.objects.filter(creditor=seller, debtor=buyer).first()
+    if profile is None:
+        return
+
+    if profile.status == CreditProfile.Status.HOLD:
+        reason = profile.hold_reason or "no reason recorded"
+        raise CreditHoldError(f"{buyer.name} is on credit hold ({reason}).")
+
+    overdue = days_overdue(seller, buyer, today=today)
+    if overdue > ORDER_BLOCK_DAYS_OVERDUE:
+        raise CreditHoldError(
+            f"{buyer.name} has an invoice {overdue} days past due "
+            f"(limit is {ORDER_BLOCK_DAYS_OVERDUE}). Settle it before ordering again."
+        )
+
+    if profile.credit_limit > 0 and order_amount > 0:
+        projected = _customer_outstanding(seller, buyer) + Decimal(order_amount)
+        if projected > profile.credit_limit:
+            raise CreditHoldError(
+                f"{buyer.name} credit limit breached: exposure would be {projected} "
+                f"against a limit of {profile.credit_limit}."
+            )
