@@ -313,6 +313,32 @@ class UserDocument(models.Model):
         return f"{self.doc_type} · {self.user_id}"
 
 
+class ApiKey(models.Model):
+    """A service-account API key. It authenticates requests **as a specific user**
+    (reusing that user's roles & org scope), so machine integrations get exactly the
+    access their service account is granted. Only the SHA-256 **hash** is stored; the
+    raw key is shown once at creation and never again.
+    """
+
+    name = models.CharField(max_length=120)
+    user = models.ForeignKey("iam.User", on_delete=models.CASCADE, related_name="api_keys")
+    prefix = models.CharField(max_length=12, db_index=True)  # shown in the UI
+    key_hash = models.CharField(max_length=64, unique=True)  # sha256 hex
+    is_active = models.BooleanField(default=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        "iam.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["user", "is_active"])]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.prefix}…)"
+
+
 class ImpersonationSession(models.Model):
     """Records an admin 'view-as' session: who acted as whom, when, and until when.
 

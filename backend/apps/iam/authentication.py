@@ -8,8 +8,13 @@ until they expire (grandfathered), so enabling it never logs anyone out spurious
 
 from __future__ import annotations
 
+import hashlib
+import secrets
 from typing import Any, cast
 
+from django.utils import timezone
+from rest_framework.authentication import BaseAuthentication
+from rest_framework.request import Request
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import (
@@ -18,7 +23,41 @@ from rest_framework_simplejwt.serializers import (
 )
 from rest_framework_simplejwt.tokens import RefreshToken, Token
 
-from apps.iam.models import User
+from apps.iam.models import ApiKey, User
+
+
+def hash_api_key(raw: str) -> str:
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def generate_api_key() -> tuple[str, str, str]:
+    """Return (raw_key, prefix, key_hash). The raw key is shown to the admin once."""
+    raw = "pk_" + secrets.token_urlsafe(32)
+    return raw, raw[:12], hash_api_key(raw)
+
+
+class ApiKeyAuthentication(BaseAuthentication):
+    """Authenticate a request by an ``X-API-Key`` header, acting as the key's user."""
+
+    def authenticate(self, request: Request) -> tuple[User, ApiKey] | None:
+        raw = request.META.get("HTTP_X_API_KEY")
+        if not raw:
+            return None
+        key = (
+            ApiKey.objects.select_related("user")
+            .filter(key_hash=hash_api_key(raw), is_active=True)
+            .first()
+        )
+        if key is None:
+            raise AuthenticationFailed("Invalid API key.")
+        if not key.user.is_active:
+            raise AuthenticationFailed("The account for this key is inactive.")
+        ApiKey.objects.filter(pk=key.pk).update(last_used_at=timezone.now())
+        return key.user, key
+
+    def authenticate_header(self, request: Request) -> str:
+        # Ensures DRF returns 401 (not 403) when an API key is rejected.
+        return "Api-Key"
 
 
 class VersionedTokenObtainPairSerializer(TokenObtainPairSerializer):
