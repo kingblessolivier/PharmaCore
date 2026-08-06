@@ -13,12 +13,23 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 
-from apps.hr.models import Employee, EmployeeDocument, PayrollRun, StatutoryRate
+from apps.hr.models import (
+    AttendanceLog,
+    Employee,
+    EmployeeDocument,
+    LeaveRequest,
+    PayrollRun,
+    ShiftRoster,
+    StatutoryRate,
+)
 from apps.hr.payroll_run import build_payroll_run, mark_payroll_run_paid, submit_payroll_run
 from apps.hr.serializers import (
+    AttendanceLogSerializer,
     EmployeeDocumentSerializer,
     EmployeeSerializer,
+    LeaveRequestSerializer,
     PayrollRunSerializer,
+    ShiftRosterSerializer,
     StatutoryRateSerializer,
 )
 from apps.hr.services import request_termination as request_termination_approval
@@ -194,3 +205,61 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
             raise ValidationError(str(exc)) from exc
         run.refresh_from_db()
         return Response(PayrollRunSerializer(run).data)
+
+
+class AttendanceLogViewSet(viewsets.ModelViewSet):
+    serializer_class = AttendanceLogSerializer
+    queryset = AttendanceLog.objects.select_related("employee")
+
+    def get_queryset(self) -> QuerySet[AttendanceLog]:
+        user = cast(User, self.request.user)
+        qs = AttendanceLog.objects.select_related("employee")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            qs = qs.filter(employee__organization__in=organizations_visible_to(user))
+        return qs
+
+    def perform_create(self, serializer: BaseSerializer) -> None:
+        _require_hr_manage(cast(User, self.request.user))
+        serializer.save()
+
+
+class ShiftRosterViewSet(viewsets.ModelViewSet):
+    serializer_class = ShiftRosterSerializer
+    queryset = ShiftRoster.objects.select_related("organization", "employee")
+
+    def get_queryset(self) -> QuerySet[ShiftRoster]:
+        user = cast(User, self.request.user)
+        qs = ShiftRoster.objects.select_related("organization", "employee")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            qs = qs.filter(organization__in=organizations_visible_to(user))
+        return qs
+
+    def perform_create(self, serializer: BaseSerializer) -> None:
+        _require_hr_manage(cast(User, self.request.user))
+        serializer.save()
+
+
+class LeaveRequestViewSet(viewsets.ModelViewSet):
+    serializer_class = LeaveRequestSerializer
+    queryset = LeaveRequest.objects.select_related("employee", "approved_by")
+
+    def get_queryset(self) -> QuerySet[LeaveRequest]:
+        user = cast(User, self.request.user)
+        qs = LeaveRequest.objects.select_related("employee", "approved_by")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            qs = qs.filter(employee__organization__in=organizations_visible_to(user))
+        return qs
+
+    def perform_create(self, serializer: BaseSerializer) -> None:
+        serializer.save()
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request: Request, pk: str | None = None) -> Response:
+        user = cast(User, request.user)
+        _require_hr_manage(user)
+        leave = self.get_object()
+        leave.status = LeaveRequest.Status.APPROVED
+        leave.approved_by = user
+        leave.save(update_fields=["status", "approved_by"])
+        return Response(LeaveRequestSerializer(leave).data)
+

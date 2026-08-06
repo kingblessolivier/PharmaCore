@@ -31,6 +31,12 @@ import { PayrollPage } from "./pages/PayrollPage";
 import { SupplierBillsPage } from "./pages/SupplierBillsPage";
 import { BankingPage } from "./pages/BankingPage";
 import { FinanceStatementsPage } from "./pages/FinanceStatementsPage";
+import { FixedAssetsPage } from "./pages/FixedAssetsPage";
+import { TaxEbmPage } from "./pages/TaxEbmPage";
+import { BudgetsPage } from "./pages/BudgetsPage";
+import { AttendancePage } from "./pages/AttendancePage";
+import { ShiftRosterPage } from "./pages/ShiftRosterPage";
+import { LeavePage } from "./pages/LeavePage";
 import { AdminHome } from "./pages/apps/AdminHome";
 import { RetailHome } from "./pages/apps/RetailHome";
 import { CatalogHome } from "./pages/apps/CatalogHome";
@@ -140,10 +146,16 @@ function App() {
               <Route path="/finance/payables" element={forFinance(<SupplierBillsPage />)} />
               <Route path="/finance/banking" element={forFinance(<BankingPage />)} />
               <Route path="/finance/statements" element={forFinance(<FinanceStatementsPage />)} />
+              <Route path="/finance/assets" element={forFinance(<FixedAssetsPage />)} />
+              <Route path="/finance/tax-ebm" element={forFinance(<TaxEbmPage />)} />
+              <Route path="/finance/budgets" element={forFinance(<BudgetsPage />)} />
               <Route path="/people" element={forHR(<PeopleHome />)} />
               <Route path="/people/employees" element={forHR(<EmployeesPage />)} />
               <Route path="/people/employees/:id" element={forHR(<EmployeeDetailPage />)} />
               <Route path="/people/payroll" element={forHR(<PayrollPage />)} />
+              <Route path="/people/attendance" element={forHR(<AttendancePage />)} />
+              <Route path="/people/roster" element={forHR(<ShiftRosterPage />)} />
+              <Route path="/people/leave" element={forHR(<LeavePage />)} />
               <Route path="/approvals" element={<ApprovalsInboxPage />} />
               <Route path="/documents" element={<DocumentsPage />} />
             </Route>

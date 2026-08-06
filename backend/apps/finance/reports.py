@@ -15,7 +15,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
-from django.db.models import Case, DecimalField, Q, Sum, When
+from django.db.models import Case, DecimalField, F, Q, Sum, When
 from django.db.models.functions import Coalesce
 
 from apps.finance.models import Account, JournalEntry, JournalLine, SupplierBill
@@ -252,6 +252,9 @@ def performance(organization: Organization, *, start: date, end: date) -> dict[s
     DSO/DPO use the standard formulas over the period actually requested:
       DSO = receivables / revenue * days
       DPO = payables / COGS * days
+    Stock turns / GMROI use the standard pharmacy formulas:
+      stock_turns = COGS(period) / avg_inventory_value * (365 / days)
+      gmroi       = gross_margin_pct * stock_turns
     """
     days = (end - start).days + 1
     prev_end = start - timedelta(days=1)
@@ -263,6 +266,17 @@ def performance(organization: Organization, *, start: date, end: date) -> dict[s
 
     dso = _q(receivable / current["revenue"] * days) if current["revenue"] else ZERO
     dpo = _q(payable / current["cogs"] * days) if current["cogs"] else ZERO
+
+    # Operational KPIs the leader needs at a glance: cash, payroll liability,
+    # inventory value, stock turns, GMROI.
+    cash_on_hand = _cash_on_hand(organization)
+    payroll_liability = _payroll_liability(organization)
+    inventory_value = _inventory_value(organization)
+    annualiser = Decimal("365") / Decimal(str(days)) if days else Decimal("0")
+    stock_turns = (
+        _q(current["cogs"] / inventory_value * annualiser) if inventory_value else ZERO
+    )
+    gmroi = _q(current["gross_margin_pct"] * stock_turns) if current["gross_margin_pct"] and stock_turns else ZERO
 
     def delta_pct(now: Decimal, before: Decimal) -> Decimal | None:
         """Percentage change vs the previous period; None when there is no base to
@@ -289,6 +303,11 @@ def performance(organization: Organization, *, start: date, end: date) -> dict[s
         "payable": payable,
         "dso_days": dso,
         "dpo_days": dpo,
+        "cash_on_hand": cash_on_hand,
+        "payroll_liability": payroll_liability,
+        "inventory_value": inventory_value,
+        "stock_turns": stock_turns,
+        "gmroi": gmroi,
         "previous": {
             "revenue": previous["revenue"],
             "cogs": previous["cogs"],
@@ -301,6 +320,66 @@ def performance(organization: Organization, *, start: date, end: date) -> dict[s
             "net_profit": delta_pct(current["net_profit"], previous["net_profit"]),
         },
     }
+
+
+def _cash_on_hand(organization: Organization) -> Decimal:
+    """Sum of every active bank/MoMo/cash account's running cash-book balance."""
+    from apps.finance.models import BankAccount
+    from apps.finance.services import cash_book_lines
+
+    total = Decimal("0")
+    for acc in BankAccount.objects.filter(organization=organization, is_active=True):
+        rows = cash_book_lines(acc)
+        if rows:
+            total += rows[-1]["running_balance"]
+        else:
+            total += acc.opening_balance
+    return _q(total)
+
+
+def _payroll_liability(organization: Organization) -> Decimal:
+    """Outstanding payroll liabilities: net pay payable + statutory payables.
+    Sums the signed balance of the four payroll control accounts (2100/2200/
+    2300/2400). Liabilities carry a credit normal balance, so their signed
+    value is already positive when owed."""
+    codes = {"2100", "2200", "2300", "2400"}
+    rows = account_balances(organization, end=date.today())
+    total = sum((r.signed for r in rows if r.code in codes), Decimal("0"))
+    return _q(total)
+
+
+def _inventory_value(organization: Organization) -> Decimal:
+    """On-hand × wholesale_cost across every active batch in the org. Batches
+    with no recorded cost contribute zero (their stock is still tracked
+    physically, but the GL can't value what has no cost stamp)."""
+    from apps.inventory.models import InventoryBatch
+
+    total = (
+        InventoryBatch.objects.filter(
+            organization=organization,
+            status=InventoryBatch.Status.ACTIVE,
+            quantity_available__gt=0,
+        )
+        .aggregate(
+            v=Coalesce(
+                Sum(
+                    Case(
+                        When(
+                            wholesale_cost__isnull=False,
+                            then=(
+                                F("quantity_available") * F("wholesale_cost")
+                            ),
+                        ),
+                        output_field=_MONEY,
+                    )
+                ),
+                0,
+                output_field=_MONEY,
+            )
+        )["v"]
+        or Decimal("0")
+    )
+    return _q(total)
 
 
 def cash_flow_statement(organization: Organization, *, start: date, end: date) -> dict[str, Any]:
@@ -462,3 +541,57 @@ def revenue_vs_cogs_series(
         )
         cursor = next_month
     return points
+
+
+def inventory_valuation(organization: Organization) -> dict[str, Any]:
+    """Inventory on hand × wholesale cost, broken down by product and storage
+    zone. Powers the leader's 'how much is sitting on the shelf' question
+    and the inventory-valuation statement tab.
+
+    Batches without a recorded wholesale_cost contribute zero — they are still
+    physically present, but the GL can't value what has no cost stamp.
+    """
+    from apps.inventory.models import InventoryBatch
+
+    total = Decimal("0")
+    total_units = 0
+    per_product: dict[int, dict[str, Any]] = {}
+    rows = (
+        InventoryBatch.objects.filter(
+            organization=organization,
+            status=InventoryBatch.Status.ACTIVE,
+            quantity_available__gt=0,
+        )
+        .select_related("product", "storage_location")
+    )
+    for b in rows:
+        cost = b.wholesale_cost or Decimal("0")
+        line_value = _q(cost * b.quantity_available)
+        total += line_value
+        total_units += b.quantity_available
+        bucket = per_product.setdefault(
+            b.product_id,
+            {
+                "product_id": b.product_id,
+                "product_name": str(b.product),
+                "units": 0,
+                "value": ZERO,
+                "batches": 0,
+            },
+        )
+        bucket["units"] += b.quantity_available
+        bucket["value"] += line_value
+        bucket["batches"] += 1
+
+    return {
+        "as_of": date.today(),
+        "total_units": total_units,
+        "total_value": _q(total),
+        "by_product": [
+            {
+                **v,
+                "value": _q(v["value"]),
+            }
+            for v in sorted(per_product.values(), key=lambda x: x["value"], reverse=True)
+        ],
+    }

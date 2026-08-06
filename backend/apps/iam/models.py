@@ -244,6 +244,21 @@ class User(AbstractUser):
     must_change_password = models.BooleanField(default=False)
     # Bumped to invalidate all outstanding tokens (force-logout / session revocation).
     token_version = models.PositiveIntegerField(default=0)
+    # RRA TIN — Rwanda tax-identification, used on PAYE withholding certificates.
+    tin = models.CharField(
+        max_length=30, blank=True, default="",
+        help_text="Rwanda Revenue Authority Tax Identification Number — printed on annual PIT summaries.",
+    )
+    # A secondary mailbox for payslip/PDF delivery (separate from login email).
+    payroll_email = models.EmailField(
+        blank=True, default="",
+        help_text="Optional secondary email where payslips/PDFs are delivered, in addition to the login email.",
+    )
+    # Senior oversight — used by the approvals engine to escalate long-tail queues.
+    reports_to = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="direct_reports",
+        help_text="The user's supervisor — used for senior oversight and approval escalation.",
+    )
 
     class Meta(AbstractUser.Meta):  # type: ignore[name-defined]
         constraints = [

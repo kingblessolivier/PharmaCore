@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BookOpen,
@@ -17,15 +18,26 @@ const money = (n: string | number) =>
   Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
 const num = (s: string | null) => (s === null ? null : Number(s));
 
-/** Current month, as ISO date strings. */
-function thisMonth() {
+type PeriodPreset = "this-month" | "last-month" | "this-quarter" | "ytd" | "custom";
+
+/** Compute the start/end ISO dates for a named preset; "custom" reads from state. */
+function periodFor(preset: PeriodPreset, customStart: string, customEnd: string) {
   const now = new Date();
-  const iso = (x: Date) =>
-    `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
-  return {
-    start: iso(new Date(now.getFullYear(), now.getMonth(), 1)),
-    end: iso(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
-  };
+  const iso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const today = iso(now);
+  const monthStart = iso(new Date(now.getFullYear(), now.getMonth(), 1));
+  const lastMonthStart = iso(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  const lastMonthEnd = iso(new Date(now.getFullYear(), now.getMonth(), 0));
+  const quarterStart = iso(new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1));
+  const ytdStart = iso(new Date(now.getFullYear(), 0, 1));
+  switch (preset) {
+    case "this-month": return { start: monthStart, end: today };
+    case "last-month": return { start: lastMonthStart, end: lastMonthEnd };
+    case "this-quarter": return { start: quarterStart, end: today };
+    case "ytd": return { start: ytdStart, end: today };
+    case "custom": return { start: customStart, end: customEnd };
+  }
 }
 
 /** Revenue vs COGS as grouped bars on ONE axis.
@@ -90,13 +102,16 @@ function RevenueVsCogs({ series }: { series: FinancePerformance["series"] }) {
 export function FinanceHome() {
   const { user } = useAuth();
   const orgId = user?.organization ?? 0;
-  const { start, end } = thisMonth();
+  const [preset, setPreset] = useState<PeriodPreset>("this-month");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const period = useMemo(() => periodFor(preset, customStart, customEnd), [preset, customStart, customEnd]);
 
   const perfQ = useQuery({
-    queryKey: ["fin-performance", orgId, start, end],
+    queryKey: ["fin-performance", orgId, period.start, period.end],
     queryFn: () =>
       api<FinancePerformance>(
-        `/api/finance/reports/performance/?organization=${orgId}&start=${start}&end=${end}`,
+        `/api/finance/reports/performance/?organization=${orgId}&start=${period.start}&end=${period.end}`,
       ),
     enabled: orgId > 0,
   });
@@ -110,6 +125,46 @@ export function FinanceHome() {
         title="Finance"
         subtitle="How much is invested, how the business is performing, who owes you, and whether cash is safe."
       />
+
+      {/* Period switcher — the leader's cockpit can compare across windows. */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium uppercase tracking-wide text-ink-500">Period</span>
+        {(["this-month", "last-month", "this-quarter", "ytd", "custom"] as PeriodPreset[]).map((p) => (
+          <button
+            key={p}
+            type="button"
+            onClick={() => setPreset(p)}
+            className={`rounded-md border px-2.5 py-1 text-xs ${
+              preset === p
+                ? "border-emerald-700 bg-emerald-700 text-white"
+                : "border-line bg-surface-0 text-ink-700 hover:bg-surface-50"
+            }`}
+          >
+            {p === "this-month" ? "This month"
+              : p === "last-month" ? "Last month"
+              : p === "this-quarter" ? "This quarter"
+              : p === "ytd" ? "YTD"
+              : "Custom"}
+          </button>
+        ))}
+        {preset === "custom" && (
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              className="rounded-md border border-line bg-surface-0 px-2 py-1 text-xs"
+            />
+            <span className="text-xs text-ink-500">→</span>
+            <input
+              type="date"
+              value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              className="rounded-md border border-line bg-surface-0 px-2 py-1 text-xs"
+            />
+          </div>
+        )}
+      </div>
 
       {perfQ.isLoading && (
         <div className="flex justify-center py-10">
@@ -125,7 +180,7 @@ export function FinanceHome() {
               label="Revenue"
               value={`RWF ${money(p.revenue)}`}
               deltaPct={num(p.delta_pct.revenue)}
-              deltaContext="last month"
+              deltaContext="last period"
             />
             <StatTile
               label="COGS"
@@ -136,7 +191,7 @@ export function FinanceHome() {
               label="Gross margin"
               value={`${Number(p.gross_margin_pct).toFixed(1)}%`}
               deltaPct={num(p.delta_pct.gross_profit)}
-              deltaContext="last month"
+              deltaContext="last period"
             />
             <StatTile
               label="Receivables"
@@ -145,12 +200,38 @@ export function FinanceHome() {
             />
           </div>
 
+          {/* Operational reality: cash position, payroll liabilities, inventory health. */}
+          <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatTile
+              label="Cash on hand"
+              value={`RWF ${money(p.cash_on_hand ?? "0")}`}
+              hint="All active bank / MoMo / cash accounts"
+            />
+            <StatTile
+              label="Payroll liability"
+              value={`RWF ${money(p.payroll_liability ?? "0")}`}
+              hint="PAYE + RSSB + CBHI + Net pay"
+            />
+            <StatTile
+              label="Stock value"
+              value={`RWF ${money(p.inventory_value ?? "0")}`}
+              hint="On-hand × wholesale cost"
+            />
+            <StatTile
+              label="Stock turns"
+              value={p.stock_turns ? `${Number(p.stock_turns).toFixed(1)}× / yr` : "—"}
+              hint={
+                p.gmroi ? `GMROI ${Number(p.gmroi).toFixed(0)}%` : "Target: 13–18×/yr"
+              }
+            />
+          </div>
+
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatTile
               label="Net profit"
               value={`RWF ${money(p.net_profit)}`}
               deltaPct={num(p.delta_pct.net_profit)}
-              deltaContext="last month"
+              deltaContext="last period"
             />
             <StatTile
               label="Net margin"
@@ -217,6 +298,24 @@ export function FinanceHome() {
           title="Banking & cash"
           description="Bank/MoMo/cash accounts, cash-book, reconciliation, and a cash-flow forecast."
           to="/finance/banking"
+        />
+        <SectionCard
+          icon={BookOpen}
+          title="Fixed assets"
+          description="Fixed asset register, useful life tracking, and straight-line depreciation schedules."
+          to="/finance/assets"
+        />
+        <SectionCard
+          icon={ScrollText}
+          title="Tax & EBM audit"
+          description="RRA EBM OSDC receipt fiscalization logs and 18% VAT return calculations."
+          to="/finance/tax-ebm"
+        />
+        <SectionCard
+          icon={FileBarChart}
+          title="Budgets & variance"
+          description="Departmental cost centre budget allocations vs actual GL spend tracking."
+          to="/finance/budgets"
         />
       </SectionGrid>
     </div>

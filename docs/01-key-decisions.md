@@ -206,3 +206,199 @@ logging. This is the honest, achievable, correct posture.
 - Drug-interaction dataset: license clinical data vs. basic duplication check.
 - Exact medicine **tax-class** mapping (A/B/C) — confirm with accountant/RRA.
 - Which insurers to onboard *first* operationally (schema supports all; rollout order TBD).
+
+---
+
+## ADR-009 — Rwandan payroll compliance is data, not code (StatutoryRate engine)
+
+**Decision:** PAYE bands, RSSB pension rates (and the 2025 → 2030 phased rises),
+maternity, CBHI, occupational hazards, RAMA, VAT, WHT, and any future statutory
+rate live in a single, **effective-dated, versioned** table (`StatutoryRate`). The
+payroll engine, the statutory filing generator, and the Finance tax sub-ledger
+read from this resolver; **no rate or band is hard-coded** in application logic.
+
+**Status:** Accepted (2026-08-06)
+
+**Context:** Rwanda 2025 doubled pension contributions from 6% to 12% (Presidential
+Order N° 086/01, gazetted 13 Dec 2024) and set a phased rise to 20% by 2030. The
+new income-tax framework (Organic Law N° 026/2024) revised PAYE bands for FY 2025.
+Any change that requires a code deploy, a migration, or a hotfix is a bug. Compliance
+must survive a Finance Law with zero code changes — only a new `StatutoryRate` row,
+with its `source_url` for audit.
+
+**Consequences:**
+- New entity `StatutoryRate(code, valid_from, valid_to, params JSONB, source_url,
+  published_by, status)` with a resolver service used by HR + Finance + Reporting.
+- Publishing a new rate is **approval-gated** (Finance manager + Director), audit-logged,
+  and visible in a timeline UI with diff between consecutive rows.
+- 2025/26 seed data: PAYE bands per Organic Law N° 026/2024; pension 6%+6% per
+  Presidential Order N° 086/01; maternity 0.3%+0.3% per Law N° 003/2016 amended by
+  Law N° 049/2024; CBHI 0.5% on net per PM Order N° 034/01; occupational hazards 2%
+  ER per Law N° 13/2009; RAMA 7.5%+7.5% on basic; VAT 18% class B.
+- CBHI's base rule (0.5% on **net** after PAYE/RSSB/maternity) is encoded in the
+  resolver as a `base_rule` string, not branched in code, so a future change (e.g.
+  flat amount) is a single row update.
+- Transport allowance is now in the contributory base — `SalaryComponent` carries a
+  `contributory_to_pension` flag that drives the engine; no code branch on allowance type.
+- Open data file: `docs/18-rwanda-integrations-and-statutory.md` is the source of truth
+  for which rates to seed.
+
+## ADR-010 — Domain events + outbox bus, not direct cross-app calls
+
+**Decision:** HR ↔ Finance ↔ Distribution ↔ Inventory integrate through a **domain
+event bus** backed by an `OutboxEvent` table and Django Signals; **no subsystem
+imports another's models or services directly** for cross-cutting events.
+
+**Status:** Accepted (2026-08-06)
+
+**Context:** Direct Django-import integration between HR and Finance (the previous
+implicit design) couples releases, makes tests brittle, blocks independent scaling
+of workers, and prevents the same event from being observed by Reporting / Analytics
+without code changes. A reliable, idempotent, auditable event bus is the standard
+fix and matches the workspace's "single source of truth" principle.
+
+**Consequences:**
+- New entity `OutboxEvent(event_type, payload JSONB, occurred_at, status, retries)`;
+  producers publish via `transaction.on_commit(lambda: outbox.publish(...))`;
+  consumers register `subscribe(event_type, handler)` and must be **idempotent on
+  `(event_type, source_doc_id, source_line_id)`**.
+- First-class events: `SaleFinalised`, `PurchaseOrderApproved`, `GoodsReceivedNotePosted`,
+  `InventoryAdjusted`, `StockDisposed`, `EmployeeHired`, `EmployeeTerminated`,
+  `TimesheetApproved`, `PayrollRunApproved`, `PayslipPublished`, `StatutoryFilingGenerated`,
+  `StatutoryPaymentConfirmed`, `CustomerInvoiceIssued`, `PaymentReceived`, `PaymentMade`,
+  `CreditLimitChanged`, `CreditHoldEngaged`, `FiscalPeriodOpened`, `FiscalPeriodClosed`,
+  `PeriodReopened`, `EODCloseFinalised`, `EOMCloseFinalised`, plus the full approval
+  lifecycle (`ApprovalRequested`, `ApprovalClaimed`, `ApprovalGranted`, `ApprovalRejected`,
+  `ApprovalEscalated`, `ApprovalSLABreached`).
+- The outbox makes the HR → Finance payroll→GL→statutory-payment flow **observable
+  end-to-end**: any stuck event is a row in `OutboxEvent` with a failure reason.
+- Reporting / Insights subscribe to the same bus without coupling to any subsystem.
+- ADR-001 (POS offline outbox) and ADR-008 (audit logging) both reuse this primitive.
+
+## ADR-011 — Finance is double-entry from day one, driven by auto-posting
+
+**Decision:** Finance uses a real **chart of accounts + double-entry journals** from
+the first commit; every money- or compliance-moving domain event auto-posts a
+journal through a `JournalPostingService`. Statutory sub-ledgers (PAYE, RSSB pension,
+RSSB maternity, CBHI, occupational hazards, RAMA, VAT, WHT) are **first-class GL
+accounts**, not side tables.
+
+**Status:** Accepted (2026-08-06)
+
+**Context:** The owner's question — *am I making money, who owes me, is cash safe* —
+requires reports that reconcile to source events. Single-entry "append-only" ledgers
+cannot produce a reliable balance sheet or trial balance. EBM/RRA reconciliation
+also requires that posted liabilities equal the statutory filing amounts, which is
+trivial when they share the same chart of accounts.
+
+**Consequences:**
+- New entities: `ChartOfAccounts`, `FiscalPeriod`, `PeriodClose`, `JournalEntry`,
+  `JournalLine`, `JournalSource`. Seeded Rwanda-appropriate CoA with **2200-level
+  statutory payable accounts** (`2200 PAYE Payable`, `2210 RSSB Pension Payable`,
+  `2220 RSSB Maternity Payable`, `2230 CBHI Payable`, `2240 Occupational Hazards
+  Payable`, `2250 RAMA Payable`, `2300 VAT Payable`, `2400 EBM Liability`,
+  `2500 WHT Payable`).
+- `JournalPostingService` dispatches per-source handlers (`SALE / PURCHASE / PAYROLL
+  / INVENTORY_ADJ / MANUAL / OPENING_BALANCE / FX / DEPRECIATION / BANK_RECON /
+  STATUTORY_PAYMENT`). All handlers are idempotent on `(source_doc, source_line)`.
+- `FiscalPeriod.status ∈ {Open, SoftClosed, HardClosed}`; reopen requires audit-recorded
+  reason. Reversal entries (not edits) are the only way to correct a HardClosed period.
+- Cross-system invariants encoded at the model/service level:
+  - A payroll run cannot be marked `FILED_PAID` unless its GL sub-ledger balance equals
+    the filing amount.
+  - An employee cannot be terminated while referenced by an open payroll run.
+  - A `CreditProfile.on_hold = True` blocks new B2B orders in Distribution.
+  - A HardClosed fiscal period rejects all postings except reversal entries.
+- Inventory valuation (WAC vs FEFO-lot) is a `TenantSettings.costing_method`; lot-level
+  cost drives COGS posting on `SaleFinalised`.
+- EBM, MoMo, bank integrations live behind a `Provider` interface; **MockEbmProvider**
+  and **MockMomoProvider** ship before real adapters (EBM OSDC certification is gated).
+
+## ADR-012 — Approvals engine is the only path for sensitive actions
+
+**Decision:** Every sensitive action across all subsystems — payroll run final
+approval, salary revision, credit-limit change, AR/AP write-off, supplier bill
+3-way-match variance, inventory write-off / disposal, period reopen, statutory rate
+publish, credit hold engagement, user creation, claim resubmit, price override,
+discount beyond threshold — routes through a single **Approvals engine** with a
+**central inbox**, **claim-to-lock**, **no self-approval**, **SLA timers with
+escalation**, and **senior oversight**. No subsystem reinvents approval.
+
+**Status:** Accepted (2026-08-06)
+
+**Context:** A standalone approval in each subsystem (HR approval, Finance approval,
+Distribution approval) creates inconsistent UX, double-work, and hidden approvals.
+The memory rule "central inbox, claim-to-lock, SLA timeout, escalation, senior
+oversight" is a system property, not a per-module convention.
+
+**Consequences:**
+- `ApprovalRequest`, `ApprovalStep`, `ApprovalDecision`, `ApprovalDelegation`,
+  `ApprovalSLATimer` are first-class data so the inbox is queryable, filterable,
+  exportable, and auditable.
+- Senior leaders (HQ exec, Finance director) see **all** pending approvals across
+  branches and can **forward/reassign** — the "oversight" guarantee.
+- Every approval is **e-signed** (actor + timestamp + immutable audit trail) and
+  drives a downstream `Approval*` event on the outbox bus, so Finance and Reporting
+  react without polling.
+- The engine supports **multi-step / parallel** chains and **delegation while away**.
+- Rule tables (who can approve what, by amount / branch / cost center) are seeded
+  per role and overridable by tenant; sensitive approval rules (payroll final,
+  AR write-off) are not overridable by tenant.
+
+## ADR-013 — Payroll engine is a pure function over a StatutoryRate snapshot
+
+**Decision:** The payroll engine computes a `Payslip` as `f(employee_inputs ×
+StatutoryRate effective on period_end_date)`. It is **pure, deterministic, and
+re-runnable**; once a run is `Locked`, the rate resolver, the attendance, the leave
+balances, and the loan schedules for that period are frozen.
+
+**Status:** Accepted (2026-08-06)
+
+**Context:** Payroll errors cost real money and erode trust. A re-run with a
+different rate set, or with attendance that changed mid-calculation, would produce
+non-reproducible payslips and unreconcilable GL postings. The Labour Code (Art. 70)
+allows daily / weekly / fortnightly / monthly pay periods — the engine must handle
+all four without special-casing.
+
+**Consequences:**
+- The run lifecycle `Draft → Calculated → Approved → Paid → Locked` is enforced
+  server-side; `Lock` snapshots `StatutoryRate` resolution, attendance, leave, and
+  loans for the period into the run record.
+- Any later change (correction, back-pay, arrears) is a new `PayrollAdjustment`
+  in a future period, not a mutation of the locked run.
+- Labour Code Art. 70 pay-period support is configurable per tenant (`TenantSettings.pay_period`)
+  but defaults to **monthly** for full-time formal-sector staff.
+- For monthly employees, the **15th of the following month** is the practical deadline
+  driven by PAYE/RSSB remittance rather than a calendar day stated in the Code (the
+  2009 7-working-day rule was removed in 2018). The engine surfaces statutory filing
+  due dates on `StatutoryFiling.due_date` and the **Statutory Due** dashboard.
+- Gross-to-net formula (Rwanda, versioned): see ROADMAP §10.3. CBHI's base is **net
+  after PAYE/RSSB/maternity**; transport is **in the contributory base** for pension;
+  RAMA is on **basic only** and only if the employer opts in (≥7 employees).
+- End-to-end demo scenario lives in ROADMAP §10 to validate the engine against the
+  Rwanda 2025/26 rates before Phase 9 begins.
+
+## ADR-014 — Numbers, periods & opening balances are first-class
+
+**Decision:** `NumberSequence`, `FiscalPeriod`, `PeriodClose`, `OpeningBalance`,
+and `TenantSettings` are **first-class subsystems**, not ad-hoc utilities. They
+are loaded before any tenant can transact.
+
+**Status:** Accepted (2026-08-06)
+
+**Context:** Numbering collisions, missing opening balances, ambiguous fiscal periods,
+and tenant-specific defaults (costing method, pay period, FX provider) cause
+post-go-live chaos that sinks rollouts. The previous roadmap had these scattered
+across modules.
+
+**Consequences:**
+- `NumberSequence` is **gapless, monotonic, transactional**; the documents engine
+  and the journal engine call `next_number(tenant, type)` under `SELECT … FOR UPDATE`.
+- `FiscalPeriod` supports standard calendar (month) and retail (4-4-5) calendars;
+  `Open → SoftClosed → HardClosed`; reopen requires approval + audit reason.
+- `OpeningBalance` covers opening stock (batches + qty + valuation), opening AR/AP
+  with aging preserved, opening GL trial balance, opening employee + leave balances.
+  A migration wizard validates that sums tie out before committing.
+- `TenantSettings` carries `costing_method ∈ {wac, fefo_lot}`, `currency`,
+  `fx_provider`, `default_country='RW'`, `pay_period`, `statutory_remittance_day=15`,
+  `pit_filing_deadline_month=3, day=31`.

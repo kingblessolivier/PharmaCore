@@ -30,11 +30,14 @@ from apps.iam.models import Organization, User
 _CONTROL_ACCOUNTS: list[tuple[str, str, str, str]] = [
     ("1000", "Cash & Bank", Account.Type.ASSET, Account.Balance.DEBIT),
     ("1100", "Accounts Receivable", Account.Type.ASSET, Account.Balance.DEBIT),
+    ("1200", "Inventory on Hand", Account.Type.ASSET, Account.Balance.DEBIT),
     ("2000", "Accounts Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    ("2050", "VAT Output (sales tax payable)", Account.Type.LIABILITY, Account.Balance.CREDIT),
     ("2100", "PAYE Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
     ("2200", "RSSB Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
     ("2300", "CBHI Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
     ("2400", "Net Pay Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    ("2500", "Inventory Adjustment / Disposal Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
     ("3000", "Owner's Equity", Account.Type.EQUITY, Account.Balance.CREDIT),
     ("4000", "Sales Revenue", Account.Type.REVENUE, Account.Balance.CREDIT),
     ("5000", "Cost of Goods Sold", Account.Type.EXPENSE, Account.Balance.DEBIT),
@@ -682,3 +685,241 @@ def reopen_period(*, period: AccountingPeriod, user: User | None, reason: str) -
         changes={"reason": reason},
     )
     return period
+
+
+# ---------------------------------------------------------------------------
+# Slice 2 — auto-posting the operational reality into the ledger.
+#
+# Up to here, the ledger only captured journal entries that were explicitly
+# posted by a service (payroll, supplier bill, B2B settlement). The P&L stayed
+# empty because nothing was posting sales. These three functions close that
+# gap so the leader's cockpit — the Finance home — reflects the business as it
+# happens:
+#
+#   * ``post_sale_journal`` — every completed POS sale → AR/cash, revenue,
+#     VAT Output, and COGS+Inventory at the FEFO batch's wholesale_cost.
+#   * ``post_inventory_adjustment`` — a stock-count variance →
+#     Dr/COGS  Cr/Inventory so the GL moves with the physical count.
+#   * ``post_writeoff`` — a StockDisposal (destruction, expiry) →
+#     Dr Inventory Adjustment Expense / Cr Inventory at batch cost.
+# ---------------------------------------------------------------------------
+
+
+@transaction.atomic
+def post_sale_journal(*, sale: Any, user: User | None) -> JournalEntry | None:
+    """Auto-post a completed retail sale to the GL.
+
+    Debits:
+      * Cash & Bank (1000)  — full sale total (retail is cash-on-delivery).
+    Credits:
+      * Sales Revenue (4000) — sum of line_net (price excluding VAT portion).
+      * VAT Output (2050)   — sum of line_tax (only the B-class 18% portion;
+                              Rwanda exempts / zero-rates medicines A/C/D).
+    COGS leg (separate entry so it has its own reference + audit trail):
+      Debit  COGS (5000)
+      Credit Inventory (1200)
+      at the FEFO batch's ``wholesale_cost``. This is the moment inventory
+      leaves the books: every retail sale also adjusts the on-hand value.
+
+    Returns the sales-side JournalEntry (or None if the sale had no value).
+    """
+    accounts = ensure_default_accounts(sale.organization)
+
+    # Sales side: cash/debit-revenue + VAT split. Prices are VAT-inclusive
+    # (see apps/retail/models.py), so each line already knows its tax portion.
+    revenue_net = sum((i.line_net for i in sale.items.all()), Decimal("0"))
+    vat_output = sum((i.line_tax for i in sale.items.all()), Decimal("0"))
+    total = sale.total
+
+    if total <= 0:
+        return None
+
+    revenue_lines: list[JournalLineInput] = [
+        {
+            "account": accounts["1000"],
+            "side": JournalLine.Side.DEBIT,
+            "amount": total,
+            "memo": "Cash & equivalents at POS",
+        },
+        {
+            "account": accounts["4000"],
+            "side": JournalLine.Side.CREDIT,
+            "amount": revenue_net,
+            "memo": "Sales revenue (net of VAT)",
+        },
+    ]
+    if vat_output > 0:
+        revenue_lines.append(
+            {
+                "account": accounts["2050"],
+                "side": JournalLine.Side.CREDIT,
+                "amount": vat_output,
+                "memo": "VAT Output (18% on standard-rated lines)",
+            }
+        )
+
+    sale_entry = post_journal(
+        organization=sale.organization,
+        description=f"Sale {sale.sale_number or sale.pk} — POS revenue",
+        lines=revenue_lines,
+        reference_type="sale",
+        reference_id=str(sale.pk),
+        user=user,
+    )
+
+    # COGS leg: draw the cost straight off the FEFO allocations so the GL
+    # agrees with the on-hand value, batch by batch.
+    cogs_total = Decimal("0")
+    cogs_lines: list[JournalLineInput] = []
+    for item in sale.items.prefetch_related("allocations__batch").all():
+        for alloc in item.allocations.all():
+            unit_cost = alloc.batch.wholesale_cost or Decimal("0")
+            cost = (unit_cost * alloc.quantity).quantize(Decimal("0.01"))
+            if cost <= 0:
+                continue
+            cogs_total += cost
+
+    if cogs_total > 0:
+        post_journal(
+            organization=sale.organization,
+            description=f"Sale {sale.sale_number or sale.pk} — COGS",
+            lines=[
+                {
+                    "account": accounts["5000"],
+                    "side": JournalLine.Side.DEBIT,
+                    "amount": cogs_total,
+                    "memo": "Cost of goods sold (FEFO batch cost)",
+                },
+                {
+                    "account": accounts["1200"],
+                    "side": JournalLine.Side.CREDIT,
+                    "amount": cogs_total,
+                    "memo": "Inventory on hand (FEFO allocations)",
+                },
+            ],
+            reference_type="sale",
+            reference_id=str(sale.pk),
+            user=user,
+        )
+
+    record_audit(
+        action="SALE_POSTED",
+        user=user,
+        organization=sale.organization,
+        entity_type="sale",
+        entity_id=str(sale.pk),
+        changes={
+            "entry_id": sale_entry.pk,
+            "total": str(total),
+            "revenue_net": str(revenue_net),
+            "vat_output": str(vat_output),
+            "cogs": str(cogs_total),
+        },
+    )
+    return sale_entry
+
+
+@transaction.atomic
+def post_inventory_adjustment(
+    *, batch: Any, delta: int, unit_cost: Decimal | None, reason: str,
+    reference_type: str, reference_id: str, user: User | None,
+) -> JournalEntry | None:
+    """Auto-post a stock-count variance (approved StockCount) to the GL.
+
+    A positive ``delta`` means we found more than the books showed (Dr Inventory
+    / Cr COGS — a gain, reducing expense). A negative delta means we found
+    less (Dr COGS / Cr Inventory — a shrinkage expense).
+    """
+    if delta == 0:
+        return None
+
+    cost_per_unit = unit_cost if unit_cost is not None else batch.wholesale_cost
+    if not cost_per_unit:
+        # No cost recorded yet — skip the GL leg, the movement ledger still
+        # records the physical truth.
+        return None
+    amount = (Decimal(str(cost_per_unit)) * abs(int(delta))).quantize(Decimal("0.01"))
+    accounts = ensure_default_accounts(batch.organization)
+
+    if delta > 0:
+        lines: list[JournalLineInput] = [
+            {"account": accounts["1200"], "side": JournalLine.Side.DEBIT, "amount": amount,
+             "memo": "Stock found (variance surplus)"},
+            {"account": accounts["5000"], "side": JournalLine.Side.CREDIT, "amount": amount,
+             "memo": "COGS reversal on found stock"},
+        ]
+    else:
+        lines = [
+            {"account": accounts["5000"], "side": JournalLine.Side.DEBIT, "amount": amount,
+             "memo": "COGS — stock shrinkage"},
+            {"account": accounts["1200"], "side": JournalLine.Side.CREDIT, "amount": amount,
+             "memo": "Inventory written off (variance loss)"},
+        ]
+
+    entry = post_journal(
+        organization=batch.organization,
+        description=f"Inventory variance — batch {batch.batch_number} ({reason})",
+        lines=lines,
+        reference_type=reference_type,
+        reference_id=reference_id,
+        user=user,
+    )
+    record_audit(
+        action="INVENTORY_ADJUSTMENT_POSTED",
+        user=user,
+        organization=batch.organization,
+        entity_type="inventory_batch",
+        entity_id=str(batch.pk),
+        changes={"delta": delta, "amount": str(amount), "reason": reason},
+    )
+    return entry
+
+
+@transaction.atomic
+def post_writeoff(
+    *, batch: Any, quantity: int, reason: str,
+    reference_type: str, reference_id: str, user: User | None,
+) -> JournalEntry | None:
+    """Auto-post a StockDisposal (destruction / writeoff) at the batch's cost.
+
+    Dr Inventory Adjustment / Disposal Expense (2500)
+    Cr Inventory on Hand (1200)
+    """
+    if quantity <= 0:
+        return None
+    cost_per_unit = batch.wholesale_cost
+    if not cost_per_unit:
+        return None
+    amount = (Decimal(str(cost_per_unit)) * quantity).quantize(Decimal("0.01"))
+    accounts = ensure_default_accounts(batch.organization)
+
+    entry = post_journal(
+        organization=batch.organization,
+        description=f"Stock writeoff — batch {batch.batch_number} ({reason})",
+        lines=[
+            {
+                "account": accounts["2500"],
+                "side": JournalLine.Side.DEBIT,
+                "amount": amount,
+                "memo": f"{quantity} units disposed",
+            },
+            {
+                "account": accounts["1200"],
+                "side": JournalLine.Side.CREDIT,
+                "amount": amount,
+                "memo": "Inventory on hand removed",
+            },
+        ],
+        reference_type=reference_type,
+        reference_id=reference_id,
+        user=user,
+    )
+    record_audit(
+        action="WRITE_OFF_POSTED",
+        user=user,
+        organization=batch.organization,
+        entity_type="inventory_batch",
+        entity_id=str(batch.pk),
+        changes={"quantity": quantity, "amount": str(amount), "reason": reason},
+    )
+    return entry

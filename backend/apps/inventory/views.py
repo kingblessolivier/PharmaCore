@@ -208,14 +208,26 @@ class StockCountViewSet(_AuditedAdminViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanManageOrg])
     def approve_count(self, request: Request, pk: str | None = None) -> Response:
+        from apps.finance.services import post_inventory_adjustment
+
         sc = self.get_object()
         with transaction.atomic():
             for item in sc.items.all():
                 if item.variance_qty != 0:
+                    delta = item.variance_qty
                     adjust_stock(
                         batch=item.batch,
                         counted_quantity=item.counted_qty,
                         reason=f"Stock Count Variance Reconciliation ({sc.reference_no})",
+                        user=cast(User, request.user),
+                    )
+                    post_inventory_adjustment(
+                        batch=item.batch,
+                        delta=delta,
+                        unit_cost=item.batch.wholesale_cost,
+                        reason=f"Stock count {sc.reference_no}",
+                        reference_type="stock_count",
+                        reference_id=str(sc.pk),
                         user=cast(User, request.user),
                     )
             sc.status = StockCount.Status.APPROVED

@@ -887,6 +887,16 @@ export interface FinancePerformance {
   payable: string;
   dso_days: string;
   dpo_days: string;
+  /** Cash on hand — sum of all active bank/MoMo/cash accounts (GL 1000). */
+  cash_on_hand: string;
+  /** Net pay payable + PAYE payable + RSSB payable + CBHI payable (statutory liabilities). */
+  payroll_liability: string;
+  /** Inventory valuation: sum of on-hand × wholesale_cost across batches. */
+  inventory_value: string;
+  /** COGS(period) / average_inventory_value — annualised for the cockpit (× 12). */
+  stock_turns: string | null;
+  /** Gross margin % × stock turns (pharmacy target: >300%). */
+  gmroi: string | null;
   previous: { revenue: string; cogs: string; gross_profit: string; net_profit: string };
   delta_pct: {
     revenue: string | null;
@@ -1188,5 +1198,95 @@ export interface GoodsReceivedNote {
   has_discrepancy: boolean;
   received_at: string;
   lines: GRNLine[];
+}
+
+export interface FixedAsset {
+  id: number;
+  organization: number;
+  organization_name: string;
+  asset_number: string;
+  name: string;
+  category: string;
+  acquisition_date: string;
+  acquisition_cost: string;
+  useful_life_years: number;
+  salvage_value: string;
+  accumulated_depreciation: string;
+  net_book_value: string;
+  annual_depreciation: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface TaxRecord {
+  id: number;
+  organization: number;
+  organization_name: string;
+  receipt_number: string;
+  sdc_id: string;
+  mrc_number: string;
+  taxable_amount: string;
+  vat_amount: string;
+  tax_class_a: string;
+  tax_class_b: string;
+  tax_class_c: string;
+  qr_code_payload: string;
+  fiscalized_at: string;
+}
+
+export interface Budget {
+  id: number;
+  organization: number;
+  department: number;
+  department_name: string;
+  financial_year: number;
+  account: number;
+  account_code: string;
+  account_name: string;
+  budgeted_amount: string;
+  actual_amount: string;
+  variance: string;
+  created_at: string;
+}
+
+export interface AttendanceLog {
+  id: number;
+  employee: number;
+  employee_name: string;
+  employee_number: string;
+  date: string;
+  clock_in: string | null;
+  clock_out: string | null;
+  overtime_hours: string;
+  status: string;
+  notes: string;
+  created_at: string;
+}
+
+export interface ShiftRoster {
+  id: number;
+  organization: number;
+  organization_name: string;
+  employee: number;
+  employee_name: string;
+  date: string;
+  shift_type: string;
+  requires_pharmacist_license: boolean;
+  created_at: string;
+}
+
+export interface LeaveRequest {
+  id: number;
+  employee: number;
+  employee_name: string;
+  leave_type: string;
+  start_date: string;
+  end_date: string;
+  days_count: number;
+  status: string;
+  reason: string;
+  approved_by: number | null;
+  approved_by_name: string | null;
+  created_at: string;
 }
 

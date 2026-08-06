@@ -317,3 +317,101 @@ class SupplierBillPayment(models.Model):
 
     def __str__(self) -> str:
         return f"{self.amount} for {self.bill}"
+
+
+class FixedAsset(models.Model):
+    """Fixed asset register & straight-line depreciation schedule. ROADMAP '9. Finance'."""
+
+    class Category(models.TextChoices):
+        EQUIPMENT = "EQUIPMENT", "Medical & Cold-Chain Equipment"
+        FURNITURE = "FURNITURE", "Pharmacy Furniture & Fixtures"
+        VEHICLE = "VEHICLE", "Delivery Vehicle"
+        IT_HARDWARE = "IT_HARDWARE", "IT & POS Hardware"
+        LEASEHOLD = "LEASEHOLD", "Leasehold Improvements"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="fixed_assets"
+    )
+    asset_number = models.CharField(max_length=30, unique=True)
+    name = models.CharField(max_length=150)
+    category = models.CharField(max_length=30, choices=Category.choices, default=Category.EQUIPMENT)
+    acquisition_date = models.DateField()
+    acquisition_cost = models.DecimalField(max_digits=14, decimal_places=2)
+    useful_life_years = models.PositiveIntegerField(default=5)
+    salvage_value = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    accumulated_depreciation = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-acquisition_date"]
+
+    def __str__(self) -> str:
+        return f"{self.asset_number} · {self.name}"
+
+    @property
+    def net_book_value(self) -> Decimal:
+        return self.acquisition_cost - self.accumulated_depreciation
+
+    @property
+    def annual_depreciation(self) -> Decimal:
+        if self.useful_life_years == 0:
+            return Decimal("0")
+        return (self.acquisition_cost - self.salvage_value) / Decimal(str(self.useful_life_years))
+
+
+class TaxRecord(models.Model):
+    """EBM Fiscalization & VAT audit trail record. ROADMAP '9. Finance'."""
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="tax_records"
+    )
+    receipt_number = models.CharField(max_length=50, unique=True)
+    sdc_id = models.CharField(max_length=50, blank=True, default="")
+    mrc_number = models.CharField(max_length=50, blank=True, default="")
+    taxable_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    vat_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    tax_class_a = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # Exempt
+    tax_class_b = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # 18% Standard VAT
+    tax_class_c = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # Zero Rated
+    qr_code_payload = models.TextField(blank=True, default="")
+    fiscalized_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fiscalized_at"]
+
+    def __str__(self) -> str:
+        return f"EBM-{self.receipt_number} ({self.vat_amount} VAT)"
+
+
+class Budget(models.Model):
+    """Departmental budget vs actual variance tracking. ROADMAP '9. Finance'."""
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="budgets"
+    )
+    department = models.ForeignKey(
+        "iam.Department", on_delete=models.CASCADE, related_name="budgets"
+    )
+    financial_year = models.PositiveIntegerField(default=2026)
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="budgets")
+    budgeted_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    actual_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["financial_year", "department"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "department", "financial_year", "account"],
+                name="uniq_budget_line",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"Budget FY{self.financial_year} · {self.department.name} · {self.account.code}"
+
+    @property
+    def variance(self) -> Decimal:
+        return self.budgeted_amount - self.actual_amount
+

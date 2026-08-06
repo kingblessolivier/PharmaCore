@@ -52,6 +52,46 @@ class Employee(models.Model):
     bank_account = models.CharField(max_length=50, blank=True, default="")
     momo_number = models.CharField(max_length=20, blank=True, default="")
     rssb_number = models.CharField(max_length=30, blank=True, default="")
+    # ---- Finacle-grade R/O/C fields for the People module ----
+    # Personal / identity
+    gender = models.CharField(
+        max_length=10, blank=True, default="",
+        help_text="M / F / Other — used for headcount reporting and pension scheme flags.",
+    )
+    dob = models.DateField(
+        null=True, blank=True,
+        help_text="Date of birth — drives annual-leave entitlement (Law 66/2018 §55: 25 days if ≥55y).",
+    )
+    photo = models.URLField(
+        blank=True, default="",
+        help_text="URL of the employee's profile photo (badge).",
+    )
+    # Contract lifecycle
+    probation_end = models.DateField(
+        null=True, blank=True,
+        help_text="Last day of the probation period (auto-confirmation trigger).",
+    )
+    contract_end = models.DateField(
+        null=True, blank=True,
+        help_text="End date of a fixed-term contract (CDD); blank for permanent (CDI).",
+    )
+    # Payroll classification
+    pay_group = models.CharField(
+        max_length=20, blank=True, default="",
+        help_text="Salary band — pharmacist, technician, cashier, driver, manager. Drives default salary structure.",
+    )
+    pay_frequency = models.CharField(
+        max_length=10, blank=True, default="MONTHLY",
+        help_text="Pay period — MONTHLY (Law 66/2018 default) or FORTNIGHTLY.",
+    )
+    tin = models.CharField(
+        max_length=30, blank=True, default="",
+        help_text="RRA TIN — Rwanda tax-identification number; printed on annual PIT summaries.",
+    )
+    supervisor = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="reports",
+        help_text="Direct manager — used by the approvals engine for leave / loan routing.",
+    )
     # Professional licence driving dispensing rights (pharmacist/technician).
     license = models.ForeignKey(
         "iam.License", null=True, blank=True, on_delete=models.SET_NULL, related_name="employees"
@@ -214,3 +254,94 @@ class PayrollRecord(models.Model):
 
     def __str__(self) -> str:
         return f"{self.employee} · {self.run}"
+
+
+class AttendanceLog(models.Model):
+    """Employee Clock-In / Clock-Out & Overtime tracking. ROADMAP '10. People'."""
+
+    class Status(models.TextChoices):
+        PRESENT = "PRESENT", "Present"
+        LATE = "LATE", "Late arrival"
+        ABSENT = "ABSENT", "Absent"
+        ON_LEAVE = "ON_LEAVE", "On approved leave"
+
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="attendance_logs")
+    date = models.DateField()
+    clock_in = models.DateTimeField(null=True, blank=True)
+    clock_out = models.DateTimeField(null=True, blank=True)
+    overtime_hours = models.DecimalField(max_digits=4, decimal_places=2, default=0)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PRESENT)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date"]
+        constraints = [
+            models.UniqueConstraint(fields=["employee", "date"], name="uniq_attendance_per_employee_day")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.employee} · {self.date} ({self.status})"
+
+
+class ShiftRoster(models.Model):
+    """Credential-based shift scheduling with mandatory pharmacist coverage guard. ROADMAP '10. People'."""
+
+    class ShiftType(models.TextChoices):
+        MORNING = "MORNING", "Morning shift (07:00 – 15:00)"
+        EVENING = "EVENING", "Evening shift (15:00 – 23:00)"
+        NIGHT = "NIGHT", "Night shift (23:00 – 07:00)"
+        FULL_DAY = "FULL_DAY", "Full day (08:00 – 17:00)"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="shift_rosters"
+    )
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="shift_rosters")
+    date = models.DateField()
+    shift_type = models.CharField(max_length=20, choices=ShiftType.choices, default=ShiftType.FULL_DAY)
+    requires_pharmacist_license = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["date", "shift_type"]
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "employee", "date"], name="uniq_shift_roster")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.date} · {self.shift_type} · {self.employee}"
+
+
+class LeaveRequest(models.Model):
+    """Employee Leave Request & Accrual Engine. ROADMAP '10. People'."""
+
+    class LeaveType(models.TextChoices):
+        ANNUAL = "ANNUAL", "Annual leave"
+        SICK = "SICK", "Sick leave"
+        MATERNITY = "MATERNITY", "Maternity leave"
+        PATERNITY = "PATERNITY", "Paternity leave"
+        CASUAL = "CASUAL", "Casual leave"
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending approval"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="leave_requests")
+    leave_type = models.CharField(max_length=20, choices=LeaveType.choices, default=LeaveType.ANNUAL)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    days_count = models.PositiveIntegerField(default=1)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    reason = models.TextField(blank=True, default="")
+    approved_by = models.ForeignKey(
+        "iam.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.employee} · {self.leave_type} ({self.days_count} days)"
+
