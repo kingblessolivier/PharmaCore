@@ -23,6 +23,7 @@ import {
   TextField,
 } from "../components/ui";
 import { ResetPasswordModal } from "../components/ResetPasswordModal";
+import { DataGrid } from "../components/DataGrid";
 
 const DOC_TYPES = [
   ["NATIONAL_ID", "National ID"],
@@ -449,97 +450,113 @@ export function UsersPage() {
         they have been doing.
       </p>
 
-      {users.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
-      {users.data && (
-        <div className="overflow-hidden rounded-lg border border-line bg-surface-0">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-2.5">Username</th>
-                <th className="px-4 py-2.5">PF no.</th>
-                <th className="px-4 py-2.5">Name</th>
-                <th className="px-4 py-2.5">Organization</th>
-                <th className="px-4 py-2.5">Roles</th>
-                <th className="px-4 py-2.5">Status</th>
-                <th className="px-4 py-2.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.data.results.map((u) => (
-                <tr key={u.id} className="border-b border-line last:border-0 hover:bg-surface-100">
-                  <td className="px-4 py-2.5 font-medium">{u.username}</td>
-                  <td className="px-4 py-2.5 text-ink-700">{u.pf_number || "—"}</td>
-                  <td className="px-4 py-2.5 text-ink-700">
-                    {[u.first_name, u.last_name].filter(Boolean).join(" ") || "—"}
-                  </td>
-                  <td className="px-4 py-2.5 text-ink-700">{orgName(u.organization)}</td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex flex-wrap gap-1">
-                      {u.roles.length ? (
-                        u.roles.map((r) => <Badge key={r}>{r}</Badge>)
-                      ) : (
-                        <span className="text-ink-500">—</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {u.is_active ? (
-                      <span className="text-green-700">Active</span>
-                    ) : (
-                      <span className="text-ink-500">Disabled</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="secondary"
-                        onClick={() => void viewAs(u)}
-                        disabled={busyViewAs === u.id}
-                      >
-                        <Eye className="h-3.5 w-3.5" /> {busyViewAs === u.id ? "…" : "View as"}
-                      </Button>
-                      <Button variant="secondary" onClick={() => setActivityFor(u.id)}>
-                        <Activity className="h-3.5 w-3.5" /> Activity
-                      </Button>
-                      <Button variant="secondary" onClick={() => setDocsFor(u)}>
-                        <FileText className="h-3.5 w-3.5" /> Documents
-                      </Button>
-                      <Button variant="secondary" onClick={() => setResetFor(u)}>
-                        <KeyRound className="h-3.5 w-3.5" /> Reset pw
-                      </Button>
-                      <Button variant="secondary" onClick={() => setEditing(u)}>
-                        Edit
-                      </Button>
-                      <Button variant="secondary" onClick={() => toggleActive.mutate(u)}>
-                        {u.is_active ? "Suspend" : "Activate"}
-                      </Button>
-                      <button
-                        onClick={() => setLogoutFor(u)}
-                        className="rounded-md p-1.5 text-ink-500 hover:bg-amber-50 hover:text-amber-700"
-                        aria-label={`Force logout ${u.username}`}
-                        title="End all this user's sessions"
-                      >
-                        <LogOut className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {users.data.results.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-ink-500">
-                    No users yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataGrid<UserAdmin>
+        rows={users.data?.results ?? []}
+        loading={users.isLoading}
+        getRowId={(u) => u.id}
+        storageKey="users"
+        exportName="users"
+        searchPlaceholder="Search users by name, PF number, role…"
+        emptyMessage="No users yet."
+        columns={[
+          { key: "username", header: "Username", render: (u) => <span className="font-medium">{u.username}</span> },
+          { key: "pf_number", header: "PF no.", value: (u) => u.pf_number || "—" },
+          {
+            key: "name",
+            header: "Name",
+            value: (u) => [u.first_name, u.last_name].filter(Boolean).join(" ") || "—",
+          },
+          { key: "organization", header: "Organization", value: (u) => orgName(u.organization) },
+          {
+            key: "roles",
+            header: "Roles",
+            value: (u) => u.roles.join(", "),
+            render: (u) => (
+              <div className="flex flex-wrap gap-1">
+                {u.roles.length ? (
+                  u.roles.map((r) => <Badge key={r}>{r}</Badge>)
+                ) : (
+                  <span className="text-ink-500">—</span>
+                )}
+              </div>
+            ),
+          },
+          {
+            key: "is_active",
+            header: "Status",
+            value: (u) => (u.is_active ? "Active" : "Disabled"),
+            render: (u) =>
+              u.is_active ? (
+                <span className="text-green-700">Active</span>
+              ) : (
+                <span className="text-ink-500">Disabled</span>
+              ),
+          },
+          {
+            key: "actions",
+            header: "Actions",
+            align: "right",
+            fixed: true,
+            sortable: false,
+            render: (u) => (
+              <div className="flex justify-end gap-1">
+                <Button
+                  variant="secondary"
+                  onClick={() => void viewAs(u)}
+                  disabled={busyViewAs === u.id}
+                >
+                  <Eye className="h-3.5 w-3.5" /> {busyViewAs === u.id ? "…" : "View as"}
+                </Button>
+                <Button variant="secondary" onClick={() => setActivityFor(u.id)}>
+                  <Activity className="h-3.5 w-3.5" /> Activity
+                </Button>
+                <Button variant="secondary" onClick={() => setDocsFor(u)}>
+                  <FileText className="h-3.5 w-3.5" /> Documents
+                </Button>
+                <Button variant="secondary" onClick={() => setResetFor(u)}>
+                  <KeyRound className="h-3.5 w-3.5" /> Reset pw
+                </Button>
+                <Button variant="secondary" onClick={() => setEditing(u)}>
+                  Edit
+                </Button>
+                <Button variant="secondary" onClick={() => toggleActive.mutate(u)}>
+                  {u.is_active ? "Suspend" : "Activate"}
+                </Button>
+                <button
+                  onClick={() => setLogoutFor(u)}
+                  className="rounded-md p-1.5 text-ink-500 hover:bg-amber-50 hover:text-amber-700"
+                  aria-label={`Force logout ${u.username}`}
+                  title="End all this user's sessions"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </div>
+            ),
+          },
+        ]}
+        bulkActions={(rows, clear) => (
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                rows.filter((u) => u.is_active).forEach((u) => toggleActive.mutate(u));
+                clear();
+              }}
+            >
+              Suspend selected
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                rows.filter((u) => !u.is_active).forEach((u) => toggleActive.mutate(u));
+                clear();
+              }}
+            >
+              Activate selected
+            </Button>
+          </>
+        )}
+      />
 
       {adding && roles.data && orgs.data && (
         <UserModal orgs={orgs.data.results} roles={roles.data} onClose={() => setAdding(false)} />
