@@ -21,6 +21,7 @@ from apps.finance.models import (
     JournalLine,
     SupplierBill,
     SupplierBillPayment,
+    TenantSettings,
 )
 from apps.iam.audit import record_audit
 from apps.iam.models import Organization, User
@@ -1181,3 +1182,36 @@ def request_tax_payment(
         payload=payload,
         reason=reason,
     )
+
+
+# ---------------------------------------------------------------------------
+# TenantSettings (ADR-014 — per-tenant configuration as data, not code)
+# ---------------------------------------------------------------------------
+
+
+def tenant_settings_for(organization: Organization) -> TenantSettings:
+    """Return (and lazily create) the :class:`TenantSettings` for ``organization``.
+
+    Every module reads tenant-scoped config through this helper so the
+    configuration lives in the database, not in code: costing method,
+    FX provider, pay period, statutory remittance day, PIT filing
+    deadline.
+
+    The lazy create keeps onboarding cheap — a new tenant gets a default
+    TenantSettings row the first time any module asks for one.
+    """
+    settings, _created = TenantSettings.objects.get_or_create(
+        organization=organization,
+        defaults={
+            "base_currency": organization.currency or "RWF",
+            "fx_provider": "",
+            "costing_method": TenantSettings.CostingMethod.FEFO_LOT,
+            "pay_period": TenantSettings.PayPeriod.MONTHLY,
+            "statutory_remittance_day": 15,
+            "pit_filing_deadline_month": 3,
+            "pit_filing_deadline_day": 31,
+            "default_country": "RW",
+            "timezone": "Africa/Kigali",
+        },
+    )
+    return settings

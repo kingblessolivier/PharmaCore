@@ -525,3 +525,74 @@ class TaxPayment(models.Model):
     def __str__(self) -> str:
         return f"{self.payment_number or f'TAX#{self.pk}'} · {self.amount}"
 
+
+class TenantSettings(models.Model):
+    """Per-tenant configuration that lives **in the database, not in code**.
+
+    ADR-014 makes these first-class. Everything that varies by tenant —
+    inventory costing method, FX provider, pay-period cadence, statutory
+    remittance day, PIT filing deadline — is read by the service layer
+    via :func:`apps.finance.services.tenant_settings_for`. There is exactly
+    one row per organization, lazily created the first time it's needed.
+    """
+
+    class CostingMethod(models.TextChoices):
+        WAC = "WAC", "Weighted average cost"
+        FEFO_LOT = "FEFO_LOT", "FEFO at the lot level (batch cost)"
+
+    class PayPeriod(models.TextChoices):
+        DAILY = "DAILY", "Daily"
+        WEEKLY = "WEEKLY", "Weekly"
+        FORTNIGHTLY = "FORTNIGHTLY", "Fortnightly"
+        MONTHLY = "MONTHLY", "Monthly"
+
+    organization = models.OneToOneField(
+        "iam.Organization",
+        on_delete=models.CASCADE,
+        related_name="tenant_settings",
+    )
+
+    # Money & FX
+    base_currency = models.CharField(max_length=3, default="RWF")
+    fx_provider = models.CharField(
+        max_length=30,
+        blank=True,
+        default="",
+        help_text="Identifier for the FX rate provider (e.g. 'BNR', 'manual').",
+    )
+
+    # Inventory valuation
+    costing_method = models.CharField(
+        max_length=10,
+        choices=CostingMethod.choices,
+        default=CostingMethod.FEFO_LOT,
+    )
+
+    # HR / payroll
+    pay_period = models.CharField(
+        max_length=12,
+        choices=PayPeriod.choices,
+        default=PayPeriod.MONTHLY,
+    )
+    statutory_remittance_day = models.PositiveSmallIntegerField(
+        default=15,
+        help_text="Day-of-month statutory remittances are paid (Rwanda default: 15).",
+    )
+
+    # PIT filing deadline — Rwanda personal-income-tax declaration
+    pit_filing_deadline_month = models.PositiveSmallIntegerField(default=3)  # March
+    pit_filing_deadline_day = models.PositiveSmallIntegerField(default=31)
+
+    # Locale & display
+    default_country = models.CharField(max_length=2, default="RW")
+    timezone = models.CharField(max_length=50, default="Africa/Kigali")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["organization__name"]
+
+    def __str__(self) -> str:
+        return f"TenantSettings({self.organization.name})"
+
