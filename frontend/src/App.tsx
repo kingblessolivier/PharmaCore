@@ -38,6 +38,24 @@ import { DistributionHome } from "./pages/apps/DistributionHome";
 import { FinanceHome } from "./pages/apps/FinanceHome";
 import { PeopleHome } from "./pages/apps/PeopleHome";
 
+import { LowStockPage } from "./pages/LowStockPage";
+import { ExpiryPage } from "./pages/ExpiryPage";
+import { PriceListsPage } from "./pages/PriceListsPage";
+import { FormulariesPage } from "./pages/FormulariesPage";
+import { InteractionsPage } from "./pages/InteractionsPage";
+import { UomPage } from "./pages/UomPage";
+import { SubstitutesPage } from "./pages/SubstitutesPage";
+import { ManufacturersPage } from "./pages/ManufacturersPage";
+import { IngredientsPage } from "./pages/IngredientsPage";
+
+import { InventoryHome } from "./pages/apps/InventoryHome";
+import { StorageZonesPage } from "./pages/StorageZonesPage";
+import { TemperatureLogsPage } from "./pages/TemperatureLogsPage";
+import { QualityControlPage } from "./pages/QualityControlPage";
+import { BatchRecallsPage } from "./pages/BatchRecallsPage";
+import { StockCountsPage } from "./pages/StockCountsPage";
+import { StockDisposalPage } from "./pages/StockDisposalPage";
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
 });
@@ -78,6 +96,22 @@ function App() {
               <Route path="/" element={<DashboardPage />} />
               <Route path="/retail" element={<RetailHome />} />
               <Route path="/catalog" element={forPharmacy(<CatalogHome />)} />
+              <Route path="/catalog/low-stock" element={forPharmacy(<LowStockPage />)} />
+              <Route path="/catalog/expiry" element={forPharmacy(<ExpiryPage />)} />
+              <Route path="/catalog/price-lists" element={forPharmacy(<PriceListsPage />)} />
+              <Route path="/catalog/formularies" element={forPharmacy(<FormulariesPage />)} />
+              <Route path="/catalog/interactions" element={forPharmacy(<InteractionsPage />)} />
+              <Route path="/catalog/uom" element={forPharmacy(<UomPage />)} />
+              <Route path="/catalog/substitutes" element={forPharmacy(<SubstitutesPage />)} />
+              <Route path="/catalog/manufacturers" element={forPharmacy(<ManufacturersPage />)} />
+              <Route path="/catalog/ingredients" element={forPharmacy(<IngredientsPage />)} />
+              <Route path="/inventory" element={forPharmacy(<InventoryHome />)} />
+              <Route path="/inventory/zones" element={forPharmacy(<StorageZonesPage />)} />
+              <Route path="/inventory/temperature" element={forPharmacy(<TemperatureLogsPage />)} />
+              <Route path="/inventory/qc" element={forPharmacy(<QualityControlPage />)} />
+              <Route path="/inventory/recalls" element={forPharmacy(<BatchRecallsPage />)} />
+              <Route path="/inventory/counts" element={forPharmacy(<StockCountsPage />)} />
+              <Route path="/inventory/disposal" element={forPharmacy(<StockDisposalPage />)} />
               <Route path="/distribution" element={forPharmacy(<DistributionHome />)} />
               <Route path="/admin" element={adminOnly(<AdminHome />)} />
               <Route path="/companies" element={adminOnly(<CompaniesPage />)} />
@@ -114,5 +148,6 @@ function App() {
     </QueryClientProvider>
   );
 }
+
 
 export default App;

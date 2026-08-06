@@ -1,4 +1,5 @@
-"""Inventory API: per-pharmacy product listing (products + price).
+"""Inventory API: per-pharmacy product listing, batch stock, storage zones, bins,
+temperature logs, QA checks, batch recalls, physical stock counts, and witness disposal.
 
 Org-scoped; reads for any authed user in the org, writes admin/manager-only and audited.
 """
@@ -8,7 +9,9 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any, cast
 
+from django.db import transaction
 from django.db.models import QuerySet
+from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -22,16 +25,224 @@ from apps.iam.audit import record_audit
 from apps.iam.models import User
 from apps.iam.permissions import CanManageOrg
 from apps.iam.scoping import organizations_visible_to
-from apps.inventory.models import InventoryBatch, PharmacyProduct, StockMovement
+from apps.inventory.models import (
+    BatchRecall,
+    BinLocation,
+    InventoryBatch,
+    PharmacyProduct,
+    QualityCheck,
+    StockCount,
+    StockCountItem,
+    StockDisposal,
+    StockMovement,
+    StorageZone,
+    TemperatureLog,
+    TemperatureSensor,
+)
 from apps.inventory.serializers import (
+    BatchRecallSerializer,
+    BinLocationSerializer,
     IntakeSerializer,
     InventoryBatchSerializer,
     PharmacyProductSerializer,
+    QualityCheckSerializer,
+    StockCountSerializer,
+    StockDisposalSerializer,
     StockMovementSerializer,
+    StorageZoneSerializer,
+    TemperatureLogSerializer,
+    TemperatureSensorSerializer,
 )
 from apps.inventory.services import adjust_stock, log_wastage, receive_intake
 
 _WRITE = {"create", "update", "partial_update", "destroy"}
+
+
+class _AuditedAdminViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self) -> list[BasePermission]:
+        if self.action in _WRITE:
+            return [IsAuthenticated(), CanManageOrg()]
+        return [IsAuthenticated()]
+
+    def perform_create(self, serializer: BaseSerializer[Any]) -> None:
+        obj = serializer.save()
+        org = getattr(obj, "organization", None) or getattr(getattr(obj, "zone", None), "organization", None)
+        record_audit(
+            action="CREATE",
+            user=cast(User, self.request.user),
+            organization=org,
+            entity_type=obj._meta.model_name,
+            entity_id=str(obj.pk),
+            request=self.request,
+        )
+
+    def perform_update(self, serializer: BaseSerializer[Any]) -> None:
+        obj = serializer.save()
+        org = getattr(obj, "organization", None) or getattr(getattr(obj, "zone", None), "organization", None)
+        record_audit(
+            action="UPDATE",
+            user=cast(User, self.request.user),
+            organization=org,
+            entity_type=obj._meta.model_name,
+            entity_id=str(obj.pk),
+            request=self.request,
+        )
+
+    def perform_destroy(self, instance: Any) -> None:
+        org = getattr(instance, "organization", None) or getattr(getattr(instance, "zone", None), "organization", None)
+        record_audit(
+            action="DELETE",
+            user=cast(User, self.request.user),
+            organization=org,
+            entity_type=instance._meta.model_name,
+            entity_id=str(instance.pk),
+            request=self.request,
+        )
+        instance.delete()
+
+
+class StorageZoneViewSet(_AuditedAdminViewSet):
+    serializer_class = StorageZoneSerializer
+    queryset = StorageZone.objects.all()
+
+    def get_queryset(self) -> QuerySet[StorageZone]:
+        user = cast(User, self.request.user)
+        return StorageZone.objects.filter(organization__in=organizations_visible_to(user))
+
+
+class BinLocationViewSet(_AuditedAdminViewSet):
+    serializer_class = BinLocationSerializer
+    queryset = BinLocation.objects.all()
+
+    def get_queryset(self) -> QuerySet[BinLocation]:
+        user = cast(User, self.request.user)
+        return BinLocation.objects.filter(zone__organization__in=organizations_visible_to(user))
+
+
+class TemperatureSensorViewSet(_AuditedAdminViewSet):
+    serializer_class = TemperatureSensorSerializer
+    queryset = TemperatureSensor.objects.all()
+
+    def get_queryset(self) -> QuerySet[TemperatureSensor]:
+        user = cast(User, self.request.user)
+        return TemperatureSensor.objects.filter(organization__in=organizations_visible_to(user))
+
+
+class TemperatureLogViewSet(_AuditedAdminViewSet):
+    serializer_class = TemperatureLogSerializer
+    queryset = TemperatureLog.objects.all()
+
+    def get_queryset(self) -> QuerySet[TemperatureLog]:
+        user = cast(User, self.request.user)
+        return TemperatureLog.objects.filter(sensor__organization__in=organizations_visible_to(user))
+
+
+class QualityCheckViewSet(_AuditedAdminViewSet):
+    serializer_class = QualityCheckSerializer
+    queryset = QualityCheck.objects.all()
+
+    def get_queryset(self) -> QuerySet[QualityCheck]:
+        user = cast(User, self.request.user)
+        return QualityCheck.objects.filter(batch__organization__in=organizations_visible_to(user))
+
+    def perform_create(self, serializer: BaseSerializer[Any]) -> None:
+        serializer.save(inspector=cast(User, self.request.user))
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanManageOrg])
+    def pass_qc(self, request: Request, pk: str | None = None) -> Response:
+        qc = self.get_object()
+        qc.status = QualityCheck.Status.PASSED
+        qc.save()
+        batch = qc.batch
+        batch.status = InventoryBatch.Status.ACTIVE
+        batch.save()
+        return Response(QualityCheckSerializer(qc).data)
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanManageOrg])
+    def fail_qc(self, request: Request, pk: str | None = None) -> Response:
+        qc = self.get_object()
+        qc.status = QualityCheck.Status.FAILED
+        qc.save()
+        batch = qc.batch
+        batch.status = InventoryBatch.Status.QUARANTINE
+        batch.save()
+        return Response(QualityCheckSerializer(qc).data)
+
+
+class BatchRecallViewSet(_AuditedAdminViewSet):
+    serializer_class = BatchRecallSerializer
+    queryset = BatchRecall.objects.all()
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanManageOrg])
+    def execute_freeze(self, request: Request, pk: str | None = None) -> Response:
+        recall = self.get_object()
+        # Freeze batch across all organizations
+        affected = InventoryBatch.objects.filter(batch_number=recall.batch_number)
+        updated_count = affected.update(status=InventoryBatch.Status.RECALLED)
+        recall.status = BatchRecall.Status.IN_PROGRESS
+        recall.save()
+        record_audit(
+            action="EMERGENCY_RECALL_FREEZE",
+            user=cast(User, request.user),
+            organization=None,
+            entity_type="batch_recall",
+            entity_id=str(recall.pk),
+            changes={"batch_number": recall.batch_number, "frozen_batches": updated_count},
+            request=request,
+        )
+        return Response({"status": "frozen", "affected_batches": updated_count})
+
+
+class StockCountViewSet(_AuditedAdminViewSet):
+    serializer_class = StockCountSerializer
+    queryset = StockCount.objects.all()
+
+    def get_queryset(self) -> QuerySet[StockCount]:
+        user = cast(User, self.request.user)
+        return StockCount.objects.filter(organization__in=organizations_visible_to(user))
+
+    def perform_create(self, serializer: BaseSerializer[Any]) -> None:
+        serializer.save(counter_user=cast(User, self.request.user))
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanManageOrg])
+    def approve_count(self, request: Request, pk: str | None = None) -> Response:
+        sc = self.get_object()
+        with transaction.atomic():
+            for item in sc.items.all():
+                if item.variance_qty != 0:
+                    adjust_stock(
+                        batch=item.batch,
+                        counted_quantity=item.counted_qty,
+                        reason=f"Stock Count Variance Reconciliation ({sc.reference_no})",
+                        user=cast(User, request.user),
+                    )
+            sc.status = StockCount.Status.APPROVED
+            sc.approver_user = cast(User, request.user)
+            sc.completed_at = timezone.now()
+            sc.save()
+        return Response(StockCountSerializer(sc).data)
+
+
+class StockDisposalViewSet(_AuditedAdminViewSet):
+    serializer_class = StockDisposalSerializer
+    queryset = StockDisposal.objects.all()
+
+    def get_queryset(self) -> QuerySet[StockDisposal]:
+        user = cast(User, self.request.user)
+        return StockDisposal.objects.filter(organization__in=organizations_visible_to(user))
+
+    def perform_create(self, serializer: BaseSerializer[Any]) -> None:
+        serializer.save(primary_witness=cast(User, self.request.user))
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanManageOrg])
+    def confirm_destruction(self, request: Request, pk: str | None = None) -> Response:
+        sd = self.get_object()
+        sd.status = StockDisposal.Status.DESTROYED
+        sd.destroyed_at = timezone.now()
+        sd.save()
+        return Response(StockDisposalSerializer(sd).data)
 
 
 class PharmacyProductViewSet(viewsets.ModelViewSet):
@@ -104,7 +315,7 @@ class InventoryBatchViewSet(viewsets.ReadOnlyModelViewSet):
         within = self.request.query_params.get("expiring_within")
         if within:
             qs = qs.filter(expiry_date__lte=date.today() + timedelta(days=int(within)))
-        return qs  # default ordering = FEFO (expiry_date)
+        return qs
 
     def _act(self, action_name: str, batch: InventoryBatch, changes: dict[str, object]) -> None:
         record_audit(
@@ -119,7 +330,6 @@ class InventoryBatchViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanManageOrg])
     def adjust(self, request: Request, pk: str | None = None) -> Response:
-        """Correct a batch to a physically-counted quantity (logs the delta)."""
         batch = self.get_object()
         try:
             counted = int(request.data["counted_quantity"])
@@ -137,7 +347,6 @@ class InventoryBatchViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanManageOrg])
     def waste(self, request: Request, pk: str | None = None) -> Response:
-        """Remove expired/damaged stock from a batch (never below zero)."""
         batch = self.get_object()
         try:
             qty = int(request.data["quantity"])
@@ -153,8 +362,6 @@ class InventoryBatchViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
-    """The immutable stock-movement ledger, org-scoped."""
-
     serializer_class = StockMovementSerializer
     queryset = StockMovement.objects.select_related("product", "created_by").all()
     permission_classes = [IsAuthenticated]
@@ -171,9 +378,6 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class IntakeView(APIView):
-    """Receive supplier stock into a pharmacy: creates/updates a batch + INTAKE
-    movement (one transaction). Admin/manager-only, audited."""
-
     permission_classes = [IsAuthenticated, CanManageOrg]
 
     def post(self, request: Request) -> Response:
@@ -183,8 +387,6 @@ class IntakeView(APIView):
         actor = cast(User, request.user)
         if not organizations_visible_to(actor).filter(pk=data["organization"].pk).exists():
             raise PermissionDenied("You cannot receive stock for that organization.")
-        # Manual intake is for depots importing from suppliers. Retail pharmacies
-        # must receive stock through transfers, so they never re-key (or double-count) it.
         if data["organization"].type != "DEPOT":
             raise PermissionDenied(
                 "Only depots receive supplier intake. Retail branches get stock via transfers."

@@ -821,116 +821,117 @@ export interface ProfitAndLoss {
   operating_expenses: string;
   net_profit: string;
   net_margin_pct: string;
-  ebitda: string;
-  revenue_lines: StatementLine[];
-  expense_lines: StatementLine[];
-}
-
-export interface BalanceSheet {
-  as_of: string;
-  assets: StatementLine[];
-  liabilities: StatementLine[];
-  equity: StatementLine[];
-  total_assets: string;
-  total_liabilities: string;
-  contributed_equity: string;
-  retained_earnings: string;
-  total_equity: string;
-  balanced: boolean;
-}
-
-export interface CashFlowMovement {
-  entry_number: string;
-  entry_date: string;
-  description: string;
-  amount: string;
-}
-
-export interface CashFlowStatement {
-  start: string;
-  end: string;
-  operating: string;
-  investing: string;
-  financing: string;
-  net_change: string;
-  opening_cash: string;
-  closing_cash: string;
-  movements: Record<"operating" | "investing" | "financing", CashFlowMovement[]>;
-}
-
-export interface RevenueCogsPoint {
-  month: string;
-  revenue: string;
-  cogs: string;
-  gross_profit: string;
-}
-
-export interface FinancePerformance {
-  start: string;
-  end: string;
-  days: number;
-  previous_start: string;
-  previous_end: string;
-  revenue: string;
-  cogs: string;
-  gross_profit: string;
-  gross_margin_pct: string;
-  operating_expenses: string;
-  net_profit: string;
-  net_margin_pct: string;
-  ebitda: string;
-  receivable: string;
-  payable: string;
-  dso_days: string;
-  dpo_days: string;
-  previous: { revenue: string; cogs: string; gross_profit: string; net_profit: string };
-  delta_pct: {
-    revenue: string | null;
-    gross_profit: string | null;
-    net_profit: string | null;
-  };
-  series: RevenueCogsPoint[];
-}
-
-export interface ConsolidatedBranch {
   organization: number;
   organization_name: string;
-  revenue: string;
-  cogs: string;
-  gross_profit: string;
-  gross_margin_pct: string;
-  operating_expenses: string;
-  net_profit: string;
-  net_margin_pct: string;
-  total_assets: string;
-  total_liabilities: string;
-  total_equity: string;
-}
-
-export interface Consolidated {
-  start: string;
-  end: string;
-  branches: ConsolidatedBranch[];
-  totals: Record<string, string>;
-  group_gross_margin_pct: string;
-  group_net_margin_pct: string;
-}
-
-export type PeriodKind = "DAY" | "MONTH" | "YEAR";
-
-export interface AccountingPeriod {
-  id: number;
-  organization: number;
-  organization_name: string;
-  kind: PeriodKind;
-  start_date: string;
-  end_date: string;
-  status: "OPEN" | "CLOSED";
-  closing_totals: Record<string, string>;
-  closed_by: number | null;
-  closed_by_name: string | null;
-  closed_at: string | null;
-  reopened_at: string | null;
-  notes: string;
+  name: string;
+  zone_type: "AMBIENT" | "COLD_CHAIN" | "FREEZER" | "CONTROLLED_SAFE" | "HAZARDOUS";
+  temp_min_celsius: string;
+  temp_max_celsius: string;
+  humidity_max_percent: string;
+  is_active: boolean;
+  bins_count: number;
   created_at: string;
 }
+
+export interface BinLocation {
+  id: number;
+  zone: number;
+  zone_name: string;
+  aisle: string;
+  shelf: string;
+  bin_code: string;
+  is_occupied: boolean;
+  created_at: string;
+}
+
+export interface TemperatureSensor {
+  id: number;
+  organization: number;
+  zone: number;
+  zone_name: string;
+  device_id: string;
+  name: string;
+  calibration_due_date: string | null;
+  is_active: boolean;
+}
+
+export interface TemperatureLog {
+  id: number;
+  sensor: number;
+  sensor_name: string;
+  temperature_celsius: string;
+  humidity_percent: string | null;
+  excursion_status: "NORMAL" | "WARNING" | "CRITICAL_BREACH";
+  recorded_at: string;
+}
+
+export interface QualityCheck {
+  id: number;
+  batch: number;
+  batch_number: string;
+  product_name: string;
+  inspector: number;
+  inspector_username: string;
+  inspection_date: string;
+  status: "PASSED" | "FAILED" | "PENDING_REVIEW";
+  visual_integrity_ok: boolean;
+  temp_indicator_ok: boolean;
+  coa_document_url: string;
+  inspection_notes: string;
+}
+
+export interface BatchRecall {
+  id: number;
+  company: number | null;
+  recall_reference: string;
+  manufacturer_name: string;
+  product: number;
+  product_name: string;
+  batch_number: string;
+  reason: string;
+  status: "INITIATED" | "IN_PROGRESS" | "COMPLETED";
+  recalled_at: string;
+}
+
+export interface StockCountItem {
+  id: number;
+  stock_count: number;
+  batch: number;
+  batch_number: string;
+  product_name: string;
+  system_qty: number;
+  counted_qty: number;
+  variance_qty: number;
+  variance_reason: string;
+}
+
+export interface StockCount {
+  id: number;
+  organization: number;
+  reference_no: string;
+  count_type: "CYCLE_COUNT" | "FULL_PHYSICAL" | "SPOT_CHECK";
+  status: "DRAFT" | "IN_PROGRESS" | "SUBMITTED" | "APPROVED";
+  counter_user: number;
+  counter_username: string;
+  approver_user: number | null;
+  approver_username: string | null;
+  started_at: string;
+  completed_at: string | null;
+  items: StockCountItem[];
+}
+
+export interface StockDisposal {
+  id: number;
+  organization: number;
+  disposal_no: string;
+  status: "DRAFT" | "APPROVED" | "DESTROYED";
+  reason: "EXPIRED" | "DAMAGED" | "RECALLED";
+  primary_witness: number;
+  primary_witness_username: string;
+  secondary_witness_name: string;
+  destruction_method: string;
+  certificate_no: string;
+  destroyed_at: string | null;
+  created_at: string;
+}
+

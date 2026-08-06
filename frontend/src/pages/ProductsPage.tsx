@@ -56,7 +56,12 @@ interface ProductForm {
   leaflet_url: string;
   min_temp_c: string;
   max_temp_c: string;
+  ddd: string;
+  is_essential: boolean;
+  rxnorm_id: string;
+  lifecycle_status: "ACTIVE" | "DISCONTINUED" | "OBSOLETE" | "PENDING_APPROVAL";
 }
+
 
 const ROUTES = [
   "",
@@ -225,6 +230,10 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
     leaflet_url: product?.leaflet_url ?? "",
     min_temp_c: product?.min_temp_c ?? "",
     max_temp_c: product?.max_temp_c ?? "",
+    ddd: product?.ddd ?? "",
+    is_essential: product?.is_essential ?? false,
+    rxnorm_id: product?.rxnorm_id ?? "",
+    lifecycle_status: product?.lifecycle_status ?? "ACTIVE",
   });
   const [error, setError] = useState<string | null>(null);
 
@@ -324,6 +333,45 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
           </SelectField>
         </div>
         <div className="grid grid-cols-2 gap-3">
+          <TextField
+            label="WHO Defined Daily Dose (DDD)"
+            value={form.ddd}
+            onChange={(e) => set("ddd", e.target.value)}
+            placeholder="e.g. 500mg/day"
+          />
+          <TextField
+            label="RxNorm ID"
+            value={form.rxnorm_id}
+            onChange={(e) => set("rxnorm_id", e.target.value)}
+            placeholder="e.g. 308182"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <SelectField
+            label="Lifecycle Status"
+            value={form.lifecycle_status}
+            onChange={(e) =>
+              set(
+                "lifecycle_status",
+                e.target.value as "ACTIVE" | "DISCONTINUED" | "OBSOLETE" | "PENDING_APPROVAL"
+              )
+            }
+          >
+            <option value="ACTIVE">Active</option>
+            <option value="DISCONTINUED">Discontinued</option>
+            <option value="OBSOLETE">Obsolete</option>
+            <option value="PENDING_APPROVAL">Pending Approval</option>
+          </SelectField>
+          <label className="flex items-center gap-2 pt-6 text-sm text-ink-700">
+            <input
+              type="checkbox"
+              checked={form.is_essential}
+              onChange={(e) => set("is_essential", e.target.checked)}
+            />
+            WHO Essential Medicine (EML)
+          </label>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
           <SelectField
             label="Route of administration"
             value={form.route_of_administration}
@@ -379,6 +427,7 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
             Controlled substance
           </label>
         </div>
+
         {form.is_controlled_substance && (
           <TextField
             label="Controlled schedule"
