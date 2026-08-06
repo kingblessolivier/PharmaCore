@@ -6,10 +6,17 @@ from rest_framework import serializers
 
 from apps.catalog.models import (
     ActiveIngredient,
+    FormularyItem,
     Manufacturer,
+    PriceList,
     Product,
     ProductBarcode,
+    ProductContraindication,
     ProductIngredient,
+    ProductInteraction,
+    ProductPrice,
+    ProductSubstitute,
+    ProductUomConversion,
     Supplier,
 )
 
@@ -92,6 +99,10 @@ class ProductSerializer(serializers.ModelSerializer):
             "leaflet_url",
             "min_temp_c",
             "max_temp_c",
+            "ddd",
+            "is_essential",
+            "rxnorm_id",
+            "lifecycle_status",
             "is_active",
             "created_at",
             "updated_at",
@@ -100,3 +111,126 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def get_manufacturer_name(self, obj: Product) -> str | None:
         return obj.manufacturer.name if obj.manufacturer else None
+
+
+class ProductInteractionSerializer(serializers.ModelSerializer):
+    ingredient_a_name = serializers.CharField(source="ingredient_a.name", read_only=True)
+    ingredient_b_name = serializers.CharField(source="ingredient_b.name", read_only=True)
+
+    class Meta:
+        model = ProductInteraction
+        fields = [
+            "id",
+            "ingredient_a",
+            "ingredient_a_name",
+            "ingredient_b",
+            "ingredient_b_name",
+            "severity",
+            "effect",
+            "management",
+        ]
+        read_only_fields = ["id", "ingredient_a_name", "ingredient_b_name"]
+
+
+class ProductContraindicationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductContraindication
+        fields = [
+            "id",
+            "product",
+            "condition",
+            "icd10_code",
+            "snomed_code",
+            "severity",
+            "message",
+        ]
+        read_only_fields = ["id"]
+
+
+class PriceListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PriceList
+        fields = [
+            "id",
+            "name",
+            "list_type",
+            "effective_from",
+            "effective_to",
+            "is_active",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+
+class ProductPriceSerializer(serializers.ModelSerializer):
+    price_list_name = serializers.CharField(source="price_list.name", read_only=True)
+    product_generic_name = serializers.CharField(source="product.generic_name", read_only=True)
+
+    class Meta:
+        model = ProductPrice
+        fields = [
+            "id",
+            "price_list",
+            "price_list_name",
+            "product",
+            "product_generic_name",
+            "unit_price",
+            "min_quantity",
+        ]
+        read_only_fields = ["id", "price_list_name", "product_generic_name"]
+
+
+class FormularyItemSerializer(serializers.ModelSerializer):
+    product_generic_name = serializers.CharField(source="product.generic_name", read_only=True)
+
+    class Meta:
+        model = FormularyItem
+        fields = [
+            "id",
+            "scheme_name",
+            "product",
+            "product_generic_name",
+            "is_covered",
+            "max_reimbursable_price",
+            "copay_percentage",
+            "requires_prior_auth",
+            "notes",
+        ]
+        read_only_fields = ["id", "product_generic_name"]
+
+
+class ProductUomConversionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductUomConversion
+        fields = [
+            "id",
+            "product",
+            "unit_name",
+            "conversion_factor",
+            "price_per_unit",
+            "is_default_dispensing",
+        ]
+        read_only_fields = ["id"]
+
+
+class ProductSubstituteSerializer(serializers.ModelSerializer):
+    substitute_generic_name = serializers.CharField(
+        source="substitute_product.generic_name", read_only=True
+    )
+    substitute_strength = serializers.CharField(
+        source="substitute_product.strength", read_only=True
+    )
+
+    class Meta:
+        model = ProductSubstitute
+        fields = [
+            "id",
+            "product",
+            "substitute_product",
+            "substitute_generic_name",
+            "substitute_strength",
+            "substitute_type",
+            "notes",
+        ]
+        read_only_fields = ["id", "substitute_generic_name", "substitute_strength"]
+

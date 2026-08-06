@@ -1,0 +1,29 @@
+{% extends "documents/base.html" %}
+{% block content %}
+<table class="parties">
+  <tr>
+    <td style="width:60%"><div class="plabel">Employee</div>{{ employee_name }}<br><span class="muted">{{ employee_number }} &middot; {{ job_title }}</span></td>
+    <td style="width:40%"><div class="plabel">Pay period</div>{{ period_start }} &ndash; {{ period_end }}</td>
+  </tr>
+</table>
+<table>
+  <tr><th>Earnings</th><th class="right">Amount (RWF)</th></tr>
+  <tr><td>Base salary</td><td class="right">{{ base_salary }}</td></tr>
+  <tr><td>Allowances</td><td class="right">{{ allowances }}</td></tr>
+  <tr><td>Overtime</td><td class="right">{{ overtime_amount }}</td></tr>
+  <tr><td>Bonus / commission</td><td class="right">{{ bonus_commission }}</td></tr>
+  <tr><td>Shift premium</td><td class="right">{{ shift_premium }}</td></tr>
+  <tr><td><b>Gross pay</b></td><td class="right"><b>{{ gross }}</b></td></tr>
+</table>
+<table>
+  <tr><th>Deductions</th><th class="right">Amount (RWF)</th></tr>
+  <tr><td>PAYE</td><td class="right">{{ paye }}</td></tr>
+  <tr><td>RSSB pension (employee)</td><td class="right">{{ pension_employee }}</td></tr>
+  <tr><td>Maternity leave (employee)</td><td class="right">{{ maternity_employee }}</td></tr>
+  <tr><td>CBHI</td><td class="right">{{ cbhi }}</td></tr>
+  <tr><td>Loans / advances</td><td class="right">{{ loans_advances }}</td></tr>
+  <tr><td>Other deductions</td><td class="right">{{ other_deductions }}</td></tr>
+  <tr><td><b>Net pay</b></td><td class="right"><b>{{ net_pay }}</b></td></tr>
+</table>
+<p class="muted">Employer contributions (not deducted from pay, shown for transparency): RSSB pension {{ pension_employer }}, maternity leave {{ maternity_employer }}.</p>
+{% endblock %}

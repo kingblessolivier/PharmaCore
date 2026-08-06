@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, cast
 
 from django.db.models import Q, QuerySet
@@ -28,6 +29,7 @@ from apps.distribution.services import (
     record_order_payment,
     release_order_reservations,
 )
+from apps.finance.services import post_payment_journal
 from apps.iam.audit import record_audit
 from apps.iam.models import User
 from apps.iam.scoping import organizations_visible_to
@@ -276,6 +278,10 @@ class StockOrderViewSet(viewsets.ModelViewSet):
             )
         except (ValueError, ArithmeticError) as exc:
             raise ValidationError(str(exc)) from exc
+        # Auto-post the settlement to both parties' books (see docs/06 §9, ROADMAP "9. Finance").
+        post_payment_journal(
+            order=order, amount=Decimal(str(request.data.get("amount", 0))), user=user
+        )
         # Notify the other party (the one who didn't record it).
         counterpart = order.depot if user.organization_id == order.retail_id else order.retail
         notify_org_admins(

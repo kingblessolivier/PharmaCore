@@ -6,12 +6,214 @@ from rest_framework import serializers
 
 from apps.catalog.models import Product, Supplier
 from apps.iam.models import Organization
-from apps.inventory.models import InventoryBatch, PharmacyProduct, StockMovement
+from apps.inventory.models import (
+    BatchRecall,
+    BinLocation,
+    InventoryBatch,
+    PharmacyProduct,
+    QualityCheck,
+    StockCount,
+    StockCountItem,
+    StockDisposal,
+    StockMovement,
+    StorageZone,
+    TemperatureLog,
+    TemperatureSensor,
+)
+
+
+class StorageZoneSerializer(serializers.ModelSerializer):
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+    bins_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StorageZone
+        fields = [
+            "id",
+            "organization",
+            "organization_name",
+            "name",
+            "zone_type",
+            "temp_min_celsius",
+            "temp_max_celsius",
+            "humidity_max_percent",
+            "is_active",
+            "bins_count",
+            "created_at",
+        ]
+
+    def get_bins_count(self, obj: StorageZone) -> int:
+        return obj.bins.count()
+
+
+class BinLocationSerializer(serializers.ModelSerializer):
+    zone_name = serializers.CharField(source="zone.name", read_only=True)
+
+    class Meta:
+        model = BinLocation
+        fields = [
+            "id",
+            "zone",
+            "zone_name",
+            "aisle",
+            "shelf",
+            "bin_code",
+            "is_occupied",
+            "created_at",
+        ]
+
+
+class TemperatureSensorSerializer(serializers.ModelSerializer):
+    zone_name = serializers.CharField(source="zone.name", read_only=True)
+
+    class Meta:
+        model = TemperatureSensor
+        fields = [
+            "id",
+            "organization",
+            "zone",
+            "zone_name",
+            "device_id",
+            "name",
+            "calibration_due_date",
+            "is_active",
+        ]
+
+
+class TemperatureLogSerializer(serializers.ModelSerializer):
+    sensor_name = serializers.CharField(source="sensor.name", read_only=True)
+
+    class Meta:
+        model = TemperatureLog
+        fields = [
+            "id",
+            "sensor",
+            "sensor_name",
+            "temperature_celsius",
+            "humidity_percent",
+            "excursion_status",
+            "recorded_at",
+        ]
+
+
+class QualityCheckSerializer(serializers.ModelSerializer):
+    batch_number = serializers.CharField(source="batch.batch_number", read_only=True)
+    product_name = serializers.SerializerMethodField()
+    inspector_username = serializers.CharField(source="inspector.username", read_only=True)
+
+    class Meta:
+        model = QualityCheck
+        fields = [
+            "id",
+            "batch",
+            "batch_number",
+            "product_name",
+            "inspector",
+            "inspector_username",
+            "inspection_date",
+            "status",
+            "visual_integrity_ok",
+            "temp_indicator_ok",
+            "coa_document_url",
+            "inspection_notes",
+        ]
+        read_only_fields = ["id", "inspector", "inspection_date"]
+
+    def get_product_name(self, obj: QualityCheck) -> str:
+        return f"{obj.batch.product.generic_name} {obj.batch.product.strength}".strip()
+
+
+class BatchRecallSerializer(serializers.ModelSerializer):
+    product_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BatchRecall
+        fields = [
+            "id",
+            "company",
+            "recall_reference",
+            "manufacturer_name",
+            "product",
+            "product_name",
+            "batch_number",
+            "reason",
+            "status",
+            "recalled_at",
+        ]
+
+    def get_product_name(self, obj: BatchRecall) -> str:
+        return f"{obj.product.generic_name} {obj.product.strength}".strip()
+
+
+class StockCountItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.SerializerMethodField()
+    batch_number = serializers.CharField(source="batch.batch_number", read_only=True)
+
+    class Meta:
+        model = StockCountItem
+        fields = [
+            "id",
+            "stock_count",
+            "batch",
+            "batch_number",
+            "product_name",
+            "system_qty",
+            "counted_qty",
+            "variance_qty",
+            "variance_reason",
+        ]
+
+    def get_product_name(self, obj: StockCountItem) -> str:
+        return f"{obj.batch.product.generic_name} {obj.batch.product.strength}".strip()
+
+
+class StockCountSerializer(serializers.ModelSerializer):
+    counter_username = serializers.CharField(source="counter_user.username", read_only=True)
+    approver_username = serializers.CharField(source="approver_user.username", read_only=True, default=None)
+    items = StockCountItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = StockCount
+        fields = [
+            "id",
+            "organization",
+            "reference_no",
+            "count_type",
+            "status",
+            "counter_user",
+            "counter_username",
+            "approver_user",
+            "approver_username",
+            "started_at",
+            "completed_at",
+            "items",
+        ]
+        read_only_fields = ["id", "counter_user", "started_at"]
+
+
+class StockDisposalSerializer(serializers.ModelSerializer):
+    primary_witness_username = serializers.CharField(source="primary_witness.username", read_only=True)
+
+    class Meta:
+        model = StockDisposal
+        fields = [
+            "id",
+            "organization",
+            "disposal_no",
+            "status",
+            "reason",
+            "primary_witness",
+            "primary_witness_username",
+            "secondary_witness_name",
+            "destruction_method",
+            "certificate_no",
+            "destroyed_at",
+            "created_at",
+        ]
+        read_only_fields = ["id", "primary_witness", "created_at"]
 
 
 class PharmacyProductSerializer(serializers.ModelSerializer):
-    # The product is a global master, so a listing inherits every characteristic —
-    # these read-only mirrors let the catalog/POS show the full product.
     product_name = serializers.SerializerMethodField()
     product_form = serializers.CharField(source="product.dosage_form", read_only=True)
     product_strength = serializers.CharField(source="product.strength", read_only=True)
@@ -65,8 +267,6 @@ class PharmacyProductSerializer(serializers.ModelSerializer):
         return f"{obj.product.generic_name} {obj.product.strength}".strip()
 
     def get_on_hand(self, obj: PharmacyProduct) -> int:
-        # Sellable units: active, non-expired batches. Expired stock is excluded so
-        # the number matches what the POS can actually sell.
         from django.db.models import Sum
         from django.utils import timezone
 
@@ -79,8 +279,6 @@ class PharmacyProductSerializer(serializers.ModelSerializer):
         return int(total or 0)
 
     def get_avg_cost(self, obj: PharmacyProduct) -> str | None:
-        # Average landed cost across this org's batches of the product — the basis
-        # for a margin figure against the selling price.
         from django.db.models import Avg
 
         avg = InventoryBatch.objects.filter(
@@ -110,6 +308,8 @@ class InventoryBatchSerializer(serializers.ModelSerializer):
             "quantity_available",
             "wholesale_cost",
             "storage_location",
+            "bin_location",
+            "is_consignment",
             "status",
             "source_supplier",
             "source_org",

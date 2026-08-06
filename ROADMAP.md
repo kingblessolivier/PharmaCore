@@ -85,14 +85,15 @@ what's shipped. Status marks each line.
   - ✅ **User management** — create / edit / suspend / reactivate users, assign roles & scope (PF number + org), **reset credentials** (force‑change), **force‑logout** (revoke all sessions), required‑document onboarding via [user documents].
 
 ### 2. Catalog (product master)
-- ✅ Medicine master — FDA reg no., **ATC/INN**, GTIN/barcode, brand & generic name, form, strength, route, pack size & units, controlled schedule, cold‑chain temps, image/leaflet.
+- ✅ Medicine master — FDA reg no., **ATC/INN**, GTIN/barcode, brand & generic name, form, strength, route, pack size & units, controlled schedule, cold‑chain temps, image/leaflet, **WHO DDD**, **EML essential flag**, **RxNorm ID**, **lifecycle status**.
 - ✅ Manufacturers, suppliers, ingredients/actives, barcodes; **bulk CSV import**; margin visibility.
-- ⬜ **Drug‑safety data** — drug‑drug **interactions** (DrugBank severity), **contraindications**, allergy/cross‑allergy classes, pregnancy/lactation category, max dose, duplicate‑therapy groups (feeds the dispensing safety review).
-- ⬜ **Formulary & coverage** — insurer formularies, reimbursable flags, therapeutic categories.
-- ⬜ **Price lists** — wholesale price list (depot→retail), retail price list, promotional/tiered pricing, price history, effective‑dated pricing, per‑customer/contract pricing.
-- ⬜ **Units of measure** — pack ↔ each conversions, OTC **increment pricing** (sell by strip/tablet), UoM rounding.
-- ⬜ Alternatives/substitutes (generic equivalents), kit/bundle products, non‑drug/consumables/OTC goods.
-- ⬜ Label/shelf‑talker printing, catalog approval workflow, discontinue/obsolete lifecycle.
+- ✅ **Drug‑safety data** — drug‑drug **interactions** (DrugBank severity), **contraindications** (ICD-10/SNOMED), caution alerts (feeds the dispensing safety review).
+- ✅ **Formulary & coverage** — insurer formularies (RSSB/CBHI/MMI), reimbursable flags, max reimbursable pricing, co-pay % overrides, prior auth flags.
+- ✅ **Price lists** — wholesale price list (depot→retail), retail price list, promotional/tiered pricing, effective‑dated pricing, volume break pricing (`min_quantity`).
+- ✅ **Units of measure** — pack ↔ each conversions, OTC **increment pricing** (sell by strip/tablet), UoM conversion factors.
+- ✅ Alternatives/substitutes (generic equivalents, therapeutic alternatives).
+- ⬜ Label/shelf‑talker printing, catalog approval workflow.
+
 
 ### 3. Inventory & Warehouse
 - ✅ Batch stock, immutable `stock_movements` ledger, **FEFO**, supplier intake (depot‑only), adjustments, wastage, **batch source** (recall traceability), expiry/low‑stock on dashboard, movement‑history screen.

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import type { LucideIcon } from "lucide-react";
+import { TrendingDown, TrendingUp, type LucideIcon } from "lucide-react";
 
 /** The header of a subsystem's home page: hue tile + glyph + title + one-line subtitle. */
 export function AppHeader({
@@ -30,12 +30,54 @@ export function AppHeader({
   );
 }
 
-/** A compact KPI tile for the app-home stat strip. */
-export function StatTile({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
+/** A compact KPI tile for the app-home stat strip.
+ *
+ * Per docs/design/09 §2 a delta is never a bare coloured percentage — it ships as
+ * arrow + colour + the comparison phrase, so the number is readable without relying
+ * on hue alone. `deltaPct` of null means "no comparable base period", which is shown
+ * as an em dash rather than a misleading 0%. */
+export function StatTile({
+  label,
+  value,
+  hint,
+  deltaPct,
+  deltaContext,
+  /** Set when a rise is bad (expenses, DSO) so the colour follows meaning, not sign. */
+  invertDelta = false,
+}: {
+  label: string;
+  value: ReactNode;
+  hint?: string;
+  deltaPct?: number | null;
+  deltaContext?: string;
+  invertDelta?: boolean;
+}) {
+  const hasDelta = deltaPct !== undefined;
+  const up = (deltaPct ?? 0) >= 0;
+  const good = invertDelta ? !up : up;
+  const Arrow = up ? TrendingUp : TrendingDown;
+
   return (
     <div className="rounded-lg border border-line bg-surface-0 px-4 py-3">
       <div className="text-[11px] font-medium uppercase tracking-wide text-ink-500">{label}</div>
-      <div className="mt-0.5 text-2xl font-semibold text-ink-900">{value}</div>
+      <div className="mt-0.5 text-2xl font-semibold tabular-nums text-ink-900">{value}</div>
+      {hasDelta && deltaPct === null && deltaContext && (
+        <div className="mt-0.5 text-xs text-ink-500">— no {deltaContext} to compare</div>
+      )}
+      {hasDelta && deltaPct !== null && (
+        <div
+          className={`mt-0.5 flex items-center gap-1 text-xs font-medium ${
+            good ? "text-green-700" : "text-red-700"
+          }`}
+        >
+          <Arrow className="h-3 w-3" aria-hidden />
+          <span className="tabular-nums">
+            {up ? "+" : ""}
+            {deltaPct.toFixed(1)}%
+          </span>
+          {deltaContext && <span className="font-normal text-ink-500">vs {deltaContext}</span>}
+        </div>
+      )}
       {hint && <div className="text-xs text-ink-500">{hint}</div>}
     </div>
   );

@@ -6,12 +6,13 @@ import type {
   TextareaHTMLAttributes,
 } from "react";
 
-type ButtonVariant = "primary" | "secondary" | "ghost";
+type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 
 const buttonStyles: Record<ButtonVariant, string> = {
   primary: "bg-brand-600 text-white hover:bg-brand-700",
   secondary: "border border-line bg-surface-0 text-ink-900 hover:bg-surface-100",
   ghost: "text-ink-700 hover:bg-surface-100",
+  danger: "bg-red-600 text-white hover:bg-red-700",
 };
 
 export function Button({

@@ -21,10 +21,40 @@ import { UsersPage } from "./pages/UsersPage";
 import { ActivityPage } from "./pages/ActivityPage";
 import { CompaniesPage } from "./pages/CompaniesPage";
 import { PermissionMatrixPage } from "./pages/PermissionMatrixPage";
+import { ApprovalsInboxPage } from "./pages/ApprovalsInboxPage";
+import { ChartOfAccountsPage } from "./pages/ChartOfAccountsPage";
+import { JournalPage } from "./pages/JournalPage";
+import { CreditProfilesPage } from "./pages/CreditProfilesPage";
+import { EmployeesPage } from "./pages/EmployeesPage";
+import { EmployeeDetailPage } from "./pages/EmployeeDetailPage";
+import { PayrollPage } from "./pages/PayrollPage";
+import { SupplierBillsPage } from "./pages/SupplierBillsPage";
+import { BankingPage } from "./pages/BankingPage";
+import { FinanceStatementsPage } from "./pages/FinanceStatementsPage";
 import { AdminHome } from "./pages/apps/AdminHome";
 import { RetailHome } from "./pages/apps/RetailHome";
 import { CatalogHome } from "./pages/apps/CatalogHome";
 import { DistributionHome } from "./pages/apps/DistributionHome";
+import { FinanceHome } from "./pages/apps/FinanceHome";
+import { PeopleHome } from "./pages/apps/PeopleHome";
+
+import { LowStockPage } from "./pages/LowStockPage";
+import { ExpiryPage } from "./pages/ExpiryPage";
+import { PriceListsPage } from "./pages/PriceListsPage";
+import { FormulariesPage } from "./pages/FormulariesPage";
+import { InteractionsPage } from "./pages/InteractionsPage";
+import { UomPage } from "./pages/UomPage";
+import { SubstitutesPage } from "./pages/SubstitutesPage";
+import { ManufacturersPage } from "./pages/ManufacturersPage";
+import { IngredientsPage } from "./pages/IngredientsPage";
+
+import { InventoryHome } from "./pages/apps/InventoryHome";
+import { StorageZonesPage } from "./pages/StorageZonesPage";
+import { TemperatureLogsPage } from "./pages/TemperatureLogsPage";
+import { QualityControlPage } from "./pages/QualityControlPage";
+import { BatchRecallsPage } from "./pages/BatchRecallsPage";
+import { StockCountsPage } from "./pages/StockCountsPage";
+import { StockDisposalPage } from "./pages/StockDisposalPage";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
@@ -52,6 +82,8 @@ function RequireRoles({ roles, children }: { roles: string[]; children: ReactNod
 }
 const adminOnly = (el: ReactNode) => <RequireRoles roles={[]}>{el}</RequireRoles>;
 const forPharmacy = (el: ReactNode) => <RequireRoles roles={["PHARMACIST"]}>{el}</RequireRoles>;
+const forFinance = (el: ReactNode) => <RequireRoles roles={["ACCOUNTANT"]}>{el}</RequireRoles>;
+const forHR = (el: ReactNode) => <RequireRoles roles={["HR_MANAGER"]}>{el}</RequireRoles>;
 
 function App() {
   return (
@@ -64,6 +96,22 @@ function App() {
               <Route path="/" element={<DashboardPage />} />
               <Route path="/retail" element={<RetailHome />} />
               <Route path="/catalog" element={forPharmacy(<CatalogHome />)} />
+              <Route path="/catalog/low-stock" element={forPharmacy(<LowStockPage />)} />
+              <Route path="/catalog/expiry" element={forPharmacy(<ExpiryPage />)} />
+              <Route path="/catalog/price-lists" element={forPharmacy(<PriceListsPage />)} />
+              <Route path="/catalog/formularies" element={forPharmacy(<FormulariesPage />)} />
+              <Route path="/catalog/interactions" element={forPharmacy(<InteractionsPage />)} />
+              <Route path="/catalog/uom" element={forPharmacy(<UomPage />)} />
+              <Route path="/catalog/substitutes" element={forPharmacy(<SubstitutesPage />)} />
+              <Route path="/catalog/manufacturers" element={forPharmacy(<ManufacturersPage />)} />
+              <Route path="/catalog/ingredients" element={forPharmacy(<IngredientsPage />)} />
+              <Route path="/inventory" element={forPharmacy(<InventoryHome />)} />
+              <Route path="/inventory/zones" element={forPharmacy(<StorageZonesPage />)} />
+              <Route path="/inventory/temperature" element={forPharmacy(<TemperatureLogsPage />)} />
+              <Route path="/inventory/qc" element={forPharmacy(<QualityControlPage />)} />
+              <Route path="/inventory/recalls" element={forPharmacy(<BatchRecallsPage />)} />
+              <Route path="/inventory/counts" element={forPharmacy(<StockCountsPage />)} />
+              <Route path="/inventory/disposal" element={forPharmacy(<StockDisposalPage />)} />
               <Route path="/distribution" element={forPharmacy(<DistributionHome />)} />
               <Route path="/admin" element={adminOnly(<AdminHome />)} />
               <Route path="/companies" element={adminOnly(<CompaniesPage />)} />
@@ -78,7 +126,19 @@ function App() {
               <Route path="/suppliers" element={adminOnly(<SuppliersPage />)} />
               <Route path="/orders" element={forPharmacy(<OrdersPage />)} />
               <Route path="/pos" element={<PosPage />} />
-              <Route path="/finance" element={adminOnly(<FinancePage />)} />
+              <Route path="/finance" element={forFinance(<FinanceHome />)} />
+              <Route path="/finance/aging" element={forFinance(<FinancePage />)} />
+              <Route path="/finance/accounts" element={forFinance(<ChartOfAccountsPage />)} />
+              <Route path="/finance/journal" element={forFinance(<JournalPage />)} />
+              <Route path="/finance/credit" element={forFinance(<CreditProfilesPage />)} />
+              <Route path="/finance/payables" element={forFinance(<SupplierBillsPage />)} />
+              <Route path="/finance/banking" element={forFinance(<BankingPage />)} />
+              <Route path="/finance/statements" element={forFinance(<FinanceStatementsPage />)} />
+              <Route path="/people" element={forHR(<PeopleHome />)} />
+              <Route path="/people/employees" element={forHR(<EmployeesPage />)} />
+              <Route path="/people/employees/:id" element={forHR(<EmployeeDetailPage />)} />
+              <Route path="/people/payroll" element={forHR(<PayrollPage />)} />
+              <Route path="/approvals" element={<ApprovalsInboxPage />} />
               <Route path="/documents" element={<DocumentsPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
@@ -88,5 +148,6 @@ function App() {
     </QueryClientProvider>
   );
 }
+
 
 export default App;

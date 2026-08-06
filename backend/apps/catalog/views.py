@@ -15,18 +15,32 @@ from rest_framework.serializers import BaseSerializer
 
 from apps.catalog.models import (
     ActiveIngredient,
+    FormularyItem,
     Manufacturer,
+    PriceList,
     Product,
     ProductBarcode,
+    ProductContraindication,
     ProductIngredient,
+    ProductInteraction,
+    ProductPrice,
+    ProductSubstitute,
+    ProductUomConversion,
     Supplier,
 )
 from apps.catalog.serializers import (
     ActiveIngredientSerializer,
+    FormularyItemSerializer,
     ManufacturerSerializer,
+    PriceListSerializer,
     ProductBarcodeSerializer,
+    ProductContraindicationSerializer,
     ProductIngredientSerializer,
+    ProductInteractionSerializer,
+    ProductPriceSerializer,
     ProductSerializer,
+    ProductSubstituteSerializer,
+    ProductUomConversionSerializer,
     SupplierSerializer,
 )
 from apps.iam.audit import record_audit
@@ -84,9 +98,12 @@ _IMPORT_TEXT = {
     "storage_condition",
     "route_of_administration",
     "tax_class",
+    "ddd",
+    "rxnorm_id",
+    "lifecycle_status",
 }
 _IMPORT_INT = {"units_per_pack", "reorder_level", "reorder_quantity"}
-_IMPORT_BOOL = {"requires_prescription", "is_controlled_substance"}
+_IMPORT_BOOL = {"requires_prescription", "is_controlled_substance", "is_essential"}
 
 
 def _clean_row(raw: dict[str, Any]) -> dict[str, Any]:
@@ -198,3 +215,91 @@ class ProductBarcodeViewSet(_AuditedAdminViewSet):
         qs = ProductBarcode.objects.all()
         product = self.request.query_params.get("product")
         return qs.filter(product_id=product) if product else qs
+
+
+class ProductInteractionViewSet(_AuditedAdminViewSet):
+    entity_type = "product_interaction"
+    serializer_class = ProductInteractionSerializer
+    queryset = ProductInteraction.objects.select_related("ingredient_a", "ingredient_b").all()
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["ingredient_a__name", "ingredient_b__name"]
+
+    def get_queryset(self) -> QuerySet[ProductInteraction]:
+        qs = super().get_queryset()
+        ingredient = self.request.query_params.get("ingredient")
+        if ingredient:
+            qs = qs.filter(ingredient_a_id=ingredient) | qs.filter(ingredient_b_id=ingredient)
+        return qs
+
+
+class ProductContraindicationViewSet(_AuditedAdminViewSet):
+    entity_type = "product_contraindication"
+    serializer_class = ProductContraindicationSerializer
+    queryset = ProductContraindication.objects.all()
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["condition", "icd10_code", "snomed_code"]
+
+    def get_queryset(self) -> QuerySet[ProductContraindication]:
+        qs = super().get_queryset()
+        product = self.request.query_params.get("product")
+        return qs.filter(product_id=product) if product else qs
+
+
+class PriceListViewSet(_AuditedAdminViewSet):
+    entity_type = "price_list"
+    serializer_class = PriceListSerializer
+    queryset = PriceList.objects.all()
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["name", "list_type"]
+
+
+class ProductPriceViewSet(_AuditedAdminViewSet):
+    entity_type = "product_price"
+    serializer_class = ProductPriceSerializer
+    queryset = ProductPrice.objects.select_related("price_list", "product").all()
+
+    def get_queryset(self) -> QuerySet[ProductPrice]:
+        qs = super().get_queryset()
+        product = self.request.query_params.get("product")
+        price_list = self.request.query_params.get("price_list")
+        if product:
+            qs = qs.filter(product_id=product)
+        if price_list:
+            qs = qs.filter(price_list_id=price_list)
+        return qs
+
+
+class FormularyItemViewSet(_AuditedAdminViewSet):
+    entity_type = "formulary_item"
+    serializer_class = FormularyItemSerializer
+    queryset = FormularyItem.objects.select_related("product").all()
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["scheme_name", "product__generic_name"]
+
+    def get_queryset(self) -> QuerySet[FormularyItem]:
+        qs = super().get_queryset()
+        product = self.request.query_params.get("product")
+        return qs.filter(product_id=product) if product else qs
+
+
+class ProductUomConversionViewSet(_AuditedAdminViewSet):
+    entity_type = "product_uom_conversion"
+    serializer_class = ProductUomConversionSerializer
+    queryset = ProductUomConversion.objects.all()
+
+    def get_queryset(self) -> QuerySet[ProductUomConversion]:
+        qs = super().get_queryset()
+        product = self.request.query_params.get("product")
+        return qs.filter(product_id=product) if product else qs
+
+
+class ProductSubstituteViewSet(_AuditedAdminViewSet):
+    entity_type = "product_substitute"
+    serializer_class = ProductSubstituteSerializer
+    queryset = ProductSubstitute.objects.select_related("substitute_product").all()
+
+    def get_queryset(self) -> QuerySet[ProductSubstitute]:
+        qs = super().get_queryset()
+        product = self.request.query_params.get("product")
+        return qs.filter(product_id=product) if product else qs
+

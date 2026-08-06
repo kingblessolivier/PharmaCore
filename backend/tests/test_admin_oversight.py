@@ -88,9 +88,9 @@ def test_admin_can_view_as_user_and_is_audited(sys_admin: User, cashier: User) -
 def test_stop_impersonation_closes_session(sys_admin: User, cashier: User) -> None:
     client = APIClient()
     client.force_authenticate(user=sys_admin)
-    token = client.post(
-        "/api/auth/impersonate", {"user_id": cashier.pk}, format="json"
-    ).json()["access"]
+    token = client.post("/api/auth/impersonate", {"user_id": cashier.pk}, format="json").json()[
+        "access"
+    ]
     imp = APIClient()
     _bearer(imp, token)
     assert imp.post("/api/auth/impersonate/stop").status_code == 204

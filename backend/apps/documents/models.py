@@ -20,6 +20,7 @@ class DocType(models.TextChoices):
     TAX_INVOICE = "TAX_INVOICE", "Tax invoice"
     CREDIT_NOTE = "CREDIT_NOTE", "Credit note"
     RECEIPT = "RECEIPT", "Receipt"
+    PAYSLIP = "PAYSLIP", "Payslip"
 
 
 # Per-type human prefix for the document number.
@@ -31,6 +32,7 @@ DOC_PREFIX: dict[str, str] = {
     DocType.TAX_INVOICE: "INV",
     DocType.CREDIT_NOTE: "CN",
     DocType.RECEIPT: "RCT",
+    DocType.PAYSLIP: "PAY",
 }
 
 
