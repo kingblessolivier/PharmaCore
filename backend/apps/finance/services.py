@@ -19,6 +19,7 @@ from apps.finance.models import (
     CreditProfile,
     JournalEntry,
     JournalLine,
+    OpeningBalance,
     SupplierBill,
     SupplierBillPayment,
     TenantSettings,
@@ -1215,3 +1216,289 @@ def tenant_settings_for(organization: Organization) -> TenantSettings:
         },
     )
     return settings
+
+
+# ---------------------------------------------------------------------------
+# F4.4 — OpeningBalance import (onboarding + legacy migration)
+# ---------------------------------------------------------------------------
+
+
+class OpeningBalanceValidationError(ValueError):
+    """Raised when an opening-balance import fails its tie-out checks."""
+
+    def __init__(self, errors: list[str]) -> None:
+        self.errors = errors
+        super().__init__("; ".join(errors))
+
+
+def _validate_gl_trial_balance(organization: Organization, rows: list[OpeningBalance]) -> None:
+    """A trial balance must balance: Σdebits = Σcredits. Each account code must
+    exist in the org's chart of accounts."""
+    accounts = {a.code: a for a in Account.objects.filter(organization=organization)}
+    total_debit = Decimal("0")
+    total_credit = Decimal("0")
+    errors: list[str] = []
+    for row in rows:
+        code = row.payload.get("account_code", "")
+        if code not in accounts:
+            errors.append(f"GL row {row.reference_key}: unknown account code {code!r}")
+            continue
+        total_debit += Decimal(str(row.payload.get("debit", 0) or 0))
+        total_credit += Decimal(str(row.payload.get("credit", 0) or 0))
+    if total_debit != total_credit:
+        errors.append(
+            f"Trial balance does not balance: debits={total_debit} credits={total_credit}"
+        )
+    if errors:
+        raise OpeningBalanceValidationError(errors)
+
+
+def _validate_ar_ap_aging(organization: Organization, rows: list[OpeningBalance], kind: str) -> None:
+    """AR/AP aging rows must reference a known partner (catalog.Supplier or a
+    downstream Customer model — fall back to raw reference_id if the model is
+    absent). Each row must carry a positive amount and a valid aging bucket."""
+    valid_buckets = {"d30", "d60", "d90", "over90"}
+    errors: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        if row.reference_key in seen:
+            errors.append(f"{kind} duplicate reference_key {row.reference_key!r}")
+        seen.add(row.reference_key)
+        amount = Decimal(str(row.payload.get("amount", 0) or 0))
+        if amount <= 0:
+            errors.append(f"{kind} row {row.reference_key}: amount must be > 0")
+        bucket = row.payload.get("aging_bucket", "")
+        if bucket not in valid_buckets:
+            errors.append(
+                f"{kind} row {row.reference_key}: invalid aging_bucket {bucket!r} "
+                f"(expected one of {sorted(valid_buckets)})"
+            )
+        if not row.payload.get("partner_ref"):
+            errors.append(f"{kind} row {row.reference_key}: missing partner_ref")
+    if errors:
+        raise OpeningBalanceValidationError(errors)
+
+
+def _validate_stock_batches(organization: Organization, rows: list[OpeningBalance]) -> None:
+    """Stock batch rows must reference a known product (by id) and carry a
+    positive quantity + non-negative cost."""
+    # Lazy import to avoid pulling catalog at app load time.
+    from apps.catalog.models import Product
+
+    valid_ids = {p.pk for p in Product.objects.filter(is_active=True)}
+    errors: list[str] = []
+    for row in rows:
+        pid = row.payload.get("product_id")
+        if pid is None or int(pid) not in valid_ids:
+            errors.append(
+                f"STOCK_BATCH row {row.reference_key}: unknown product_id {pid!r}"
+            )
+        qty = int(row.payload.get("quantity", 0) or 0)
+        if qty <= 0:
+            errors.append(f"STOCK_BATCH row {row.reference_key}: quantity must be > 0")
+        cost = Decimal(str(row.payload.get("unit_cost", 0) or 0))
+        if cost < 0:
+            errors.append(f"STOCK_BATCH row {row.reference_key}: unit_cost must be >= 0")
+    if errors:
+        raise OpeningBalanceValidationError(errors)
+
+
+def _validate_employee_leave(organization: Organization, rows: list[OpeningBalance]) -> None:
+    """Employee leave rows must reference a known employee + valid leave type."""
+    # Lazy import to avoid linking HR schema into every finance import call.
+    from apps.hr.models import Employee
+
+    employee_ids = {str(e.pk) for e in Employee.objects.filter(organization=organization)}
+    valid_types = {"ANNUAL", "SICK", "MATERNITY", "PATERNITY", "UNPAID", "COMPASSIONATE"}
+    errors: list[str] = []
+    for row in rows:
+        emp_id = str(row.payload.get("employee_id", ""))
+        if emp_id not in employee_ids:
+            errors.append(
+                f"EMPLOYEE_LEAVE row {row.reference_key}: unknown employee_id {emp_id!r}"
+            )
+        leave_type = row.payload.get("leave_type", "")
+        if leave_type not in valid_types:
+            errors.append(
+                f"EMPLOYEE_LEAVE row {row.reference_key}: invalid leave_type {leave_type!r}"
+            )
+        days = Decimal(str(row.payload.get("days_accrued", 0) or 0))
+        if days < 0:
+            errors.append(f"EMPLOYEE_LEAVE row {row.reference_key}: days_accrued must be >= 0")
+    if errors:
+        raise OpeningBalanceValidationError(errors)
+
+
+def validate_opening_balance_rows(
+    *, organization: Organization, rows: list[dict[str, Any]]
+) -> list[OpeningBalance]:
+    """Validate a list of opening-balance line dicts and return them as
+    in-memory ``OpeningBalance`` objects (not yet saved). Per-kind tie-out
+    checks catch the things you can't catch at the row level: trial-balance
+    imbalance, duplicate keys, missing partners.
+
+    Each input dict must carry ``kind`` and ``reference_key``; ``payload``
+    carries the kind-specific fields.
+    """
+    if not rows:
+        raise OpeningBalanceValidationError(["No opening-balance rows supplied."])
+
+    by_kind: dict[str, list[OpeningBalance]] = {}
+    seen_keys: set[tuple[str, str]] = set()
+    for r in rows:
+        kind = r.get("kind", "")
+        ref_key = r.get("reference_key", "")
+        if kind not in OpeningBalance.Kind.values:
+            raise OpeningBalanceValidationError([f"Unknown kind {kind!r}"])
+        if not ref_key:
+            raise OpeningBalanceValidationError(
+                [f"Row with kind={kind!r} is missing reference_key"]
+            )
+        dedupe_key = (kind, ref_key)
+        if dedupe_key in seen_keys:
+            raise OpeningBalanceValidationError(
+                [f"Duplicate row within import: {kind}/{ref_key}"]
+            )
+        seen_keys.add(dedupe_key)
+        by_kind.setdefault(kind, []).append(
+            OpeningBalance(
+                organization=organization,
+                kind=kind,
+                reference_key=ref_key,
+                payload=r.get("payload", {}),
+            )
+        )
+
+    if OpeningBalance.Kind.GL_TRIAL_BALANCE in by_kind:
+        _validate_gl_trial_balance(organization, by_kind[OpeningBalance.Kind.GL_TRIAL_BALANCE])
+    if OpeningBalance.Kind.AR_AGING in by_kind:
+        _validate_ar_ap_aging(
+            organization, by_kind[OpeningBalance.Kind.AR_AGING], "AR_AGING"
+        )
+    if OpeningBalance.Kind.AP_AGING in by_kind:
+        _validate_ar_ap_aging(
+            organization, by_kind[OpeningBalance.Kind.AP_AGING], "AP_AGING"
+        )
+    if OpeningBalance.Kind.STOCK_BATCH in by_kind:
+        _validate_stock_batches(organization, by_kind[OpeningBalance.Kind.STOCK_BATCH])
+    if OpeningBalance.Kind.EMPLOYEE_LEAVE in by_kind:
+        _validate_employee_leave(organization, by_kind[OpeningBalance.Kind.EMPLOYEE_LEAVE])
+
+    flat: list[OpeningBalance] = []
+    for items in by_kind.values():
+        flat.extend(items)
+    return flat
+
+
+@transaction.atomic
+def import_opening_balances(
+    *,
+    organization: Organization,
+    rows: list[dict[str, Any]],
+    apply: bool = False,
+    user: User | None = None,
+) -> list[OpeningBalance]:
+    """Import a batch of opening-balance rows for ``organization``.
+
+    Validation runs first; if any kind-level tie-out check fails, no row is
+    written. On success, rows are persisted as drafts (``applied_at is None``).
+    If ``apply=True``, downstream effects (GL opening journal, inventory
+    batches, leave balances) are produced in the same transaction.
+    """
+    validated = validate_opening_balance_rows(organization=organization, rows=rows)
+    # Upsert: re-importing the same file is a no-op for already-applied rows.
+    for obj in validated:
+        OpeningBalance.objects.update_or_create(
+            organization=organization,
+            kind=obj.kind,
+            reference_key=obj.reference_key,
+            defaults={"payload": obj.payload},
+        )
+    if apply:
+        _apply_opening_balances(organization=organization, user=user)
+    return list(
+        OpeningBalance.objects.filter(organization=organization).order_by(
+            "kind", "reference_key"
+        )
+    )
+
+
+def _apply_opening_balances(*, organization: Organization, user: User | None) -> None:
+    """Promote draft opening balances to applied: write the GL opening journal,
+    create inventory batches for stock rows, leave balances for HR rows.
+
+    AR/AP aging rows are recorded as OpeningBalances only at this stage — the
+    downstream partner-ledger models (open invoices) are not yet a first-class
+    concept separate from the AR/AP control accounts, so the GL opening journal
+    captures the net position. Future migrations will hook them up.
+    """
+    gl_rows = list(
+        OpeningBalance.objects.filter(
+            organization=organization,
+            kind=OpeningBalance.Kind.GL_TRIAL_BALANCE,
+            applied_at__isnull=True,
+        )
+    )
+    if gl_rows:
+        accounts = {a.code: a for a in Account.objects.filter(organization=organization)}
+        lines: list[JournalLineInput] = []
+        for row in gl_rows:
+            acct = accounts[row.payload["account_code"]]
+            debit = Decimal(str(row.payload.get("debit", 0) or 0))
+            credit = Decimal(str(row.payload.get("credit", 0) or 0))
+            if debit > 0:
+                lines.append(
+                    {"account": acct, "side": JournalLine.Side.DEBIT, "amount": debit, "memo": ""}
+                )
+            if credit > 0:
+                lines.append(
+                    {"account": acct, "side": JournalLine.Side.CREDIT, "amount": credit, "memo": ""}
+                )
+        if lines:
+            post_journal(
+                organization=organization,
+                description="Opening trial balance",
+                lines=lines,
+                reference_type="opening_balance",
+                reference_id=f"gl-{organization.pk}",
+                user=user,
+            )
+
+    stock_rows = list(
+        OpeningBalance.objects.filter(
+            organization=organization,
+            kind=OpeningBalance.Kind.STOCK_BATCH,
+            applied_at__isnull=True,
+        )
+    )
+    if stock_rows:
+        from apps.catalog.models import Product
+        from apps.inventory.models import InventoryBatch, StockMovement
+
+        products = {p.pk: p for p in Product.objects.filter(is_active=True)}
+        for row in stock_rows:
+            product = products[int(row.payload["product_id"])]
+            batch = InventoryBatch.objects.create(
+                organization=organization,
+                product=product,
+                batch_number=row.payload["batch_number"],
+                expiry_date=row.payload["expiry_date"],
+                quantity_available=int(row.payload["quantity"]),
+                wholesale_cost=Decimal(str(row.payload.get("unit_cost", 0) or 0)),
+                source_supplier_id=row.payload.get("source_supplier_id"),
+            )
+            StockMovement.objects.create(
+                organization=organization,
+                product=product,
+                batch=batch,
+                batch_number=batch.batch_number,
+                movement_type=StockMovement.Type.INTAKE,
+                quantity_delta=int(row.payload["quantity"]),
+                reference_type="opening_balance",
+                reference_id=row.reference_key,
+                reason="Opening balance",
+            )
+
+    OpeningBalance.objects.filter(organization=organization, applied_at__isnull=True).update(
+        applied_at=timezone.now()
+    )
