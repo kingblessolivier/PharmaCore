@@ -46,7 +46,9 @@ INSTALLED_APPS = [
     "apps.approvals",
     "apps.finance",
     "apps.hr",
+    "apps.procurement",
     "apps.core",
+    "apps.events",
 ]
 
 # --- Media (generated document vault) ---
