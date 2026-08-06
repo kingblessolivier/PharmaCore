@@ -7,6 +7,7 @@ from rest_framework import serializers
 
 from apps.finance.models import (
     Account,
+    AccountingPeriod,
     BankAccount,
     CreditProfile,
     JournalEntry,
@@ -192,6 +193,39 @@ class SupplierBillSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "amount_paid", "amount_due", "status", "payments", "created_at"]
+
+
+class AccountingPeriodSerializer(serializers.ModelSerializer):
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+    closed_by_name = serializers.CharField(source="closed_by.username", read_only=True)
+
+    class Meta:
+        model = AccountingPeriod
+        fields = [
+            "id",
+            "organization",
+            "organization_name",
+            "kind",
+            "start_date",
+            "end_date",
+            "status",
+            "closing_totals",
+            "closed_by",
+            "closed_by_name",
+            "closed_at",
+            "reopened_at",
+            "notes",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "status",
+            "closing_totals",
+            "closed_by",
+            "closed_at",
+            "reopened_at",
+            "created_at",
+        ]
 
 
 class BankAccountSerializer(serializers.ModelSerializer):

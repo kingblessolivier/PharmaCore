@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from decimal import Decimal
-from typing import cast
+from typing import Any, cast
 
 from django.db.models import Case, DecimalField, Q, QuerySet, Sum, When
 from django.db.models.functions import Coalesce
+from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -14,8 +16,10 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 
+from apps.finance import reports
 from apps.finance.models import (
     Account,
+    AccountingPeriod,
     BankAccount,
     CreditProfile,
     JournalEntry,
@@ -23,6 +27,7 @@ from apps.finance.models import (
     SupplierBill,
 )
 from apps.finance.serializers import (
+    AccountingPeriodSerializer,
     AccountSerializer,
     BankAccountSerializer,
     CreditProfileSerializer,
@@ -32,10 +37,12 @@ from apps.finance.serializers import (
 from apps.finance.services import (
     cash_book_lines,
     cash_flow_forecast,
+    close_period,
     create_bank_account,
     reconcile_lines,
     record_supplier_bill,
     record_supplier_bill_payment,
+    reopen_period,
     request_credit_override,
 )
 from apps.iam.audit import record_audit
@@ -321,7 +328,7 @@ class BankAccountViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], url_path="cash-book")
     def cash_book(self, request: Request, pk: str | None = None) -> Response:
         account = self.get_object()
-        return Response(cash_book_lines(account))
+        return Response(_money_safe(cash_book_lines(account)))
 
     @action(detail=True, methods=["post"], url_path="reconcile")
     def reconcile(self, request: Request, pk: str | None = None) -> Response:
@@ -336,6 +343,174 @@ class BankAccountViewSet(viewsets.ModelViewSet):
             user=user,
         )
         return Response({"reconciled": count})
+
+
+def _money_safe(value: Any) -> Any:
+    """Render Decimals as strings, recursively.
+
+    DRF's JSON encoder turns a bare Decimal into a float, which silently trades
+    exactness for binary floating point — unacceptable for money. Serializer fields
+    already stringify; these reports return plain dicts, so they need the same
+    treatment applied by hand.
+    """
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: _money_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_money_safe(v) for v in value]
+    return value
+
+
+def _resolve_org(request: Request, user: User) -> Organization:
+    """The organization a report is for: the ?organization= param when given (and
+    visible to the caller), otherwise the caller's own."""
+    org_param = request.query_params.get("organization")
+    if org_param and org_param.isdigit():
+        try:
+            organization = Organization.objects.get(pk=org_param)
+        except Organization.DoesNotExist as exc:
+            raise ValidationError("Organization not found.") from exc
+    elif user.organization_id:
+        organization = cast(Organization, user.organization)
+    else:
+        raise ValidationError("An 'organization' query param is required.")
+    if not (
+        user.is_superuser
+        or user.has_role("SYS_ADMIN")
+        or organization in organizations_visible_to(user)
+    ):
+        raise PermissionDenied("You may not view this organization's finances.")
+    return organization
+
+
+def _date_param(request: Request, name: str, default: date) -> date:
+    raw = request.query_params.get(name)
+    if not raw:
+        return default
+    try:
+        return date.fromisoformat(raw)
+    except ValueError as exc:
+        raise ValidationError(f"'{name}' must be an ISO date (YYYY-MM-DD).") from exc
+
+
+def _month_bounds(today: date) -> tuple[date, date]:
+    start = today.replace(day=1)
+    next_month = date(start.year + (start.month // 12), (start.month % 12) + 1, 1)
+    return start, next_month - timedelta(days=1)
+
+
+class FinanceReportsView(viewsets.ViewSet):
+    """Statements over the ledger: trial balance, P&L, balance sheet, cash-flow,
+    the performance cockpit, and HQ consolidation.
+
+    All are read-only derivations of posted journal entries — see apps/finance/reports.py.
+    """
+
+    def _period(self, request: Request) -> tuple[date, date]:
+        today = timezone.now().date()
+        default_start, default_end = _month_bounds(today)
+        start = _date_param(request, "start", default_start)
+        end = _date_param(request, "end", default_end)
+        if end < start:
+            raise ValidationError("'end' must not be before 'start'.")
+        return start, end
+
+    @action(detail=False, methods=["get"], url_path="trial-balance")
+    def trial_balance(self, request: Request) -> Response:
+        org = _resolve_org(request, cast(User, request.user))
+        as_of = _date_param(request, "as_of", timezone.now().date())
+        return Response(_money_safe(reports.trial_balance(org, as_of=as_of)))
+
+    @action(detail=False, methods=["get"], url_path="profit-and-loss")
+    def profit_and_loss(self, request: Request) -> Response:
+        org = _resolve_org(request, cast(User, request.user))
+        start, end = self._period(request)
+        return Response(_money_safe(reports.profit_and_loss(org, start=start, end=end)))
+
+    @action(detail=False, methods=["get"], url_path="balance-sheet")
+    def balance_sheet(self, request: Request) -> Response:
+        org = _resolve_org(request, cast(User, request.user))
+        as_of = _date_param(request, "as_of", timezone.now().date())
+        return Response(_money_safe(reports.balance_sheet(org, as_of=as_of)))
+
+    @action(detail=False, methods=["get"], url_path="cash-flow")
+    def cash_flow(self, request: Request) -> Response:
+        org = _resolve_org(request, cast(User, request.user))
+        start, end = self._period(request)
+        return Response(_money_safe(reports.cash_flow_statement(org, start=start, end=end)))
+
+    @action(detail=False, methods=["get"], url_path="performance")
+    def performance(self, request: Request) -> Response:
+        org = _resolve_org(request, cast(User, request.user))
+        start, end = self._period(request)
+        data = reports.performance(org, start=start, end=end)
+        data["series"] = reports.revenue_vs_cogs_series(org, start=start, end=end)
+        return Response(_money_safe(data))
+
+    @action(detail=False, methods=["get"], url_path="consolidated")
+    def consolidated(self, request: Request) -> Response:
+        """Group view across every branch the caller can see (HQ consolidation)."""
+        user = cast(User, request.user)
+        start, end = self._period(request)
+        if user.is_superuser or user.has_role("SYS_ADMIN"):
+            orgs = list(Organization.objects.filter(is_active=True).order_by("name"))
+        else:
+            orgs = list(organizations_visible_to(user).order_by("name"))
+        if not orgs:
+            raise ValidationError("No organizations are visible to you.")
+        return Response(_money_safe(reports.consolidated(orgs, start=start, end=end)))
+
+
+class AccountingPeriodViewSet(viewsets.ModelViewSet):
+    """EOD/EOM/annual closeouts. Closing freezes the window against new postings."""
+
+    serializer_class = AccountingPeriodSerializer
+    queryset = AccountingPeriod.objects.select_related("organization", "closed_by")
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self) -> QuerySet[AccountingPeriod]:
+        user = cast(User, self.request.user)
+        qs = AccountingPeriod.objects.select_related("organization", "closed_by")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            qs = qs.filter(organization__in=organizations_visible_to(user))
+        org_param = self.request.query_params.get("organization")
+        if org_param and org_param.isdigit():
+            qs = qs.filter(organization_id=int(org_param))
+        return qs
+
+    def create(self, request: Request, *args: object, **kwargs: object) -> Response:
+        """Close a period."""
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        org = _resolve_org(request, user)
+        data = request.data
+        try:
+            period = close_period(
+                organization=org,
+                kind=str(data.get("kind", AccountingPeriod.Kind.MONTH)),
+                start_date=date.fromisoformat(str(data["start_date"])),
+                end_date=date.fromisoformat(str(data["end_date"])),
+                user=user,
+                notes=str(data.get("notes", "")),
+            )
+        except KeyError as exc:
+            raise ValidationError("'start_date' and 'end_date' are required.") from exc
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        return Response(AccountingPeriodSerializer(period).data, status=201)
+
+    @action(detail=True, methods=["post"])
+    def reopen(self, request: Request, pk: str | None = None) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        period = self.get_object()
+        try:
+            reopen_period(period=period, user=user, reason=str(request.data.get("reason", "")))
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        period.refresh_from_db()
+        return Response(AccountingPeriodSerializer(period).data)
 
 
 class CashFlowForecastView(viewsets.ViewSet):
@@ -360,4 +535,4 @@ class CashFlowForecastView(viewsets.ViewSet):
             or organization in organizations_visible_to(user)
         ):
             raise PermissionDenied("You may not view this organization's cash-flow forecast.")
-        return Response(cash_flow_forecast(organization))
+        return Response(_money_safe(cash_flow_forecast(organization)))

@@ -14,6 +14,7 @@ from apps.approvals.models import ApprovalRequest
 from apps.approvals.services import request_approval
 from apps.finance.models import (
     Account,
+    AccountingPeriod,
     BankAccount,
     CreditProfile,
     JournalEntry,
@@ -67,6 +68,28 @@ class JournalLineInput(TypedDict):
     memo: str
 
 
+class PeriodClosedError(ValueError):
+    """Raised when something tries to post into a closed accounting period."""
+
+
+def assert_period_open(organization: Organization, day: Any) -> None:
+    """Refuse to touch a period that has been closed out.
+
+    This is the whole point of a close: once EOM is signed off, the month's numbers
+    are final. Without this check the close would be decorative.
+    """
+    if AccountingPeriod.objects.filter(
+        organization=organization,
+        status=AccountingPeriod.Status.CLOSED,
+        start_date__lte=day,
+        end_date__gte=day,
+    ).exists():
+        raise PeriodClosedError(
+            f"The accounting period covering {day} is closed. "
+            "Reopen it, or date the entry in an open period."
+        )
+
+
 @transaction.atomic
 def post_journal(
     *,
@@ -78,7 +101,8 @@ def post_journal(
     reference_id: str = "",
     user: User | None = None,
 ) -> JournalEntry:
-    """Create a balanced journal entry. Raises ValueError if debits != credits."""
+    """Create a balanced journal entry. Raises ValueError if debits != credits, or
+    PeriodClosedError if the entry would land inside a closed period."""
     debit = sum(
         (ln["amount"] for ln in lines if ln["side"] == JournalLine.Side.DEBIT), Decimal("0")
     )
@@ -87,6 +111,8 @@ def post_journal(
     )
     if not lines or debit != credit:
         raise ValueError(f"Journal entry does not balance: debits={debit} credits={credit}.")
+
+    assert_period_open(organization, entry_date or timezone.now().date())
 
     entry = JournalEntry.objects.create(
         organization=organization,
@@ -570,3 +596,89 @@ def cash_flow_forecast(organization: Organization) -> dict[str, Any]:
         )
 
     return {"cash_on_hand": cash_on_hand, "projection": projection}
+
+
+@transaction.atomic
+def close_period(
+    *,
+    organization: Organization,
+    kind: str,
+    start_date: Any,
+    end_date: Any,
+    user: User | None,
+    notes: str = "",
+) -> AccountingPeriod:
+    """Close an accounting period, snapshotting its headline figures.
+
+    The snapshot matters: a closed period must report the same numbers forever, so
+    the trial-balance/P&L totals are frozen onto the record rather than recomputed
+    on every later read.
+    """
+    from apps.finance import reports
+
+    period, _ = AccountingPeriod.objects.get_or_create(
+        organization=organization,
+        kind=kind,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    if period.status == AccountingPeriod.Status.CLOSED:
+        raise ValueError("That period is already closed.")
+
+    tb = reports.trial_balance(organization, as_of=end_date)
+    pl = reports.profit_and_loss(organization, start=start_date, end=end_date)
+    bs = reports.balance_sheet(organization, as_of=end_date)
+    if not tb["balanced"]:
+        raise ValueError(
+            "Refusing to close: the trial balance does not balance "
+            f"(debits {tb['total_debit']} vs credits {tb['total_credit']})."
+        )
+
+    period.status = AccountingPeriod.Status.CLOSED
+    period.closed_by = user
+    period.closed_at = timezone.now()
+    period.notes = notes
+    period.closing_totals = {
+        "total_debit": str(tb["total_debit"]),
+        "total_credit": str(tb["total_credit"]),
+        "revenue": str(pl["revenue"]),
+        "cogs": str(pl["cogs"]),
+        "gross_profit": str(pl["gross_profit"]),
+        "net_profit": str(pl["net_profit"]),
+        "total_assets": str(bs["total_assets"]),
+        "total_liabilities": str(bs["total_liabilities"]),
+        "total_equity": str(bs["total_equity"]),
+    }
+    period.save()
+    record_audit(
+        action="PERIOD_CLOSE",
+        user=user,
+        organization=organization,
+        entity_type="accounting_period",
+        entity_id=str(period.pk),
+        changes=period.closing_totals,
+    )
+    return period
+
+
+@transaction.atomic
+def reopen_period(*, period: AccountingPeriod, user: User | None, reason: str) -> AccountingPeriod:
+    """Reopen a closed period — deliberate and audited, never silent."""
+    if period.status != AccountingPeriod.Status.CLOSED:
+        raise ValueError("That period is not closed.")
+    if not reason.strip():
+        raise ValueError("A reason is required to reopen a closed period.")
+    period.status = AccountingPeriod.Status.OPEN
+    period.reopened_by = user
+    period.reopened_at = timezone.now()
+    period.notes = f"{period.notes}\nReopened: {reason}".strip()
+    period.save(update_fields=["status", "reopened_by", "reopened_at", "notes"])
+    record_audit(
+        action="PERIOD_REOPEN",
+        user=user,
+        organization=period.organization,
+        entity_type="accounting_period",
+        entity_id=str(period.pk),
+        changes={"reason": reason},
+    )
+    return period

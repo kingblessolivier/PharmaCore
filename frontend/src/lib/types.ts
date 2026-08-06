@@ -785,3 +785,152 @@ export interface CashFlowForecast {
   cash_on_hand: number;
   projection: CashFlowBucket[];
 }
+
+// --- Finance statements (apps/finance/reports.py) ---
+// Money always crosses the wire as a string; parse with Number() at the edge.
+
+export interface TrialBalanceRow {
+  code: string;
+  name: string;
+  account_type: AccountType;
+  debit: string;
+  credit: string;
+}
+
+export interface TrialBalance {
+  as_of: string;
+  rows: TrialBalanceRow[];
+  total_debit: string;
+  total_credit: string;
+  balanced: boolean;
+}
+
+export interface StatementLine {
+  code: string;
+  name: string;
+  amount: string;
+}
+
+export interface ProfitAndLoss {
+  start: string;
+  end: string;
+  revenue: string;
+  cogs: string;
+  gross_profit: string;
+  gross_margin_pct: string;
+  operating_expenses: string;
+  net_profit: string;
+  net_margin_pct: string;
+  ebitda: string;
+  revenue_lines: StatementLine[];
+  expense_lines: StatementLine[];
+}
+
+export interface BalanceSheet {
+  as_of: string;
+  assets: StatementLine[];
+  liabilities: StatementLine[];
+  equity: StatementLine[];
+  total_assets: string;
+  total_liabilities: string;
+  contributed_equity: string;
+  retained_earnings: string;
+  total_equity: string;
+  balanced: boolean;
+}
+
+export interface CashFlowMovement {
+  entry_number: string;
+  entry_date: string;
+  description: string;
+  amount: string;
+}
+
+export interface CashFlowStatement {
+  start: string;
+  end: string;
+  operating: string;
+  investing: string;
+  financing: string;
+  net_change: string;
+  opening_cash: string;
+  closing_cash: string;
+  movements: Record<"operating" | "investing" | "financing", CashFlowMovement[]>;
+}
+
+export interface RevenueCogsPoint {
+  month: string;
+  revenue: string;
+  cogs: string;
+  gross_profit: string;
+}
+
+export interface FinancePerformance {
+  start: string;
+  end: string;
+  days: number;
+  previous_start: string;
+  previous_end: string;
+  revenue: string;
+  cogs: string;
+  gross_profit: string;
+  gross_margin_pct: string;
+  operating_expenses: string;
+  net_profit: string;
+  net_margin_pct: string;
+  ebitda: string;
+  receivable: string;
+  payable: string;
+  dso_days: string;
+  dpo_days: string;
+  previous: { revenue: string; cogs: string; gross_profit: string; net_profit: string };
+  delta_pct: {
+    revenue: string | null;
+    gross_profit: string | null;
+    net_profit: string | null;
+  };
+  series: RevenueCogsPoint[];
+}
+
+export interface ConsolidatedBranch {
+  organization: number;
+  organization_name: string;
+  revenue: string;
+  cogs: string;
+  gross_profit: string;
+  gross_margin_pct: string;
+  operating_expenses: string;
+  net_profit: string;
+  net_margin_pct: string;
+  total_assets: string;
+  total_liabilities: string;
+  total_equity: string;
+}
+
+export interface Consolidated {
+  start: string;
+  end: string;
+  branches: ConsolidatedBranch[];
+  totals: Record<string, string>;
+  group_gross_margin_pct: string;
+  group_net_margin_pct: string;
+}
+
+export type PeriodKind = "DAY" | "MONTH" | "YEAR";
+
+export interface AccountingPeriod {
+  id: number;
+  organization: number;
+  organization_name: string;
+  kind: PeriodKind;
+  start_date: string;
+  end_date: string;
+  status: "OPEN" | "CLOSED";
+  closing_totals: Record<string, string>;
+  closed_by: number | null;
+  closed_by_name: string | null;
+  closed_at: string | null;
+  reopened_at: string | null;
+  notes: string;
+  created_at: string;
+}

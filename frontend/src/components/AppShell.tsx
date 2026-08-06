@@ -12,6 +12,7 @@ import {
   Eye,
   FileText,
   Globe,
+  FileBarChart,
   Landmark,
   LayoutDashboard,
   LayoutGrid,
@@ -328,6 +329,7 @@ const NAV: NavGroup[] = [
       { to: "/finance/credit", label: "Customer credit", icon: Wallet },
       { to: "/finance/payables", label: "Supplier bills (AP)", icon: CreditCard },
       { to: "/finance/banking", label: "Banking & cash", icon: Landmark },
+      { to: "/finance/statements", label: "Statements & close", icon: FileBarChart },
     ],
   },
   {

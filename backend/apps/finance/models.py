@@ -8,6 +8,7 @@ corrections are new reversing entries, never edits (immutable once posted).
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 from django.core.validators import MinValueValidator
@@ -125,6 +126,62 @@ class JournalLine(models.Model):
 
     def __str__(self) -> str:
         return f"{self.side} {self.amount} {self.account.code}"
+
+
+class AccountingPeriod(models.Model):
+    """An EOD/EOM closeout. Closing a period freezes it: no new entry may be dated
+    inside a closed window, so last month's trial balance can never move after it
+    has been reported. Reopening is a deliberate, audited act.
+
+    ROADMAP "9. Finance" — *"Period close — EOD/EOM closeout, trial balance, P&L,
+    balance sheet, cash-flow"*.
+    """
+
+    class Kind(models.TextChoices):
+        DAY = "DAY", "Day (EOD)"
+        MONTH = "MONTH", "Month (EOM)"
+        YEAR = "YEAR", "Year"
+
+    class Status(models.TextChoices):
+        OPEN = "OPEN", "Open"
+        CLOSED = "CLOSED", "Closed"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="accounting_periods"
+    )
+    kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.MONTH)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN)
+    # Snapshot of the headline figures at the moment of closing, so the closed
+    # period reports the same numbers forever even if later code changes.
+    closing_totals = models.JSONField(default=dict, blank=True)
+    closed_by = models.ForeignKey(
+        "iam.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    closed_at = models.DateTimeField(null=True, blank=True)
+    reopened_by = models.ForeignKey(
+        "iam.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    reopened_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-start_date"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "kind", "start_date", "end_date"],
+                name="uniq_accounting_period",
+            )
+        ]
+        indexes = [models.Index(fields=["organization", "status"])]
+
+    def __str__(self) -> str:
+        return f"{self.organization.name} {self.kind} {self.start_date}–{self.end_date}"
+
+    def covers(self, day: date) -> bool:
+        return self.start_date <= day <= self.end_date
 
 
 class BankAccount(models.Model):

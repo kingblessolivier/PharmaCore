@@ -108,7 +108,9 @@ def test_bank_account_api_and_cash_book_endpoint(org: Organization, accountant: 
     cb = _auth(accountant).get(f"/api/finance/bank-accounts/{account_id}/cash-book/")
     assert cb.status_code == 200
     assert len(cb.json()) == 1
-    assert cb.json()[0]["running_balance"] == 200000.0
+    # Money crosses the wire as a string — never a float, which would trade
+    # exactness for binary floating point.
+    assert cb.json()[0]["running_balance"] == "200000.00"
 
     line_id = cb.json()[0]["line_id"]
     rec = _auth(accountant).post(
