@@ -33,7 +33,7 @@ def request_approval(
     reason: str = "",
     sla_hours: int = DEFAULT_SLA_HOURS,
 ) -> ApprovalRequest:
-    return ApprovalRequest.objects.create(
+    approval = ApprovalRequest.objects.create(
         resource_type=resource_type,
         resource_id=str(resource_id),
         organization=organization,
@@ -42,6 +42,20 @@ def request_approval(
         reason=reason,
         sla_hours=sla_hours,
     )
+
+    # F1.3 — emit ApprovalRequested on the bus (ADR-010). Reporting / Insights
+    # / the per-user bell counter all subscribe here without coupling to the
+    # approvals engine internals.
+    from apps.events.publishers import publish_approval_requested
+
+    publish_approval_requested(
+        approval_id=approval.pk,
+        organization=organization,
+        requested_by=requested_by,
+        resource_type=resource_type,
+        resource_id=resource_id,
+    )
+    return approval
 
 
 def refresh_sla(qs: QuerySet[ApprovalRequest]) -> None:
@@ -101,6 +115,19 @@ def decide(
     approval.save(update_fields=["status", "decided_by", "decided_at", "decision_note"])
     if approve:
         registry.apply(approval)
+
+    # F1.3 — emit ApprovalGranted/ApprovalRejected on the bus (ADR-010). The
+    # downstream resource handler (registry.apply) is in-process; the event
+    # is what Reporting/Insights listen to for their dashboards.
+    from apps.events.publishers import publish_approval_decided
+
+    publish_approval_decided(
+        approval_id=approval.pk,
+        organization=approval.organization,
+        user=user,
+        approve=approve,
+    )
+
     record_audit(
         action="APPROVE" if approve else "REJECT",
         user=user,

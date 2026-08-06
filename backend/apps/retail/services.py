@@ -217,6 +217,22 @@ def complete_sale(
             "updated_at",
         ]
     )
+
+    # F1.3 — emit SaleFinalised on the bus (ADR-010). The journal service and
+    # any Reporting/Insights subscriber pick this up asynchronously, so a
+    # transient dispatcher failure cannot block a sale.
+    from apps.events.publishers import publish_sale_finalised
+
+    publish_sale_finalised(
+        sale_id=sale.pk,
+        organization=sale.organization,
+        user=user,
+        payload={
+            "total": str(total),
+            "payment_status": "PAID",
+            "branch_id": sale.organization_id,
+        },
+    )
     if needs_pharmacist:
         d = dispensing or {}
         Dispensing.objects.create(
