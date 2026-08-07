@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Edit2, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Button, Card, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
+import { Badge, Button, PageHeader, SelectField, TextField } from "../components/ui";
 import { api } from "../lib/api";
 import type { Paginated, Product, ProductSubstitute } from "../lib/types";
+import { DataGrid } from "../components/DataGrid";
+import { Drawer } from "../components/RecordKit";
 
 export function SubstitutesPage() {
   const navigate = useNavigate();
@@ -132,68 +134,77 @@ export function SubstitutesPage() {
         />
       </div>
 
-      {isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
-
-      {data && (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-3">Substitute Medicine</th>
-                <th className="px-4 py-3">Strength</th>
-                <th className="px-4 py-3">Substitution Type</th>
-                <th className="px-4 py-3">Notes</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((s) => (
-                <tr key={s.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                  <td className="px-4 py-3 font-semibold text-ink-900 flex items-center gap-2">
-                    <RefreshCcw className="h-4 w-4 text-brand-600" />
-                    {s.substitute_generic_name}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-ink-700">{s.substitute_strength || "—"}</td>
-                  <td className="px-4 py-3">
-                    <Badge tone="neutral">{s.substitute_type}</Badge>
-                  </td>
-                  <td className="px-4 py-3 text-ink-700">{s.notes || "—"}</td>
-                  <td className="px-4 py-3 text-right flex items-center justify-end gap-1">
-                    <button
-                      onClick={() => startEdit(s)}
-                      className="rounded-md p-1.5 text-ink-500 hover:bg-surface-200 hover:text-ink-900"
-                      aria-label="Edit substitute"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => deleteMutation.mutate(s.id)}
-                      className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
-                      aria-label="Delete substitute"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-ink-500">
-                    {search ? "No substitutes match your filter." : "No generic or therapeutic substitutes mapped yet. Click 'Add Substitute' to create one."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      <DataGrid<ProductSubstitute>
+        rows={filtered}
+        loading={isLoading}
+        getRowId={(r) => r.id}
+        storageKey="product-substitutes"
+        exportName="product-substitutes"
+        searchPlaceholder="Search substitutes…"
+        emptyMessage="No substitutes recorded."
+        columns={[
+          {
+            key: "substitute_generic_name",
+            header: "Substitute medicine",
+            value: (s) => s.substitute_generic_name,
+            render: (s) => (
+              <span className="flex items-center gap-2 font-medium text-ink-900">
+                <RefreshCcw className="h-4 w-4 text-brand-600" />
+                {s.substitute_generic_name}
+              </span>
+            ),
+          },
+          {
+            key: "substitute_strength",
+            header: "Strength",
+            value: (s) => s.substitute_strength || "—",
+            render: (s) => (
+              <span className="font-mono text-ink-700">{s.substitute_strength || "—"}</span>
+            ),
+          },
+          {
+            key: "substitute_type",
+            header: "Type",
+            value: (s) => s.substitute_type,
+            render: (s) => <Badge tone="neutral">{s.substitute_type}</Badge>,
+          },
+          { key: "notes", header: "Notes", value: (s) => s.notes || "—" },
+          {
+            key: "actions",
+            header: "",
+            align: "right",
+            fixed: true,
+            sortable: false,
+            render: (s) => (
+              <div className="flex items-center justify-end gap-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEdit(s);
+                  }}
+                  className="rounded-md p-1.5 text-ink-500 hover:bg-surface-200 hover:text-ink-900"
+                  aria-label="Edit"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteMutation.mutate(s.id);
+                  }}
+                  className="rounded-md p-1.5 text-ink-500 hover:bg-danger-50 hover:text-danger-600"
+                  aria-label="Delete"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ),
+          },
+        ]}
+      />
 
       {creating && (
-        <Modal title="Add Generic / Therapeutic Substitute" onClose={() => setCreating(false)}>
+        <Drawer title="Add Generic / Therapeutic Substitute" onClose={() => setCreating(false)}>
           <form onSubmit={submitCreate} className="flex flex-col gap-4">
             <SelectField
               label="Primary Medicine"
@@ -244,11 +255,11 @@ export function SubstitutesPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
 
       {editing && (
-        <Modal title="Edit Generic / Therapeutic Substitute" onClose={() => setEditing(null)}>
+        <Drawer title="Edit Generic / Therapeutic Substitute" onClose={() => setEditing(null)}>
           <form onSubmit={submitUpdate} className="flex flex-col gap-4">
             <TextField
               label="Substitute Medicine Name"
@@ -285,7 +296,7 @@ export function SubstitutesPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
     </div>
   );

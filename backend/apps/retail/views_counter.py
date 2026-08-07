@@ -76,14 +76,13 @@ class CounterViewSet(viewsets.ViewSet):
 
         from django.db.models import Sum
 
-        # PharmacyProduct is the per-pharmacy listing and lives in inventory, not
-        # catalog — catalog holds the product, inventory holds what this shop
-        # stocks and charges for it.
-        from apps.inventory.models import InventoryBatch, PharmacyProduct
+        from apps.catalog import pricing, substitution
 
-        listing = PharmacyProduct.objects.filter(
-            organization=organization, product=result.product
-        ).first()
+        # Price resolves through catalog (any list in force, else this pharmacy's
+        # own price); stock comes from inventory.
+        from apps.inventory.models import InventoryBatch
+
+        resolved = pricing.resolve(product=result.product, organization=organization)
         on_hand = (
             InventoryBatch.objects.filter(
                 organization=organization, product=result.product
@@ -99,10 +98,19 @@ class CounterViewSet(viewsets.ViewSet):
                 # Scanning a carton must add the carton, not one tablet.
                 "units": result.units,
                 "packaging_level": result.packaging_level,
-                # Read the real field. A `getattr` fallback here would hand the
-                # till an empty price on every scan and never say why.
-                "unit_price": str(listing.retail_price) if listing and listing.retail_price else "",
+                # Resolved through any price list in force, falling back to the
+                # pharmacy's own price. Reading `retail_price` alone meant a
+                # promotional list changed nothing at the till.
+                "unit_price": str(resolved.unit_price) if resolved.unit_price else "",
+                "price_source": resolved.source,
+                "price_list_name": resolved.price_list_name,
                 "on_hand": int(on_hand),
+                # An empty shelf is exactly when the catalogue is most useful.
+                "substitutes": (
+                    substitution.suggest(product=result.product, organization=organization)
+                    if on_hand <= 0
+                    else None
+                ),
                 "requires_prescription": result.product.requires_prescription,
                 "is_controlled": result.product.is_controlled_substance,
             }

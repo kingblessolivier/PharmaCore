@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Edit2, Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Button, Card, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
+import { Badge, Button, PageHeader, SelectField, TextField } from "../components/ui";
 import { api } from "../lib/api";
 import type { ActiveIngredient, Paginated, ProductInteraction } from "../lib/types";
+import { DataGrid } from "../components/DataGrid";
+import { Drawer } from "../components/RecordKit";
 
 export function InteractionsPage() {
   const navigate = useNavigate();
@@ -132,77 +134,83 @@ export function InteractionsPage() {
         />
       </div>
 
-      {isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
-
-      {data && (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-3">Active Ingredient A</th>
-                <th className="px-4 py-3">Active Ingredient B</th>
-                <th className="px-4 py-3">Severity</th>
-                <th className="px-4 py-3">Clinical Effect</th>
-                <th className="px-4 py-3">Management / Advice</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((i) => (
-                <tr key={i.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                  <td className="px-4 py-3 font-semibold text-ink-900">{i.ingredient_a_name}</td>
-                  <td className="px-4 py-3 font-semibold text-ink-900">{i.ingredient_b_name}</td>
-                  <td className="px-4 py-3">
-                    <Badge
-                      tone={
-                        i.severity === "MAJOR"
-                          ? "critical"
-                          : i.severity === "MODERATE"
-                            ? "warning"
-                            : "neutral"
-                      }
-                    >
-                      {i.severity}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-ink-700">{i.effect || "—"}</td>
-                  <td className="px-4 py-3 text-ink-700">{i.management || "—"}</td>
-                  <td className="px-4 py-3 text-right flex items-center justify-end gap-1">
-                    <button
-                      onClick={() => startEdit(i)}
-                      className="rounded-md p-1.5 text-ink-500 hover:bg-surface-200 hover:text-ink-900"
-                      aria-label="Edit interaction"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => deleteMutation.mutate(i.id)}
-                      className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
-                      aria-label="Delete interaction"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-ink-500">
-                    {search ? "No drug interactions match your search." : "No clinical drug interactions recorded. Click 'Add Drug Interaction' to create one."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      <DataGrid<ProductInteraction>
+        rows={filtered}
+        loading={isLoading}
+        getRowId={(r) => r.id}
+        storageKey="drug-interactions"
+        exportName="drug-interactions"
+        searchPlaceholder="Search by ingredient or severity…"
+        emptyMessage="No interactions recorded."
+        columns={[
+          {
+            key: "ingredient_a_name",
+            header: "Ingredient A",
+            value: (i) => i.ingredient_a_name,
+            render: (i) => <span className="font-medium text-ink-900">{i.ingredient_a_name}</span>,
+          },
+          {
+            key: "ingredient_b_name",
+            header: "Ingredient B",
+            value: (i) => i.ingredient_b_name,
+            render: (i) => <span className="font-medium text-ink-900">{i.ingredient_b_name}</span>,
+          },
+          {
+            key: "severity",
+            header: "Severity",
+            value: (i) => i.severity,
+            render: (i) => (
+              <Badge
+                tone={
+                  i.severity === "MAJOR"
+                    ? "critical"
+                    : i.severity === "MODERATE"
+                      ? "warning"
+                      : "neutral"
+                }
+              >
+                {i.severity}
+              </Badge>
+            ),
+          },
+          { key: "effect", header: "Clinical effect", value: (i) => i.effect || "—" },
+          { key: "management", header: "Management", value: (i) => i.management || "—" },
+          {
+            key: "actions",
+            header: "",
+            align: "right",
+            fixed: true,
+            sortable: false,
+            render: (i) => (
+              <div className="flex items-center justify-end gap-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEdit(i);
+                  }}
+                  className="rounded-md p-1.5 text-ink-500 hover:bg-surface-200 hover:text-ink-900"
+                  aria-label="Edit"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteMutation.mutate(i.id);
+                  }}
+                  className="rounded-md p-1.5 text-ink-500 hover:bg-danger-50 hover:text-danger-600"
+                  aria-label="Delete"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ),
+          },
+        ]}
+      />
 
       {creating && (
-        <Modal title="Add Drug Interaction Rule" onClose={() => setCreating(false)}>
+        <Drawer title="Add Drug Interaction Rule" onClose={() => setCreating(false)}>
           <form onSubmit={submitCreate} className="flex flex-col gap-4">
             <SelectField
               label="Ingredient A"
@@ -256,11 +264,11 @@ export function InteractionsPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
 
       {editing && (
-        <Modal title="Edit Drug Interaction Rule" onClose={() => setEditing(null)}>
+        <Drawer title="Edit Drug Interaction Rule" onClose={() => setEditing(null)}>
           <form onSubmit={submitUpdate} className="flex flex-col gap-4">
             <div className="text-sm font-medium text-ink-900">
               Interaction: <span className="text-brand-700">{editing.ingredient_a_name}</span> + <span className="text-brand-700">{editing.ingredient_b_name}</span>
@@ -293,7 +301,7 @@ export function InteractionsPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
     </div>
   );

@@ -1,91 +1,197 @@
+/* -------------------------------------------------------------------------- */
+/* Expiry forecast — the batches, not just the count of them.                 */
+/*                                                                             */
+/* This screen promised "batch tracking" and showed two aggregate numbers. A   */
+/* count tells you there is a problem; it does not tell you which shelf to walk */
+/* to. Expiry is only actionable per batch — you sell it through, move it, or   */
+/* destroy it — so the batches are the screen.                                  */
+/* -------------------------------------------------------------------------- */
+
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, CalendarClock, RefreshCw, ShieldAlert } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { Button, Card, PageHeader, Spinner } from "../components/ui";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { DataGrid, type Column } from "../components/DataGrid";
+import { Badge, Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
-import type { DashboardSummary } from "../lib/types";
+import { money, shortDate } from "../lib/format";
+import { useDefaultOrg } from "../lib/recordData";
+import type { InventoryBatch, Paginated } from "../lib/types";
+
+/** Anything inside this window is close enough to plan around. */
+const HORIZON_DAYS = 90;
+
+function daysLeft(expiry: string): number {
+  return Math.floor((new Date(expiry).getTime() - Date.now()) / 86_400_000);
+}
 
 export function ExpiryPage() {
-  const navigate = useNavigate();
+  const { orgId } = useDefaultOrg();
+  const [horizon, setHorizon] = useState(HORIZON_DAYS);
 
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ["dashboard"],
-    queryFn: () => api<DashboardSummary>("/api/dashboard/"),
+  const batches = useQuery({
+    queryKey: ["expiry-batches", orgId],
+    enabled: orgId != null,
+    queryFn: () =>
+      api<Paginated<InventoryBatch>>(
+        `/api/inventory/batches/?organization=${orgId}&page_size=1000`,
+      ),
   });
 
-  const expiringCount = data?.expiring_soon.count ?? 0;
-  const expiringUnits = data?.expiring_soon.units ?? 0;
-  const expiredCount = data?.expired.count ?? 0;
-  const expiredUnits = data?.expired.units ?? 0;
+  const all = (batches.data?.results ?? []).filter((b) => b.quantity_available > 0);
+  const rows = all
+    .filter((b) => daysLeft(b.expiry_date) <= horizon)
+    .sort((a, b) => (a.expiry_date < b.expiry_date ? -1 : 1));
+
+  const expired = rows.filter((b) => daysLeft(b.expiry_date) < 0);
+  const units = rows.reduce((s, b) => s + b.quantity_available, 0);
+  const value = rows.reduce(
+    (s, b) => s + Number(b.wholesale_cost ?? 0) * b.quantity_available,
+    0,
+  );
+
+  const columns: Column<InventoryBatch>[] = [
+    {
+      key: "product_name",
+      header: "Medicine",
+      value: (b) => b.product_name ?? "",
+      render: (b) => <span className="font-medium text-ink-900">{b.product_name}</span>,
+    },
+    {
+      key: "batch_number",
+      header: "Batch",
+      value: (b) => b.batch_number,
+      render: (b) => <span className="font-mono text-xs text-ink-700">{b.batch_number}</span>,
+    },
+    {
+      key: "quantity_available",
+      header: "Units",
+      align: "right",
+      numeric: true,
+      value: (b) => b.quantity_available,
+      render: (b) => <span className="tabular-nums">{b.quantity_available.toLocaleString()}</span>,
+    },
+    {
+      key: "value",
+      header: "Value at cost",
+      align: "right",
+      numeric: true,
+      value: (b) => Number(b.wholesale_cost ?? 0) * b.quantity_available,
+      render: (b) => money(Number(b.wholesale_cost ?? 0) * b.quantity_available),
+    },
+    {
+      key: "expiry_date",
+      header: "Expires",
+      value: (b) => b.expiry_date,
+      render: (b) => shortDate(b.expiry_date),
+    },
+    {
+      key: "days",
+      header: "Days left",
+      align: "right",
+      numeric: true,
+      value: (b) => daysLeft(b.expiry_date),
+      render: (b) => {
+        const d = daysLeft(b.expiry_date);
+        if (d < 0) return <Badge tone="danger">expired</Badge>;
+        if (d <= 30) return <Badge tone="danger">{d}d</Badge>;
+        if (d <= 60) return <Badge tone="warning">{d}d</Badge>;
+        return <span className="tabular-nums text-ink-600">{d}d</span>;
+      },
+    },
+    {
+      key: "status",
+      header: "Status",
+      value: (b) => b.status,
+      render: (b) => (
+        <Badge tone={b.status === "ACTIVE" ? "neutral" : "warning"}>{b.status}</Badge>
+      ),
+    },
+  ];
 
   return (
-    <div className="max-w-5xl">
-      <button
-        onClick={() => navigate("/catalog")}
-        className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
-      >
-        <ArrowLeft className="h-4 w-4" /> Catalog Home
-      </button>
-
+    <div className="space-y-4">
       <PageHeader
-        title="Expiry Forecast & Action List"
+        title="Expiry forecast"
         action={
-          <Button variant="secondary" onClick={() => refetch()}>
-            <RefreshCw className="h-4 w-4" /> Refresh Forecast
-          </Button>
+          <div className="flex items-center gap-2">
+            <select
+              value={horizon}
+              onChange={(e) => setHorizon(Number(e.target.value))}
+              className="rounded-md border border-line bg-surface-0 px-2 py-1.5 text-sm"
+            >
+              <option value={30}>Next 30 days</option>
+              <option value={60}>Next 60 days</option>
+              <option value={90}>Next 90 days</option>
+              <option value={180}>Next 180 days</option>
+            </select>
+            <Button variant="secondary" onClick={() => batches.refetch()}>
+              <RefreshCw className="h-4 w-4" /> Refresh
+            </Button>
+          </div>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
-        Inventory batch tracking for stock nearing expiry within 90 days and expired stock requiring quarantine.
+      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
+        Every batch that will expire inside the window, soonest first. Expiry is only actionable
+        per batch — sell it through, move it where it will sell, or destroy it.
       </p>
 
-      {isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Tile label={`Batches within ${horizon} days`} value={rows.length} />
+        <Tile label="Units at risk" value={units.toLocaleString()} />
+        <Tile label="Value at cost" value={money(value)} tone={value > 0 ? "warning" : undefined} />
+        <Tile
+          label="Already expired"
+          value={expired.length}
+          tone={expired.length ? "danger" : undefined}
+          hint={expired.length ? "still on the shelf" : "nothing expired"}
+        />
+      </div>
 
-      {data && (
-        <div className="flex flex-col gap-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Card className="p-5 border-amber-200 bg-amber-50">
-              <div className="flex items-center gap-2 text-amber-900">
-                <CalendarClock className="h-5 w-5 text-amber-600" />
-                <h2 className="font-semibold text-base">Expiring Soon (90 Days)</h2>
-              </div>
-              <div className="mt-3 text-3xl font-bold font-mono text-amber-900">{expiringCount} <span className="text-sm font-normal text-amber-700">batches</span></div>
-              <p className="mt-1 text-sm text-amber-800">
-                {expiringUnits.toLocaleString()} units available. Dispense these batches first under FEFO rules.
-              </p>
-            </Card>
-
-            <Card className="p-5 border-red-200 bg-red-50">
-              <div className="flex items-center gap-2 text-red-900">
-                <ShieldAlert className="h-5 w-5 text-red-600" />
-                <h2 className="font-semibold text-base">Expired Stock</h2>
-              </div>
-              <div className="mt-3 text-3xl font-bold font-mono text-red-900">{expiredCount} <span className="text-sm font-normal text-red-700">batches</span></div>
-              <p className="mt-1 text-sm text-red-800">
-                {expiredUnits.toLocaleString()} units expired on hand. Must be quarantined and written off immediately.
-              </p>
-            </Card>
+      {expired.length > 0 && (
+        <div className="flex items-start gap-2 rounded-lg border border-danger-200 bg-danger-50 p-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger-600" />
+          <div className="text-sm text-danger-900">
+            <span className="font-semibold">
+              {expired.length} batch(es) have already expired and still hold stock.
+            </span>{" "}
+            They are unsellable in fact. Raise a disposal so they leave the books and the loss
+            lands, rather than sitting as inventory that cannot be sold.
           </div>
-
-          <Card className="p-5">
-            <h2 className="mb-3 text-sm font-semibold text-ink-900">Expiry Management Guidelines (Good Pharmacy Practice)</h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-xs text-ink-700">
-              <div className="rounded border border-line bg-surface-50 p-3">
-                <div className="font-medium text-ink-900 mb-1">FEFO Dispensing Enforcement</div>
-                <p>Always pick the oldest batch with the nearest expiry date. The dispensing counter enforces FEFO automatically during sale scan.</p>
-              </div>
-              <div className="rounded border border-line bg-surface-50 p-3">
-                <div className="font-medium text-ink-900 mb-1">Quarantine & Destruction Protocol</div>
-                <p>Expired medicines are blocked from sale. Move physical stock to the designated quarantine area before formal witness write-off.</p>
-              </div>
-            </div>
-          </Card>
         </div>
       )}
+
+      <DataGrid
+        rows={rows}
+        columns={columns}
+        getRowId={(b) => b.id}
+        loading={batches.isLoading}
+        storageKey="expiry-forecast"
+        exportName="expiry-forecast"
+        searchPlaceholder="Search by medicine or batch…"
+        emptyMessage={`Nothing expires within ${horizon} days.`}
+      />
+    </div>
+  );
+}
+
+function Tile({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+  tone?: "danger" | "warning";
+}) {
+  const colour =
+    tone === "danger" ? "text-danger-700" : tone === "warning" ? "text-warning-700" : "text-ink-900";
+  return (
+    <div className="rounded-lg border border-line bg-surface-0 p-3">
+      <div className="text-xs text-ink-500">{label}</div>
+      <div className={`mt-0.5 text-xl font-semibold tabular-nums ${colour}`}>{value}</div>
+      {hint && <div className="mt-0.5 text-xs text-ink-500">{hint}</div>}
     </div>
   );
 }

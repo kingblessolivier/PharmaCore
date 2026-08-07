@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Edit2, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Button, Card, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
+import { Badge, Button, PageHeader, SelectField, TextField } from "../components/ui";
 import { api } from "../lib/api";
 import type { FormularyItem, Paginated, Product } from "../lib/types";
+import { DataGrid } from "../components/DataGrid";
+import { Drawer } from "../components/RecordKit";
 
 export function FormulariesPage() {
   const navigate = useNavigate();
@@ -137,84 +139,112 @@ export function FormulariesPage() {
         />
       </div>
 
-      {isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
-
-      {data && (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-3">Insurer / Scheme</th>
-                <th className="px-4 py-3">Medicine</th>
-                <th className="px-4 py-3">Coverage Status</th>
-                <th className="px-4 py-3 text-right">Max Reimbursable</th>
-                <th className="px-4 py-3 text-right">Co-pay %</th>
-                <th className="px-4 py-3 text-center">Prior Auth</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((f) => (
-                <tr key={f.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                  <td className="px-4 py-3 font-semibold text-ink-900 flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-brand-600" />
-                    {f.scheme_name}
-                  </td>
-                  <td className="px-4 py-3 font-medium text-ink-900">{f.product_generic_name}</td>
-                  <td className="px-4 py-3">
-                    <Badge tone={f.is_covered ? "success" : "critical"}>
-                      {f.is_covered ? "Covered" : "Not Covered"}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-ink-700">
-                    {f.max_reimbursable_price ? `RWF ${f.max_reimbursable_price}` : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-ink-700">
-                    {f.copay_percentage ? `${f.copay_percentage}%` : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    {f.requires_prior_auth ? (
-                      <Badge tone="warning">Required</Badge>
-                    ) : (
-                      <span className="text-xs text-ink-500">No</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right flex items-center justify-end gap-1">
-                    <button
-                      onClick={() => startEdit(f)}
-                      className="rounded-md p-1.5 text-ink-500 hover:bg-surface-200 hover:text-ink-900"
-                      aria-label="Edit entry"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => deleteMutation.mutate(f.id)}
-                      className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
-                      aria-label="Delete entry"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-ink-500">
-                    {search ? "No formularies match your filter." : "No insurer formularies mapped yet. Click 'Add Formulary Entry' to create one."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      <DataGrid<FormularyItem>
+        rows={filtered}
+        loading={isLoading}
+        getRowId={(r) => r.id}
+        storageKey="formulary-items"
+        exportName="formulary-items"
+        searchPlaceholder="Search by scheme or medicine…"
+        emptyMessage="No formulary entries recorded."
+        columns={[
+          {
+            key: "scheme_name",
+            header: "Insurer / scheme",
+            value: (f) => f.scheme_name,
+            render: (f) => (
+              <span className="flex items-center gap-2 font-medium text-ink-900">
+                <ShieldCheck className="h-4 w-4 text-brand-600" />
+                {f.scheme_name}
+              </span>
+            ),
+          },
+          {
+            key: "product_generic_name",
+            header: "Medicine",
+            value: (f) => f.product_generic_name,
+          },
+          {
+            key: "is_covered",
+            header: "Coverage",
+            value: (f) => (f.is_covered ? "Covered" : "Not covered"),
+            render: (f) => (
+              <Badge tone={f.is_covered ? "success" : "critical"}>
+                {f.is_covered ? "Covered" : "Not covered"}
+              </Badge>
+            ),
+          },
+          {
+            key: "max_reimbursable_price",
+            header: "Max reimbursable",
+            align: "right",
+            numeric: true,
+            value: (f) => Number(f.max_reimbursable_price ?? 0),
+            render: (f) => (
+              <span className="font-mono text-ink-700">
+                {f.max_reimbursable_price ? `RWF ${f.max_reimbursable_price}` : "—"}
+              </span>
+            ),
+          },
+          {
+            key: "copay_percentage",
+            header: "Co-pay",
+            align: "right",
+            numeric: true,
+            value: (f) => Number(f.copay_percentage ?? 0),
+            render: (f) => (
+              <span className="font-mono text-ink-700">
+                {f.copay_percentage ? `${f.copay_percentage}%` : "—"}
+              </span>
+            ),
+          },
+          {
+            key: "requires_prior_auth",
+            header: "Prior auth",
+            value: (f) => (f.requires_prior_auth ? "Required" : "No"),
+            render: (f) =>
+              f.requires_prior_auth ? (
+                <Badge tone="warning">Required</Badge>
+              ) : (
+                <span className="text-xs text-ink-500">No</span>
+              ),
+          },
+          {
+            key: "actions",
+            header: "",
+            align: "right",
+            fixed: true,
+            sortable: false,
+            render: (f) => (
+              <div className="flex items-center justify-end gap-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEdit(f);
+                  }}
+                  className="rounded-md p-1.5 text-ink-500 hover:bg-surface-200 hover:text-ink-900"
+                  aria-label="Edit"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteMutation.mutate(f.id);
+                  }}
+                  className="rounded-md p-1.5 text-ink-500 hover:bg-danger-50 hover:text-danger-600"
+                  aria-label="Delete"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ),
+          },
+        ]}
+      />
 
       {creating && (
-        <Modal title="Add Formulary Entry" onClose={() => setCreating(false)}>
+        <Drawer title="Add Formulary Entry" onClose={() => setCreating(false)}>
           <form onSubmit={submitCreate} className="flex flex-col gap-4">
             <SelectField
               label="Medicine"
@@ -266,11 +296,11 @@ export function FormulariesPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
 
       {editing && (
-        <Modal title="Edit Formulary Entry" onClose={() => setEditing(null)}>
+        <Drawer title="Edit Formulary Entry" onClose={() => setEditing(null)}>
           <form onSubmit={submitUpdate} className="flex flex-col gap-4">
             <div className="text-sm font-medium text-ink-900">
               Medicine: <span className="text-brand-700">{editing.product_generic_name}</span>
@@ -311,7 +341,7 @@ export function FormulariesPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
     </div>
   );

@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Edit2, Factory, Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Button, Card, Modal, PageHeader, Spinner, TextField } from "../components/ui";
+import { Badge, Button, PageHeader, TextField } from "../components/ui";
 import { api } from "../lib/api";
 import type { Manufacturer, Paginated } from "../lib/types";
+import { DataGrid } from "../components/DataGrid";
+import { Drawer } from "../components/RecordKit";
 
 export function ManufacturersPage() {
   const navigate = useNavigate();
@@ -97,68 +99,73 @@ export function ManufacturersPage() {
         Full CRUD management for pharmaceutical manufacturing companies and GMP compliance status.
       </p>
 
-      {isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
-
-      {data && (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-3">Manufacturer Name</th>
-                <th className="px-4 py-3">Country of Origin</th>
-                <th className="px-4 py-3">GMP Status</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.results.map((m) => (
-                <tr key={m.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                  <td className="px-4 py-3 font-semibold text-ink-900 flex items-center gap-2">
-                    <Factory className="h-4 w-4 text-brand-600" />
-                    {m.name}
-                  </td>
-                  <td className="px-4 py-3 text-ink-700">{m.country || "—"}</td>
-                  <td className="px-4 py-3">
-                    <Badge tone={m.is_active ? "success" : "warning"}>
-                      {m.is_active ? "Compliant / Active" : "Inactive"}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-right flex items-center justify-end gap-1">
-                    <button
-                      onClick={() => startEdit(m)}
-                      className="rounded-md p-1.5 text-ink-500 hover:bg-surface-200 hover:text-ink-900"
-                      aria-label="Edit manufacturer"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => deleteMutation.mutate(m.id)}
-                      className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
-                      aria-label="Delete manufacturer"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {data.results.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-ink-500">
-                    No pharmaceutical manufacturers added yet. Click "Add Manufacturer" to create one.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      <DataGrid<Manufacturer>
+        rows={data?.results ?? []}
+        loading={isLoading}
+        getRowId={(m) => m.id}
+        storageKey="manufacturers"
+        exportName="manufacturers"
+        searchPlaceholder="Search manufacturers by name or country…"
+        emptyMessage="No manufacturers recorded yet."
+        columns={[
+          {
+            key: "name",
+            header: "Manufacturer",
+            value: (m) => m.name,
+            render: (m) => (
+              <span className="flex items-center gap-2 font-medium text-ink-900">
+                <Factory className="h-4 w-4 text-brand-600" />
+                {m.name}
+              </span>
+            ),
+          },
+          { key: "country", header: "Country of origin", value: (m) => m.country || "—" },
+          {
+            key: "is_active",
+            header: "GMP status",
+            value: (m) => (m.is_active ? "Compliant" : "Inactive"),
+            render: (m) => (
+              <Badge tone={m.is_active ? "success" : "warning"}>
+                {m.is_active ? "Compliant / Active" : "Inactive"}
+              </Badge>
+            ),
+          },
+          {
+            key: "actions",
+            header: "",
+            align: "right",
+            fixed: true,
+            sortable: false,
+            render: (m) => (
+              <div className="flex items-center justify-end gap-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEdit(m);
+                  }}
+                  className="rounded-md p-1.5 text-ink-500 hover:bg-surface-200 hover:text-ink-900"
+                  aria-label="Edit manufacturer"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteMutation.mutate(m.id);
+                  }}
+                  className="rounded-md p-1.5 text-ink-500 hover:bg-danger-50 hover:text-danger-600"
+                  aria-label="Delete manufacturer"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ),
+          },
+        ]}
+      />
 
       {creating && (
-        <Modal title="Add Manufacturer" onClose={() => setCreating(false)}>
+        <Drawer title="Add Manufacturer" onClose={() => setCreating(false)}>
           <form onSubmit={submitCreate} className="flex flex-col gap-4">
             <TextField
               label="Manufacturer Name"
@@ -183,11 +190,11 @@ export function ManufacturersPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
 
       {editing && (
-        <Modal title="Edit Manufacturer" onClose={() => setEditing(null)}>
+        <Drawer title="Edit Manufacturer" onClose={() => setEditing(null)}>
           <form onSubmit={submitUpdate} className="flex flex-col gap-4">
             <TextField
               label="Manufacturer Name"
@@ -218,7 +225,7 @@ export function ManufacturersPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
     </div>
   );
