@@ -5,7 +5,7 @@
 # API reference
 
 
-**970 routes.**
+**983 routes.**
 
 Every route the project serves, generated from the URL resolver.
 For conventions — pagination, errors, auth, idempotency — read
@@ -920,9 +920,13 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/inventory/^consignments\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `ConsignmentAgreementViewSet` | Supplier-owned stock held on our shelves: ownership only transfers on use. |
 | `/api/inventory/^disposals/$` | GET,POST | `StockDisposalViewSet` |  |
 | `/api/inventory/^disposals/(?P<pk>[^/.]+)/$` | DELETE,GET,PATCH,PUT | `StockDisposalViewSet` |  |
-| `/api/inventory/^disposals/(?P<pk>[^/.]+)/confirm_destruction/$` | POST | `StockDisposalViewSet` |  |
-| `/api/inventory/^disposals/(?P<pk>[^/.]+)/confirm_destruction\.(?P<format>[a-z0-9]+)/?$` | POST | `StockDisposalViewSet` |  |
+| `/api/inventory/^disposals/(?P<pk>[^/.]+)/add_line/$` | POST | `StockDisposalViewSet` | List a batch, and how much of it, for destruction. |
+| `/api/inventory/^disposals/(?P<pk>[^/.]+)/add_line\.(?P<format>[a-z0-9]+)/?$` | POST | `StockDisposalViewSet` | List a batch, and how much of it, for destruction. |
+| `/api/inventory/^disposals/(?P<pk>[^/.]+)/confirm_destruction/$` | POST | `StockDisposalViewSet` | Actually destroy the listed stock: remove it, record it, write it off. |
+| `/api/inventory/^disposals/(?P<pk>[^/.]+)/confirm_destruction\.(?P<format>[a-z0-9]+)/?$` | POST | `StockDisposalViewSet` | Actually destroy the listed stock: remove it, record it, write it off. |
 | `/api/inventory/^disposals/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | DELETE,GET,PATCH,PUT | `StockDisposalViewSet` |  |
+| `/api/inventory/^disposals/candidates/$` | GET | `StockDisposalViewSet` | Stock that cannot be sold and is waiting to be destroyed. |
+| `/api/inventory/^disposals/candidates\.(?P<format>[a-z0-9]+)/?$` | GET | `StockDisposalViewSet` | Stock that cannot be sold and is waiting to be destroyed. |
 | `/api/inventory/^disposals\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `StockDisposalViewSet` |  |
 | `/api/inventory/^epcis-events/$` | GET | `EpcisEventViewSet` | EPCIS events are an evidentiary record — readable and exportable, never edited. |
 | `/api/inventory/^epcis-events/(?P<pk>[^/.]+)/$` | GET | `EpcisEventViewSet` | EPCIS events are an evidentiary record — readable and exportable, never edited. |
@@ -970,16 +974,22 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/inventory/^putaway-rules\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `PutawayRuleViewSet` |  |
 | `/api/inventory/^quality-checks/$` | GET,POST | `QualityCheckViewSet` |  |
 | `/api/inventory/^quality-checks/(?P<pk>[^/.]+)/$` | DELETE,GET,PATCH,PUT | `QualityCheckViewSet` |  |
-| `/api/inventory/^quality-checks/(?P<pk>[^/.]+)/fail_qc/$` | POST | `QualityCheckViewSet` |  |
-| `/api/inventory/^quality-checks/(?P<pk>[^/.]+)/fail_qc\.(?P<format>[a-z0-9]+)/?$` | POST | `QualityCheckViewSet` |  |
-| `/api/inventory/^quality-checks/(?P<pk>[^/.]+)/pass_qc/$` | POST | `QualityCheckViewSet` |  |
-| `/api/inventory/^quality-checks/(?P<pk>[^/.]+)/pass_qc\.(?P<format>[a-z0-9]+)/?$` | POST | `QualityCheckViewSet` |  |
+| `/api/inventory/^quality-checks/(?P<pk>[^/.]+)/fail_qc/$` | POST | `QualityCheckViewSet` | Reject the batch and hold it in quarantine. |
+| `/api/inventory/^quality-checks/(?P<pk>[^/.]+)/fail_qc\.(?P<format>[a-z0-9]+)/?$` | POST | `QualityCheckViewSet` | Reject the batch and hold it in quarantine. |
+| `/api/inventory/^quality-checks/(?P<pk>[^/.]+)/pass_qc/$` | POST | `QualityCheckViewSet` | Release quarantined stock into saleable inventory. |
+| `/api/inventory/^quality-checks/(?P<pk>[^/.]+)/pass_qc\.(?P<format>[a-z0-9]+)/?$` | POST | `QualityCheckViewSet` | Release quarantined stock into saleable inventory. |
 | `/api/inventory/^quality-checks/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | DELETE,GET,PATCH,PUT | `QualityCheckViewSet` |  |
+| `/api/inventory/^quality-checks/queue/$` | GET | `QualityCheckViewSet` | Everything waiting on a QC decision, oldest first. |
+| `/api/inventory/^quality-checks/queue\.(?P<format>[a-z0-9]+)/?$` | GET | `QualityCheckViewSet` | Everything waiting on a QC decision, oldest first. |
 | `/api/inventory/^quality-checks\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `QualityCheckViewSet` |  |
 | `/api/inventory/^recalls/$` | GET,POST | `BatchRecallViewSet` |  |
 | `/api/inventory/^recalls/(?P<pk>[^/.]+)/$` | DELETE,GET,PATCH,PUT | `BatchRecallViewSet` |  |
-| `/api/inventory/^recalls/(?P<pk>[^/.]+)/execute_freeze/$` | POST | `BatchRecallViewSet` |  |
-| `/api/inventory/^recalls/(?P<pk>[^/.]+)/execute_freeze\.(?P<format>[a-z0-9]+)/?$` | POST | `BatchRecallViewSet` |  |
+| `/api/inventory/^recalls/(?P<pk>[^/.]+)/close_recall/$` | POST | `BatchRecallViewSet` | Close the recall once no recalled stock is still held. |
+| `/api/inventory/^recalls/(?P<pk>[^/.]+)/close_recall\.(?P<format>[a-z0-9]+)/?$` | POST | `BatchRecallViewSet` | Close the recall once no recalled stock is still held. |
+| `/api/inventory/^recalls/(?P<pk>[^/.]+)/execute_freeze/$` | POST | `BatchRecallViewSet` | Quarantine this product's recalled batch, and report where the rest went. |
+| `/api/inventory/^recalls/(?P<pk>[^/.]+)/execute_freeze\.(?P<format>[a-z0-9]+)/?$` | POST | `BatchRecallViewSet` | Quarantine this product's recalled batch, and report where the rest went. |
+| `/api/inventory/^recalls/(?P<pk>[^/.]+)/trace/$` | GET | `BatchRecallViewSet` | Where every unit of this batch went - held, in transit, and dispensed. |
+| `/api/inventory/^recalls/(?P<pk>[^/.]+)/trace\.(?P<format>[a-z0-9]+)/?$` | GET | `BatchRecallViewSet` | Where every unit of this batch went - held, in transit, and dispensed. |
 | `/api/inventory/^recalls/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | DELETE,GET,PATCH,PUT | `BatchRecallViewSet` |  |
 | `/api/inventory/^recalls\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `BatchRecallViewSet` |  |
 | `/api/inventory/^reorder-rules/$` | GET,POST | `ReorderRuleViewSet` |  |
@@ -1014,8 +1024,10 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/inventory/^serial-units\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `SerialUnitViewSet` | Serialised units are created by scanning, not by posting a form. |
 | `/api/inventory/^stock-counts/$` | GET,POST | `StockCountViewSet` |  |
 | `/api/inventory/^stock-counts/(?P<pk>[^/.]+)/$` | DELETE,GET,PATCH,PUT | `StockCountViewSet` |  |
-| `/api/inventory/^stock-counts/(?P<pk>[^/.]+)/approve_count/$` | POST | `StockCountViewSet` |  |
-| `/api/inventory/^stock-counts/(?P<pk>[^/.]+)/approve_count\.(?P<format>[a-z0-9]+)/?$` | POST | `StockCountViewSet` |  |
+| `/api/inventory/^stock-counts/(?P<pk>[^/.]+)/approve_count/$` | POST | `StockCountViewSet` | Post this count's variances to stock and the ledger - exactly once. |
+| `/api/inventory/^stock-counts/(?P<pk>[^/.]+)/approve_count\.(?P<format>[a-z0-9]+)/?$` | POST | `StockCountViewSet` | Post this count's variances to stock and the ledger - exactly once. |
+| `/api/inventory/^stock-counts/(?P<pk>[^/.]+)/variance/$` | GET | `StockCountViewSet` | What this count found, before anyone commits it. |
+| `/api/inventory/^stock-counts/(?P<pk>[^/.]+)/variance\.(?P<format>[a-z0-9]+)/?$` | GET | `StockCountViewSet` | What this count found, before anyone commits it. |
 | `/api/inventory/^stock-counts/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | DELETE,GET,PATCH,PUT | `StockCountViewSet` |  |
 | `/api/inventory/^stock-counts\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `StockCountViewSet` |  |
 | `/api/inventory/^storage-zones/$` | GET,POST | `StorageZoneViewSet` |  |
@@ -1043,6 +1055,7 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/inventory/^warehouses/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | DELETE,GET,PATCH,PUT | `WarehouseViewSet` |  |
 | `/api/inventory/^warehouses\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `WarehouseViewSet` |  |
 | `/api/inventory/intake` | — | `IntakeView` |  |
+| `/api/inventory/overview/` | — | `InventoryOverviewView` | What needs a decision in inventory, rather than what exists in it. |
 
 
 ## `/api/procurement`

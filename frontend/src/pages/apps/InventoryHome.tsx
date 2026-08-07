@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import {
+  AlertTriangle,
   Boxes,
+  CheckCircle2,
   Building2,
   ClipboardList,
   FileCheck2,
@@ -24,9 +26,21 @@ import {
 } from "../../components/AppHome";
 import { Badge, Card } from "../../components/ui";
 import { api } from "../../lib/api";
+import { inventoryOverview, type InventoryOverview } from "../../lib/inventory";
+import { money } from "../../lib/format";
+import { useDefaultOrg } from "../../lib/recordData";
 import type { Paginated } from "../../lib/types";
 
 export function InventoryHome() {
+  const { orgId } = useDefaultOrg();
+
+  // What needs a decision, as opposed to what exists. The counts below are
+  // navigation context; these are the things somebody has to act on.
+  const health = useQuery({
+    queryKey: ["inventory-overview", orgId],
+    enabled: orgId != null,
+    queryFn: () => inventoryOverview(orgId as number),
+  });
   const zonesQuery = useQuery({
     queryKey: ["count", "storage-zones"],
     queryFn: () => api<Paginated<unknown>>("/api/inventory/storage-zones/?page_size=1"),
@@ -158,6 +172,8 @@ export function InventoryHome() {
           <StatTile label="Disposals" value={disposalsQuery.data ?? 0} hint="witnessed write-off" />
         </Link>
       </div>
+
+      <NeedsAttention data={health.data} />
 
       <QuickActions>
         <QuickAction to="/inventory/serialisation" icon={ScanLine} label="Scan & Commission" primary />
@@ -335,6 +351,140 @@ export function InventoryHome() {
           />
         </SectionGrid>
       </div>
+    </div>
+  );
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Decisions waiting on somebody, each linking to where it is made.            */
+/* -------------------------------------------------------------------------- */
+
+function Row({
+  ok,
+  label,
+  detail,
+  to,
+}: {
+  ok: boolean;
+  label: string;
+  detail: string;
+  to: string;
+}) {
+  return (
+    <li className="flex items-start gap-2.5 py-2">
+      <span className="mt-0.5">
+        {ok ? (
+          <CheckCircle2 className="h-4 w-4 text-success-600" />
+        ) : (
+          <AlertTriangle className="h-4 w-4 text-warning-600" />
+        )}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm text-ink-900">{label}</div>
+        <div className="text-xs text-ink-500">{detail}</div>
+      </div>
+      {!ok && (
+        <Link to={to} className="shrink-0 text-xs text-brand-600 hover:underline">
+          Open
+        </Link>
+      )}
+    </li>
+  );
+}
+
+function NeedsAttention({ data }: { data?: InventoryOverview }) {
+  if (!data) return null;
+  const { quality, recalls, disposal, counts } = data;
+
+  return (
+    <div className="rounded-lg border border-line bg-surface-0">
+      <div className="border-b border-line px-4 py-3">
+        <div className="text-sm font-semibold text-ink-900">Needs your attention</div>
+        <div className="text-xs text-ink-500">
+          Stock nobody can sell, and decisions only a person can make.
+        </div>
+      </div>
+      <ul className="divide-y divide-line px-4">
+        <Row
+          ok={quality.pending === 0}
+          label={
+            quality.pending === 0
+              ? "Nothing waiting on quality control"
+              : `${quality.pending} batch(es) held awaiting a quality decision`
+          }
+          detail={
+            quality.pending === 0
+              ? "Every received batch has been released or rejected."
+              : `${quality.units_held.toLocaleString()} unit(s) that cannot be sold or dispensed, oldest waiting ${quality.oldest_days} day(s).`
+          }
+          to="/inventory/qc"
+        />
+        <Row
+          ok={quality.expiring_in_quarantine === 0}
+          label={
+            quality.expiring_in_quarantine === 0
+              ? "No held stock is near expiry"
+              : `${quality.expiring_in_quarantine} held batch(es) expire within 90 days`
+          }
+          detail={
+            quality.expiring_in_quarantine === 0
+              ? "Nothing will expire while waiting for a decision."
+              : "Paid for, never sold, and destroyed at your cost if the decision waits."
+          }
+          to="/inventory/qc"
+        />
+        <Row
+          ok={recalls.open_recalls === 0}
+          label={
+            recalls.open_recalls === 0
+              ? "No open recalls"
+              : `${recalls.open_recalls} recall(s) open`
+          }
+          detail={
+            recalls.open_recalls === 0
+              ? "No batch is currently withdrawn."
+              : `${recalls.recalled_units_held.toLocaleString()} recalled unit(s) still held. Open each recall to see whether it reached a patient.`
+          }
+          to="/inventory/recalls"
+        />
+        <Row
+          ok={disposal.awaiting_destruction === 0}
+          label={
+            disposal.awaiting_destruction === 0
+              ? "Nothing awaiting destruction"
+              : `${disposal.awaiting_destruction} batch(es) cannot be sold`
+          }
+          detail={
+            disposal.awaiting_destruction === 0
+              ? "No expired, quarantined or recalled stock is sitting on a shelf."
+              : `${money(disposal.value_awaiting)} at cost, still counted as inventory until it is destroyed.`
+          }
+          to="/inventory/disposal"
+        />
+        {disposal.expired_still_active > 0 && (
+          <Row
+            ok={false}
+            label={`${disposal.expired_still_active} expired batch(es) still marked active`}
+            detail="Unsellable in fact, sellable on the system — FEFO will pick them first."
+            to="/inventory/disposal"
+          />
+        )}
+        <Row
+          ok={counts.awaiting_approval === 0}
+          label={
+            counts.awaiting_approval === 0
+              ? "No counts awaiting approval"
+              : `${counts.awaiting_approval} stock count(s) awaiting approval`
+          }
+          detail={
+            counts.awaiting_approval === 0
+              ? "Every count has been reconciled to the books."
+              : "Until approved, the books still show the pre-count figures."
+          }
+          to="/inventory/counts"
+        />
+      </ul>
     </div>
   );
 }
