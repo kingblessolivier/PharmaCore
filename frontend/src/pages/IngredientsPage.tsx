@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Edit2, FlaskConical, Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Modal, PageHeader, Spinner, TextField } from "../components/ui";
+import { Button, PageHeader, TextField } from "../components/ui";
 import { api } from "../lib/api";
 import type { ActiveIngredient, Paginated } from "../lib/types";
+import { DataGrid } from "../components/DataGrid";
+import { Drawer } from "../components/RecordKit";
 
 export function IngredientsPage() {
   const navigate = useNavigate();
@@ -89,60 +91,62 @@ export function IngredientsPage() {
         Full CRUD management for International Nonproprietary Names (INN) active ingredients.
       </p>
 
-      {isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
-
-      {data && (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-3">Active Ingredient (INN)</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.results.map((ing) => (
-                <tr key={ing.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                  <td className="px-4 py-3 font-semibold text-ink-900 flex items-center gap-2">
-                    <FlaskConical className="h-4 w-4 text-brand-600" />
-                    {ing.name}
-                  </td>
-                  <td className="px-4 py-3 text-right flex items-center justify-end gap-1">
-                    <button
-                      onClick={() => startEdit(ing)}
-                      className="rounded-md p-1.5 text-ink-500 hover:bg-surface-200 hover:text-ink-900"
-                      aria-label="Edit ingredient"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => deleteMutation.mutate(ing.id)}
-                      className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
-                      aria-label="Delete ingredient"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {data.results.length === 0 && (
-                <tr>
-                  <td colSpan={2} className="px-4 py-8 text-center text-ink-500">
-                    No active ingredients recorded yet. Click "Add Active Ingredient" to create one.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      <DataGrid<ActiveIngredient>
+        rows={data?.results ?? []}
+        loading={isLoading}
+        getRowId={(i) => i.id}
+        storageKey="active-ingredients"
+        exportName="active-ingredients"
+        searchPlaceholder="Search ingredients by INN…"
+        emptyMessage="No active ingredients recorded yet."
+        columns={[
+          {
+            key: "name",
+            header: "Active ingredient (INN)",
+            value: (i) => i.name,
+            render: (i) => (
+              <span className="flex items-center gap-2 font-medium text-ink-900">
+                <FlaskConical className="h-4 w-4 text-brand-600" />
+                {i.name}
+              </span>
+            ),
+          },
+          {
+            key: "actions",
+            header: "",
+            align: "right",
+            fixed: true,
+            sortable: false,
+            render: (i) => (
+              <div className="flex items-center justify-end gap-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEdit(i);
+                  }}
+                  className="rounded-md p-1.5 text-ink-500 hover:bg-surface-200 hover:text-ink-900"
+                  aria-label="Edit ingredient"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteMutation.mutate(i.id);
+                  }}
+                  className="rounded-md p-1.5 text-ink-500 hover:bg-danger-50 hover:text-danger-600"
+                  aria-label="Delete ingredient"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ),
+          },
+        ]}
+      />
 
       {creating && (
-        <Modal title="Add Active Ingredient (INN)" onClose={() => setCreating(false)}>
+        <Drawer title="Add Active Ingredient (INN)" onClose={() => setCreating(false)}>
           <form onSubmit={submitCreate} className="flex flex-col gap-4">
             <TextField
               label="Ingredient Name (INN)"
@@ -161,11 +165,11 @@ export function IngredientsPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
 
       {editing && (
-        <Modal title="Edit Active Ingredient (INN)" onClose={() => setEditing(null)}>
+        <Drawer title="Edit Active Ingredient (INN)" onClose={() => setEditing(null)}>
           <form onSubmit={submitUpdate} className="flex flex-col gap-4">
             <TextField
               label="Ingredient Name (INN)"
@@ -182,7 +186,7 @@ export function IngredientsPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
     </div>
   );

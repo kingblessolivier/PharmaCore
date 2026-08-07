@@ -5,7 +5,7 @@
 # API reference
 
 
-**1043 routes.**
+**1047 routes.**
 
 Every route the project serves, generated from the URL resolver.
 For conventions — pagination, errors, auth, idempotency — read
@@ -341,6 +341,10 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/catalog/^suppliers/(?P<pk>[^/.]+)/$` | DELETE,GET,PATCH,PUT | `SupplierViewSet` |  |
 | `/api/catalog/^suppliers/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | DELETE,GET,PATCH,PUT | `SupplierViewSet` |  |
 | `/api/catalog/^suppliers\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `SupplierViewSet` |  |
+| `/api/catalog/price/` | — | `PriceBasketView` | Resolve what each line should be sold at, and say where the price came from. |
+| `/api/catalog/price/coverage/` | — | `PricingCoverageView` | How much of what this pharmacy stocks is actually priced by a list. |
+| `/api/catalog/screen/` | — | `ScreenBasketView` | Screen a basket for interactions, duplicate therapy and contraindications. |
+| `/api/catalog/substitutes/` | — | `SubstitutesView` | What could be dispensed instead, of what is actually on the shelf. |
 
 
 ## `/api/dashboard`

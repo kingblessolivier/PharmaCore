@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Edit2, Layers, Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Button, Card, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
+import { Badge, Button, PageHeader, SelectField, TextField } from "../components/ui";
 import { api } from "../lib/api";
 import type { Paginated, Product, ProductUomConversion } from "../lib/types";
+import { DataGrid } from "../components/DataGrid";
+import { Drawer } from "../components/RecordKit";
 
 export function UomPage() {
   const navigate = useNavigate();
@@ -132,76 +134,95 @@ export function UomPage() {
         />
       </div>
 
-      {isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
-
-      {data && (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-3">Unit Name</th>
-                <th className="px-4 py-3 text-right">Conversion Factor</th>
-                <th className="px-4 py-3 text-right">Unit Price</th>
-                <th className="px-4 py-3 text-center">Default Dispensing Unit</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((u) => (
-                <tr key={u.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                  <td className="px-4 py-3 font-semibold text-ink-900 flex items-center gap-2">
-                    <Layers className="h-4 w-4 text-brand-600" />
-                    {u.unit_name}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-ink-700">
-                    {u.conversion_factor}x per pack
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-ink-700">
-                    {u.price_per_unit ? `RWF ${u.price_per_unit}` : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    {u.is_default_dispensing ? (
-                      <Badge tone="success">Default</Badge>
-                    ) : (
-                      <span className="text-xs text-ink-500">No</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right flex items-center justify-end gap-1">
-                    <button
-                      onClick={() => startEdit(u)}
-                      className="rounded-md p-1.5 text-ink-500 hover:bg-surface-200 hover:text-ink-900"
-                      aria-label="Edit UoM"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => deleteMutation.mutate(u.id)}
-                      className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
-                      aria-label="Delete UoM"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-ink-500">
-                    {search ? "No UoM conversions match your filter." : "No UoM conversions configured. Click 'Add UoM Conversion' to create one."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      <DataGrid<ProductUomConversion>
+        rows={filtered}
+        loading={isLoading}
+        getRowId={(r) => r.id}
+        storageKey="uom-conversions"
+        exportName="uom-conversions"
+        searchPlaceholder="Search units…"
+        emptyMessage="No unit conversions recorded."
+        columns={[
+          {
+            key: "unit_name",
+            header: "Unit",
+            value: (u) => u.unit_name,
+            render: (u) => (
+              <span className="flex items-center gap-2 font-medium text-ink-900">
+                <Layers className="h-4 w-4 text-brand-600" />
+                {u.unit_name}
+              </span>
+            ),
+          },
+          {
+            key: "conversion_factor",
+            header: "Conversion",
+            align: "right",
+            numeric: true,
+            value: (u) => Number(u.conversion_factor),
+            render: (u) => (
+              <span className="font-mono text-ink-700">{u.conversion_factor}x per pack</span>
+            ),
+          },
+          {
+            key: "price_per_unit",
+            header: "Unit price",
+            align: "right",
+            numeric: true,
+            value: (u) => Number(u.price_per_unit ?? 0),
+            render: (u) => (
+              <span className="font-mono text-ink-700">
+                {u.price_per_unit ? `RWF ${u.price_per_unit}` : "—"}
+              </span>
+            ),
+          },
+          {
+            key: "is_default_dispensing",
+            header: "Default dispensing unit",
+            value: (u) => (u.is_default_dispensing ? "Yes" : "No"),
+            render: (u) =>
+              u.is_default_dispensing ? (
+                <Badge tone="success">Default</Badge>
+              ) : (
+                <span className="text-xs text-ink-500">No</span>
+              ),
+          },
+          {
+            key: "actions",
+            header: "",
+            align: "right",
+            fixed: true,
+            sortable: false,
+            render: (u) => (
+              <div className="flex items-center justify-end gap-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEdit(u);
+                  }}
+                  className="rounded-md p-1.5 text-ink-500 hover:bg-surface-200 hover:text-ink-900"
+                  aria-label="Edit"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteMutation.mutate(u.id);
+                  }}
+                  className="rounded-md p-1.5 text-ink-500 hover:bg-danger-50 hover:text-danger-600"
+                  aria-label="Delete"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ),
+          },
+        ]}
+      />
 
       {creating && (
-        <Modal title="Add UoM Conversion" onClose={() => setCreating(false)}>
+        <Drawer title="Add UoM Conversion" onClose={() => setCreating(false)}>
           <form onSubmit={submitCreate} className="flex flex-col gap-4">
             <SelectField
               label="Target Medicine"
@@ -253,11 +274,11 @@ export function UomPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
 
       {editing && (
-        <Modal title="Edit UoM Conversion" onClose={() => setEditing(null)}>
+        <Drawer title="Edit UoM Conversion" onClose={() => setEditing(null)}>
           <form onSubmit={submitUpdate} className="flex flex-col gap-4">
             <TextField
               label="Unit Name"
@@ -296,7 +317,7 @@ export function UomPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
     </div>
   );

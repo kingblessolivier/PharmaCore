@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from apps.catalog.views import (
@@ -16,6 +17,12 @@ from apps.catalog.views import (
     ProductUomConversionViewSet,
     ProductViewSet,
     SupplierViewSet,
+)
+from apps.catalog.views_clinical import (
+    PriceBasketView,
+    PricingCoverageView,
+    ScreenBasketView,
+    SubstitutesView,
 )
 
 router = DefaultRouter()
@@ -37,4 +44,11 @@ router.register(
 )
 router.register("product-substitutes", ProductSubstituteViewSet, basename="product-substitute")
 
-urlpatterns = router.urls
+urlpatterns = [
+    # Counter decisions, as opposed to CRUD on the master data.
+    path("screen/", ScreenBasketView.as_view(), name="catalog-screen"),
+    path("price/", PriceBasketView.as_view(), name="catalog-price"),
+    path("price/coverage/", PricingCoverageView.as_view(), name="catalog-price-coverage"),
+    path("substitutes/", SubstitutesView.as_view(), name="catalog-substitutes"),
+    *router.urls,
+]

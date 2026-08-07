@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, RefreshCw, Search, ShoppingCart } from "lucide-react";
+import { ArrowLeft, RefreshCw, Search } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Button, Card, PageHeader, Spinner } from "../components/ui";
+import { Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
 import type { DashboardSummary } from "../lib/types";
+import { DataGrid } from "../components/DataGrid";
 
 export function LowStockPage() {
   const navigate = useNavigate();
@@ -53,71 +54,65 @@ export function LowStockPage() {
         />
       </div>
 
-      {isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
-
-      {data && (
-        <Card className="overflow-hidden">
-          <div className="flex items-center justify-between border-b border-line bg-surface-100 px-4 py-3">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <span className="text-sm font-semibold text-ink-900">
-                {filtered.length} Medicine(s) Below Minimum
+      <DataGrid
+        rows={filtered}
+        loading={isLoading}
+        getRowId={(r) => `${r.product}-${r.organization}`}
+        storageKey="low-stock"
+        exportName="low-stock"
+        searchPlaceholder="Search by medicine or branch…"
+        emptyMessage="Nothing is below its minimum level."
+        columns={[
+          { key: "product", header: "Medicine", value: (r) => r.product },
+          { key: "organization", header: "Pharmacy / branch", value: (r) => r.organization },
+          {
+            key: "on_hand",
+            header: "On hand",
+            align: "right",
+            numeric: true,
+            value: (r) => r.on_hand,
+            render: (r) => (
+              <span className="font-mono font-semibold text-danger-600">{r.on_hand}</span>
+            ),
+          },
+          {
+            key: "min",
+            header: "Minimum level",
+            align: "right",
+            numeric: true,
+            value: (r) => r.min,
+            render: (r) => <span className="font-mono text-ink-500">{r.min}</span>,
+          },
+          {
+            key: "deficit",
+            header: "Deficit",
+            align: "right",
+            numeric: true,
+            value: (r) => Math.max(0, r.min - r.on_hand),
+            render: (r) => (
+              <span className="font-mono text-warning-700">
+                +{Math.max(0, r.min - r.on_hand)}
               </span>
-            </div>
-            <Link to="/orders" className="text-xs font-medium text-brand-700 hover:underline flex items-center gap-1">
-              <ShoppingCart className="h-3.5 w-3.5" /> Raise Purchase Order
-            </Link>
-          </div>
+            ),
+          },
+          {
+            key: "action",
+            header: "",
+            align: "right",
+            fixed: true,
+            sortable: false,
+            render: () => (
+              <Link
+                to="/orders"
+                className="inline-flex items-center gap-1 rounded bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100"
+              >
+                Reorder
+              </Link>
+            ),
+          },
+        ]}
+      />
 
-          <table className="w-full text-sm">
-            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-3">Medicine</th>
-                <th className="px-4 py-3">Pharmacy / Branch</th>
-                <th className="px-4 py-3 text-right">On Hand</th>
-                <th className="px-4 py-3 text-right">Minimum Level</th>
-                <th className="px-4 py-3 text-right">Deficit</th>
-                <th className="px-4 py-3 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((item, idx) => {
-                const deficit = Math.max(0, item.min - item.on_hand);
-                return (
-                  <tr key={idx} className="border-b border-line last:border-0 hover:bg-surface-50">
-                    <td className="px-4 py-3 font-medium text-ink-900">{item.product}</td>
-                    <td className="px-4 py-3 text-ink-700">{item.organization}</td>
-                    <td className="px-4 py-3 text-right font-mono font-semibold text-red-600">
-                      {item.on_hand}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono text-ink-500">{item.min}</td>
-                    <td className="px-4 py-3 text-right font-mono text-amber-700">+{deficit}</td>
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        to="/orders"
-                        className="inline-flex items-center gap-1 rounded bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100"
-                      >
-                        Reorder
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-ink-500">
-                    {search ? "No low-stock items match your filter." : "All medicines are sufficiently stocked!"}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-      )}
     </div>
   );
 }

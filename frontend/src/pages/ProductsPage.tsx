@@ -6,7 +6,6 @@ import {
   Badge,
   Button,
   ConfirmModal,
-  Modal,
   PageHeader,
   SelectField,
   TextField,
@@ -16,6 +15,7 @@ import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { isAdmin } from "../lib/roles";
 import type { Paginated, Product, TaxClass } from "../lib/types";
+import { Drawer } from "../components/RecordKit";
 
 const DOSAGE_FORMS = [
   "TABLET",
@@ -147,7 +147,7 @@ function ImportModal({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <Modal title="Import medicines from CSV" onClose={onClose}>
+    <Drawer title="Import medicines from CSV" onClose={onClose}>
       <div className="flex flex-col gap-3">
         <p className="text-xs text-ink-500">
           First row = column headers. Recognised columns: <code>generic_name</code> (required),
@@ -202,7 +202,7 @@ function ImportModal({ onClose }: { onClose: () => void }) {
           </Button>
         </div>
       </div>
-    </Modal>
+    </Drawer>
   );
 }
 
@@ -276,7 +276,7 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
   }
 
   return (
-    <Modal title={editing ? "Edit medicine" : "New medicine"} onClose={onClose}>
+    <Drawer title={editing ? "Edit medicine" : "New medicine"} onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-4">
         <TextField
           label="Generic name"
@@ -498,7 +498,7 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
           </Button>
         </div>
       </form>
-    </Modal>
+    </Drawer>
   );
 }
 

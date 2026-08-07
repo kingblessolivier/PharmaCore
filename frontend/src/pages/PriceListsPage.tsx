@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Edit2, Plus, Tag, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Button, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
+import { Badge, Button, PageHeader, SelectField, TextField } from "../components/ui";
 import { api } from "../lib/api";
 import type { Paginated, PriceList } from "../lib/types";
+import { DataGrid } from "../components/DataGrid";
+import { Drawer } from "../components/RecordKit";
 
 export function PriceListsPage() {
   const navigate = useNavigate();
@@ -96,72 +98,78 @@ export function PriceListsPage() {
         Full CRUD management for effective-dated retail, wholesale, contract, and promotional price lists.
       </p>
 
-      {isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
-
-      {data && (
-        <div className="flex flex-col gap-4">
-          <div className="overflow-hidden rounded-lg border border-line bg-surface-0">
-            <table className="w-full text-sm">
-              <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
-                <tr>
-                  <th className="px-4 py-3">Price List Name</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.results.map((pl) => (
-                  <tr key={pl.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                    <td className="px-4 py-3 font-medium text-ink-900 flex items-center gap-2">
-                      <Tag className="h-4 w-4 text-brand-600" />
-                      {pl.name}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge tone="neutral">{pl.list_type}</Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge tone={pl.is_active ? "success" : "warning"}>
-                        {pl.is_active ? "Active" : "Inactive"}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => startEdit(pl)}
-                        className="rounded-md p-1.5 text-ink-500 hover:bg-surface-200 hover:text-ink-900"
-                        aria-label="Edit price list"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => deleteMutation.mutate(pl.id)}
-                        className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
-                        aria-label="Delete price list"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {data.results.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-ink-500">
-                      No price lists configured yet. Click "Create Price List" above to add one.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      <DataGrid<PriceList>
+        rows={data?.results ?? []}
+        loading={isLoading}
+        getRowId={(r) => r.id}
+        storageKey="price-lists"
+        exportName="price-lists"
+        searchPlaceholder="Search price lists…"
+        emptyMessage="No price lists yet."
+        columns={[
+          {
+            key: "name",
+            header: "Price list",
+            value: (pl) => pl.name,
+            render: (pl) => (
+              <span className="flex items-center gap-2 font-medium text-ink-900">
+                <Tag className="h-4 w-4 text-brand-600" />
+                {pl.name}
+              </span>
+            ),
+          },
+          {
+            key: "list_type",
+            header: "Type",
+            value: (pl) => pl.list_type,
+            render: (pl) => <Badge tone="neutral">{pl.list_type}</Badge>,
+          },
+          {
+            key: "is_active",
+            header: "Status",
+            value: (pl) => (pl.is_active ? "Active" : "Inactive"),
+            render: (pl) => (
+              <Badge tone={pl.is_active ? "success" : "warning"}>
+                {pl.is_active ? "Active" : "Inactive"}
+              </Badge>
+            ),
+          },
+          {
+            key: "actions",
+            header: "",
+            align: "right",
+            fixed: true,
+            sortable: false,
+            render: (pl) => (
+              <div className="flex items-center justify-end gap-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEdit(pl);
+                  }}
+                  className="rounded-md p-1.5 text-ink-500 hover:bg-surface-200 hover:text-ink-900"
+                  aria-label="Edit"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteMutation.mutate(pl.id);
+                  }}
+                  className="rounded-md p-1.5 text-ink-500 hover:bg-danger-50 hover:text-danger-600"
+                  aria-label="Delete"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ),
+          },
+        ]}
+      />
 
       {creating && (
-        <Modal title="Create Price List" onClose={() => setCreating(false)}>
+        <Drawer title="Create Price List" onClose={() => setCreating(false)}>
           <form onSubmit={submitCreate} className="flex flex-col gap-4">
             <TextField
               label="Price List Name"
@@ -192,11 +200,11 @@ export function PriceListsPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
 
       {editing && (
-        <Modal title="Edit Price List" onClose={() => setEditing(null)}>
+        <Drawer title="Edit Price List" onClose={() => setEditing(null)}>
           <form onSubmit={submitUpdate} className="flex flex-col gap-4">
             <TextField
               label="Price List Name"
@@ -234,7 +242,7 @@ export function PriceListsPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
     </div>
   );
