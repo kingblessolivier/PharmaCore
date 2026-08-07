@@ -1067,3 +1067,59 @@ def test_overview_counts_the_buyers_workload(
     assert body["orders_draft"] == 1
     assert body["orders_open"] == 0
     assert "licences_expiring" in body
+
+
+def test_arriving_stock_closes_the_retail_demand_it_was_imported_for(
+    depot: Organization, qualified_supplier: Supplier, product: Product, buyer: User, approver: User
+) -> None:
+    """The demand loop has to close, or it re-proposes an import that already landed.
+
+    A pharmacy asks for stock the depot has not got -> the shortfall is captured as
+    demand -> the demand becomes a requisition -> the requisition becomes an import.
+    When that import is received, the people who were waiting must stop waiting.
+    ``settle_backorders_for`` existed and was unit-tested, but nothing called it.
+    """
+    from apps.distribution.demand import capture, raise_requisition_from_demand
+    from apps.distribution.models import BackorderLine
+
+    retail = Organization.objects.create(name="Waiting Pharmacy", type="RETAIL")
+    other = Organization.objects.create(name="Second Pharmacy", type="RETAIL")
+    first = capture(depot=depot, retail=retail, product=product, quantity=40)
+    second = capture(depot=depot, retail=other, product=product, quantity=40)
+    raise_requisition_from_demand(depot=depot, user=None)
+    first.refresh_from_db()
+    assert first.status == BackorderLine.Status.SOURCING
+
+    client = _auth(buyer)
+    order = _approved_order(client, depot, qualified_supplier, product, approver)
+    receipt = client.post(
+        f"/api/procurement/orders/{order['id']}/start_receipt/", {}, format="json"
+    ).json()
+    line = receipt["lines"][0]
+    client.patch(
+        f"/api/procurement/receipts/{receipt['id']}/",
+        {
+            "lines": [
+                {
+                    "order_line": line["order_line"],
+                    "product": line["product"],
+                    "batch_number": "DEMAND-FILL",
+                    "expiry_date": str(date.today() + timedelta(days=400)),
+                    "quantity_expected": 100,
+                    "quantity_received": 60,
+                    "unit_cost": "3250.00",
+                }
+            ]
+        },
+        format="json",
+    )
+    posted = client.post(f"/api/procurement/receipts/{receipt['id']}/post/", {}, format="json")
+    assert posted.status_code == 200, posted.content
+
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert first.status == BackorderLine.Status.FULFILLED, "the longest waiter is served first"
+    assert first.quantity_fulfilled == 40
+    # 60 landed, 40 closed the first request; the remaining 20 part-fills the next.
+    assert second.quantity_fulfilled == 20
+    assert second.status == BackorderLine.Status.SOURCING, "still owed 20"

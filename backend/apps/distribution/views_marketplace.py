@@ -38,7 +38,7 @@ from apps.distribution.serializers import (
     VanStockMovementSerializer,
     VanStockSerializer,
 )
-from apps.iam.models import User
+from apps.iam.models import Organization, User
 from apps.iam.scoping import organizations_visible_to
 
 
@@ -551,5 +551,49 @@ class DistributionOverviewView(APIView):
                 "storefront": marketplace.coverage(depot=depot_id),
                 "demand": demand_engine.summary(depot=depot_id),
                 "returns": returns.summary(depot=depot_id),
+            }
+        )
+
+
+class TradingPartnersView(APIView):
+    """Who this organization may trade with — deliberately not the same question
+    as which organizations it may *see*.
+
+    ``organizations_visible_to`` governs data access: a branch sees its own orders
+    and nobody else's, which is right. But a marketplace cannot run on that — to
+    buy from a depot you must first be able to name it. Reusing the administrative
+    scope for the buyer/seller pickers meant every dropdown was empty for everyone
+    except a superuser, so no B2B order could be raised at all.
+
+    This returns identity only — id, name, type — never anything about the other
+    party's stock, orders or money. Enough to trade with them, nothing more.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    #: Organization types that sell into the trade.
+    SELLER_TYPES = ("DEPOT", "DISTRIBUTOR", "HQ")
+    #: Organization types that buy from it.
+    BUYER_TYPES = ("RETAIL", "RETAIL_PHARMACY")
+
+    def get(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        role = (request.query_params.get("role") or "seller").lower()
+        if role not in ("seller", "buyer"):
+            raise ValidationError({"role": "Must be 'seller' or 'buyer'."})
+
+        wanted = self.SELLER_TYPES if role == "seller" else self.BUYER_TYPES
+        qs = Organization.objects.filter(type__in=wanted, is_active=True)
+        # You are never your own trading partner.
+        if user.organization_id:
+            qs = qs.exclude(pk=user.organization_id)
+
+        return Response(
+            {
+                "role": role,
+                "results": [
+                    {"id": o.pk, "name": o.name, "type": o.type, "district": o.district}
+                    for o in qs.order_by("name")
+                ],
             }
         )

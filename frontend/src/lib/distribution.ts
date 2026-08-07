@@ -335,3 +335,25 @@ export const BACKORDER_STATUS_LABEL: Record<Backorder["status"], string> = {
   FULFILLED: "Fulfilled",
   CANCELLED: "Cancelled",
 };
+
+/** An organization you may trade with — identity only, never their data. */
+export interface TradingPartner {
+  id: number;
+  name: string;
+  type: string;
+  district: string;
+}
+
+/**
+ * Who you can buy from (`seller`) or sell to (`buyer`).
+ *
+ * Deliberately not `/api/organizations/`: that endpoint answers "whose data may
+ * I see", which for a branch is only itself — so using it to populate a depot
+ * picker left every dropdown empty and made it impossible to raise a B2B order.
+ */
+export async function tradingPartners(role: "seller" | "buyer"): Promise<TradingPartner[]> {
+  const body = await api<{ role: string; results: TradingPartner[] }>(
+    `/api/distribution/trading-partners/?role=${role}`,
+  );
+  return body.results;
+}

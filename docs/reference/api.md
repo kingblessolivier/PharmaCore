@@ -5,7 +5,7 @@
 # API reference
 
 
-**969 routes.**
+**970 routes.**
 
 Every route the project serves, generated from the URL resolver.
 For conventions — pagination, errors, auth, idempotency — read
@@ -429,6 +429,7 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/distribution/storefront/` | — | `StorefrontView` | What a buyer may order from a depot right now. |
 | `/api/distribution/storefront/availability/` | — | `AvailabilityView` | Resolve one product's availability and price for one buyer. |
 | `/api/distribution/storefront/publish/` | — | `PublishListingView` | Create or update what a depot offers — including withdrawing it from sale. |
+| `/api/distribution/trading-partners/` | — | `TradingPartnersView` | Who this organization may trade with — deliberately not the same question as which organizations it may *see*. |
 
 
 ## `/api/docs`

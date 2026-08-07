@@ -749,3 +749,46 @@ def test_approving_a_return_reports_the_credit_note_number(depot, retail, produc
     assert body["restocked_units"] == 10
     assert body["credit_amount"] == "5000.00"
     assert body["credit_note_number"], "the issued credit note must be named in the response"
+
+
+# ---------------------------------------------------------------------------
+# Trading partners — you cannot buy from someone you cannot name
+# ---------------------------------------------------------------------------
+
+
+def test_trading_partners_are_visible_even_though_their_data_is_not(depot, retail):
+    """A marketplace cannot run on administrative scope.
+
+    ``organizations_visible_to`` answers "whose data may I see" — for a branch,
+    only its own. The order builder used it to populate the depot and buyer
+    pickers, so both were empty for every non-superuser and no B2B order could be
+    raised at all: the request went out with ``retail: null`` and came back
+    "This field may not be null" with nothing on screen to fix.
+    """
+    Organization.objects.create(name="Far Depot", type="DEPOT")
+    client = _staff_client(retail)
+
+    # Administrative scope still refuses to widen — that part must not regress.
+    orgs = client.get("/api/organizations/").json()
+    assert all(
+        o["id"] == retail.pk for o in orgs["results"]
+    ), "seeing another org's record is a data leak, and stays refused"
+
+    partners = client.get("/api/distribution/trading-partners/?role=seller").json()
+    names = {o["name"] for o in partners["results"]}
+    assert "Far Depot" in names and depot.name in names
+    assert all(o["id"] != retail.pk for o in partners["results"]), "never your own partner"
+    # Identity only — nothing about their stock, orders or money.
+    assert set(partners["results"][0]) == {"id", "name", "type", "district"}
+
+
+def test_trading_partners_separates_who_sells_from_who_buys(depot, retail):
+    client = _staff_client(depot)
+    sellers = client.get("/api/distribution/trading-partners/?role=seller").json()["results"]
+    buyers = client.get("/api/distribution/trading-partners/?role=buyer").json()["results"]
+
+    assert all(o["type"] in ("DEPOT", "DISTRIBUTOR", "HQ") for o in sellers)
+    assert all(o["type"] in ("RETAIL", "RETAIL_PHARMACY") for o in buyers)
+    assert retail.pk in {o["id"] for o in buyers}
+
+    assert client.get("/api/distribution/trading-partners/?role=nonsense").status_code == 400

@@ -222,7 +222,20 @@ export interface StockOrder {
   order_payments: OrderPayment[];
   in_transit: InTransitStock[];
   items: OrderItem[];
+  /** What this order asked for that the depot could not supply. */
+  backorders: OrderBackorder[];
   created_at: string;
+}
+
+/** A line the depot could not fill, kept as demand rather than refused. */
+export interface OrderBackorder {
+  id: number;
+  product: number;
+  product_name: string;
+  quantity: number;
+  status: string;
+  origin: string;
+  note: string;
 }
 
 export interface GRNLine {

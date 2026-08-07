@@ -1104,6 +1104,7 @@ def post_goods_receipt(*, receipt: GoodsReceipt, user: User) -> GoodsReceipt:
     )
 
     refresh_order_status(order)
+    _settle_retail_demand(receipt)
     _generate_grn_document(receipt, user)
     _post_receipt_journal(receipt, user)
 
@@ -1136,6 +1137,30 @@ def post_goods_receipt(*, receipt: GoodsReceipt, user: User) -> GoodsReceipt:
         },
     )
     return receipt
+
+
+def _settle_retail_demand(receipt: GoodsReceipt) -> None:
+    """Close the retail backorders this delivery was imported to satisfy.
+
+    The demand loop only pays for itself if it closes. A pharmacy's unmet request
+    becomes a requisition, the requisition becomes an import, and the import lands
+    here — at which point the people who have been waiting are, in fact, no longer
+    waiting. Leaving the backorders open would keep re-proposing an import that has
+    already arrived.
+
+    Quantities are settled oldest-request-first against what physically landed, so
+    a partial delivery closes the front of the queue rather than a little of
+    everybody's.
+    """
+    from apps.distribution.demand import settle_backorders_for
+
+    for line in receipt.lines.select_related("product").all():
+        if line.quantity_received > 0:
+            settle_backorders_for(
+                depot=receipt.organization_id,
+                product=line.product_id,
+                quantity=line.quantity_received,
+            )
 
 
 def _generate_grn_document(receipt: GoodsReceipt, user: User | None) -> Document:
