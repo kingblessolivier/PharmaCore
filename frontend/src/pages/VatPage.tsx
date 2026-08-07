@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Download, FileBarChart } from "lucide-react";
+import { ArrowLeft, FileDown, Download, FileBarChart } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import { useFinanceDocument } from "../lib/financeDocuments";
 import { useAuth } from "../lib/auth";
 import type { VatReturn } from "../lib/types";
-import { Badge, Card, PageHeader, Spinner } from "../components/ui";
+import { Badge, Button, Card, PageHeader, Spinner } from "../components/ui";
 import { SectionCard, SectionGrid } from "../components/AppHome";
 
 type PeriodPreset = "this-month" | "last-month" | "this-quarter" | "ytd" | "custom";
@@ -40,6 +41,7 @@ function exportCsv(v: VatReturn): string {
 }
 
 export function VatPage() {
+  const filed = useFinanceDocument("vat-return");
   const navigate = useNavigate();
   const { user } = useAuth();
   const orgId = user?.organization ?? 0;
@@ -78,10 +80,29 @@ export function VatPage() {
         <ArrowLeft className="h-4 w-4" /> Finance Home
       </button>
 
-      <PageHeader title="VAT return (Rwanda)" />
+      <PageHeader
+        title="VAT return (Rwanda)"
+        action={
+          <Button
+            variant="secondary"
+            onClick={() => filed.mutate({ start: period.start, end: period.end })}
+            disabled={filed.isPending}
+          >
+            <FileDown className="h-4 w-4" />
+            {filed.isPending ? "Preparing…" : "Filed copy (PDF)"}
+          </Button>
+        }
+      />
       <p className="mb-4 text-sm text-ink-500">
         Per-class Output and Input derived from posted journal entries, plus withholding,
         the running carry-forward, and a CSV draft for the RRA e-Tax filing.
+        {/* A CSV draft proves nothing after the fact — the filed copy is the record. */}
+        {filed.data && (
+          <>
+            {" "}
+            Filed copy issued as <strong>{filed.data.doc_number}</strong>.
+          </>
+        )}
       </p>
 
       {/* Period switcher — same UI as FinanceHome. */}

@@ -1,13 +1,13 @@
 /** Shared data hooks for the Procurement screens.
  *
- * Separate from `components/ProcurementKit.tsx` so that module only exports
+ * Separate from `components/RecordKit.tsx` so that module only exports
  * components (keeps React Fast Refresh working across the whole subsystem).
  */
 
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
 import { useAuth } from "./auth";
-import type { Organization, Paginated, Product, Supplier } from "./types";
+import type { Employee, Organization, Paginated, Product, Supplier } from "./types";
 
 /** The organization new documents belong to: the signed-in user's, or — for a
  * system admin with no org of their own — the first one they can see. */
@@ -44,4 +44,14 @@ export function productLabel(p: Product): string {
   return [p.generic_name, p.strength, p.brand_name ? `(${p.brand_name})` : ""]
     .filter(Boolean)
     .join(" ");
+}
+
+export function useEmployees(organization?: number | null) {
+  const query = organization ? `&organization=${organization}` : "";
+  return useQuery({
+    queryKey: ["hr-employees-all", organization ?? "all"],
+    queryFn: () => api<Paginated<Employee>>(`/api/hr/employees/?page_size=500${query}`),
+    select: (r) => r.results,
+    staleTime: 60_000,
+  });
 }

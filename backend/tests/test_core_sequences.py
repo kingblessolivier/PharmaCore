@@ -12,11 +12,10 @@ from __future__ import annotations
 import threading
 
 import pytest
-from django.db import connections, transaction
-
 from apps.core.sequences import next_document_number, next_number
 from apps.iam.models import Organization
 from apps.procurement.models import NumberSequence
+from django.db import connections, transaction
 
 pytestmark = pytest.mark.django_db
 

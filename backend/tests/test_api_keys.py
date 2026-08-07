@@ -54,9 +54,11 @@ def test_create_returns_raw_key_once(sys_admin: User, service: User) -> None:
 
 @pytest.mark.django_db
 def test_key_authenticates_as_its_user(sys_admin: User, service: User) -> None:
-    raw = _auth(sys_admin).post(
-        "/api/api-keys/", {"name": "k", "user": service.pk}, format="json"
-    ).json()["key"]
+    raw = (
+        _auth(sys_admin)
+        .post("/api/api-keys/", {"name": "k", "user": service.pk}, format="json")
+        .json()["key"]
+    )
     client = APIClient()
     client.credentials(HTTP_X_API_KEY=raw)
     me = client.get("/api/auth/me")
@@ -66,9 +68,11 @@ def test_key_authenticates_as_its_user(sys_admin: User, service: User) -> None:
 
 @pytest.mark.django_db
 def test_revoked_key_rejected(sys_admin: User, service: User) -> None:
-    created = _auth(sys_admin).post(
-        "/api/api-keys/", {"name": "k", "user": service.pk}, format="json"
-    ).json()
+    created = (
+        _auth(sys_admin)
+        .post("/api/api-keys/", {"name": "k", "user": service.pk}, format="json")
+        .json()
+    )
     raw = created["key"]
     _auth(sys_admin).delete(f"/api/api-keys/{created['id']}/")
     client = APIClient()

@@ -12,8 +12,11 @@ from apps.retail.views import (
     PrescriptionViewSet,
     SaleViewSet,
 )
+from apps.retail.views_counter import CounterViewSet, OfflineSyncViewSet
 
 router = DefaultRouter()
+router.register("counter", CounterViewSet, basename="counter")
+router.register("offline", OfflineSyncViewSet, basename="offline")
 router.register("sales", SaleViewSet, basename="sale")
 router.register("dispensing", DispensingViewSet, basename="dispensing")
 router.register("drawer-sessions", DrawerSessionViewSet, basename="drawer-session")

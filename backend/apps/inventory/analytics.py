@@ -40,8 +40,16 @@ DEMAND_TYPES = (StockMovement.Type.SALE, StockMovement.Type.TRANSFER_OUT)
 # Normal-distribution z-scores for the common service levels. Safety stock is
 # z × σ_demand × √lead-time, the textbook formula for a fixed lead time.
 _Z_SCORES: list[tuple[float, float]] = [
-    (99.9, 3.09), (99.0, 2.33), (98.0, 2.05), (97.0, 1.88), (95.0, 1.65),
-    (90.0, 1.28), (85.0, 1.04), (80.0, 0.84), (75.0, 0.67), (50.0, 0.0),
+    (99.9, 3.09),
+    (99.0, 2.33),
+    (98.0, 2.05),
+    (97.0, 1.88),
+    (95.0, 1.65),
+    (90.0, 1.28),
+    (85.0, 1.04),
+    (80.0, 0.84),
+    (75.0, 0.67),
+    (50.0, 0.0),
 ]
 
 
@@ -50,9 +58,7 @@ def z_for_service_level(percent: float) -> float:
     return min(_Z_SCORES, key=lambda row: abs(row[0] - percent))[1]
 
 
-def _demand_rows(
-    organization: Organization, *, days: int
-) -> QuerySet[StockMovement]:
+def _demand_rows(organization: Organization, *, days: int) -> QuerySet[StockMovement]:
     since = timezone.now() - timedelta(days=days)
     return StockMovement.objects.filter(
         organization=organization,
@@ -183,9 +189,7 @@ def recompute_reorder_rules(
     now = timezone.now()
     for product_id, abc in abc_by_product.items():
         s = stats.get(product_id, {"avg_daily": 0.0, "std_dev": 0.0, "cv": 0.0, "total": 0})
-        rule = ReorderRule.objects.filter(
-            organization=organization, product_id=product_id
-        ).first()
+        rule = ReorderRule.objects.filter(organization=organization, product_id=product_id).first()
         if rule is None:
             if not create_missing:
                 continue
@@ -261,11 +265,7 @@ def suggested_orders(organization: Organization) -> list[dict[str, Any]]:
         qty = max(target - free, rule.reorder_quantity, 1)
         daily = float(rule.avg_daily_demand)
         cover_days = round(free / daily, 1) if daily > 0 else None
-        urgency = (
-            "CRITICAL" if free <= 0
-            else "HIGH" if free <= rule.safety_stock
-            else "NORMAL"
-        )
+        urgency = "CRITICAL" if free <= 0 else "HIGH" if free <= rule.safety_stock else "NORMAL"
         unit_cost = _unit_cost(organization, rule.product_id)
         out.append(
             {
@@ -288,7 +288,7 @@ def suggested_orders(organization: Organization) -> list[dict[str, Any]]:
                 "estimated_value": str((unit_cost * Decimal(int(qty))).quantize(Decimal("0.01"))),
                 "preferred_supplier": rule.preferred_supplier_id,
                 "preferred_supplier_name": (
-                    rule.preferred_supplier.name if rule.preferred_supplier_id else None
+                    rule.preferred_supplier.name if rule.preferred_supplier else None
                 ),
             }
         )
@@ -336,7 +336,9 @@ def abc_xyz_matrix(organization: Organization) -> dict[str, Any]:
                 "units": v["units"],
                 "value": str(v["value"].quantize(Decimal("0.01"))),
                 "products": sorted(
-                    v["products"], key=lambda p: Decimal(p["annual_consumption_value"]), reverse=True
+                    v["products"],
+                    key=lambda p: Decimal(p["annual_consumption_value"]),
+                    reverse=True,
                 )[:25],
             }
             for k, v in cells.items()
@@ -357,9 +359,7 @@ def slow_and_dead_stock(
     """
     last_moved: dict[int, Any] = {}
     for product_id, occurred in (
-        StockMovement.objects.filter(
-            organization=organization, movement_type__in=DEMAND_TYPES
-        )
+        StockMovement.objects.filter(organization=organization, movement_type__in=DEMAND_TYPES)
         .order_by("product_id", "-occurred_at")
         .values_list("product_id", "occurred_at")
     ):
@@ -502,9 +502,7 @@ def mean_kinetic_temperature(temperatures_celsius: list[float]) -> float | None:
     return round(mkt_kelvin - 273.15, 3)
 
 
-def sensor_thermal_profile(
-    sensor: Any, *, start: Any = None, end: Any = None
-) -> dict[str, Any]:
+def sensor_thermal_profile(sensor: Any, *, start: Any = None, end: Any = None) -> dict[str, Any]:
     """MKT plus min/mean/max and excursion counts for one sensor over a window."""
     logs = TemperatureLog.objects.filter(sensor=sensor)
     if start:
@@ -515,8 +513,7 @@ def sensor_thermal_profile(
     temps = [float(t) for t in logs.values_list("temperature_celsius", flat=True)]
     zone = sensor.zone
     in_range = [
-        t for t in temps
-        if float(zone.temp_min_celsius) <= t <= float(zone.temp_max_celsius)
+        t for t in temps if float(zone.temp_min_celsius) <= t <= float(zone.temp_max_celsius)
     ]
     breaches = logs.filter(
         Q(excursion_status=TemperatureLog.ExcursionStatus.CRITICAL_BREACH)
@@ -542,9 +539,7 @@ def sensor_thermal_profile(
             <= (mean_kinetic_temperature(temps) or 0)
             <= float(zone.temp_max_celsius)
         ),
-        "time_in_range_percent": (
-            round(len(in_range) / len(temps) * 100, 2) if temps else None
-        ),
+        "time_in_range_percent": (round(len(in_range) / len(temps) * 100, 2) if temps else None),
         "excursion_readings": breaches,
         "calibration_state": sensor.calibration_state,
         "calibration_due_date": (

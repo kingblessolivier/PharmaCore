@@ -562,6 +562,9 @@ export interface Account {
   code: string;
   name: string;
   account_type: AccountType;
+  /** Which statement line this account rolls into. Blank falls back to a
+   * per-type default — see apps/finance/models.py Account.Classification. */
+  classification: string;
   normal_balance: BalanceSide;
   parent: number | null;
   is_system: boolean;
@@ -746,6 +749,8 @@ export interface SupplierBill {
   bill_date: string;
   due_date: string | null;
   total_amount: string;
+  vat_amount: string;
+  tax_class: string;
   amount_paid: string;
   amount_due: string;
   status: "UNPAID" | "PARTIAL" | "PAID";
@@ -823,18 +828,29 @@ export interface StatementLine {
   amount: string;
 }
 
+/** The full statement ladder. Predated the classification rewrite and was missing
+ * every line between gross and net — see apps/finance/reports.profit_and_loss. */
 export interface ProfitAndLoss {
   start: string;
   end: string;
   revenue: string;
+  other_income: string;
   cogs: string;
   gross_profit: string;
   gross_margin_pct: string;
   operating_expenses: string;
+  depreciation: string;
+  operating_profit: string;
+  operating_margin_pct: string;
+  finance_cost: string;
+  tax_expense: string;
   net_profit: string;
   net_margin_pct: string;
+  /** Operating profit plus depreciation — not net profit plus depreciation. */
   ebitda: string;
+  ebitda_margin_pct: string;
   revenue_lines: StatementLine[];
+  cogs_lines: StatementLine[];
   expense_lines: StatementLine[];
 }
 
@@ -929,10 +945,24 @@ export interface ConsolidatedBranch {
   total_equity: string;
 }
 
+export interface IntercompanyEliminations {
+  revenue: string;
+  cogs: string;
+  profit_effect: string;
+  receivable: string;
+  payable: string;
+  invoice_count: number;
+  /** Profit on internally transferred goods still in stock is NOT eliminated. */
+  unrealised_profit_note: string;
+}
+
 export interface Consolidated {
   start: string;
   end: string;
   branches: ConsolidatedBranch[];
+  /** What the branches add up to before internal trade is netted off. */
+  gross_totals: Record<string, string>;
+  eliminations: IntercompanyEliminations;
   totals: Record<string, string>;
   group_gross_margin_pct: string;
   group_net_margin_pct: string;
@@ -1246,7 +1276,29 @@ export interface FixedAsset {
   net_book_value: string;
   annual_depreciation: string;
   is_active: boolean;
+  /** Stamped by the dispose action — null until the asset is written off / sold. */
+  disposal_date: string | null;
+  disposal_amount: string | null;
+  disposal_reason: string;
   created_at: string;
+}
+
+/** Per-organisation configuration singleton. */
+export interface TenantSettings {
+  id: number;
+  organization: number;
+  organization_name: string;
+  base_currency: string;
+  fx_provider: string;
+  costing_method: "WAC" | "FEFO_LOT";
+  pay_period: "DAILY" | "WEEKLY" | "FORTNIGHTLY" | "MONTHLY";
+  statutory_remittance_day: number;
+  pit_filing_deadline_month: number;
+  pit_filing_deadline_day: number;
+  default_country: string;
+  timezone: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface TaxRecord {
@@ -1263,21 +1315,6 @@ export interface TaxRecord {
   tax_class_c: string;
   qr_code_payload: string;
   fiscalized_at: string;
-}
-
-export interface Budget {
-  id: number;
-  organization: number;
-  department: number;
-  department_name: string;
-  financial_year: number;
-  account: number;
-  account_code: string;
-  account_name: string;
-  budgeted_amount: string;
-  actual_amount: string;
-  variance: string;
-  created_at: string;
 }
 
 export interface AttendanceLog {

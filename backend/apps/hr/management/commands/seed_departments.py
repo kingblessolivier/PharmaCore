@@ -9,10 +9,11 @@ user manually creates them before the Finance cockpit or payroll screen works.
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.core.management.base import BaseCommand
 
 from apps.iam.models import Department, Organization
-
 
 # A department that the rest of the app expects to exist. Anything else (Pharmacy
 # Dispensing, Logistics, etc.) can be added by the org admin via the IAM UI.
@@ -25,7 +26,7 @@ CANONICAL_DEPARTMENTS = [
 class Command(BaseCommand):
     help = "Seed canonical (FINANCE, HR) departments for every active organisation."
 
-    def handle(self, *args, **options) -> None:
+    def handle(self, *args: Any, **options: Any) -> None:
         orgs = Organization.objects.filter(is_active=True)
         created = 0
         for org in orgs:

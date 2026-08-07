@@ -1,0 +1,27 @@
+{% extends "documents/base.html" %}
+{% block content %}
+<table class="parties">
+  <tr>
+    <td style="width:55%"><div class="plabel">Taxpayer</div>{{ organization.name }}{% if organization.tin %}<br><span class="muted">TIN {{ organization.tin }}</span>{% endif %}</td>
+    <td style="width:45%"><div class="plabel">Period</div>{{ start }} to {{ end }}</td>
+  </tr>
+</table>
+<table>
+  <tr><th>Class</th><th>Basis</th><th class="right">Output VAT</th><th class="right">Input VAT</th><th class="right">Net</th></tr>
+  {% for r in rows %}
+  <tr><td>{{ r.tax_class }}</td><td>{{ r.basis }}</td><td class="right">{{ r.output }}</td><td class="right">{{ r.input }}</td><td class="right">{{ r.net }}</td></tr>
+  {% endfor %}
+  <tr><td colspan="2" class="right"><b>Total</b></td><td class="right"><b>{{ total_output }}</b></td><td class="right"><b>{{ total_input }}</b></td><td class="right"><b>{{ net_payable }}</b></td></tr>
+</table>
+<p class="muted">
+  Class A is exempt and Class C zero-rated, which is why a pharmacy's output VAT is far
+  smaller than its turnover suggests. Input VAT on exempt supplies is not recoverable.
+</p>
+<p class="muted">Withholding tax accounted for in the period: {{ withholding }}</p>
+<table class="parties" style="margin-top:24px">
+  <tr>
+    <td style="width:50%"><div class="plabel">Prepared by</div>{{ prepared_by }}<br><br>___________________</td>
+    <td style="width:50%"><div class="plabel">Declared by</div><br><br>___________________</td>
+  </tr>
+</table>
+{% endblock %}

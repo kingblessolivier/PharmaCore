@@ -30,16 +30,55 @@ class Account(models.Model):
         DEBIT = "DEBIT", "Debit"
         CREDIT = "CREDIT", "Credit"
 
+    class Classification(models.TextChoices):
+        """Where the account sits on a *published* statement.
+
+        ``account_type`` says which side of the equation an account lives on;
+        this says which line of the P&L or balance sheet it rolls into. Without
+        it the reports had to infer meaning from the account code (anything
+        starting "5" was cost of sales), so adding "5500 Marketing" silently
+        wrecked gross margin. Classification makes that explicit and editable.
+        """
+
+        # Balance sheet
+        CURRENT_ASSET = "CURRENT_ASSET", "Current asset"
+        NON_CURRENT_ASSET = "NON_CURRENT_ASSET", "Non-current asset"
+        CURRENT_LIABILITY = "CURRENT_LIABILITY", "Current liability"
+        NON_CURRENT_LIABILITY = "NON_CURRENT_LIABILITY", "Non-current liability"
+        EQUITY = "EQUITY", "Equity"
+        # Profit & loss
+        REVENUE = "REVENUE", "Revenue"
+        OTHER_INCOME = "OTHER_INCOME", "Other income"
+        COGS = "COGS", "Cost of sales"
+        OPERATING_EXPENSE = "OPERATING_EXPENSE", "Operating expense"
+        DEPRECIATION = "DEPRECIATION", "Depreciation & amortisation"
+        FINANCE_COST = "FINANCE_COST", "Finance cost (interest)"
+        TAX_EXPENSE = "TAX_EXPENSE", "Tax expense"
+
     organization = models.ForeignKey(
         "iam.Organization", on_delete=models.CASCADE, related_name="accounts"
     )
     code = models.CharField(max_length=20)
     name = models.CharField(max_length=150)
     account_type = models.CharField(max_length=20, choices=Type.choices)
+    classification = models.CharField(
+        max_length=25,
+        choices=Classification.choices,
+        blank=True,
+        default="",
+        help_text="Which statement line this account rolls into. Blank falls back "
+        "to a sensible default for the account type.",
+    )
     normal_balance = models.CharField(max_length=10, choices=Balance.choices)
     parent = models.ForeignKey(
         "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="children"
     )
+    # IAS 21 turns on exactly this distinction. A monetary balance — cash, a
+    # receivable, a payable — is a fixed number of *currency units*, so when the
+    # rate moves its value in the base currency moves with it and must be
+    # restated. Inventory and fixed assets are non-monetary: they stay at the
+    # rate on the day they were acquired, however the currency moves afterwards.
+    is_monetary = models.BooleanField(default=False)
     # System control accounts (Cash & Bank, AR, AP, …) are auto-created and
     # protected from deletion, per the auto-posting rules.
     is_system = models.BooleanField(default=False)
@@ -67,11 +106,33 @@ class JournalEntry(models.Model):
         POSTED = "POSTED", "Posted"
         REVERSED = "REVERSED", "Reversed"
 
+    class Source(models.TextChoices):
+        """Which part of the business produced this posting.
+
+        ``reference_type`` already says *which document*, but it is free text with
+        dozens of values. This is the coarse grouping the money-flow map and the
+        "where did this month's cost come from" question need, and it is the one
+        field that lets an accountant tell a system-generated entry from something
+        a human typed at midnight.
+        """
+
+        SALES = "SALES", "Sales & dispensing"
+        PROCUREMENT = "PROCUREMENT", "Procurement & imports"
+        INVENTORY = "INVENTORY", "Inventory & stock"
+        PAYROLL = "PAYROLL", "Payroll & people"
+        TREASURY = "TREASURY", "Treasury & banking"
+        TAX = "TAX", "Tax & statutory"
+        CLOSE = "CLOSE", "Period close & adjustments"
+        MANUAL = "MANUAL", "Manual journal"
+
     organization = models.ForeignKey(
         "iam.Organization", on_delete=models.CASCADE, related_name="journal_entries"
     )
     entry_number = models.CharField(max_length=30, unique=True, blank=True, default="")
     entry_date = models.DateField()
+    source_module = models.CharField(
+        max_length=15, choices=Source.choices, default=Source.MANUAL, db_index=True
+    )
     description = models.CharField(max_length=255, blank=True, default="")
     reference_type = models.CharField(max_length=50, blank=True, default="")
     reference_id = models.CharField(max_length=64, blank=True, default="")
@@ -130,6 +191,24 @@ class JournalLine(models.Model):
         max_digits=14, decimal_places=2, validators=[MinValueValidator(0.01)]
     )
     memo = models.CharField(max_length=200, blank=True, default="")
+    # Multi-currency. `amount` is always base currency (RWF) — the ledger foots in
+    # one currency or it does not foot at all. `amount_fc` keeps the figure the
+    # transaction was actually struck in, which is what revaluation needs: you
+    # cannot restate a balance without knowing how many foreign units it is.
+    currency = models.CharField(max_length=3, default="RWF")
+    amount_fc = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    exchange_rate = models.DecimalField(max_digits=12, decimal_places=6, default=Decimal("1"))
+    # The analysis dimension. Optional because control-account postings (VAT, AP,
+    # bank) belong to the entity rather than to any one branch or department —
+    # forcing a centre onto them would only invent a "Head Office" bucket that
+    # means "we had to put it somewhere".
+    cost_centre = models.ForeignKey(
+        "finance.CostCentre",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="journal_lines",
+    )
     # Bank reconciliation: matched against a bank/MoMo statement line.
     is_reconciled = models.BooleanField(default=False)
     reconciled_at = models.DateTimeField(null=True, blank=True)
@@ -361,6 +440,9 @@ class FixedAsset(models.Model):
     salvage_value = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     accumulated_depreciation = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     is_active = models.BooleanField(default=True)
+    disposal_date = models.DateField(null=True, blank=True)
+    disposal_amount = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    disposal_reason = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -404,38 +486,6 @@ class TaxRecord(models.Model):
 
     def __str__(self) -> str:
         return f"EBM-{self.receipt_number} ({self.vat_amount} VAT)"
-
-
-class Budget(models.Model):
-    """Departmental budget vs actual variance tracking. ROADMAP '9. Finance'."""
-
-    organization = models.ForeignKey(
-        "iam.Organization", on_delete=models.CASCADE, related_name="budgets"
-    )
-    department = models.ForeignKey(
-        "iam.Department", on_delete=models.CASCADE, related_name="budgets"
-    )
-    financial_year = models.PositiveIntegerField(default=2026)
-    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="budgets")
-    budgeted_amount = models.DecimalField(max_digits=14, decimal_places=2)
-    actual_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["financial_year", "department"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["organization", "department", "financial_year", "account"],
-                name="uniq_budget_line",
-            )
-        ]
-
-    def __str__(self) -> str:
-        return f"Budget FY{self.financial_year} · {self.department.name} · {self.account.code}"
-
-    @property
-    def variance(self) -> Decimal:
-        return self.budgeted_amount - self.actual_amount
 
 
 class TaxCode(models.Model):
@@ -665,6 +715,13 @@ class TenantSettings(models.Model):
     # Locale & display
     default_country = models.CharField(max_length=2, default="RW")
     timezone = models.CharField(max_length=50, default="Africa/Kigali")
+    # EBM (electronic billing machine) registration. Rwandan retail must fiscalise
+    # every receipt, and the SDC/MRC identifiers come from the registered device.
+    # Blank means the till is not registered yet: sales still complete — refusing
+    # to sell because a device is unconfigured would close the shop — but they are
+    # recorded as unfiscalised so they can be found and submitted later.
+    ebm_sdc_id = models.CharField(max_length=50, blank=True, default="")
+    ebm_mrc_number = models.CharField(max_length=50, blank=True, default="")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -927,3 +984,64 @@ class PaymentRunLine(models.Model):
     def idempotency_key(self) -> str:
         """Stable per (run, bill), so a re-sent file cannot pay twice."""
         return f"{self.payment_run_id}:{self.bill_id}"
+
+
+# ---------------------------------------------------------------------------
+# The ledger spine — analysis dimensions, budgets that read from the books, and
+# the period-close checklist. Defined in models_ledger.py to keep this module
+# readable; re-exported here so `from apps.finance.models import CostCentre`
+# keeps working and Django registers them under the `finance` app label.
+# ---------------------------------------------------------------------------
+from .models_accrual import (  # noqa: E402
+    RecurringSchedule,
+    ScheduleRun,
+)
+from .models_bank import (  # noqa: E402
+    BankStatement,
+    BankStatementLine,
+    ReconciliationMatch,
+)
+from .models_fx import (  # noqa: E402
+    ExchangeRate,
+    FxRevaluation,
+)
+from .models_ledger import (  # noqa: E402
+    Budget,
+    BudgetLine,
+    CostCentre,
+    PeriodTask,
+)
+
+__all__ = [
+    "Account",
+    "AccountingPeriod",
+    "BankAccount",
+    "BankStatement",
+    "BankStatementLine",
+    "Budget",
+    "BudgetLine",
+    "CostCentre",
+    "ExchangeRate",
+    "FxRevaluation",
+    "CreditProfile",
+    "CustomerCredit",
+    "CustomerInvoice",
+    "CustomerReceipt",
+    "DunningNotice",
+    "FixedAsset",
+    "JournalEntry",
+    "JournalLine",
+    "OpeningBalance",
+    "PaymentRun",
+    "PaymentRunLine",
+    "PeriodTask",
+    "ReconciliationMatch",
+    "RecurringSchedule",
+    "ScheduleRun",
+    "SupplierBill",
+    "SupplierBillPayment",
+    "TaxCode",
+    "TaxPayment",
+    "TaxRecord",
+    "TenantSettings",
+]

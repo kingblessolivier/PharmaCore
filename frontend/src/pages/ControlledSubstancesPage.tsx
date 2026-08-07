@@ -1,247 +1,326 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, ShieldAlert } from "lucide-react";
-import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
-import { Badge, Button, Card, Modal, PageHeader, Spinner, TextField } from "../components/ui";
+import { Plus, ShieldAlert } from "lucide-react";
+import { useMemo, useState } from "react";
+import { DataGrid } from "../components/DataGrid";
+import {
+  Drawer,
+  ErrorNote,
+  Field,
+  Grid,
+  Input,
+  Section,
+  Select,
+} from "../components/RecordKit";
+import { Badge, Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
-import { useAuth } from "../lib/auth";
-import type { ControlledSubstanceRegister, Paginated, Product } from "../lib/types";
+import { dateTime } from "../lib/format";
+import type { CDMovement, ControlledEntry } from "../lib/retail";
+import { useDefaultOrg, useProducts } from "../lib/recordData";
+import type { Paginated } from "../lib/types";
 
-export function ControlledSubstancesPage() {
-  const navigate = useNavigate();
+const MOVEMENT_LABEL: Record<CDMovement, string> = {
+  RECEIPT: "Received",
+  DISPENSING: "Dispensed",
+  DISPOSAL: "Disposed",
+};
+
+const MOVEMENT_TONE: Record<CDMovement, "success" | "info" | "warning"> = {
+  RECEIPT: "success",
+  DISPENSING: "info",
+  DISPOSAL: "warning",
+};
+
+/* -------------------------------------------------------------------------- */
+
+function EntryDrawer({ orgId, onClose }: { orgId: number | null; onClose: () => void }) {
   const qc = useQueryClient();
-  const { user } = useAuth();
-  const [creating, setCreating] = useState(false);
-
-  const [productId, setProductId] = useState("");
-  const [batchNumber, setBatchNumber] = useState("BATCH-CS-2026-X");
-  const [movementType, setMovementType] = useState<"RECEIPT" | "DISPENSING" | "DISPOSAL">("DISPENSING");
-  const [quantity, setQuantity] = useState("-20");
-  const [runningBalance, setRunningBalance] = useState("80");
-  const [patientName, setPatientName] = useState("Jean-Pierre Niyonzima");
-  const [prescriberName, setPrescriberName] = useState("Dr. Emmanuel Habimana");
-  const [witnessName, setWitnessName] = useState("Pharm. Marie Claire Mukamana");
-  const [rxRef, setRxRef] = useState("RX-2026-009");
-
-  const logsQuery = useQuery({
-    queryKey: ["controlled-drugs-list"],
-    queryFn: () => api<Paginated<ControlledSubstanceRegister>>("/api/retail/controlled-drugs/"),
+  const { data: products = [] } = useProducts();
+  const [form, setForm] = useState({
+    product: "" as number | "",
+    batch_number: "",
+    movement_type: "RECEIPT" as CDMovement,
+    quantity: 0,
+    running_balance: 0,
+    patient_name: "",
+    prescriber_name: "",
+    witness_name: "",
+    rx_reference: "",
   });
+  const set = (patch: Partial<typeof form>) => setForm({ ...form, ...patch });
 
-  const productsQuery = useQuery({
-    queryKey: ["products-for-controlled-drugs"],
-    queryFn: () => api<Paginated<Product>>("/api/catalog/products/"),
-  });
-
-  const createLogMutation = useMutation({
+  const create = useMutation({
     mutationFn: () =>
-      api<ControlledSubstanceRegister>("/api/retail/controlled-drugs/", {
+      api<ControlledEntry>("/api/retail/controlled-drugs/", {
         method: "POST",
-        body: JSON.stringify({
-          organization: user?.organization,
-          product: Number(productId),
-          batch_number: batchNumber,
-          movement_type: movementType,
-          quantity: Number(quantity),
-          running_balance: Number(runningBalance),
-          patient_name: patientName,
-          prescriber_name: prescriberName,
-          witness_name: witnessName,
-          rx_reference: rxRef,
-          logged_by: user?.id,
-        }),
+        body: JSON.stringify({ ...form, organization: orgId }),
       }),
     onSuccess: () => {
-      setCreating(false);
-      void qc.invalidateQueries({ queryKey: ["controlled-drugs-list"] });
+      void qc.invalidateQueries({ queryKey: ["controlled-drugs"] });
+      onClose();
     },
   });
 
-  function handleCreateLog(e: FormEvent) {
-    e.preventDefault();
-    if (productId) createLogMutation.mutate();
-  }
+  const isDisposal = form.movement_type === "DISPOSAL";
 
   return (
-    <div className="max-w-6xl">
-      <button
-        onClick={() => navigate("/pos")}
-        className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
-      >
-        <ArrowLeft className="h-4 w-4" /> Return to POS Counter
-      </button>
+    <Drawer
+      title="Manual register entry"
+      subtitle="Dispensing is written by the till. This is for receipts and witnessed disposals."
+      width="max-w-2xl"
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => create.mutate()}
+            disabled={create.isPending || form.product === "" || form.quantity <= 0}
+          >
+            {create.isPending ? "Recording…" : "Record entry"}
+          </Button>
+        </div>
+      }
+    >
+      <ErrorNote error={create.error} />
+      <Section title="Movement">
+        <Grid cols={2}>
+          <Field label="Product">
+            <Select
+              value={form.product}
+              onChange={(e) => set({ product: Number(e.target.value) || "" })}
+            >
+              <option value="">— choose —</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.generic_name} {p.strength}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Kind">
+            <Select
+              value={form.movement_type}
+              onChange={(e) => set({ movement_type: e.target.value as CDMovement })}
+            >
+              <option value="RECEIPT">Received from supplier or depot</option>
+              <option value="DISPOSAL">Witnessed disposal</option>
+              <option value="DISPENSING">Dispensed to patient</option>
+            </Select>
+          </Field>
+          <Field label="Batch number">
+            <Input
+              value={form.batch_number}
+              onChange={(e) => set({ batch_number: e.target.value })}
+            />
+          </Field>
+          <Field label="Quantity">
+            <Input
+              type="number"
+              min={1}
+              value={form.quantity}
+              onChange={(e) => set({ quantity: Number(e.target.value) })}
+            />
+          </Field>
+          <Field
+            label="Running balance after"
+            hint="What is physically on the shelf once this movement is done."
+          >
+            <Input
+              type="number"
+              min={0}
+              value={form.running_balance}
+              onChange={(e) => set({ running_balance: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="Reference">
+            <Input
+              value={form.rx_reference}
+              onChange={(e) => set({ rx_reference: e.target.value })}
+              placeholder="GRN or disposal certificate"
+            />
+          </Field>
+        </Grid>
+      </Section>
 
+      <Section
+        title={isDisposal ? "Witness" : "Patient & prescriber"}
+        hint={
+          isDisposal
+            ? "A disposal without a named witness is not a witnessed disposal."
+            : "Required when the movement is a dispensing."
+        }
+      >
+        {isDisposal ? (
+          <Field label="Witness name">
+            <Input
+              value={form.witness_name}
+              onChange={(e) => set({ witness_name: e.target.value })}
+            />
+          </Field>
+        ) : (
+          <Grid cols={2}>
+            <Field label="Patient">
+              <Input
+                value={form.patient_name}
+                onChange={(e) => set({ patient_name: e.target.value })}
+              />
+            </Field>
+            <Field label="Prescriber">
+              <Input
+                value={form.prescriber_name}
+                onChange={(e) => set({ prescriber_name: e.target.value })}
+              />
+            </Field>
+          </Grid>
+        )}
+      </Section>
+    </Drawer>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+export function ControlledSubstancesPage() {
+  const { orgId } = useDefaultOrg();
+  const [creating, setCreating] = useState(false);
+  const [product, setProduct] = useState<number | "">("");
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["controlled-drugs", orgId],
+    enabled: orgId !== null,
+    queryFn: () =>
+      api<Paginated<ControlledEntry>>(
+        `/api/retail/controlled-drugs/?organization=${orgId}&page_size=500`,
+      ),
+  });
+  const entries = useMemo(() => data?.results ?? [], [data]);
+
+  const products = useMemo(() => {
+    const seen = new Map<number, string>();
+    for (const e of entries) seen.set(e.product, e.product_name ?? `#${e.product}`);
+    return [...seen.entries()];
+  }, [entries]);
+
+  const rows = useMemo(
+    () => (product === "" ? entries : entries.filter((e) => e.product === product)),
+    [entries, product],
+  );
+
+  // The register is a running balance, so each product's most recent entry is
+  // what the shelf should show. Surfacing it is the whole point of the log —
+  // a register nobody can reconcile against is just a list.
+  const balances = useMemo(() => {
+    const latest = new Map<number, ControlledEntry>();
+    for (const e of [...entries].sort((a, b) => a.logged_at.localeCompare(b.logged_at))) {
+      latest.set(e.product, e);
+    }
+    return [...latest.values()];
+  }, [entries]);
+
+  return (
+    <div className="space-y-4">
       <PageHeader
-        title="Statutory Controlled Substances Register & Audit Log"
+        title="Controlled drugs register"
         action={
           <Button onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4" /> Log Controlled Movement
+            <Plus className="h-4 w-4" /> Manual entry
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
-        Statutory running balance ledger, witness sign-offs, quarterly audit report, and receipt-to-dispensing trail for narcotics & controlled drugs.
+      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
+        The statutory running-balance record. Dispensing is written automatically by the till at
+        the moment of sale — a register typed up afterwards drifts from the stock it is meant to
+        account for, and this is the document an inspector reads.
       </p>
 
-      {logsQuery.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
+      {balances.length > 0 && (
+        <div className="rounded-lg border border-line bg-surface-0 px-4 py-3">
+          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink-900">
+            <ShieldAlert className="h-4 w-4 text-ink-400" />
+            Current register balances
+          </div>
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+            {balances.map((b) => (
+              <span key={b.product}>
+                <span className="text-ink-600">{b.product_name ?? `#${b.product}`} </span>
+                <strong className="tabular-nums">{b.running_balance}</strong>
+              </span>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-ink-500">
+            These must equal what is physically in the cabinet. A difference is a discrepancy to
+            investigate, not a number to correct.
+          </p>
         </div>
       )}
 
-      {logsQuery.data && (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-3">Product Name</th>
-                <th className="px-4 py-3">Batch #</th>
-                <th className="px-4 py-3">Movement Type</th>
-                <th className="px-4 py-3 text-right">Qty</th>
-                <th className="px-4 py-3 text-right">Running Balance</th>
-                <th className="px-4 py-3">Patient & Prescriber</th>
-                <th className="px-4 py-3">Witness & Logged By</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logsQuery.data.results.map((l) => (
-                <tr key={l.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                  <td className="px-4 py-3 font-medium text-ink-900">
-                    <div className="flex items-center gap-1.5">
-                      <ShieldAlert className="h-4 w-4 text-amber-600" />
-                      <span>{l.product_name}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-ink-700">{l.batch_number}</td>
-                  <td className="px-4 py-3">
-                    <Badge tone={l.movement_type === "DISPENSING" ? "brand" : l.movement_type === "RECEIPT" ? "success" : "danger"}>
-                      {l.movement_type}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-ink-900">{l.quantity}</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-emerald-700">{l.running_balance} units</td>
-                  <td className="px-4 py-3 text-xs text-ink-700">
-                    <div><span className="font-semibold">Pt:</span> {l.patient_name || "N/A"}</div>
-                    <div><span className="font-semibold">Rx:</span> {l.prescriber_name || "N/A"}</div>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-ink-700">
-                    <div><span className="font-semibold">Witness:</span> {l.witness_name || "N/A"}</div>
-                    <div><span className="font-semibold">Staff:</span> {l.logged_by_name || "N/A"}</div>
-                  </td>
-                </tr>
-              ))}
-              {logsQuery.data.results.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-ink-500">
-                    No controlled drug movements recorded yet. Click "Log Controlled Movement" above.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      <DataGrid
+        rows={rows}
+        loading={isLoading}
+        getRowId={(e) => e.id}
+        storageKey="retail.controlled-drugs"
+        exportName="controlled-drugs-register"
+        searchPlaceholder="Search patient, prescriber or reference…"
+        emptyMessage="No controlled-drug movements recorded."
+        initialDensity="compact"
+        toolbar={
+          <Select
+            value={product}
+            onChange={(e) => setProduct(Number(e.target.value) || "")}
+            className="h-8 text-xs"
+          >
+            <option value="">All products</option>
+            {products.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </Select>
+        }
+        columns={[
+          {
+            key: "logged_at",
+            header: "When",
+            value: (e) => e.logged_at,
+            render: (e) => dateTime(e.logged_at),
+            width: "11rem",
+          },
+          { key: "product_name", header: "Product", value: (e) => e.product_name ?? "" },
+          { key: "batch_number", header: "Batch", value: (e) => e.batch_number },
+          {
+            key: "movement_type",
+            header: "Movement",
+            value: (e) => e.movement_type,
+            render: (e) => (
+              <Badge tone={MOVEMENT_TONE[e.movement_type]}>
+                {MOVEMENT_LABEL[e.movement_type]}
+              </Badge>
+            ),
+          },
+          {
+            key: "quantity",
+            header: "Qty",
+            numeric: true,
+            align: "right",
+            value: (e) => e.quantity,
+          },
+          {
+            key: "running_balance",
+            header: "Balance",
+            numeric: true,
+            align: "right",
+            value: (e) => e.running_balance,
+            render: (e) => <span className="font-semibold">{e.running_balance}</span>,
+          },
+          { key: "patient_name", header: "Patient", value: (e) => e.patient_name },
+          { key: "prescriber_name", header: "Prescriber", value: (e) => e.prescriber_name },
+          { key: "witness_name", header: "Witness", value: (e) => e.witness_name },
+          { key: "logged_by_name", header: "Logged by", value: (e) => e.logged_by_name ?? "—" },
+        ]}
+      />
 
-      {creating && (
-        <Modal title="Log Controlled Drug Movement / Audit" onClose={() => setCreating(false)}>
-          <form onSubmit={handleCreateLog} className="flex flex-col gap-4">
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-ink-500">
-                Controlled Product
-              </label>
-              <select
-                className="w-full rounded-md border border-line bg-surface-50 px-3 py-2 text-sm text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                value={productId}
-                onChange={(e) => setProductId(e.target.value)}
-                required
-              >
-                <option value="">-- Select Product --</option>
-                {productsQuery.data?.results.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.generic_name} ({p.strength})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <TextField
-                label="Batch Number"
-                value={batchNumber}
-                onChange={(e) => setBatchNumber(e.target.value)}
-                required
-              />
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-ink-500">
-                  Movement Type
-                </label>
-                <select
-                  className="w-full rounded-md border border-line bg-surface-50 px-3 py-2 text-sm text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  value={movementType}
-                  onChange={(e) => setMovementType(e.target.value as any)}
-                  required
-                >
-                  <option value="DISPENSING">DISPENSING (Patient)</option>
-                  <option value="RECEIPT">RECEIPT (Supplier Inflow)</option>
-                  <option value="DISPOSAL">DISPOSAL (Witnessed Waste)</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <TextField
-                label="Quantity Changed (+/-)"
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                required
-              />
-              <TextField
-                label="New Running Balance"
-                type="number"
-                value={runningBalance}
-                onChange={(e) => setRunningBalance(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <TextField
-                label="Patient Name"
-                value={patientName}
-                onChange={(e) => setPatientName(e.target.value)}
-              />
-              <TextField
-                label="Prescriber Name"
-                value={prescriberName}
-                onChange={(e) => setPrescriberName(e.target.value)}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <TextField
-                label="Witness Pharmacist Name"
-                value={witnessName}
-                onChange={(e) => setWitnessName(e.target.value)}
-              />
-              <TextField
-                label="Rx Reference #"
-                value={rxRef}
-                onChange={(e) => setRxRef(e.target.value)}
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="secondary" onClick={() => setCreating(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createLogMutation.isPending || !productId}>
-                {createLogMutation.isPending ? "Logging…" : "Confirm & Save Entry"}
-              </Button>
-            </div>
-          </form>
-        </Modal>
-      )}
+      {creating && <EntryDrawer orgId={orgId} onClose={() => setCreating(false)} />}
     </div>
   );
 }

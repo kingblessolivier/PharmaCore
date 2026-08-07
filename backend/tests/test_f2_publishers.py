@@ -13,12 +13,10 @@ so we can assert a specific row lands.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 
 import pytest
-from django.utils import timezone
-
 from apps.events.events import EventType
 from apps.events.models import OutboxEvent
 from apps.events.publishers import (

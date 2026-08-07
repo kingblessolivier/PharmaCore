@@ -102,9 +102,7 @@ class NumberSequence(models.Model):
     organization = models.ForeignKey(
         "iam.Organization", on_delete=models.CASCADE, related_name="procurement_sequences"
     )
-    domain = models.CharField(
-        max_length=4, choices=Domain.choices, default=Domain.PROCUREMENT
-    )
+    domain = models.CharField(max_length=4, choices=Domain.choices, default=Domain.PROCUREMENT)
     kind = models.CharField(max_length=6, choices=Kind.choices)
     year = models.IntegerField()
     next_number = models.BigIntegerField(default=1)
@@ -796,9 +794,7 @@ class PurchaseOrderLine(models.Model):
     # duty/freight/insurance/clearing this line carries, and the resulting
     # per-unit cost in base currency that goes into the inventory batch.
     landed_cost_allocated = models.DecimalField(max_digits=14, decimal_places=2, default=0)
-    landed_unit_cost = models.DecimalField(
-        max_digits=14, decimal_places=2, null=True, blank=True
-    )
+    landed_unit_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     notes = models.CharField(max_length=255, blank=True, default="")
 
     class Meta:

@@ -1,146 +1,263 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Play, Plus, Send } from "lucide-react";
-import { useState, type FormEvent } from "react";
-import { Button, Modal, PageHeader, Spinner, TextField } from "../components/ui";
-import { api, ApiError, downloadFile } from "../lib/api";
-import { useAuth } from "../lib/auth";
-import type { Paginated, PayrollRun } from "../lib/types";
+import { useState } from "react";
+import { DataGrid } from "../components/DataGrid";
+import {
+  Drawer,
+  ErrorNote,
+  Facts,
+  Field,
+  Grid,
+  Input,
+  Section,
+  StatusBadge,
+} from "../components/RecordKit";
+import { Badge, Button, PageHeader } from "../components/ui";
+import { api, downloadFile } from "../lib/api";
+import { amount, dateTime, money } from "../lib/format";
+import { useDefaultOrg } from "../lib/recordData";
+import type { Paginated, PayrollRecord, PayrollRun } from "../lib/types";
 
-const money = (n: string | number) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+/* -------------------------------------------------------------------------- */
 
-const STATUS_TONE: Record<string, string> = {
-  DRAFT: "text-ink-500 bg-surface-100",
-  PENDING_APPROVAL: "text-amber-700 bg-amber-50",
-  APPROVED: "text-green-700 bg-green-50",
-  PAID: "text-brand-700 bg-brand-50",
-};
-
-function NewRunModal({ onClose, orgId }: { onClose: () => void; orgId: number }) {
+function NewRunDrawer({ orgId, onClose }: { orgId: number | null; onClose: () => void }) {
   const qc = useQueryClient();
   const today = new Date();
-  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
-  const lastOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
-  const [periodStart, setPeriodStart] = useState(firstOfMonth);
-  const [periodEnd, setPeriodEnd] = useState(lastOfMonth);
-  const [error, setError] = useState<string | null>(null);
+  const [periodStart, setPeriodStart] = useState(
+    new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10),
+  );
+  const [periodEnd, setPeriodEnd] = useState(
+    new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10),
+  );
 
   const create = useMutation({
     mutationFn: () =>
       api<PayrollRun>("/api/hr/payroll-runs/", {
         method: "POST",
-        body: JSON.stringify({ organization: orgId, period_start: periodStart, period_end: periodEnd }),
+        body: JSON.stringify({
+          organization: orgId,
+          period_start: periodStart,
+          period_end: periodEnd,
+        }),
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["payroll-runs"] });
       onClose();
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : "Could not build this payroll run."),
   });
 
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    create.mutate();
-  }
-
   return (
-    <Modal title="Run payroll" onClose={onClose}>
-      <form onSubmit={submit} className="flex flex-col gap-4">
-        <p className="text-sm text-ink-500">
-          Computes gross→net for every active/probationary employee using the current statutory
-          rates (PAYE, RSSB pension, maternity, CBHI).
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          <TextField label="Period start" type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} required />
-          <TextField label="Period end" type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} required />
-        </div>
-        {error && <p className="text-sm text-danger">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
+    <Drawer
+      title="Run payroll"
+      subtitle="Computes gross→net for every active employee using the statutory rates in force at period end."
+      onClose={onClose}
+      width="max-w-xl"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={create.isPending}>
+          <Button disabled={create.isPending} onClick={() => create.mutate()}>
             {create.isPending ? "Computing…" : "Compute run"}
           </Button>
-        </div>
-      </form>
-    </Modal>
+        </>
+      }
+    >
+      <ErrorNote error={create.error} />
+      <Section title="Period">
+        <Grid cols={2}>
+          <Field label="Period start">
+            <Input
+              type="date"
+              value={periodStart}
+              onChange={(e) => setPeriodStart(e.target.value)}
+            />
+          </Field>
+          <Field label="Period end">
+            <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+          </Field>
+        </Grid>
+        <p className="mt-3 text-xs text-ink-500">
+          PAYE bands, RSSB pension and maternity, CBHI and occupational hazards are read from the
+          effective-dated statutory-rate table — never hardcoded — so a re-run of an old period
+          reproduces the same payslips.
+        </p>
+      </Section>
+    </Drawer>
   );
 }
 
-function RunDetail({ run }: { run: PayrollRun }) {
+/* -------------------------------------------------------------------------- */
+
+function RunDrawer({ run, onClose }: { run: PayrollRun; onClose: () => void }) {
   const qc = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
+  const invalidate = () => void qc.invalidateQueries({ queryKey: ["payroll-runs"] });
 
   const submit = useMutation({
-    mutationFn: () => api<PayrollRun>(`/api/hr/payroll-runs/${run.id}/submit/`, { method: "POST" }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["payroll-runs"] }),
-    onError: (e) => setError(e instanceof ApiError ? e.message : "Could not submit this run."),
+    mutationFn: () =>
+      api<PayrollRun>(`/api/hr/payroll-runs/${run.id}/submit/`, { method: "POST" }),
+    onSuccess: invalidate,
   });
   const markPaid = useMutation({
-    mutationFn: () => api<PayrollRun>(`/api/hr/payroll-runs/${run.id}/mark-paid/`, { method: "POST" }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["payroll-runs"] }),
-    onError: (e) => setError(e instanceof ApiError ? e.message : "Could not mark this run paid."),
+    mutationFn: () =>
+      api<PayrollRun>(`/api/hr/payroll-runs/${run.id}/mark-paid/`, { method: "POST" }),
+    onSuccess: invalidate,
   });
 
+  const totals = run.records.reduce(
+    (acc, r) => ({
+      gross: acc.gross + Number(r.gross),
+      paye: acc.paye + Number(r.paye),
+      rssb: acc.rssb + Number(r.pension_employee) + Number(r.maternity_employee),
+      cbhi: acc.cbhi + Number(r.cbhi),
+      loans: acc.loans + Number(r.loans_advances),
+      net: acc.net + Number(r.net_pay),
+      employer:
+        acc.employer + Number(r.pension_employer) + Number(r.maternity_employer),
+    }),
+    { gross: 0, paye: 0, rssb: 0, cbhi: 0, loans: 0, net: 0, employer: 0 },
+  );
+
   return (
-    <div className="rounded-lg border border-line bg-surface-0">
-      <div className="flex items-center justify-between border-b border-line px-4 py-3">
-        <div>
-          <span className="text-sm font-semibold text-ink-900">
-            {run.period_start} – {run.period_end}
-          </span>
-          <span className={`ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_TONE[run.status]}`}>
-            {run.status.replace("_", " ")}
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-sm font-semibold">RWF {money(run.total_net_pay)} net</span>
+    <Drawer
+      title={`Payroll ${run.period_start} – ${run.period_end}`}
+      badge={<StatusBadge status={run.status} />}
+      subtitle={
+        <>
+          {run.organization_name} · {run.records.length} employee(s) · raised by{" "}
+          {run.created_by_name ?? "—"}
+          {run.approved_by_name && ` · approved by ${run.approved_by_name}`}
+        </>
+      }
+      onClose={onClose}
+      width="max-w-6xl"
+      footer={
+        <>
           {run.status === "DRAFT" && (
-            <Button onClick={() => submit.mutate()} disabled={submit.isPending}>
-              <Send className="h-4 w-4" /> Submit for approval
+            <Button disabled={submit.isPending} onClick={() => submit.mutate()}>
+              <Send className="h-3.5 w-3.5" /> Submit for approval
             </Button>
           )}
           {run.status === "APPROVED" && (
-            <Button onClick={() => markPaid.mutate()} disabled={markPaid.isPending}>
-              <Play className="h-4 w-4" /> Mark paid
+            <Button disabled={markPaid.isPending} onClick={() => markPaid.mutate()}>
+              <Play className="h-3.5 w-3.5" /> Mark paid
             </Button>
           )}
-        </div>
-      </div>
-      {error && <p className="px-4 pt-2 text-sm text-danger">{error}</p>}
+          <Button variant="secondary" onClick={onClose}>
+            Close
+          </Button>
+        </>
+      }
+    >
+      <ErrorNote error={submit.error ?? markPaid.error} />
+
       {run.status === "PENDING_APPROVAL" && (
-        <p className="px-4 py-2 text-xs text-ink-500">
-          Waiting on another approver in the <strong>Approvals inbox</strong> — you cannot approve your
-          own payroll run.
-        </p>
+        <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Waiting on another approver in the <strong>Approvals inbox</strong> — you cannot approve
+          your own payroll run.
+        </div>
       )}
-      <table className="w-full text-sm">
-        <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
-          <tr>
-            <th className="px-4 py-2">Employee</th>
-            <th className="px-4 py-2 text-right">Gross</th>
-            <th className="px-4 py-2 text-right">PAYE</th>
-            <th className="px-4 py-2 text-right">RSSB</th>
-            <th className="px-4 py-2 text-right">CBHI</th>
-            <th className="px-4 py-2 text-right">Net pay</th>
-            <th className="px-4 py-2 text-right">Payslip</th>
-          </tr>
-        </thead>
-        <tbody>
-          {run.records.map((r) => (
-            <tr key={r.id} className="border-b border-line last:border-0">
-              <td className="px-4 py-2">
-                {r.employee_name} <span className="text-xs text-ink-500">({r.employee_number})</span>
-              </td>
-              <td className="px-4 py-2 text-right font-mono">{money(r.gross)}</td>
-              <td className="px-4 py-2 text-right font-mono">{money(r.paye)}</td>
-              <td className="px-4 py-2 text-right font-mono">
-                {money(Number(r.pension_employee) + Number(r.maternity_employee))}
-              </td>
-              <td className="px-4 py-2 text-right font-mono">{money(r.cbhi)}</td>
-              <td className="px-4 py-2 text-right font-mono font-semibold">{money(r.net_pay)}</td>
-              <td className="px-4 py-2 text-right">
-                {r.payslip_document_id ? (
+
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          ["Gross", totals.gross],
+          ["Deductions", totals.paye + totals.rssb + totals.cbhi + totals.loans],
+          ["Net pay", totals.net],
+          ["Employer cost", totals.gross + totals.employer],
+        ].map(([label, value]) => (
+          <div key={String(label)} className="rounded-lg border border-line px-3 py-2">
+            <div className="text-[11px] uppercase tracking-wide text-ink-500">{label}</div>
+            <div className="text-lg font-semibold tabular-nums">{money(value as number)}</div>
+          </div>
+        ))}
+      </div>
+
+      <Section title="Payroll register" hint="Sort, search and export exactly like any other grid.">
+        <DataGrid<PayrollRecord>
+          rows={run.records}
+          getRowId={(r) => r.id}
+          storageKey="payroll-register"
+          exportName={`payroll-${run.period_start}`}
+          searchPlaceholder="Search the register by name or number…"
+          emptyMessage="No employees on this run."
+          initialDensity="compact"
+          columns={[
+            {
+              key: "employee_name",
+              header: "Employee",
+              render: (r) => (
+                <div>
+                  <div className="font-medium text-ink-900">{r.employee_name}</div>
+                  <div className="font-mono text-xs text-ink-500">{r.employee_number}</div>
+                </div>
+              ),
+              value: (r) => `${r.employee_name} ${r.employee_number}`,
+            },
+            {
+              key: "gross",
+              header: "Gross",
+              align: "right",
+              numeric: true,
+              value: (r) => Number(r.gross),
+              render: (r) => amount(r.gross),
+            },
+            {
+              key: "paye",
+              header: "PAYE",
+              align: "right",
+              numeric: true,
+              value: (r) => Number(r.paye),
+              render: (r) => amount(r.paye),
+            },
+            {
+              key: "rssb",
+              header: "RSSB",
+              align: "right",
+              numeric: true,
+              value: (r) => Number(r.pension_employee) + Number(r.maternity_employee),
+              render: (r) => amount(Number(r.pension_employee) + Number(r.maternity_employee)),
+            },
+            {
+              key: "cbhi",
+              header: "CBHI",
+              align: "right",
+              numeric: true,
+              value: (r) => Number(r.cbhi),
+              render: (r) => amount(r.cbhi),
+            },
+            {
+              key: "loans_advances",
+              header: "Loans",
+              align: "right",
+              numeric: true,
+              value: (r) => Number(r.loans_advances),
+              render: (r) =>
+                Number(r.loans_advances) > 0 ? amount(r.loans_advances) : <span className="text-ink-400">—</span>,
+            },
+            {
+              key: "net_pay",
+              header: "Net pay",
+              align: "right",
+              numeric: true,
+              value: (r) => Number(r.net_pay),
+              render: (r) => <span className="font-semibold">{amount(r.net_pay)}</span>,
+            },
+            {
+              key: "employer_cost",
+              header: "Employer cost",
+              align: "right",
+              numeric: true,
+              value: (r) => Number(r.pension_employer) + Number(r.maternity_employer),
+              render: (r) => amount(Number(r.pension_employer) + Number(r.maternity_employer)),
+            },
+            {
+              key: "payslip",
+              header: "Payslip",
+              align: "right",
+              fixed: true,
+              sortable: false,
+              render: (r) =>
+                r.payslip_document_id ? (
                   <button
                     onClick={() =>
                       void downloadFile(
@@ -154,67 +271,158 @@ function RunDetail({ run }: { run: PayrollRun }) {
                   </button>
                 ) : (
                   <span className="text-ink-400">—</span>
-                )}
-              </td>
-            </tr>
-          ))}
-          {run.records.length === 0 && (
-            <tr>
-              <td colSpan={7} className="px-4 py-6 text-center text-ink-500">
-                No employees on this run.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+                ),
+            },
+          ]}
+        />
+      </Section>
+
+      <Section title="Run detail">
+        <Facts
+          rows={[
+            ["Created", dateTime(run.created_at)],
+            ["Created by", run.created_by_name ?? "—"],
+            ["Approved", dateTime(run.approved_at)],
+            ["Approved by", run.approved_by_name ?? "—"],
+            ["Employees", run.records.length],
+            ["Total net", money(run.total_net_pay)],
+          ]}
+        />
+      </Section>
+    </Drawer>
   );
 }
 
-export function PayrollPage() {
-  const { user } = useAuth();
-  const [adding, setAdding] = useState(false);
-  const orgId = user?.organization ?? 0;
+/* -------------------------------------------------------------------------- */
 
-  const runsQ = useQuery({
+export function PayrollPage() {
+  const { orgId } = useDefaultOrg();
+  const [open, setOpen] = useState<PayrollRun | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  const { data, isLoading } = useQuery({
     queryKey: ["payroll-runs", orgId],
-    queryFn: () => api<Paginated<PayrollRun>>(`/api/hr/payroll-runs/?organization=${orgId}`),
-    enabled: orgId > 0,
+    queryFn: () =>
+      api<Paginated<PayrollRun>>(`/api/hr/payroll-runs/?organization=${orgId}&page_size=200`),
+    enabled: Boolean(orgId),
   });
+
+  const rows = data?.results ?? [];
+  const current = open ? rows.find((r) => r.id === open.id) ?? open : null;
 
   return (
     <div>
       <PageHeader
         title="Payroll"
         action={
-          orgId > 0 && (
-            <Button onClick={() => setAdding(true)}>
-              <Plus className="h-4 w-4" /> Run payroll
-            </Button>
-          )
+          <Button disabled={!orgId} onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4" /> Run payroll
+          </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
-        Gross→net for every employee, computed from the current statutory rates. A run is never
-        self-approved — it posts to the Finance ledger and generates payslips once decided.
+      <p className="mb-4 max-w-3xl text-sm text-ink-500">
+        Gross→net for every employee, computed from the statutory rates in force at period end. A
+        run is never self-approved; approving posts the payroll journal and publishes payslips.
       </p>
 
-      {runsQ.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
+      <DataGrid<PayrollRun>
+        rows={rows}
+        loading={isLoading}
+        getRowId={(r) => r.id}
+        storageKey="payroll-runs"
+        exportName="payroll-runs"
+        searchPlaceholder="Search runs by period or approver…"
+        emptyMessage="No payroll runs yet."
+        onRowClick={(r) => setOpen(r)}
+        columns={[
+          {
+            key: "period",
+            header: "Period",
+            value: (r) => r.period_start,
+            render: (r) => (
+              <div>
+                <div className="font-medium text-ink-900">
+                  {r.period_start} – {r.period_end}
+                </div>
+                <div className="text-xs text-ink-500">{r.organization_name}</div>
+              </div>
+            ),
+          },
+          {
+            key: "status",
+            header: "Status",
+            value: (r) => r.status,
+            render: (r) => <StatusBadge status={r.status} />,
+          },
+          {
+            key: "headcount",
+            header: "Employees",
+            align: "right",
+            numeric: true,
+            value: (r) => r.records.length,
+          },
+          {
+            key: "gross",
+            header: "Gross",
+            align: "right",
+            numeric: true,
+            value: (r) => r.records.reduce((s, x) => s + Number(x.gross), 0),
+            render: (r) => money(r.records.reduce((s, x) => s + Number(x.gross), 0)),
+          },
+          {
+            key: "deductions",
+            header: "Deductions",
+            align: "right",
+            numeric: true,
+            value: (r) =>
+              r.records.reduce(
+                (s, x) =>
+                  s +
+                  Number(x.paye) +
+                  Number(x.pension_employee) +
+                  Number(x.maternity_employee) +
+                  Number(x.cbhi),
+                0,
+              ),
+            render: (r) =>
+              money(
+                r.records.reduce(
+                  (s, x) =>
+                    s +
+                    Number(x.paye) +
+                    Number(x.pension_employee) +
+                    Number(x.maternity_employee) +
+                    Number(x.cbhi),
+                  0,
+                ),
+              ),
+          },
+          {
+            key: "total_net_pay",
+            header: "Net pay",
+            align: "right",
+            numeric: true,
+            value: (r) => Number(r.total_net_pay),
+            render: (r) => <span className="font-semibold">{money(r.total_net_pay)}</span>,
+          },
+          {
+            key: "approved_by_name",
+            header: "Approved by",
+            value: (r) => r.approved_by_name ?? "—",
+            render: (r) =>
+              r.approved_by_name ? (
+                r.approved_by_name
+              ) : r.status === "PENDING_APPROVAL" ? (
+                <Badge tone="warning">awaiting</Badge>
+              ) : (
+                <span className="text-ink-400">—</span>
+              ),
+          },
+        ]}
+      />
 
-      <div className="flex flex-col gap-4">
-        {runsQ.data?.results.map((run) => <RunDetail key={run.id} run={run} />)}
-        {runsQ.data && runsQ.data.results.length === 0 && (
-          <div className="rounded-lg border border-dashed border-line py-10 text-center text-sm text-ink-500">
-            No payroll runs yet.
-          </div>
-        )}
-      </div>
-
-      {adding && <NewRunModal onClose={() => setAdding(false)} orgId={orgId} />}
+      {creating && <NewRunDrawer orgId={orgId} onClose={() => setCreating(false)} />}
+      {current && <RunDrawer run={current} onClose={() => setOpen(null)} />}
     </div>
   );
 }

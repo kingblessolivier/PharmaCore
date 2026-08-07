@@ -23,6 +23,8 @@ rolled back if the consuming insert fails.
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.db import transaction
 from django.utils import timezone
 
@@ -33,7 +35,7 @@ class NumberingError(Exception):
 
 def next_number(
     *,
-    organization,
+    organization: Any,
     domain: str,
     kind: str,
     year: int | None = None,
@@ -71,7 +73,7 @@ def next_number(
 
 def next_document_number(
     *,
-    organization,
+    organization: Any,
     domain: str,
     kind: str,
     year: int | None = None,

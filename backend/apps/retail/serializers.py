@@ -12,21 +12,50 @@ from apps.retail.models import (
     ControlledSubstanceRegister,
     Dispensing,
     DrawerSession,
-    POSPromotion,
     Payment,
+    POSPromotion,
     Prescription,
+    PrescriptionItem,
     Sale,
     SaleItem,
 )
 
 
+class PrescriptionItemSerializer(serializers.ModelSerializer):
+    """What was prescribed. Without this the script records who, not what."""
+
+    product_name = serializers.SerializerMethodField()
+    outstanding = serializers.IntegerField(read_only=True)
+    is_fully_dispensed = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = PrescriptionItem
+        fields = [
+            "id",
+            "product",
+            "product_name",
+            "quantity_prescribed",
+            "quantity_dispensed",
+            "dosage_instructions",
+            "substitution_allowed",
+            "outstanding",
+            "is_fully_dispensed",
+        ]
+        read_only_fields = ["id", "outstanding", "is_fully_dispensed"]
+
+    def get_product_name(self, obj: PrescriptionItem) -> str:
+        return f"{obj.product.generic_name} {obj.product.strength}".strip()
+
+
 class PrescriptionSerializer(serializers.ModelSerializer):
     organization_name = serializers.CharField(source="organization.name", read_only=True)
+    items = PrescriptionItemSerializer(many=True, required=False)
     remaining_refills = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Prescription
         fields = [
+            "items",
             "id",
             "prescription_number",
             "organization",
@@ -93,6 +122,8 @@ class POSPromotionSerializer(serializers.ModelSerializer):
             "min_spend",
             "valid_from",
             "valid_until",
+            "max_redemptions",
+            "times_redeemed",
             "is_active",
             "created_at",
         ]
@@ -114,6 +145,8 @@ class ClinicalServiceRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClinicalServiceRecord
         fields = [
+            "is_paid",
+            "sale",
             "id",
             "organization",
             "organization_name",
@@ -133,7 +166,6 @@ class ClinicalServiceRecordSerializer(serializers.ModelSerializer):
         if not obj.performed_by:
             return None
         return obj.performed_by.get_full_name() or obj.performed_by.username
-
 
 
 class DrawerSessionSerializer(serializers.ModelSerializer):

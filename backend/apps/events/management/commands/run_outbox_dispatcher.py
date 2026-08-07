@@ -137,9 +137,7 @@ class Command(BaseCommand):
         event.last_attempt_at = timezone.now()
         event.locked_at = None
         event.locked_by = ""
-        event.save(
-            update_fields=["status", "last_attempt_at", "locked_at", "locked_by"]
-        )
+        event.save(update_fields=["status", "last_attempt_at", "locked_at", "locked_by"])
 
     def _mark_failed(self, event: OutboxEvent, exc: Exception) -> None:
         event.retries = (event.retries or 0) + 1
@@ -150,8 +148,7 @@ class Command(BaseCommand):
         if event.retries >= OutboxEvent.MAX_RETRIES:
             event.status = OutboxEvent.Status.DEAD
             logger.error(
-                "OutboxEvent %s exhausted retries (%d); moving to DEAD. "
-                "Last error: %s",
+                "OutboxEvent %s exhausted retries (%d); moving to DEAD. " "Last error: %s",
                 event.pk,
                 event.retries,
                 event.last_error,

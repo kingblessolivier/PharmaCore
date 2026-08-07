@@ -1,353 +1,447 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Stethoscope, Plus } from "lucide-react";
-import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
-import { Badge, Button, Card, Modal, PageHeader, Spinner, TextField } from "../components/ui";
+import { Banknote, HeartPulse, Plus, Stethoscope } from "lucide-react";
+import { useMemo, useState } from "react";
+import { DataGrid } from "../components/DataGrid";
+import {
+  Drawer,
+  ErrorNote,
+  Field,
+  Grid,
+  Input,
+  Section,
+  Select,
+  Textarea,
+} from "../components/RecordKit";
+import { Badge, Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
-import { useAuth } from "../lib/auth";
-import type { ClinicalService, ClinicalServiceRecord, Paginated } from "../lib/types";
+import { dateTime, money } from "../lib/format";
+import type { ClinicalEncounter, ClinicalService } from "../lib/retail";
+import { useDefaultOrg } from "../lib/recordData";
+import type { Paginated } from "../lib/types";
 
-export function ClinicalServicesPage() {
-  const navigate = useNavigate();
+const CATEGORIES: [string, string][] = [
+  ["SCREENING", "Screening"],
+  ["VACCINATION", "Vaccination"],
+  ["CONSULTATION", "Consultation"],
+  ["OTHER", "Other"],
+];
+
+type Tab = "encounters" | "catalog";
+
+/* -------------------------------------------------------------------------- */
+
+function ServiceDrawer({
+  service,
+  onClose,
+}: {
+  service: ClinicalService | null;
+  onClose: () => void;
+}) {
   const qc = useQueryClient();
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<"services" | "encounters">("encounters");
-  const [creatingService, setCreatingService] = useState(false);
-  const [creatingEncounter, setCreatingEncounter] = useState(false);
-
-  // Service form states
-  const [serviceCode, setServiceCode] = useState("SVC-VACC-02");
-  const [serviceName, setServiceName] = useState("Yellow Fever Vaccination");
-  const [category, setCategory] = useState<"VACCINATION" | "SCREENING" | "CONSULTATION" | "PROCEDURE">("VACCINATION");
-  const [feeAmount, setFeeAmount] = useState("25000");
-
-  // Encounter form states
-  const [selectedServiceId, setSelectedServiceId] = useState("");
-  const [patientName, setPatientName] = useState("Claudine Uwase");
-  const [patientPhone, setPatientPhone] = useState("+250788998877");
-  const [clinicalNotes, setClinicalNotes] = useState("BP: 120/80 mmHg (Normal), Glucose: 5.4 mmol/L (Fasting).");
-  const [feeCharged, setFeeCharged] = useState("3000");
-
-  const servicesQuery = useQuery({
-    queryKey: ["clinical-services-list"],
-    queryFn: () => api<Paginated<ClinicalService>>("/api/retail/clinical-services/"),
+  const [form, setForm] = useState({
+    service_code: service?.service_code ?? "",
+    name: service?.name ?? "",
+    category: service?.category ?? "SCREENING",
+    fee_amount: service?.fee_amount ?? "",
+    is_active: service?.is_active ?? true,
   });
+  const set = (patch: Partial<typeof form>) => setForm({ ...form, ...patch });
 
-  const encountersQuery = useQuery({
-    queryKey: ["clinical-encounters-list"],
-    queryFn: () => api<Paginated<ClinicalServiceRecord>>("/api/retail/clinical-encounters/"),
-  });
-
-  const createServiceMutation = useMutation({
+  const save = useMutation({
     mutationFn: () =>
-      api<ClinicalService>("/api/retail/clinical-services/", {
-        method: "POST",
-        body: JSON.stringify({
-          service_code: serviceCode,
-          name: serviceName,
-          category: category,
-          fee_amount: feeAmount,
-          is_active: true,
-        }),
-      }),
+      api<ClinicalService>(
+        service ? `/api/retail/clinical-services/${service.id}/` : "/api/retail/clinical-services/",
+        { method: service ? "PATCH" : "POST", body: JSON.stringify(form) },
+      ),
     onSuccess: () => {
-      setCreatingService(false);
-      void qc.invalidateQueries({ queryKey: ["clinical-services-list"] });
+      void qc.invalidateQueries({ queryKey: ["clinical-services"] });
+      onClose();
     },
   });
-
-  const createEncounterMutation = useMutation({
-    mutationFn: () =>
-      api<ClinicalServiceRecord>("/api/retail/clinical-encounters/", {
-        method: "POST",
-        body: JSON.stringify({
-          organization: user?.organization,
-          service: Number(selectedServiceId),
-          patient_name: patientName,
-          patient_phone: patientPhone,
-          performed_by: user?.id,
-          clinical_notes: clinicalNotes,
-          fee_charged: feeCharged,
-        }),
-      }),
-    onSuccess: () => {
-      setCreatingEncounter(false);
-      void qc.invalidateQueries({ queryKey: ["clinical-encounters-list"] });
-    },
-  });
-
-  function handleCreateService(e: FormEvent) {
-    e.preventDefault();
-    createServiceMutation.mutate();
-  }
-
-  function handleCreateEncounter(e: FormEvent) {
-    e.preventDefault();
-    if (selectedServiceId) createEncounterMutation.mutate();
-  }
 
   return (
-    <div className="max-w-6xl">
-      <button
-        onClick={() => navigate("/pos")}
-        className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
-      >
-        <ArrowLeft className="h-4 w-4" /> Return to POS Counter
-      </button>
+    <Drawer
+      title={service ? `${service.service_code} · ${service.name}` : "New clinical service"}
+      width="max-w-xl"
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => save.mutate()}
+            disabled={save.isPending || !form.name.trim() || Number(form.fee_amount) <= 0}
+          >
+            {save.isPending ? "Saving…" : service ? "Save changes" : "Add service"}
+          </Button>
+        </div>
+      }
+    >
+      <ErrorNote error={save.error} />
+      <Section title="Service">
+        <Grid cols={2}>
+          <Field label="Code">
+            <Input
+              value={form.service_code}
+              onChange={(e) => set({ service_code: e.target.value.toUpperCase() })}
+              placeholder="VAC-01"
+            />
+          </Field>
+          <Field label="Category">
+            <Select value={form.category} onChange={(e) => set({ category: e.target.value })}>
+              {CATEGORIES.map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </Grid>
+        <Field label="Name">
+          <Input value={form.name} onChange={(e) => set({ name: e.target.value })} />
+        </Field>
+        <Field label="Fee (RWF)">
+          <Input
+            value={form.fee_amount}
+            onChange={(e) => set({ fee_amount: e.target.value })}
+            className="text-right tabular-nums"
+          />
+        </Field>
+        <Field label="Offered">
+          <Select
+            value={form.is_active ? "yes" : "no"}
+            onChange={(e) => set({ is_active: e.target.value === "yes" })}
+          >
+            <option value="yes">Offered</option>
+            <option value="no">Withdrawn</option>
+          </Select>
+        </Field>
+      </Section>
+    </Drawer>
+  );
+}
 
+/* -------------------------------------------------------------------------- */
+
+function EncounterDrawer({
+  orgId,
+  services,
+  onClose,
+}: {
+  orgId: number | null;
+  services: ClinicalService[];
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    service: "" as number | "",
+    patient_name: "",
+    patient_phone: "",
+    clinical_notes: "",
+    fee_charged: "",
+  });
+  const set = (patch: Partial<typeof form>) => setForm({ ...form, ...patch });
+
+  const chosen = services.find((s) => s.id === form.service);
+
+  const create = useMutation({
+    mutationFn: () =>
+      api<ClinicalEncounter>("/api/retail/clinical-encounters/", {
+        method: "POST",
+        body: JSON.stringify({
+          ...form,
+          organization: orgId,
+          fee_charged: form.fee_charged || chosen?.fee_amount || "0",
+        }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["clinical-encounters"] });
+      onClose();
+    },
+  });
+
+  return (
+    <Drawer
+      title="Record an encounter"
+      subtitle="A vaccination, screening or consultation performed at the pharmacy."
+      width="max-w-2xl"
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => create.mutate()}
+            disabled={create.isPending || form.service === "" || !form.patient_name.trim()}
+          >
+            {create.isPending ? "Recording…" : "Record encounter"}
+          </Button>
+        </div>
+      }
+    >
+      <ErrorNote error={create.error} />
+      <Section title="Service">
+        <Grid cols={2}>
+          <Field label="What was done">
+            <Select
+              value={form.service}
+              onChange={(e) => {
+                const id = Number(e.target.value) || "";
+                const svc = services.find((s) => s.id === id);
+                set({ service: id, fee_charged: svc?.fee_amount ?? "" });
+              }}
+            >
+              <option value="">— choose —</option>
+              {services
+                .filter((s) => s.is_active)
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} — {money(s.fee_amount)}
+                  </option>
+                ))}
+            </Select>
+          </Field>
+          <Field label="Fee charged" hint="Defaults to the list fee; override for a concession.">
+            <Input
+              value={form.fee_charged}
+              onChange={(e) => set({ fee_charged: e.target.value })}
+              className="text-right tabular-nums"
+            />
+          </Field>
+        </Grid>
+      </Section>
+
+      <Section title="Patient">
+        <Grid cols={2}>
+          <Field label="Name">
+            <Input
+              value={form.patient_name}
+              onChange={(e) => set({ patient_name: e.target.value })}
+            />
+          </Field>
+          <Field label="Phone">
+            <Input
+              value={form.patient_phone}
+              onChange={(e) => set({ patient_phone: e.target.value })}
+            />
+          </Field>
+        </Grid>
+        <Field label="Clinical notes">
+          <Textarea
+            rows={3}
+            value={form.clinical_notes}
+            onChange={(e) => set({ clinical_notes: e.target.value })}
+          />
+        </Field>
+      </Section>
+    </Drawer>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+export function ClinicalServicesPage() {
+  const { orgId } = useDefaultOrg();
+  const qc = useQueryClient();
+  const [tab, setTab] = useState<Tab>("encounters");
+  const [newEncounter, setNewEncounter] = useState(false);
+  const [service, setService] = useState<ClinicalService | null | "new">(null);
+
+  const { data: serviceData } = useQuery({
+    queryKey: ["clinical-services"],
+    queryFn: () =>
+      api<Paginated<ClinicalService>>("/api/retail/clinical-services/?page_size=200"),
+  });
+  const services = useMemo(() => serviceData?.results ?? [], [serviceData]);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["clinical-encounters", orgId],
+    enabled: orgId !== null,
+    queryFn: () =>
+      api<Paginated<ClinicalEncounter>>(
+        `/api/retail/clinical-encounters/?organization=${orgId}&page_size=300`,
+      ),
+  });
+  const encounters = useMemo(() => data?.results ?? [], [data]);
+
+  const bill = useMutation({
+    mutationFn: (record: number) =>
+      api("/api/retail/counter/bill-clinical-service/", {
+        method: "POST",
+        body: JSON.stringify({ record, organization: orgId }),
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["clinical-encounters"] }),
+  });
+
+  const unbilled = encounters.filter((e) => !e.is_paid);
+  const owed = unbilled.reduce((s, e) => s + Number(e.fee_charged), 0);
+
+  return (
+    <div className="space-y-4">
       <PageHeader
-        title="Pharmacy Clinical & Point-of-Care Services"
+        title="Clinical services"
         action={
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setCreatingService(true)}>
-              <Plus className="h-4 w-4" /> Add Service to Catalog
+            <Button variant="secondary" onClick={() => setService("new")}>
+              <Plus className="h-4 w-4" /> New service
             </Button>
-            <Button onClick={() => setCreatingEncounter(true)}>
-              <Plus className="h-4 w-4" /> Log Patient Encounter
+            <Button onClick={() => setNewEncounter(true)} disabled={services.length === 0}>
+              <Plus className="h-4 w-4" /> Record encounter
             </Button>
           </div>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
-        Billable pharmacy services (Vaccinations, BP/Glucose screenings, consultations) with clinical documentation and receipt billing.
+      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
+        Vaccinations, screenings and consultations the pharmacy charges for. Fees post to
+        <strong> 4300 Services Revenue</strong> — until recently they were recorded here and
+        never reached the books at all.
       </p>
+      <ErrorNote error={bill.error} />
 
-      {/* Tabs */}
-      <div className="mb-4 flex border-b border-line">
-        <button
-          onClick={() => setActiveTab("encounters")}
-          className={`border-b-2 px-4 py-2 text-sm font-semibold transition-colors ${
-            activeTab === "encounters"
-              ? "border-primary-600 text-primary-600"
-              : "border-transparent text-ink-500 hover:text-ink-900"
-          }`}
-        >
-          Patient Encounters & Logs
-        </button>
-        <button
-          onClick={() => setActiveTab("services")}
-          className={`border-b-2 px-4 py-2 text-sm font-semibold transition-colors ${
-            activeTab === "services"
-              ? "border-primary-600 text-primary-600"
-              : "border-transparent text-ink-500 hover:text-ink-900"
-          }`}
-        >
-          Clinical Service Catalog
-        </button>
+      {unbilled.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-warning-300 bg-warning-50 px-4 py-3 text-sm text-warning-800">
+          <Banknote className="h-4 w-4 shrink-0" />
+          <span>
+            <strong>{unbilled.length}</strong> encounter{unbilled.length === 1 ? "" : "s"} worth{" "}
+            <strong>{money(owed)}</strong> performed and not yet taken to the ledger.
+          </span>
+        </div>
+      )}
+
+      <div className="flex gap-1 rounded-lg border border-line bg-surface-0 p-0.5">
+        {(["encounters", "catalog"] as const).map((t) => (
+          <Button key={t} variant={tab === t ? "primary" : "ghost"} onClick={() => setTab(t)}>
+            {t === "encounters" ? (
+              <HeartPulse className="h-4 w-4" />
+            ) : (
+              <Stethoscope className="h-4 w-4" />
+            )}
+            {t === "encounters" ? "Encounters" : "Service catalogue"}
+          </Button>
+        ))}
       </div>
 
-      {activeTab === "encounters" && (
-        <Card className="overflow-hidden">
-          {encountersQuery.isLoading && (
-            <div className="flex justify-center py-10">
-              <Spinner />
-            </div>
-          )}
-          {encountersQuery.data && (
-            <table className="w-full text-sm">
-              <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
-                <tr>
-                  <th className="px-4 py-3">Encounter ID</th>
-                  <th className="px-4 py-3">Service Name</th>
-                  <th className="px-4 py-3">Patient Name & Phone</th>
-                  <th className="px-4 py-3">Clinical Documentation</th>
-                  <th className="px-4 py-3 text-right">Fee (RWF)</th>
-                  <th className="px-4 py-3">Clinician</th>
-                </tr>
-              </thead>
-              <tbody>
-                {encountersQuery.data.results.map((e) => (
-                  <tr key={e.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                    <td className="px-4 py-3 font-mono font-semibold text-ink-900">ENC-#{e.id}</td>
-                    <td className="px-4 py-3 font-medium text-ink-900">
-                      <div className="flex items-center gap-1.5">
-                        <Stethoscope className="h-4 w-4 text-brand-600" />
-                        <span>{e.service_name}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-ink-700">
-                      <div className="font-medium text-ink-900">{e.patient_name}</div>
-                      <div className="text-xs text-ink-500">{e.patient_phone}</div>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-ink-700">{e.clinical_notes}</td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-emerald-700">
-                      RWF {Number(e.fee_charged).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-ink-700">{e.performed_by_name || "Pharmacist"}</td>
-                  </tr>
-                ))}
-                {encountersQuery.data.results.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-ink-500">
-                      No clinical patient encounters logged yet. Click "Log Patient Encounter" above.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          )}
-        </Card>
+      {tab === "encounters" ? (
+        <DataGrid
+          rows={encounters}
+          loading={isLoading}
+          getRowId={(e) => e.id}
+          storageKey="retail.clinical-encounters"
+          exportName="clinical-encounters"
+          searchPlaceholder="Search patient or service…"
+          emptyMessage="No clinical encounters recorded."
+          columns={[
+            { key: "service_name", header: "Service", value: (e) => e.service_name ?? "" },
+            { key: "patient_name", header: "Patient", value: (e) => e.patient_name },
+            { key: "patient_phone", header: "Phone", value: (e) => e.patient_phone },
+            {
+              key: "performed_by_name",
+              header: "Performed by",
+              value: (e) => e.performed_by_name ?? "—",
+            },
+            {
+              key: "fee_charged",
+              header: "Fee",
+              numeric: true,
+              align: "right",
+              value: (e) => Number(e.fee_charged),
+              render: (e) => money(e.fee_charged),
+            },
+            {
+              key: "is_paid",
+              header: "Banked",
+              value: (e) => (e.is_paid ? "Yes" : "No"),
+              render: (e) =>
+                e.is_paid ? (
+                  <Badge tone="success">Posted</Badge>
+                ) : (
+                  <Badge tone="warning">Not banked</Badge>
+                ),
+            },
+            {
+              key: "when",
+              header: "When",
+              value: (e) => e.performed_at ?? e.created_at ?? "",
+              render: (e) =>
+                e.performed_at || e.created_at ? dateTime(e.performed_at ?? e.created_at!) : "—",
+            },
+            {
+              key: "actions",
+              header: "",
+              fixed: true,
+              sortable: false,
+              render: (e) =>
+                e.is_paid ? null : (
+                  <button
+                    className="text-xs text-brand-600 hover:underline"
+                    onClick={() => bill.mutate(e.id)}
+                    disabled={bill.isPending}
+                  >
+                    Take payment
+                  </button>
+                ),
+            },
+          ]}
+        />
+      ) : (
+        <DataGrid
+          rows={services}
+          getRowId={(s) => s.id}
+          storageKey="retail.clinical-catalogue"
+          exportName="clinical-services"
+          searchPlaceholder="Search services…"
+          emptyMessage="No services offered yet."
+          onRowClick={(s) => setService(s)}
+          columns={[
+            { key: "service_code", header: "Code", value: (s) => s.service_code, width: "8rem" },
+            { key: "name", header: "Service", value: (s) => s.name },
+            {
+              key: "category",
+              header: "Category",
+              value: (s) => s.category,
+              render: (s) => (
+                <Badge tone="info">
+                  {CATEGORIES.find(([v]) => v === s.category)?.[1] ?? s.category}
+                </Badge>
+              ),
+            },
+            {
+              key: "fee_amount",
+              header: "Fee",
+              numeric: true,
+              align: "right",
+              value: (s) => Number(s.fee_amount),
+              render: (s) => money(s.fee_amount),
+            },
+            {
+              key: "is_active",
+              header: "Status",
+              value: (s) => (s.is_active ? "Offered" : "Withdrawn"),
+              render: (s) =>
+                s.is_active ? (
+                  <Badge tone="success">Offered</Badge>
+                ) : (
+                  <Badge tone="default">Withdrawn</Badge>
+                ),
+            },
+          ]}
+        />
       )}
 
-      {activeTab === "services" && (
-        <Card className="overflow-hidden">
-          {servicesQuery.isLoading && (
-            <div className="flex justify-center py-10">
-              <Spinner />
-            </div>
-          )}
-          {servicesQuery.data && (
-            <table className="w-full text-sm">
-              <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
-                <tr>
-                  <th className="px-4 py-3">Code</th>
-                  <th className="px-4 py-3">Service Name</th>
-                  <th className="px-4 py-3">Category</th>
-                  <th className="px-4 py-3 text-right">Standard Fee (RWF)</th>
-                  <th className="px-4 py-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {servicesQuery.data.results.map((s) => (
-                  <tr key={s.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                    <td className="px-4 py-3 font-mono font-semibold text-ink-900">{s.service_code}</td>
-                    <td className="px-4 py-3 font-medium text-ink-900">{s.name}</td>
-                    <td className="px-4 py-3">
-                      <Badge tone="brand">{s.category}</Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-emerald-700">
-                      RWF {Number(s.fee_amount).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge tone={s.is_active ? "success" : "neutral"}>
-                        {s.is_active ? "Active" : "Inactive"}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </Card>
+      {newEncounter && (
+        <EncounterDrawer
+          orgId={orgId}
+          services={services}
+          onClose={() => setNewEncounter(false)}
+        />
       )}
-
-      {creatingService && (
-        <Modal title="Add Clinical Service to Catalog" onClose={() => setCreatingService(false)}>
-          <form onSubmit={handleCreateService} className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-3">
-              <TextField
-                label="Service Code"
-                value={serviceCode}
-                onChange={(e) => setServiceCode(e.target.value)}
-                required
-                autoFocus
-              />
-              <TextField
-                label="Service Name"
-                value={serviceName}
-                onChange={(e) => setServiceName(e.target.value)}
-                required
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-ink-500">
-                  Category
-                </label>
-                <select
-                  className="w-full rounded-md border border-line bg-surface-50 px-3 py-2 text-sm text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as any)}
-                  required
-                >
-                  <option value="VACCINATION">VACCINATION</option>
-                  <option value="SCREENING">SCREENING</option>
-                  <option value="CONSULTATION">CONSULTATION</option>
-                  <option value="PROCEDURE">PROCEDURE</option>
-                </select>
-              </div>
-              <TextField
-                label="Standard Fee (RWF)"
-                type="number"
-                value={feeAmount}
-                onChange={(e) => setFeeAmount(e.target.value)}
-                required
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="secondary" onClick={() => setCreatingService(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createServiceMutation.isPending}>
-                {createServiceMutation.isPending ? "Adding…" : "Save Service"}
-              </Button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {creatingEncounter && (
-        <Modal title="Log Patient Clinical Encounter" onClose={() => setCreatingEncounter(false)}>
-          <form onSubmit={handleCreateEncounter} className="flex flex-col gap-4">
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-ink-500">
-                Clinical Service
-              </label>
-              <select
-                className="w-full rounded-md border border-line bg-surface-50 px-3 py-2 text-sm text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                value={selectedServiceId}
-                onChange={(e) => setSelectedServiceId(e.target.value)}
-                required
-              >
-                <option value="">-- Select Service --</option>
-                {servicesQuery.data?.results.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} (RWF {Number(s.fee_amount).toLocaleString()})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <TextField
-                label="Patient Name"
-                value={patientName}
-                onChange={(e) => setPatientName(e.target.value)}
-                required
-              />
-              <TextField
-                label="Patient Phone"
-                value={patientPhone}
-                onChange={(e) => setPatientPhone(e.target.value)}
-                required
-              />
-            </div>
-
-            <TextField
-              label="Clinical Notes / Measurements (BP, Glucose, Observations)"
-              value={clinicalNotes}
-              onChange={(e) => setClinicalNotes(e.target.value)}
-              required
-            />
-
-            <TextField
-              label="Fee Charged (RWF)"
-              type="number"
-              value={feeCharged}
-              onChange={(e) => setFeeCharged(e.target.value)}
-              required
-            />
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="secondary" onClick={() => setCreatingEncounter(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createEncounterMutation.isPending || !selectedServiceId}>
-                {createEncounterMutation.isPending ? "Logging…" : "Confirm & Save Encounter"}
-              </Button>
-            </div>
-          </form>
-        </Modal>
+      {service !== null && (
+        <ServiceDrawer
+          service={service === "new" ? null : service}
+          onClose={() => setService(null)}
+        />
       )}
     </div>
   );

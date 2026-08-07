@@ -1,19 +1,37 @@
 import os
-import sys
-import django
-from decimal import Decimal
 from datetime import date, timedelta
+from decimal import Decimal
+
+import django
 from django.utils import timezone
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
-from apps.iam.models import Organization, Department, User
-from apps.catalog.models import Product, PriceList, Manufacturer, ActiveIngredient
-from apps.inventory.models import InventoryBatch, StorageZone, BinLocation, TemperatureSensor, TemperatureLog, QualityCheck, BatchRecall, StockCount, StockDisposal
-from apps.distribution.models import StockOrder, DepotProductListing, SalesRepresentative, JourneyPlan, SalesVisitLog, TenderContract, CustomerReturn
-from apps.finance.models import FixedAsset, TaxRecord, Budget, CustomerInvoice, CustomerCredit, CustomerReceipt
-from apps.hr.models import Employee, AttendanceLog, ShiftRoster, LeaveRequest
+from apps.catalog.models import ActiveIngredient, Manufacturer, Product
+from apps.distribution.models import (
+    CustomerReturn,
+    DepotProductListing,
+    JourneyPlan,
+    SalesRepresentative,
+    SalesVisitLog,
+    TenderContract,
+)
+from apps.finance.models import (
+    Budget,
+    FixedAsset,
+    TaxRecord,
+)
+from apps.hr.models import AttendanceLog, Employee, LeaveRequest, ShiftRoster
+from apps.iam.models import Department, Organization, User
+from apps.inventory.models import (
+    InventoryBatch,
+    QualityCheck,
+    StockDisposal,
+    StorageZone,
+    TemperatureLog,
+    TemperatureSensor,
+)
 
 print("Starting Enterprise Demo Data Seeding...")
 
@@ -48,10 +66,12 @@ if not admin_user:
         email="admin@pharmacore.rw",
         password="AdminPassword123!",
         full_name="System Administrator",
-        organization=depot_org
+        organization=depot_org,
     )
 
-print(f"Using Admin User: {admin_user.username}, Depot: {depot_org.name}, Retail: {retail_org.name}")
+print(
+    f"Using Admin User: {admin_user.username}, Depot: {depot_org.name}, Retail: {retail_org.name}"
+)
 
 # 2. Seed Catalog Items
 p1 = Product.objects.filter(brand_name="Panadol").first()
@@ -89,12 +109,11 @@ if not p3:
 
 mfg, _ = Manufacturer.objects.get_or_create(
     name="GlaxoSmithKline Pharmaceuticals",
-    defaults={"country": "United Kingdom", "is_active": True}
+    defaults={"country": "United Kingdom", "is_active": True},
 )
 
 ing, _ = ActiveIngredient.objects.get_or_create(
-    name="Paracetamol",
-    defaults={"atc_code": "N02BE01"}
+    name="Paracetamol", defaults={"atc_code": "N02BE01"}
 )
 
 # 3. Seed Inventory & Storage Zones
@@ -105,7 +124,7 @@ z1, _ = StorageZone.objects.get_or_create(
         "zone_type": "AMBIENT",
         "temp_min_celsius": Decimal("15.00"),
         "temp_max_celsius": Decimal("25.00"),
-    }
+    },
 )
 
 z2, _ = StorageZone.objects.get_or_create(
@@ -115,7 +134,7 @@ z2, _ = StorageZone.objects.get_or_create(
         "zone_type": "COLD_CHAIN",
         "temp_min_celsius": Decimal("2.00"),
         "temp_max_celsius": Decimal("8.00"),
-    }
+    },
 )
 
 sensor, _ = TemperatureSensor.objects.get_or_create(
@@ -125,7 +144,7 @@ sensor, _ = TemperatureSensor.objects.get_or_create(
         "organization": depot_org,
         "zone": z2,
         "is_active": True,
-    }
+    },
 )
 
 # Create recent temperature log
@@ -146,7 +165,7 @@ b1, _ = InventoryBatch.objects.get_or_create(
         "quantity_reserved": 100,
         "wholesale_cost": Decimal("1200.00"),
         "expiry_date": date.today() + timedelta(days=365),
-    }
+    },
 )
 
 b2, _ = InventoryBatch.objects.get_or_create(
@@ -158,7 +177,7 @@ b2, _ = InventoryBatch.objects.get_or_create(
         "quantity_reserved": 50,
         "wholesale_cost": Decimal("3500.00"),
         "expiry_date": date.today() + timedelta(days=540),
-    }
+    },
 )
 
 # Seed Quality Check & Disposal
@@ -167,8 +186,10 @@ QualityCheck.objects.get_or_create(
     defaults={
         "inspector": admin_user,
         "status": "PASSED",
-        "inspection_notes": "Visual inspection and certificate of analysis verified. Approved for active stock.",
-    }
+        "inspection_notes": (
+            "Visual inspection and certificate of analysis verified. " "Approved for active stock."
+        ),
+    },
 )
 
 StockDisposal.objects.get_or_create(
@@ -179,7 +200,7 @@ StockDisposal.objects.get_or_create(
         "destruction_method": "INCINERATION",
         "primary_witness": admin_user,
         "status": "APPROVED",
-    }
+    },
 )
 
 # 4. Seed Distribution & Depot Listings (Offered vs On-Hand)
@@ -193,7 +214,7 @@ DepotProductListing.objects.get_or_create(
         "is_published": True,
         "customer_segment": "ALL",
         "min_order_qty": 10,
-    }
+    },
 )
 
 DepotProductListing.objects.get_or_create(
@@ -206,7 +227,7 @@ DepotProductListing.objects.get_or_create(
         "is_published": True,
         "customer_segment": "ALL",
         "min_order_qty": 5,
-    }
+    },
 )
 
 sales_rep, _ = SalesRepresentative.objects.get_or_create(
@@ -217,14 +238,14 @@ sales_rep, _ = SalesRepresentative.objects.get_or_create(
         "monthly_sales_target": Decimal("25000000.00"),
         "commission_rate_pct": Decimal("2.50"),
         "is_active": True,
-    }
+    },
 )
 
 jp, _ = JourneyPlan.objects.get_or_create(
     rep=sales_rep,
     customer_org=retail_org,
     planned_date=date.today(),
-    defaults={"is_completed": True}
+    defaults={"is_completed": True},
 )
 
 SalesVisitLog.objects.get_or_create(
@@ -234,9 +255,11 @@ SalesVisitLog.objects.get_or_create(
     visited_at=timezone.now(),
     defaults={
         "visit_type": "PRE_SALES",
-        "notes": "Reviewed monthly stock levels for Amoxicillin & Panadol. Retailer placed reorder.",
+        "notes": (
+            "Reviewed monthly stock levels for Amoxicillin & Panadol. " "Retailer placed reorder."
+        ),
         "sales_amount": Decimal("1500000.00"),
-    }
+    },
 )
 
 TenderContract.objects.get_or_create(
@@ -250,7 +273,7 @@ TenderContract.objects.get_or_create(
         "drawn_qty": 2500,
         "valid_until": date.today() + timedelta(days=180),
         "is_active": True,
-    }
+    },
 )
 
 CustomerReturn.objects.get_or_create(
@@ -261,7 +284,7 @@ CustomerReturn.objects.get_or_create(
         "status": "APPROVED",
         "reason": "Near-expiry return within 60-day policy window.",
         "credit_note_amount": Decimal("180000.00"),
-    }
+    },
 )
 
 # 5. Seed Finance Items
@@ -277,7 +300,7 @@ FixedAsset.objects.get_or_create(
         "salvage_value": Decimal("1500000.00"),
         "accumulated_depreciation": Decimal("1133333.33"),
         "is_active": True,
-    }
+    },
 )
 
 TaxRecord.objects.get_or_create(
@@ -290,12 +313,11 @@ TaxRecord.objects.get_or_create(
         "vat_amount": Decimal("180000.00"),
         "tax_class_b": Decimal("180000.00"),
         "qr_code_payload": "https://ebm.rra.gov.rw/verify/SDC-RW-00192/EBM-2026-009941",
-    }
+    },
 )
 
 dept, _ = Department.objects.get_or_create(
-    name="Warehouse & Logistics",
-    defaults={"code": "LOG-01", "organization": depot_org}
+    name="Warehouse & Logistics", defaults={"code": "LOG-01", "organization": depot_org}
 )
 
 from apps.finance.models import Account
@@ -317,7 +339,7 @@ Budget.objects.get_or_create(
     defaults={
         "budgeted_amount": Decimal("45000000.00"),
         "actual_amount": Decimal("38200000.00"),
-    }
+    },
 )
 
 # 6. Seed HR Items
@@ -332,7 +354,7 @@ emp, _ = Employee.objects.get_or_create(
         "hire_date": date.today() - timedelta(days=365),
         "employment_status": "ACTIVE",
         "base_salary": Decimal("2500000.00"),
-    }
+    },
 )
 
 AttendanceLog.objects.get_or_create(
@@ -343,7 +365,7 @@ AttendanceLog.objects.get_or_create(
         "clock_out": timezone.now(),
         "status": "PRESENT",
         "notes": "Biometric Gate 1 clock-in logged.",
-    }
+    },
 )
 
 ShiftRoster.objects.get_or_create(
@@ -353,7 +375,7 @@ ShiftRoster.objects.get_or_create(
     defaults={
         "shift_type": "MORNING",
         "requires_pharmacist_license": True,
-    }
+    },
 )
 
 LeaveRequest.objects.get_or_create(
@@ -366,11 +388,17 @@ LeaveRequest.objects.get_or_create(
         "status": "APPROVED",
         "reason": "Annual statutory leave balance utilization.",
         "approved_by": admin_user,
-    }
+    },
 )
 
 # 7. Seed Retail POS Advanced Items
-from apps.retail.models import Prescription, ControlledSubstanceRegister, POSPromotion, ClinicalService, ClinicalServiceRecord
+from apps.retail.models import (
+    ClinicalService,
+    ClinicalServiceRecord,
+    ControlledSubstanceRegister,
+    POSPromotion,
+    Prescription,
+)
 
 Prescription.objects.get_or_create(
     prescription_number="RX-2026-009",
@@ -387,7 +415,7 @@ Prescription.objects.get_or_create(
         "refills_used": 1,
         "status": "ACTIVE",
         "notes": "Amoxicillin 500mg TDS for 7 days",
-    }
+    },
 )
 
 ControlledSubstanceRegister.objects.get_or_create(
@@ -403,7 +431,7 @@ ControlledSubstanceRegister.objects.get_or_create(
         "witness_name": "Pharm. Marie Claire Mukamana",
         "rx_reference": "RX-2026-009",
         "logged_by": admin_user,
-    }
+    },
 )
 
 POSPromotion.objects.get_or_create(
@@ -416,7 +444,7 @@ POSPromotion.objects.get_or_create(
         "valid_from": date.today() - timedelta(days=10),
         "valid_until": date.today() + timedelta(days=20),
         "is_active": True,
-    }
+    },
 )
 
 cs1, _ = ClinicalService.objects.get_or_create(
@@ -426,7 +454,7 @@ cs1, _ = ClinicalService.objects.get_or_create(
         "category": "VACCINATION",
         "fee_amount": Decimal("15000.00"),
         "is_active": True,
-    }
+    },
 )
 
 cs2, _ = ClinicalService.objects.get_or_create(
@@ -436,7 +464,7 @@ cs2, _ = ClinicalService.objects.get_or_create(
         "category": "SCREENING",
         "fee_amount": Decimal("3000.00"),
         "is_active": True,
-    }
+    },
 )
 
 ClinicalServiceRecord.objects.get_or_create(
@@ -448,7 +476,7 @@ ClinicalServiceRecord.objects.get_or_create(
         "performed_by": admin_user,
         "clinical_notes": "BP: 120/80 mmHg (Normal), Glucose: 5.4 mmol/L (Fasting).",
         "fee_charged": Decimal("3000.00"),
-    }
+    },
 )
 
 print("SUCCESS: Seeded rich enterprise demo data across all modules!")

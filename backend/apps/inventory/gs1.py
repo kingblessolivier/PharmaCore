@@ -191,9 +191,7 @@ def _parse_element_string(data: str) -> dict[str, str]:
         if fixed is not None:
             value = data[pos : pos + fixed]
             if len(value) < fixed:
-                raise GS1ParseError(
-                    f"AI ({ai}) needs {fixed} characters, got {len(value)}."
-                )
+                raise GS1ParseError(f"AI ({ai}) needs {fixed} characters, got {len(value)}.")
             pos += fixed
             # A fixed-length field may still be followed by a redundant FNC1.
             if pos < length and data[pos] == GROUP_SEPARATOR:

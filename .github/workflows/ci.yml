@@ -36,6 +36,11 @@ jobs:
         run: python manage.py check
       - name: Migrations in sync
         run: python manage.py makemigrations --check --dry-run
+      # The generated reference drifts silently otherwise — a stale document looks
+      # exactly like a current one, which is how the data model reached ~145
+      # undocumented entities. Regenerating is the only way to go green.
+      - name: Docs reference in sync
+        run: python manage.py generate_docs --check
       - name: Test (pytest)
         run: pytest
 

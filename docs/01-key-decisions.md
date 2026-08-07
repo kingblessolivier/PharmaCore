@@ -402,3 +402,219 @@ across modules.
 - `TenantSettings` carries `costing_method ∈ {wac, fefo_lot}`, `currency`,
   `fx_provider`, `default_country='RW'`, `pay_period`, `statutory_remittance_day=15`,
   `pit_filing_deadline_month=3, day=31`.
+
+---
+
+## ADR-015 — The ledger carries an analysis dimension, not more accounts
+
+**Decision:** Every `JournalLine` may carry a `CostCentre` — a tree of branches,
+departments, functions and projects. Slicing the ledger is done with this
+dimension, **never** by creating parallel accounts per branch.
+
+**Status:** Accepted (2026-08-07)
+
+**Context:** `JournalLine` had an account and nothing else, so the books could not
+answer "what did Kicukiro spend on rent this quarter". `Budget` was keyed by
+department while the ledger had never heard of one, which is why budget-vs-actual
+by department was unanswerable in principle. The obvious alternative — an expense
+account per branch ("6110 Rent Kicukiro", "6110 Rent Remera") — is how a chart of
+accounts grows to four thousand lines and stops being readable.
+
+**Consequences:**
+- `finance.CostCentre` is a tree; `descendant_ids()` gives the roll-up set, so
+  reporting on "Retail" includes every branch beneath it without restating anything.
+- The centre is **optional**. Control-account legs — VAT, AP, bank — belong to the
+  entity rather than to any one branch, and forcing a centre onto them would only
+  invent a "Head Office" bucket meaning "we had to put it somewhere".
+- A per-line centre overrides the entry-wide default, so one rent invoice can split
+  across two branches (`tests/test_finance_ledger_spine.py`).
+- `cost_centre_pnl()` reports `tagged_pct` — how much of the P&L is actually coded.
+  A contribution report that does not say how much of the business it covers invites
+  more confidence than it has earned.
+- Untagged postings are reported as "Unallocated", never spread across the others.
+  Allocation is a policy decision and inventing one here would hide the gap.
+
+---
+
+## ADR-016 — Actuals are read from the ledger and can never be supplied
+
+**Decision:** No model, serializer or endpoint accepts an "actual" figure. Budget
+variance derives actuals from posted journal lines at read time.
+
+**Status:** Accepted (2026-08-07)
+
+**Context:** `Budget.actual_amount` was a stored, editable decimal that nothing
+computed — it was typed in by hand next to the budget it was meant to test. A
+variance report whose actual is supplied by the person being measured is not a
+control, it is a form.
+
+**Consequences:**
+- The column is deleted. `apps/finance/budgeting.py` computes actuals, excluding
+  reversed entries exactly as the statements do, so a variance report and a P&L can
+  never disagree about what was spent.
+- Variance carries a **verdict, not just a sign**: under-spending a cost is
+  favourable, under-selling revenue is not. A naive `budget − actual` reports both
+  as the same positive number.
+- An annual budget line pro-rates across a partial window — not all of it, which
+  would make every part-year look catastrophic, and not nothing, which would make it
+  look free.
+- Rows appear for anything budgeted **or** spent, so spend with no budget at all
+  surfaces. That is usually the most useful row in a variance report and the previous
+  design could not produce it.
+
+---
+
+## ADR-017 — A period close is gated by a checklist, not by arithmetic
+
+**Decision:** `close_period` refuses while any blocking `PeriodTask` is unsettled.
+A task may be waived, but only with a reason.
+
+**Status:** Accepted (2026-08-07)
+
+**Context:** Closing already refused on an unbalanced trial balance, which is the
+right instinct but a low bar: a set of books can balance perfectly and still be
+wrong, because balancing only proves the double entry was arithmetically consistent,
+not that anything real was recorded.
+
+**Consequences:**
+- Thirteen seeded tasks covering cut-off, stock count, expiry provision, bank
+  reconciliation, till variance, AR/AP review, payroll, depreciation, accruals, VAT
+  and trial-balance review.
+- Seeding is idempotent, so opening the screen brings an older period onto the
+  current checklist.
+- A period with **no** checklist still closes. The checklist is a control added
+  later, and retro-blocking historical closes would be an obstacle rather than a
+  safeguard.
+- Waiving without a reason is refused: a waiver with no reason is indistinguishable
+  from an item that was overlooked.
+
+---
+
+## ADR-018 — Bank reconciliation is two-sided or it is nothing
+
+**Decision:** The bank's own lines are stored as first-class rows
+(`BankStatement`, `BankStatementLine`) and matched against journal lines through
+`ReconciliationMatch`. Sign-off is refused while any difference or any unexplained
+line remains.
+
+**Status:** Accepted (2026-08-07) — supersedes the boolean flag on `JournalLine`.
+
+**Context:** `JournalLine.is_reconciled` was a checkbox an operator ticked against
+our own records. Reconciling the books to the books always succeeds and proves
+nothing. The cases reconciliation exists to catch — a payment that left the account
+and never reached the ledger, an unrecorded standing order, a double posting — were
+undetectable in principle.
+
+**Consequences:**
+- An import is refused unless the statement foots (opening + movements = closing). A
+  file that has been truncated or edited would send someone chasing a difference that
+  was never in the bank.
+- Auto-matching requires an **exact** amount within a five-day window and declines to
+  guess when two ledger lines fit equally well. Two identical payments on one day are
+  genuinely ambiguous, and picking one produces a reconciliation that looks complete
+  while pointing at the wrong entry.
+- Manual matching is many-to-many (a payment run leaves the bank once and settles a
+  dozen bills) but the signed total must equal the bank line exactly. A ledger line
+  may only be claimed once, or a genuine duplicate would be hidden.
+- `explain_line` posts a bank line straight to the ledger. **This is the only way
+  bank charges and interest can enter the books** — no internal document produces them.
+- Balances that agree by coincidence do not pass: two unexplained lines that cancel
+  leave the difference at zero and the account still unreconciled.
+
+---
+
+## ADR-019 — Accruals reverse; prepayments do not
+
+**Decision:** `RecurringSchedule` spreads a cost across the months it belongs to.
+Accruals post at month end and reverse on the first of the next month by default.
+Prepayments never reverse, and the model enforces that even when a caller asks.
+
+**Status:** Accepted (2026-08-07)
+
+**Context:** A monthly P&L driven by the billing calendar is wrong in both
+directions: insurance paid annually in January makes January look terrible and
+eleven months look better than they are; rent invoiced quarterly in arrears makes
+two months look free. A branch manager judged on either is being judged on when the
+invoice arrived.
+
+**Consequences:**
+- Reversing accruals let the real supplier invoice be posted normally when it
+  arrives, with the cost counted once. Non-reversing accruals must be released by
+  hand, which is a reliable source of costs counted twice.
+- A prepayment is a consumed asset, so reversing it would un-charge the month.
+- The **final period absorbs the rounding remainder**: twelve months of 1,000,000/12
+  must total 1,000,000, not 999,999.96, or the balance sheet keeps a stub nobody can
+  ever clear.
+- Idempotency is a unique constraint on `(schedule, period_month)`, not a flag
+  someone remembers to check. Catching up posts each missed month to the month it
+  belongs to, never as a lump in the current period.
+
+---
+
+## ADR-020 — Consolidation eliminates internal trade, and names what it cannot
+
+**Decision:** `consolidated()` eliminates intercompany revenue, cost, receivables
+and payables. Unrealised profit on internally transferred stock is eliminated using
+the origin cost recorded on the receiving batch; where that origin cost is unknown
+the residue is reported rather than assumed away.
+
+**Status:** Accepted (2026-08-07)
+
+**Context:** Consolidation summed the branches, so a depot's sale to its own retail
+branch counted as group revenue and the branch's purchase as group cost — the same
+goods twice on their way through one business. A group has not earned anything until
+it sells to someone outside itself.
+
+**Consequences:**
+- Internal invoices are identified directly: seller and buyer are both inside the
+  consolidation set. VAT is stripped first, since the buyer recovers it and it never
+  was group income.
+- `gross_totals` stays visible beside the consolidated figures, so the elimination is
+  auditable rather than a number that silently changed.
+- `InventoryBatch.origin_unit_cost` records the **selling entity's own cost** when
+  stock moves between group members, which is what makes the unrealised-profit
+  elimination possible at all.
+- Batches transferred before that field existed have no origin cost. Those are
+  counted and reported as `unmeasured_batches` rather than treated as zero-margin —
+  a consolidation that quietly ignores a known limitation is worse than one that
+  names it.
+
+---
+
+## ADR-021 — A wholesaler decides what to show, and unmet demand is kept
+
+**Status:** Accepted (2026-08-07)
+
+**Context:** Distribution carried two competing notions of "what a depot offers".
+Ordering priced from `PharmacyProduct.wholesale_price` in inventory, while
+`DepotProductListing` — the marketplace record holding offered quantity, buffer,
+minimum order, customer segment and a publication flag — governed nothing at all.
+Neither consulted stock, so a depot could sell what it did not have, and neither
+allowed a depot to hold stock back deliberately. Separately, a line the depot could
+not fill was refused outright, throwing away the most valuable thing a marketplace
+produces: a customer stating what to buy next.
+
+**Decision:** The storefront listing is the offer, and demand is never discarded.
+
+**Consequences:**
+- Available-to-promise is `min(offered_qty, free_unexpired_stock − buffer_qty)`.
+  Publishing more than is held is permitted but capped and reported, because a
+  depot may legitimately offer against goods already on order.
+- `buffer_qty` and `is_published` make withholding explicit. A depot may hold 5,000
+  and offer 800, or hold stock and offer none. **The buyer-facing API never returns
+  the depot's real holding** — leaking it would defeat the purpose of withholding it.
+- A published `DepotProductListing` supersedes the inventory offer entirely. Where
+  no listing exists the inventory offer still stands, so depots that never adopted
+  listings keep trading — but now capped by physical stock, which it never was.
+- An unfillable line becomes a `BackorderLine`, not an error. The order proceeds
+  with what is available; the shortfall is captured with the reason it could not be
+  met. Buyers who want goods-or-nothing can pass `allow_backorder: false`.
+- Aggregated demand converts to a `PurchaseRequisition` and hands off to the
+  existing procurement flow (RFQ → quote → PO → import). Distribution does not
+  duplicate that machinery; it was only ever missing the bridge into it.
+- Backorders carry the requisition that sourced them, so the same demand cannot be
+  sourced twice.
+- The depot reserves FEFO from **unexpired** batches only. Retail had this guard and
+  distribution did not, which meant the till refused expired stock while the depot
+  shipped it — and because FEFO sorts by expiry, expired batches were not merely
+  reachable but *preferred*.

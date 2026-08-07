@@ -16,7 +16,7 @@ import {
   StatusBadge,
   Textarea,
   TotalsRow,
-} from "../components/ProcurementKit";
+} from "../components/RecordKit";
 import { Badge, Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
 import { money, num, type GoodsReceipt, type GoodsReceiptLine } from "../lib/procurement";

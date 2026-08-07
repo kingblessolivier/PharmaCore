@@ -10,7 +10,7 @@ from django.db.models import Case, DecimalField, Q, QuerySet, Sum, When
 from django.db.models.functions import Coalesce
 from django.http import HttpResponse
 from django.utils import timezone
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.request import Request
@@ -18,11 +18,15 @@ from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 
 from apps.finance import reports
+from apps.finance.budgeting import budget_variance, cost_centre_pnl
+from apps.finance.closing import close_readiness, seed_period_tasks, settle_task
+from apps.finance.fx import exposure_report, month_end, revalue, seed_rate
 from apps.finance.models import (
     Account,
     AccountingPeriod,
     BankAccount,
     Budget,
+    CostCentre,
     CreditProfile,
     CustomerCredit,
     CustomerInvoice,
@@ -32,16 +36,24 @@ from apps.finance.models import (
     JournalEntry,
     JournalLine,
     PaymentRun,
+    PeriodTask,
     SupplierBill,
     TaxCode,
     TaxPayment,
     TaxRecord,
+)
+from apps.finance.moneymap import summary as money_map_summary
+from apps.finance.operations import (
+    post_expiry_provision,
+    run_depreciation,
+    settle_card_batch,
 )
 from apps.finance.serializers import (
     AccountingPeriodSerializer,
     AccountSerializer,
     BankAccountSerializer,
     BudgetSerializer,
+    CostCentreSerializer,
     CreditProfileSerializer,
     CustomerCreditSerializer,
     CustomerInvoiceSerializer,
@@ -50,15 +62,18 @@ from apps.finance.serializers import (
     FixedAssetSerializer,
     JournalEntrySerializer,
     PaymentRunSerializer,
+    PeriodTaskSerializer,
     SupplierBillSerializer,
     TaxCodeSerializer,
     TaxPaymentSerializer,
     TaxRecordSerializer,
+    TenantSettingsSerializer,
 )
 from apps.finance.services import (
     CreditHoldError,
     PaymentRunError,
     apply_dunning,
+    cancel_customer_invoice,
     cancel_payment_run,
     cash_book_lines,
     cash_flow_forecast,
@@ -66,6 +81,7 @@ from apps.finance.services import (
     create_bank_account,
     create_payment_run,
     disburse_payment_run,
+    dispose_fixed_asset,
     lock_payment_run,
     reconcile_lines,
     record_customer_invoice,
@@ -75,6 +91,7 @@ from apps.finance.services import (
     reopen_period,
     request_credit_override,
     submit_payment_run,
+    tenant_settings_for,
 )
 from apps.iam.audit import record_audit
 from apps.iam.models import Organization, User
@@ -431,6 +448,140 @@ def _month_bounds(today: date) -> tuple[date, date]:
     return start, next_month - timedelta(days=1)
 
 
+class FinanceOperationsView(viewsets.ViewSet):
+    """The month-end and treasury postings that keep the ledger faithful to
+    operations: depreciation, the IAS 2 stock provision, and card settlement.
+
+    Each is idempotent on its own reference, so a double-click or a re-run cannot
+    charge twice — see apps/finance/operations.py.
+    """
+
+    @action(detail=False, methods=["get"], url_path="money-map")
+    def money_map(self, request: Request) -> Response:
+        """Every money source in the business and whether it reached the ledger."""
+        organization = _resolve_org(request, cast(User, request.user))
+        start, end = _period_from_query(request)
+        return Response(money_map_summary(organization, start=start, end=end))
+
+    @action(detail=False, methods=["post"])
+    def depreciation(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        organization = _resolve_org(request, user)
+        as_of = _date_param(request, "as_of", timezone.localdate())
+        try:
+            entry = run_depreciation(organization=organization, as_of=as_of, user=user)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        if entry is None:
+            return Response({"detail": "Nothing left to depreciate for that month.", "entry": None})
+        return Response(
+            {"detail": "Depreciation posted.", "entry": JournalEntrySerializer(entry).data}
+        )
+
+    @action(detail=False, methods=["post"], url_path="expiry-provision")
+    def expiry_provision(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        organization = _resolve_org(request, user)
+        as_of = _date_param(request, "as_of", timezone.localdate())
+        entry = post_expiry_provision(organization=organization, as_of=as_of, user=user)
+        if entry is None:
+            return Response(
+                {
+                    "detail": "The provision already matches the current expiry profile.",
+                    "entry": None,
+                }
+            )
+        return Response(
+            {"detail": "Provision movement posted.", "entry": JournalEntrySerializer(entry).data}
+        )
+
+    @action(detail=False, methods=["get"], url_path="fx-exposure")
+    def fx_exposure(self, request: Request) -> Response:
+        """What the currency is doing to open foreign balances, before posting."""
+        organization = _resolve_org(request, cast(User, request.user))
+        as_of = _date_param(request, "as_of", timezone.localdate())
+        return Response(exposure_report(organization, as_of=as_of))
+
+    @action(detail=False, methods=["post"], url_path="fx-revaluation")
+    def fx_revaluation(self, request: Request) -> Response:
+        """Restate open foreign monetary balances at the closing rate (IAS 21)."""
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        organization = _resolve_org(request, user)
+        as_of = month_end(_date_param(request, "as_of", timezone.localdate()))
+        try:
+            revaluation = revalue(organization=organization, as_of=as_of, user=user)
+        except Exception as exc:  # FxError — no published rate
+            raise ValidationError(str(exc)) from exc
+        if revaluation is None:
+            return Response({"detail": "Nothing to restate — no open foreign balances have moved."})
+        return Response(
+            {
+                "detail": f"Revalued at {as_of}.",
+                "net_gain": str(revaluation.net_gain),
+                "movements": revaluation.detail,
+            }
+        )
+
+    @action(detail=False, methods=["post"], url_path="exchange-rate")
+    def exchange_rate(self, request: Request) -> Response:
+        """Record a published rate. Effective-dated, never overwritten in place."""
+        _require_finance_manage(cast(User, request.user))
+        data = request.data
+        try:
+            rate = seed_rate(
+                currency=str(data["currency"]),
+                rate_date=date.fromisoformat(str(data["rate_date"])),
+                rate_to_base=Decimal(str(data["rate_to_base"])),
+                source=str(data.get("source", "BNR")),
+            )
+        except (KeyError, ValueError, ArithmeticError) as exc:
+            raise ValidationError(
+                "'currency', 'rate_date' and 'rate_to_base' are required."
+            ) from exc
+        return Response(
+            {
+                "currency": rate.currency,
+                "rate_date": rate.rate_date,
+                "rate": str(rate.rate_to_base),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=False, methods=["post"], url_path="card-settlement")
+    def card_settlement(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        organization = _resolve_org(request, user)
+        data = request.data
+        try:
+            entry = settle_card_batch(
+                organization=organization,
+                gross=Decimal(str(data.get("gross", "0"))),
+                fee=Decimal(str(data.get("fee", "0"))),
+                settled_on=_date_param(request, "settled_on", timezone.localdate()),
+                reference=str(data.get("reference", "")),
+                bank_account_code=str(data.get("bank_account_code", "1200")),
+                user=user,
+            )
+        except (ValueError, ArithmeticError) as exc:
+            raise ValidationError(str(exc)) from exc
+        return Response(
+            {"detail": "Card settlement posted.", "entry": JournalEntrySerializer(entry).data}
+        )
+
+
+def _period_from_query(request: Request) -> tuple[date, date]:
+    """The reporting window from ?start=&end=, defaulting to the current month."""
+    default_start, default_end = _month_bounds(timezone.localdate())
+    return (
+        _date_param(request, "start", default_start),
+        _date_param(request, "end", default_end),
+    )
+
+
 class FinanceReportsView(viewsets.ViewSet):
     """Statements over the ledger: trial balance, P&L, balance sheet, cash-flow,
     the performance cockpit, and HQ consolidation.
@@ -452,6 +603,56 @@ class FinanceReportsView(viewsets.ViewSet):
         org = _resolve_org(request, cast(User, request.user))
         as_of = _date_param(request, "as_of", timezone.now().date())
         return Response(_money_safe(reports.trial_balance(org, as_of=as_of)))
+
+    # ---- Pharmacy cockpit -------------------------------------------------
+    # A pharmacy's economics are not a generic retailer's: inventory is most of
+    # the balance sheet and it expires, and cash sits trapped between paying a
+    # supplier and being paid by an insurer. These read that directly.
+
+    @action(detail=False, methods=["get"], url_path="pharmacy-cockpit")
+    def pharmacy_cockpit(self, request: Request) -> Response:
+        """Profit, cash cycle, expiry risk, break-even and margin mix in one call."""
+        from apps.finance.pharmacy import pharmacy_cockpit
+
+        org = _resolve_org(request, cast(User, request.user))
+        start, end = self._period(request)
+        return Response(_money_safe(pharmacy_cockpit(org, start=start, end=end)))
+
+    @action(detail=False, methods=["get"], url_path="expiry-exposure")
+    def expiry_exposure(self, request: Request) -> Response:
+        """Stock at risk of expiring, banded, with the IAS 2 provision it implies."""
+        from apps.finance.pharmacy import inventory_expiry_exposure
+
+        org = _resolve_org(request, cast(User, request.user))
+        as_of = _date_param(request, "as_of", timezone.now().date())
+        return Response(_money_safe(inventory_expiry_exposure(org, as_of=as_of)))
+
+    @action(detail=False, methods=["get"], url_path="working-capital")
+    def working_capital(self, request: Request) -> Response:
+        """DIO + DSO − DPO: how many days of cash the business has to fund."""
+        from apps.finance.pharmacy import working_capital_cycle
+
+        org = _resolve_org(request, cast(User, request.user))
+        start, end = self._period(request)
+        return Response(_money_safe(working_capital_cycle(org, start=start, end=end)))
+
+    @action(detail=False, methods=["get"], url_path="break-even")
+    def break_even(self, request: Request) -> Response:
+        """Revenue needed to cover fixed costs, and the margin of safety on it."""
+        from apps.finance.pharmacy import break_even
+
+        org = _resolve_org(request, cast(User, request.user))
+        start, end = self._period(request)
+        return Response(_money_safe(break_even(org, start=start, end=end)))
+
+    @action(detail=False, methods=["get"], url_path="branch-comparison")
+    def branch_comparison(self, request: Request) -> Response:
+        """HQ's view: every visible branch side by side on the numbers that matter."""
+        from apps.finance.pharmacy import branch_comparison
+
+        start, end = self._period(request)
+        orgs = list(organizations_visible_to(cast(User, request.user)))
+        return Response(_money_safe(branch_comparison(orgs, start=start, end=end)))
 
     @action(detail=False, methods=["get"], url_path="profit-and-loss")
     def profit_and_loss(self, request: Request) -> Response:
@@ -571,6 +772,42 @@ class AccountingPeriodViewSet(viewsets.ModelViewSet):
             raise ValidationError(str(exc)) from exc
         return Response(AccountingPeriodSerializer(period).data, status=201)
 
+    @action(detail=True, methods=["get", "post"])
+    def checklist(self, request: Request, pk: str | None = None) -> Response:
+        """The close checklist for this period, seeded on first request.
+
+        GET reads it; POST seeds it explicitly. Seeding is idempotent, so opening
+        the screen is enough to bring an older period onto the current checklist.
+        """
+        period = self.get_object()
+        seed_period_tasks(period)
+        tasks = PeriodTaskSerializer(period.tasks.all(), many=True).data
+        return Response({"readiness": close_readiness(period), "tasks": tasks})
+
+    @action(detail=True, methods=["post"], url_path="checklist/(?P<task_id>[^/.]+)")
+    def settle_checklist_item(
+        self, request: Request, pk: str | None = None, task_id: str | None = None
+    ) -> Response:
+        """Mark one checklist item done, or waive it with a reason."""
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        period = self.get_object()
+        task = period.tasks.filter(pk=task_id).first()
+        if task is None:
+            raise ValidationError("That checklist item does not belong to this period.")
+        try:
+            settle_task(
+                task,
+                status=str(request.data.get("status", PeriodTask.Status.DONE)),
+                user=user,
+                notes=str(request.data.get("notes", "")),
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        return Response(
+            {"readiness": close_readiness(period), "task": PeriodTaskSerializer(task).data}
+        )
+
     @action(detail=True, methods=["post"])
     def reopen(self, request: Request, pk: str | None = None) -> Response:
         user = cast(User, request.user)
@@ -609,6 +846,64 @@ class CashFlowForecastView(viewsets.ViewSet):
         return Response(_money_safe(cash_flow_forecast(organization)))
 
 
+class TenantSettingsViewSet(viewsets.ViewSet):
+    """Per-tenant configuration singleton (costing method, FX provider, pay
+    period, statutory remittance day, PIT deadline).
+
+    The lazy creation lives in :func:`apps.finance.services.tenant_settings_for`
+    so a brand-new org gets a default row the first time anything reads it.
+    """
+
+    def _get_org(self, request: Request, org_id: str | None) -> Organization:
+        user = cast(User, request.user)
+        if org_id and org_id.isdigit():
+            try:
+                organization = Organization.objects.get(pk=int(org_id))
+            except Organization.DoesNotExist as exc:
+                raise ValidationError("Organization not found.") from exc
+        elif user.organization_id:
+            organization = cast(Organization, user.organization)
+        else:
+            raise ValidationError("An 'organization' query param or url segment is required.")
+        if not (
+            user.is_superuser
+            or user.has_role("SYS_ADMIN")
+            or organization in organizations_visible_to(user)
+        ):
+            raise PermissionDenied("You may not view this organization's settings.")
+        return organization
+
+    def list(self, request: Request) -> Response:
+        """Return the singleton for the resolved org. Lazily creates it."""
+        organization = self._get_org(request, request.query_params.get("organization"))
+        settings = tenant_settings_for(organization)
+        return Response(TenantSettingsSerializer(settings).data)
+
+    def retrieve(self, request: Request, pk: str | None = None) -> Response:
+        organization = self._get_org(request, pk)
+        settings = tenant_settings_for(organization)
+        return Response(TenantSettingsSerializer(settings).data)
+
+    def partial_update(self, request: Request, pk: str | None = None) -> Response:
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        organization = self._get_org(request, pk)
+        settings = tenant_settings_for(organization)
+        serializer = TenantSettingsSerializer(settings, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        record_audit(
+            action="UPDATE",
+            user=user,
+            organization=organization,
+            entity_type="tenant_settings",
+            entity_id=str(settings.pk),
+            changes=serializer.validated_data,
+            request=request,
+        )
+        return Response(serializer.data)
+
+
 class FixedAssetViewSet(viewsets.ModelViewSet):
     serializer_class = FixedAssetSerializer
     queryset = FixedAsset.objects.select_related("organization")
@@ -624,6 +919,31 @@ class FixedAssetViewSet(viewsets.ModelViewSet):
         user = cast(User, self.request.user)
         _require_finance_manage(user)
         serializer.save()
+
+    @action(detail=True, methods=["post"])
+    def dispose(self, request: Request, pk: str | None = None) -> Response:
+        """Mark an asset disposed and post the disposal entry to the GL."""
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        asset = self.get_object()
+        amount_raw = request.data.get("disposal_amount")
+        if amount_raw in (None, ""):
+            raise ValidationError("'disposal_amount' is required.")
+        try:
+            amount = Decimal(str(amount_raw))
+        except (TypeError, ValueError) as exc:
+            raise ValidationError("'disposal_amount' must be a number.") from exc
+        try:
+            asset = dispose_fixed_asset(
+                asset=asset,
+                disposal_date=request.data.get("disposal_date"),
+                disposal_amount=amount,
+                disposal_reason=str(request.data.get("disposal_reason", "")),
+                user=user,
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        return Response(FixedAssetSerializer(asset).data)
 
 
 class TaxRecordViewSet(viewsets.ReadOnlyModelViewSet):
@@ -679,21 +999,118 @@ class TaxPaymentViewSet(viewsets.ModelViewSet):
         return qs
 
 
-class BudgetViewSet(viewsets.ModelViewSet):
-    serializer_class = BudgetSerializer
-    queryset = Budget.objects.select_related("organization", "department", "account")
+class CostCentreViewSet(viewsets.ModelViewSet):
+    """The ledger's analysis dimension — branches, departments, functions."""
 
-    def get_queryset(self) -> QuerySet[Budget]:
+    serializer_class = CostCentreSerializer
+    queryset = CostCentre.objects.select_related("organization", "parent", "department", "branch")
+
+    def get_queryset(self) -> QuerySet[CostCentre]:
         user = cast(User, self.request.user)
-        qs = Budget.objects.select_related("organization", "department", "account")
+        qs = CostCentre.objects.select_related(
+            "organization", "parent", "department", "branch", "manager"
+        )
         if not (user.is_superuser or user.has_role("SYS_ADMIN")):
             qs = qs.filter(organization__in=organizations_visible_to(user))
+        org_param = self.request.query_params.get("organization")
+        if org_param and org_param.isdigit():
+            qs = qs.filter(organization_id=int(org_param))
+        if self.request.query_params.get("active") == "true":
+            qs = qs.filter(is_active=True)
         return qs
 
     def perform_create(self, serializer: BaseSerializer[Any]) -> None:
-        user = cast(User, self.request.user)
-        _require_finance_manage(user)
+        _require_finance_manage(cast(User, self.request.user))
         serializer.save()
+
+    def perform_update(self, serializer: BaseSerializer[Any]) -> None:
+        _require_finance_manage(cast(User, self.request.user))
+        serializer.save()
+
+    @action(detail=False, methods=["get"], url_path="pnl")
+    def pnl(self, request: Request) -> Response:
+        """Contribution by cost centre — revenue, cost of sales and opex per centre."""
+        organization = _resolve_org(request, cast(User, request.user))
+        start, end = _period_from_query(request)
+        return Response(cost_centre_pnl(organization, start=start, end=end))
+
+
+class BudgetViewSet(viewsets.ModelViewSet):
+    """Budget plans and their lines.
+
+    Actuals are never written here. `variance` reads them from posted journal
+    lines so the comparison cannot be edited by the person being measured.
+    """
+
+    serializer_class = BudgetSerializer
+    queryset = Budget.objects.select_related("organization").prefetch_related("lines")
+
+    def get_queryset(self) -> QuerySet[Budget]:
+        user = cast(User, self.request.user)
+        qs = Budget.objects.select_related("organization", "approved_by").prefetch_related(
+            "lines__account", "lines__cost_centre"
+        )
+        if not (user.is_superuser or user.has_role("SYS_ADMIN")):
+            qs = qs.filter(organization__in=organizations_visible_to(user))
+        org_param = self.request.query_params.get("organization")
+        if org_param and org_param.isdigit():
+            qs = qs.filter(organization_id=int(org_param))
+        year = self.request.query_params.get("financial_year")
+        if year and year.isdigit():
+            qs = qs.filter(financial_year=int(year))
+        return qs
+
+    def perform_create(self, serializer: BaseSerializer[Any]) -> None:
+        _require_finance_manage(cast(User, self.request.user))
+        serializer.save()
+
+    def perform_update(self, serializer: BaseSerializer[Any]) -> None:
+        _require_finance_manage(cast(User, self.request.user))
+        serializer.save()
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request: Request, pk: str | None = None) -> Response:
+        """Approve the plan. Lines stay editable until it is locked."""
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        budget = self.get_object()
+        if budget.status != Budget.Status.DRAFT:
+            return Response(
+                {"detail": "Only a draft budget can be approved."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        budget.status = Budget.Status.APPROVED
+        budget.approved_by = user
+        budget.approved_at = timezone.now()
+        budget.save(update_fields=["status", "approved_by", "approved_at", "updated_at"])
+        return Response(self.get_serializer(budget).data)
+
+    @action(detail=True, methods=["post"])
+    def lock(self, request: Request, pk: str | None = None) -> Response:
+        """Freeze the plan. The thing being measured against must stop moving."""
+        _require_finance_manage(cast(User, request.user))
+        budget = self.get_object()
+        if budget.status not in {Budget.Status.DRAFT, Budget.Status.APPROVED}:
+            return Response(
+                {"detail": "Only a draft or approved budget can be locked."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        budget.status = Budget.Status.LOCKED
+        budget.save(update_fields=["status", "updated_at"])
+        return Response(self.get_serializer(budget).data)
+
+    @action(detail=True, methods=["get"])
+    def variance(self, request: Request, pk: str | None = None) -> Response:
+        """Budget vs actual, with actuals read from the general ledger."""
+        budget = self.get_object()
+        start, end = _period_from_query(request)
+        centre = None
+        centre_param = request.query_params.get("cost_centre")
+        if centre_param and centre_param.isdigit():
+            centre = CostCentre.objects.filter(
+                organization=budget.organization, pk=int(centre_param)
+            ).first()
+        return Response(budget_variance(budget, start=start, end=end, cost_centre=centre))
 
 
 class CustomerInvoiceViewSet(viewsets.ModelViewSet):
@@ -785,6 +1202,27 @@ class CustomerInvoiceViewSet(viewsets.ModelViewSet):
         )
         invoice.refresh_from_db()
         return Response(CustomerInvoiceSerializer(invoice).data, status=201)
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request: Request, pk: str | None = None) -> Response:
+        """Void a customer invoice and post the reversal entry.
+
+        Refuses if any receipts have already been booked against the invoice —
+        the user must issue refunds first, then cancel.
+        """
+        user = cast(User, request.user)
+        _require_finance_manage(user)
+        invoice = self.get_object()
+        try:
+            cancel_customer_invoice(
+                invoice=invoice,
+                user=user,
+                reason=str(request.data.get("reason", "")),
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        invoice.refresh_from_db()
+        return Response(CustomerInvoiceSerializer(invoice).data)
 
 
 class CustomerReceiptViewSet(viewsets.ReadOnlyModelViewSet):

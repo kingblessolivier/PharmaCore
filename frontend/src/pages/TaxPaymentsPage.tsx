@@ -1,79 +1,81 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Landmark } from "lucide-react";
+import { useMemo } from "react";
+import { DataGrid } from "../components/DataGrid";
+import { Badge, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
+import { money, shortDate } from "../lib/format";
 import type { Paginated, TaxPayment } from "../lib/types";
-import { Badge, Card, PageHeader, Spinner } from "../components/ui";
 
-const money = (s: string) => Number(s).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
 export function TaxPaymentsPage() {
-  const navigate = useNavigate();
-  const q = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["tax-payments"],
-    queryFn: () => api<Paginated<TaxPayment>>("/api/finance/tax-payments/"),
+    queryFn: () => api<Paginated<TaxPayment>>("/api/finance/tax-payments/?page_size=300"),
   });
+  const payments = useMemo(() => data?.results ?? [], [data]);
+
+  const total = payments.reduce((s, p) => s + Number(p.amount), 0);
 
   return (
-    <div className="max-w-6xl">
-      <button
-        onClick={() => navigate("/finance")}
-        className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
-      >
-        <ArrowLeft className="h-4 w-4" /> Finance Home
-      </button>
-
-      <PageHeader title="Tax payments (RRA remittances)" />
-      <p className="mb-4 text-sm text-ink-500">
-        Every recorded RRA remittance and the matching Dr VAT Output / Cr Cash &amp; Bank journal entry.
-        Direct create is admin-only — the normal path routes through the approvals inbox
-        (no self-approval, no surprise bank wire).
+    <div className="space-y-4">
+      <PageHeader title="RRA payments" />
+      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
+        Statutory payments made to the RRA and RSSB. Each one clears the matching liability
+        account, so what is left on those accounts is what is genuinely still owed.
       </p>
 
-      {q.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
+      <div className="flex flex-wrap gap-6 rounded-lg border border-line bg-surface-0 px-4 py-3 text-sm">
+        <span className="flex items-center gap-2 text-ink-600">
+          <Landmark className="h-4 w-4 text-ink-400" /> {payments.length} payment
+          {payments.length === 1 ? "" : "s"}
+        </span>
+        <span>
+          <span className="text-ink-500">Total paid </span>
+          <strong className="tabular-nums">{money(total)}</strong>
+        </span>
+      </div>
 
-      {q.data && q.data.results.length === 0 && (
-        <Card>
-          <p className="py-6 text-center text-sm text-ink-500">
-            No tax payments recorded yet. New RRA remittances appear here once approved.
-          </p>
-        </Card>
-      )}
-
-      {q.data && q.data.results.length > 0 && (
-        <Card>
-          <table className="w-full text-sm">
-            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="py-2">Payment #</th>
-                <th className="py-2">Paid on</th>
-                <th className="py-2">Period</th>
-                <th className="py-2">Method</th>
-                <th className="py-2">RRA reference</th>
-                <th className="py-2 text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {q.data.results.map((p) => (
-                <tr key={p.id} className="border-b border-line/50">
-                  <td className="py-2 font-medium text-ink-900">{p.payment_number || `TAX#${p.id}`}</td>
-                  <td className="py-2 text-ink-700">{p.paid_on}</td>
-                  <td className="py-2 text-ink-700">{p.period_start} → {p.period_end}</td>
-                  <td className="py-2">
-                    <Badge>{p.method}</Badge>
-                  </td>
-                  <td className="py-2 text-ink-700">{p.rra_reference || "—"}</td>
-                  <td className="py-2 text-right tabular-nums font-medium">RWF {money(p.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      <DataGrid
+        rows={payments}
+        loading={isLoading}
+        getRowId={(p) => p.id}
+        storageKey="finance.tax-payments"
+        exportName="rra-payments"
+        searchPlaceholder="Search reference or period…"
+        emptyMessage="No statutory payments recorded."
+        columns={[
+          { key: "payment_number", header: "Payment", value: (p) => p.payment_number },
+          {
+            key: "period",
+            header: "Period covered",
+            value: (p) => p.period_end,
+            render: (p) => `${shortDate(p.period_start)} – ${shortDate(p.period_end)}`,
+          },
+          {
+            key: "amount",
+            header: "Amount",
+            numeric: true,
+            align: "right",
+            value: (p) => Number(p.amount),
+            render: (p) => money(p.amount),
+          },
+          {
+            key: "method",
+            header: "Method",
+            value: (p) => p.method,
+            render: (p) => <Badge tone="info">{p.method}</Badge>,
+          },
+          {
+            key: "paid_on",
+            header: "Paid on",
+            value: (p) => p.paid_on,
+            render: (p) => shortDate(p.paid_on),
+          },
+          { key: "rra_reference", header: "RRA reference", value: (p) => p.rra_reference },
+          { key: "created_by_name", header: "Recorded by", value: (p) => p.created_by_name ?? "—" },
+        ]}
+      />
     </div>
   );
 }

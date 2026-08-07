@@ -1,770 +1,661 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Banknote,
+  CloudOff,
+  CreditCard,
   Minus,
   Plus,
-  Receipt,
-  RotateCcw,
-  Search,
-  ShieldAlert,
-  ShoppingCart,
+  ScanLine,
+  Smartphone,
   Trash2,
-  X,
+  TriangleAlert,
+  WifiOff,
 } from "lucide-react";
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { Button, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
-import { DrawerBar } from "../components/DrawerBar";
-import { api, ApiError } from "../lib/api";
-import { useAuth } from "../lib/auth";
-import type {
-  InventoryBatch,
-  Organization,
-  Paginated,
-  PaymentMethod,
-  PharmacyProduct,
-  Sale,
-} from "../lib/types";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Drawer, ErrorNote, Field, Grid, Input, Section } from "../components/RecordKit";
+import { Badge, Button } from "../components/ui";
+import { api } from "../lib/api";
+import { money } from "../lib/format";
+import {
+  enqueue,
+  flush,
+  newClientReference,
+  queueSize,
+  watchConnectivity,
+  type QueuedSale,
+} from "../lib/offlineQueue";
+import { useDefaultOrg } from "../lib/recordData";
+import type { ActivePromotion, ScanResult } from "../lib/retail";
 
-interface CartLine {
+interface Line {
   product: number;
-  name: string;
-  unit_price: number;
-  tax_rate: number;
+  label: string;
   quantity: number;
-  in_stock: number;
+  unit_price: string;
+  tax_rate: string;
   requires_prescription: boolean;
   is_controlled: boolean;
+  on_hand: number;
 }
 
-interface Dispensing {
-  patient_name: string;
-  patient_id_number: string;
-  prescriber_name: string;
-  prescriber_license: string;
-  prescription_reference: string;
-}
+type Tender = "CASH" | "MOBILE_MONEY" | "CARD";
 
-const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
-  { value: "CASH", label: "Cash" },
-  { value: "MOBILE_MONEY", label: "Mobile money" },
-  { value: "CARD", label: "Card" },
+const TENDERS: { key: Tender; label: string; hotkey: string; icon: typeof Banknote }[] = [
+  { key: "CASH", label: "Cash", hotkey: "F2", icon: Banknote },
+  { key: "MOBILE_MONEY", label: "Mobile money", hotkey: "F3", icon: Smartphone },
+  { key: "CARD", label: "Card", hotkey: "F4", icon: CreditCard },
 ];
 
-const money = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+/* -------------------------------------------------------------------------- */
 
-function OrgPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const orgs = useQuery({
-    queryKey: ["organizations"],
-    queryFn: () => api<Paginated<Organization>>("/api/organizations/"),
-  });
-  const retails = (orgs.data?.results ?? []).filter((o) => o.type === "RETAIL");
-  return (
-    <SelectField label="Selling pharmacy" value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">— select pharmacy —</option>
-      {retails.map((o) => (
-        <option key={o.id} value={o.id}>
-          {o.name}
-        </option>
-      ))}
-    </SelectField>
-  );
+/** The till's own arithmetic. Recomputed locally so the totals keep working
+ *  with no connection — the server agrees, it does not decide. */
+function totals(lines: Line[], discount: number) {
+  const gross = lines.reduce((s, l) => s + Number(l.unit_price) * l.quantity, 0);
+  const net = Math.max(gross - discount, 0);
+  const tax = lines.reduce((s, l) => {
+    const rate = Number(l.tax_rate);
+    if (rate <= 0) return s;
+    const lineTotal = Number(l.unit_price) * l.quantity;
+    return s + (lineTotal * rate) / (100 + rate);
+  }, 0);
+  return { gross, net, tax };
 }
 
-export function PosPage() {
-  const { user } = useAuth();
-  const qc = useQueryClient();
-  const [pickedOrg, setPickedOrg] = useState("");
-  const orgId = user?.organization ?? (pickedOrg ? Number(pickedOrg) : null);
+/* -------------------------------------------------------------------------- */
 
-  const [search, setSearch] = useState("");
-  const [cart, setCart] = useState<CartLine[]>([]);
-  const [method, setMethod] = useState<PaymentMethod>("CASH");
-  const [tendered, setTendered] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [lastSale, setLastSale] = useState<Sale | null>(null);
-  const [salesOpen, setSalesOpen] = useState(false);
-  const [returning, setReturning] = useState<Sale | null>(null);
-
-  const listings = useQuery({
-    queryKey: ["pos-listings", orgId],
-    enabled: Boolean(orgId),
-    queryFn: () =>
-      api<Paginated<PharmacyProduct>>(`/api/inventory/pharmacy-products/?organization=${orgId}`),
-  });
-  const batches = useQuery({
-    queryKey: ["pos-batches", orgId],
-    enabled: Boolean(orgId),
-    queryFn: () => api<Paginated<InventoryBatch>>(`/api/inventory/batches/?organization=${orgId}`),
-  });
-
-  // Sellable on-hand per product: active AND not expired. Expired batches are
-  // excluded so the counter can never ring up lapsed stock.
-  const stockByProduct = useMemo(() => {
-    const m = new Map<number, number>();
-    for (const b of batches.data?.results ?? []) {
-      if (b.status === "ACTIVE" && b.days_to_expiry >= 0)
-        m.set(b.product, (m.get(b.product) ?? 0) + b.quantity_available);
-    }
-    return m;
-  }, [batches.data]);
-
-  const sellable = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return (listings.data?.results ?? [])
-      .filter((l) => l.is_active && l.retail_price !== null)
-      .filter((l) => (q ? l.product_name.toLowerCase().includes(q) : true));
-  }, [listings.data, search]);
-
-  const total = cart.reduce((s, l) => s + l.unit_price * l.quantity, 0);
-  const tenderedNum = Number(tendered) || 0;
-  const change = Math.max(0, tenderedNum - total);
-
-  function addToCart(l: PharmacyProduct) {
-    const inStock = stockByProduct.get(l.product) ?? 0;
-    setError(null);
-    setCart((c) => {
-      const found = c.find((x) => x.product === l.product);
-      if (found) {
-        if (found.quantity + 1 > inStock) {
-          setError(`Only ${inStock} of ${l.product_name} in stock.`);
-          return c;
-        }
-        return c.map((x) => (x.product === l.product ? { ...x, quantity: x.quantity + 1 } : x));
-      }
-      if (inStock < 1) {
-        setError(`${l.product_name} is out of stock.`);
-        return c;
-      }
-      return [
-        ...c,
-        {
-          product: l.product,
-          name: l.product_name,
-          unit_price: Number(l.retail_price),
-          tax_rate: 0,
-          quantity: 1,
-          in_stock: inStock,
-          requires_prescription: l.requires_prescription,
-          is_controlled: l.is_controlled,
-        },
-      ];
-    });
-  }
-
-  function setQty(product: number, delta: number) {
-    setCart((c) =>
-      c
-        .map((x) => {
-          if (x.product !== product) return x;
-          const q = Math.min(Math.max(0, x.quantity + delta), x.in_stock);
-          return { ...x, quantity: q };
-        })
-        .filter((x) => x.quantity > 0),
-    );
-  }
-
-  // A sale with any prescription-only or controlled item must be dispensed by a
-  // pharmacist and carry patient + prescriber details.
-  const needsRx = cart.some((l) => l.requires_prescription || l.is_controlled);
-  const isPharmacist =
-    !!user &&
-    (user.is_superuser || user.roles.includes("PHARMACIST") || user.roles.includes("SYS_ADMIN"));
-  const [dispensingOpen, setDispensingOpen] = useState(false);
-
-  const complete = useMutation({
-    mutationFn: (dispensing?: Dispensing) =>
-      api<Sale>("/api/retail/sales/", {
-        method: "POST",
-        body: JSON.stringify({
-          organization: orgId,
-          items: cart.map((l) => ({ product: l.product, quantity: l.quantity })),
-          payments: [{ method, amount: String(tenderedNum) }],
-          ...(dispensing ? { dispensing } : {}),
-        }),
-      }),
-    onSuccess: (sale) => {
-      setLastSale(sale);
-      setCart([]);
-      setTendered("");
-      setError(null);
-      setDispensingOpen(false);
-      void qc.invalidateQueries({ queryKey: ["pos-batches", orgId] });
-      void qc.invalidateQueries({ queryKey: ["drawer-current", orgId] });
-    },
-    onError: (err) =>
-      setError(err instanceof ApiError ? err.message : "Could not complete the sale."),
-  });
-
-  function submit() {
-    setError(null);
-    if (cart.length === 0) return setError("Add at least one item.");
-    if (method === "CASH" && tenderedNum < total)
-      return setError("Cash tendered does not cover the total.");
-    if (needsRx) {
-      if (!isPharmacist)
-        return setError("This sale has prescription/controlled items — a pharmacist must complete it.");
-      setDispensingOpen(true); // capture prescription details before charging
-      return;
-    }
-    complete.mutate(undefined);
-  }
-
-  // For non-cash the exact amount is charged; keep the field in sync for clarity.
-  const effectiveTendered = method === "CASH" ? tendered : String(total);
-
-  if (!orgId) {
-    return (
-      <div>
-        <PageHeader title="Point of sale" />
-        <div className="max-w-sm rounded-lg border border-line bg-surface-0 p-5">
-          <p className="mb-3 text-sm text-ink-600">
-            Choose the pharmacy you're selling for to open the till.
-          </p>
-          <OrgPicker value={pickedOrg} onChange={setPickedOrg} />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <PageHeader
-        title="Point of sale"
-        action={
-          <Button variant="secondary" onClick={() => setSalesOpen(true)}>
-            <RotateCcw className="h-4 w-4" /> Sales &amp; returns
-          </Button>
-        }
-      />
-      <DrawerBar orgId={orgId} />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px]">
-        {/* Catalog */}
-        <div>
-          <div className="mb-3 flex items-center gap-2 rounded-md border border-line bg-surface-0 px-3 py-2">
-            <Search className="h-4 w-4 text-ink-500" />
-            <input
-              className="w-full bg-transparent text-sm outline-none"
-              placeholder="Search this pharmacy's products…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              autoFocus
-            />
-          </div>
-          {(listings.isLoading || batches.isLoading) && (
-            <div className="flex justify-center py-10">
-              <Spinner />
-            </div>
-          )}
-          {listings.data && (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {sellable.map((l) => {
-                const inStock = stockByProduct.get(l.product) ?? 0;
-                const out = inStock < 1;
-                return (
-                  <button
-                    key={l.id}
-                    onClick={() => addToCart(l)}
-                    disabled={out}
-                    className="flex flex-col items-start rounded-lg border border-line bg-surface-0 p-3 text-left transition-colors hover:border-brand-600 hover:bg-brand-50/40 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {l.product_image ? (
-                      <img
-                        src={l.product_image}
-                        alt=""
-                        className="mb-2 h-16 w-full rounded-md border border-line object-contain"
-                        onError={(e) => (e.currentTarget.style.display = "none")}
-                      />
-                    ) : null}
-                    <span className="line-clamp-2 text-sm font-medium text-ink-900">
-                      {l.product_name}
-                    </span>
-                    {l.requires_prescription && (
-                      <span className="mt-0.5 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-                        Rx
-                      </span>
-                    )}
-                    <span className="mt-1 font-mono text-sm text-brand-700">
-                      {money(Number(l.retail_price))} RWF
-                    </span>
-                    <span
-                      className={`mt-0.5 text-xs ${out ? "text-red-600" : "text-ink-500"}`}
-                    >
-                      {out ? "Out of stock" : `${inStock} in stock`}
-                    </span>
-                  </button>
-                );
-              })}
-              {sellable.length === 0 && (
-                <p className="col-span-full py-8 text-center text-sm text-ink-500">
-                  {search ? "No products match." : "This pharmacy has no priced products yet."}
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Cart / payment */}
-        <div className="lg:sticky lg:top-20 lg:self-start">
-          <div className="flex flex-col rounded-lg border border-line bg-surface-0">
-            <div className="flex items-center gap-2 border-b border-line px-4 py-3">
-              <ShoppingCart className="h-4 w-4 text-ink-500" />
-              <span className="text-sm font-semibold">Current sale</span>
-              {cart.length > 0 && (
-                <button
-                  onClick={() => setCart([])}
-                  className="ml-auto text-xs text-ink-500 hover:text-red-600"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-
-            <div className="max-h-[40vh] overflow-y-auto">
-              {cart.length === 0 && (
-                <p className="px-4 py-8 text-center text-sm text-ink-500">
-                  Tap a product to start a sale.
-                </p>
-              )}
-              {cart.map((l) => (
-                <div
-                  key={l.product}
-                  className="flex items-center gap-2 border-b border-line px-4 py-2 last:border-0"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-ink-900">{l.name}</div>
-                    <div className="font-mono text-xs text-ink-500">
-                      {money(l.unit_price)} × {l.quantity} = {money(l.unit_price * l.quantity)}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setQty(l.product, -1)}
-                      className="rounded-md border border-line p-1 text-ink-600 hover:bg-surface-100"
-                      aria-label="Decrease"
-                    >
-                      <Minus className="h-3.5 w-3.5" />
-                    </button>
-                    <span className="w-6 text-center text-sm tabular-nums">{l.quantity}</span>
-                    <button
-                      onClick={() => setQty(l.product, 1)}
-                      disabled={l.quantity >= l.in_stock}
-                      className="rounded-md border border-line p-1 text-ink-600 hover:bg-surface-100 disabled:opacity-40"
-                      aria-label="Increase"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={() => setCart((c) => c.filter((x) => x.product !== l.product))}
-                      className="ml-1 rounded-md p-1 text-ink-500 hover:bg-red-50 hover:text-red-600"
-                      aria-label="Remove"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="border-t border-line p-4">
-              <div className="mb-3 flex items-baseline justify-between">
-                <span className="text-sm text-ink-600">Total</span>
-                <span className="font-mono text-xl font-semibold text-ink-900">
-                  {money(total)} <span className="text-sm font-normal text-ink-500">RWF</span>
-                </span>
-              </div>
-              <p className="mb-3 -mt-2 text-xs text-ink-500">VAT is included and itemised on the receipt.</p>
-
-              <div className="grid grid-cols-2 gap-2">
-                <SelectField
-                  label="Payment"
-                  value={method}
-                  onChange={(e) => setMethod(e.target.value as PaymentMethod)}
-                >
-                  {PAYMENT_METHODS.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </SelectField>
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-medium uppercase tracking-wide text-ink-500">
-                    {method === "CASH" ? "Cash tendered" : "Amount"}
-                  </span>
-                  <input
-                    type="number"
-                    value={effectiveTendered}
-                    onChange={(e) => setTendered(e.target.value)}
-                    disabled={method !== "CASH"}
-                    placeholder={String(total)}
-                    className="rounded-md border border-line bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-600 disabled:opacity-60"
-                  />
-                </label>
-              </div>
-
-              {method === "CASH" && tenderedNum > 0 && (
-                <div className="mt-2 flex justify-between text-sm">
-                  <span className="text-ink-600">Change</span>
-                  <span className="font-mono font-semibold text-ink-900">{money(change)} RWF</span>
-                </div>
-              )}
-
-              {needsRx && (
-                <div
-                  className={`mt-3 flex items-start gap-2 rounded-md px-3 py-2 text-xs ${
-                    isPharmacist ? "bg-amber-50 text-amber-800" : "bg-red-50 text-red-700"
-                  }`}
-                >
-                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                  {isPharmacist
-                    ? "This sale has prescription/controlled items — you'll record the patient & prescriber before charging."
-                    : "This sale has prescription/controlled items — a pharmacist must complete it."}
-                </div>
-              )}
-
-              {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-
-              <Button
-                className="mt-3 w-full"
-                onClick={submit}
-                disabled={complete.isPending || cart.length === 0 || (needsRx && !isPharmacist)}
-              >
-                {complete.isPending
-                  ? "Completing…"
-                  : needsRx
-                    ? `Dispense & charge ${money(total)} RWF`
-                    : `Charge ${money(total)} RWF`}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {dispensingOpen && (
-        <DispensingModal
-          pending={complete.isPending}
-          error={error}
-          onSubmit={(d) => complete.mutate(d)}
-          onClose={() => setDispensingOpen(false)}
-        />
-      )}
-      {lastSale && (
-        <SaleReceiptModal
-          sale={lastSale}
-          onClose={() => setLastSale(null)}
-          onReturn={() => {
-            setReturning(lastSale);
-            setLastSale(null);
-          }}
-        />
-      )}
-      {salesOpen && orgId && (
-        <RecentSalesModal
-          orgId={orgId}
-          onReturn={(s) => {
-            setSalesOpen(false);
-            setReturning(s);
-          }}
-          onClose={() => setSalesOpen(false)}
-        />
-      )}
-      {returning && <ReturnModal sale={returning} onClose={() => setReturning(null)} />}
-    </div>
-  );
-}
-
-function RecentSalesModal({
-  orgId,
-  onReturn,
+function DispensingDrawer({
   onClose,
+  onConfirm,
 }: {
-  orgId: number;
-  onReturn: (s: Sale) => void;
   onClose: () => void;
+  onConfirm: (details: Record<string, string>) => void;
 }) {
-  const { data, isLoading } = useQuery({
-    queryKey: ["recent-sales", orgId],
-    queryFn: () =>
-      api<Paginated<Sale>>(`/api/retail/sales/?organization=${orgId}&status=COMPLETED`),
-  });
-  return (
-    <Modal title="Recent sales" onClose={onClose}>
-      {isLoading && (
-        <div className="flex justify-center py-6">
-          <Spinner />
-        </div>
-      )}
-      <div className="max-h-[60vh] overflow-y-auto">
-        {(data?.results ?? []).map((s) => (
-          <div
-            key={s.id}
-            className="flex items-center justify-between border-b border-line py-2 last:border-0"
-          >
-            <div>
-              <div className="font-mono text-sm">{s.sale_number}</div>
-              <div className="text-xs text-ink-500">
-                {new Date(s.created_at).toLocaleString()} · {money(Number(s.total))} RWF
-              </div>
-            </div>
-            <Button variant="secondary" onClick={() => onReturn(s)}>
-              <RotateCcw className="h-4 w-4" /> Return
-            </Button>
-          </div>
-        ))}
-        {data?.results.length === 0 && (
-          <p className="py-6 text-center text-sm text-ink-500">No completed sales yet.</p>
-        )}
-      </div>
-    </Modal>
-  );
-}
-
-function ReturnModal({ sale, onClose }: { sale: Sale; onClose: () => void }) {
-  const qc = useQueryClient();
-  const [qty, setQty] = useState<Record<number, number>>({});
-  const [reason, setReason] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const returnable = sale.items.filter((it) => (it.quantity - (it.returned_quantity ?? 0)) > 0);
-
-  const refund = returnable.reduce(
-    (s, it) => s + (qty[it.id!] ?? 0) * Number(it.unit_price ?? 0),
-    0,
-  );
-
-  const doReturn = useMutation({
-    mutationFn: () =>
-      api<Sale>(`/api/retail/sales/${sale.id}/return/`, {
-        method: "POST",
-        body: JSON.stringify({
-          reason,
-          lines: returnable
-            .filter((it) => (qty[it.id!] ?? 0) > 0)
-            .map((it) => ({ sale_item: it.id, quantity: qty[it.id!] })),
-        }),
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["pos-batches", sale.organization] });
-      void qc.invalidateQueries({ queryKey: ["recent-sales", sale.organization] });
-      onClose();
-    },
-    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not process return."),
-  });
-
-  return (
-    <Modal title={`Return · ${sale.sale_number}`} onClose={onClose}>
-      <div className="flex flex-col gap-4">
-        {returnable.length === 0 && (
-          <p className="text-sm text-ink-500">Everything on this sale has been returned.</p>
-        )}
-        {returnable.map((it) => {
-          const max = it.quantity - (it.returned_quantity ?? 0);
-          return (
-            <div key={it.id} className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium">{it.product_name}</div>
-                <div className="text-xs text-ink-500">
-                  {max} returnable · {money(Number(it.unit_price))} each
-                </div>
-              </div>
-              <input
-                type="number"
-                min={0}
-                max={max}
-                value={qty[it.id!] ?? 0}
-                onChange={(e) =>
-                  setQty((q) => ({
-                    ...q,
-                    [it.id!]: Math.max(0, Math.min(max, Number(e.target.value))),
-                  }))
-                }
-                className="w-20 rounded-md border border-line bg-surface-0 px-2 py-1 text-right text-sm outline-none focus:border-brand-600"
-              />
-            </div>
-          );
-        })}
-        <TextField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. wrong item, damaged" />
-        <div className="flex items-baseline justify-between border-t border-line pt-2 text-sm">
-          <span className="text-ink-600">Refund</span>
-          <span className="font-mono text-lg font-semibold">{money(refund)} RWF</span>
-        </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={() => doReturn.mutate()} disabled={refund <= 0 || doReturn.isPending}>
-            {doReturn.isPending ? "Processing…" : `Refund ${money(refund)} RWF`}
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function DispensingModal({
-  pending,
-  error,
-  onSubmit,
-  onClose,
-}: {
-  pending: boolean;
-  error: string | null;
-  onSubmit: (d: Dispensing) => void;
-  onClose: () => void;
-}) {
-  const [d, setD] = useState<Dispensing>({
+  const [form, setForm] = useState({
     patient_name: "",
     patient_id_number: "",
     prescriber_name: "",
     prescriber_license: "",
     prescription_reference: "",
   });
-  const set = <K extends keyof Dispensing>(k: K, v: string) => setD((p) => ({ ...p, [k]: v }));
-  const ready = d.patient_name.trim() && d.prescriber_name.trim();
+  const set = (patch: Partial<typeof form>) => setForm({ ...form, ...patch });
 
   return (
-    <Modal title="Dispense prescription / controlled items" onClose={onClose}>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (ready) onSubmit(d);
-        }}
-        className="flex flex-col gap-4"
-      >
-        <p className="text-sm text-ink-500">
-          Recorded in the dispensing log with you as the dispensing pharmacist.
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          <TextField label="Patient name" value={d.patient_name} onChange={(e) => set("patient_name", e.target.value)} required autoFocus />
-          <TextField label="Patient ID / passport" value={d.patient_id_number} onChange={(e) => set("patient_id_number", e.target.value)} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <TextField label="Prescribing doctor" value={d.prescriber_name} onChange={(e) => set("prescriber_name", e.target.value)} required />
-          <TextField label="Doctor licence no." value={d.prescriber_license} onChange={(e) => set("prescriber_license", e.target.value)} />
-        </div>
-        <TextField label="Prescription reference" value={d.prescription_reference} onChange={(e) => set("prescription_reference", e.target.value)} />
-        {error && <p className="text-sm text-red-600">{error}</p>}
+    <Drawer
+      title="Dispensing details"
+      subtitle="Required before a prescription-only or controlled item can leave the counter."
+      width="max-w-2xl"
+      onClose={onClose}
+      footer={
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={!ready || pending}>{pending ? "Dispensing…" : "Confirm & charge"}</Button>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => onConfirm(form)}
+            disabled={!form.patient_name.trim() || !form.prescriber_name.trim()}
+          >
+            Confirm &amp; take payment
+          </Button>
         </div>
-      </form>
-    </Modal>
+      }
+    >
+      <Section title="Patient">
+        <Grid cols={2}>
+          <Field label="Name">
+            <Input
+              autoFocus
+              value={form.patient_name}
+              onChange={(e) => set({ patient_name: e.target.value })}
+            />
+          </Field>
+          <Field label="ID number">
+            <Input
+              value={form.patient_id_number}
+              onChange={(e) => set({ patient_id_number: e.target.value })}
+            />
+          </Field>
+        </Grid>
+      </Section>
+      <Section title="Prescriber">
+        <Grid cols={2}>
+          <Field label="Doctor">
+            <Input
+              value={form.prescriber_name}
+              onChange={(e) => set({ prescriber_name: e.target.value })}
+            />
+          </Field>
+          <Field label="Licence">
+            <Input
+              value={form.prescriber_license}
+              onChange={(e) => set({ prescriber_license: e.target.value })}
+            />
+          </Field>
+        </Grid>
+        <Field label="Prescription reference">
+          <Input
+            value={form.prescription_reference}
+            onChange={(e) => set({ prescription_reference: e.target.value })}
+          />
+        </Field>
+      </Section>
+    </Drawer>
   );
 }
 
-function SaleReceiptModal({
-  sale,
-  onClose,
-  onReturn,
-}: {
-  sale: Sale;
-  onClose: () => void;
-  onReturn: () => void;
-}) {
-  const qc = useQueryClient();
-  const [voiding, setVoiding] = useState(false);
-  const [reason, setReason] = useState("");
-  const [status, setStatus] = useState(sale.status);
+/* -------------------------------------------------------------------------- */
 
-  const voidSale = useMutation({
-    mutationFn: () =>
-      api<Sale>(`/api/retail/sales/${sale.id}/void/`, {
-        method: "POST",
-        body: JSON.stringify({ reason }),
-      }),
-    onSuccess: (s) => {
-      setStatus(s.status);
-      setVoiding(false);
-      void qc.invalidateQueries({ queryKey: ["pos-batches", sale.organization] });
+export function PosPage() {
+  const { orgId } = useDefaultOrg();
+  const qc = useQueryClient();
+  const scanRef = useRef<HTMLInputElement>(null);
+
+  const [lines, setLines] = useState<Line[]>([]);
+  const [code, setCode] = useState("");
+  const [notice, setNotice] = useState<{ text: string; tone: "info" | "warn" } | null>(null);
+  const [tenders, setTenders] = useState<Record<Tender, string>>({
+    CASH: "",
+    MOBILE_MONEY: "",
+    CARD: "",
+  });
+  const [couponCode, setCouponCode] = useState("");
+  const [discount, setDiscount] = useState(0);
+  const [dispensingOpen, setDispensingOpen] = useState(false);
+  const [online, setOnline] = useState(navigator.onLine);
+  const [pending, setPending] = useState(0);
+
+  const { gross, net, tax } = useMemo(() => totals(lines, discount), [lines, discount]);
+  const tendered = useMemo(
+    () => Object.values(tenders).reduce((s, v) => s + Number(v || 0), 0),
+    [tenders],
+  );
+  const needsPharmacist = lines.some((l) => l.requires_prescription || l.is_controlled);
+
+  /* The scan field is the till's home position. Anything that steals focus has
+     to give it back, or the next scan lands in the wrong box. */
+  const focusScan = useCallback(() => {
+    window.setTimeout(() => scanRef.current?.focus(), 0);
+  }, []);
+
+  useEffect(focusScan, [focusScan]);
+
+  const refreshQueue = useCallback(() => {
+    void queueSize().then(setPending);
+  }, []);
+  useEffect(refreshQueue, [refreshQueue]);
+
+  const drain = useCallback(async () => {
+    const result = await flush((sale) =>
+      api("/api/retail/offline/sync/", { method: "POST", body: JSON.stringify(sale) }),
+    );
+    setPending(result.remaining);
+    if (result.synced > 0) {
+      setNotice({ text: `${result.synced} queued sale(s) synced.`, tone: "info" });
+      void qc.invalidateQueries({ queryKey: ["sales"] });
+    }
+    return result;
+  }, [qc]);
+
+  useEffect(() => {
+    const stop = watchConnectivity((up) => {
+      setOnline(up);
+      if (up) void drain();
+    });
+    // `online` fires when the interface comes up, not when the server is
+    // reachable, so the queue is also retried on a timer.
+    const timer = window.setInterval(() => {
+      if (navigator.onLine) void drain();
+    }, 30_000);
+    return () => {
+      stop();
+      window.clearInterval(timer);
+    };
+  }, [drain]);
+
+  const { data: promotions = [] } = useQuery({
+    queryKey: ["active-promotions"],
+    enabled: online,
+    queryFn: () => api<ActivePromotion[]>("/api/retail/counter/promotions/"),
+  });
+
+  /* ---------------------------------------------------------------- scanning */
+
+  const addLine = useCallback((hit: Extract<ScanResult, { found: true }>) => {
+    setLines((current) => {
+      const existing = current.findIndex((l) => l.product === hit.product);
+      if (existing >= 0) {
+        const copy = [...current];
+        copy[existing] = { ...copy[existing], quantity: copy[existing].quantity + hit.units };
+        return copy;
+      }
+      return [
+        ...current,
+        {
+          product: hit.product,
+          label: hit.label,
+          // A carton barcode adds the carton, not one tablet.
+          quantity: hit.units,
+          unit_price: hit.unit_price || "0",
+          tax_rate: "18",
+          requires_prescription: hit.requires_prescription,
+          is_controlled: hit.is_controlled,
+          on_hand: hit.on_hand,
+        },
+      ];
+    });
+  }, []);
+
+  const scan = useMutation({
+    mutationFn: (value: string) =>
+      api<ScanResult>(
+        `/api/retail/counter/scan/?organization=${orgId}&code=${encodeURIComponent(value)}`,
+      ),
+    onSuccess: (result) => {
+      if (result.found) {
+        addLine(result);
+        setNotice(
+          result.on_hand <= 0
+            ? { text: `${result.label} shows no stock on hand.`, tone: "warn" }
+            : null,
+        );
+      }
+      setCode("");
+      focusScan();
+    },
+    onError: () => {
+      setNotice({ text: `Nothing matches ${code}.`, tone: "warn" });
+      setCode("");
+      focusScan();
     },
   });
 
+  /* -------------------------------------------------------------- promotions */
+
+  const applyCoupon = useMutation({
+    mutationFn: (value: string) =>
+      api<{ applied: boolean; reason: string; discount: string }>(
+        "/api/retail/counter/apply-promotion/",
+        { method: "POST", body: JSON.stringify({ code: value, organization: orgId }) },
+      ),
+    onSuccess: (result) => {
+      setDiscount(result.applied ? Number(result.discount) : 0);
+      setNotice({ text: result.reason, tone: result.applied ? "info" : "warn" });
+      focusScan();
+    },
+  });
+
+  /* ---------------------------------------------------------------- checkout */
+
+  const setTender = (key: Tender, value: string) =>
+    setTenders((current) => ({ ...current, [key]: value }));
+
+  const payExactly = (key: Tender) => {
+    const outstanding = Math.max(net - tendered, 0);
+    if (outstanding > 0) setTender(key, String(outstanding));
+  };
+
+  const reset = () => {
+    setLines([]);
+    setTenders({ CASH: "", MOBILE_MONEY: "", CARD: "" });
+    setDiscount(0);
+    setCouponCode("");
+    focusScan();
+  };
+
+  const takePayment = useCallback(
+    async (dispensing?: Record<string, string>) => {
+      if (lines.length === 0 || tendered < net) return;
+
+      const sale: QueuedSale = {
+        client_reference: newClientReference(),
+        organization: orgId ?? 0,
+        items: lines.map((l) => ({
+          product: l.product,
+          quantity: l.quantity,
+          unit_price: l.unit_price,
+          tax_rate: l.tax_rate,
+          label: l.label,
+        })),
+        payments: TENDERS.filter((t) => Number(tenders[t.key]) > 0).map((t) => ({
+          method: t.key,
+          amount: tenders[t.key],
+        })),
+        dispensing,
+        total: String(net),
+        queued_at: new Date().toISOString(),
+        attempts: 0,
+      };
+
+      // Queue first, send second. If the send fails the sale is already on disk;
+      // the other order loses it.
+      await enqueue(sale);
+      refreshQueue();
+      reset();
+
+      const result = await drain();
+      setNotice(
+        result.failed > 0
+          ? { text: "Sale held offline — it will sync when the connection returns.", tone: "warn" }
+          : { text: `Sale complete. Change ${money(tendered - net)}.`, tone: "info" },
+      );
+    },
+    [lines, tendered, net, tenders, orgId, drain, refreshQueue],
+  );
+
+  /* ---------------------------------------------------------------- keyboard */
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // A scanner is a keyboard that types fast and presses Enter. F-keys are
+      // the tender shortcuts a cashier learns in a day and then never looks at.
+      if (e.key === "F2" || e.key === "F3" || e.key === "F4") {
+        e.preventDefault();
+        const tender = TENDERS.find((t) => t.hotkey === e.key);
+        if (tender) payExactly(tender.key);
+        return;
+      }
+      if (e.key === "F8") {
+        e.preventDefault();
+        reset();
+        return;
+      }
+      if (e.key === "F9" && lines.length > 0 && tendered >= net) {
+        e.preventDefault();
+        if (needsPharmacist) setDispensingOpen(true);
+        else void takePayment();
+        return;
+      }
+      if (e.key === "Escape") {
+        focusScan();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  /* ------------------------------------------------------------------ render */
+
+  const outstanding = Math.max(net - tendered, 0);
+  const change = Math.max(tendered - net, 0);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4 sm:items-center">
-      <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-sm flex-col overflow-hidden rounded-lg border border-line bg-surface-0 shadow-xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3">
-          <div className="flex items-center gap-2">
-            <Receipt className="h-4 w-4 text-brand-600" />
-            <h2 className="text-base font-semibold">Sale complete</h2>
-          </div>
-          <button onClick={onClose} aria-label="Close" className="rounded-md px-2 text-ink-500 hover:bg-surface-100">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="overflow-y-auto p-5">
-          <div className="mb-3 rounded-lg bg-brand-50/60 p-3 text-center">
-            <div className="font-mono text-sm text-ink-600">{sale.sale_number}</div>
-            <div className="mt-1 font-mono text-2xl font-semibold text-ink-900">
-              {money(Number(sale.total))} RWF
+    <div className="flex h-[calc(100vh-7rem)] flex-col gap-3">
+      {/* Connection and queue state, always visible. A cashier must know the
+          till is holding sales without having to go looking. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-xl font-semibold tracking-tight text-ink-900">Counter</h1>
+        {online ? (
+          <Badge tone="success">Online</Badge>
+        ) : (
+          <Badge tone="warning">
+            <WifiOff className="mr-1 inline h-3 w-3" />
+            Offline — still selling
+          </Badge>
+        )}
+        {pending > 0 && (
+          <Badge tone="info">
+            <CloudOff className="mr-1 inline h-3 w-3" />
+            {pending} sale{pending === 1 ? "" : "s"} waiting to sync
+          </Badge>
+        )}
+        <span className="ml-auto text-xs text-ink-500">
+          F2 cash · F3 MoMo · F4 card · F8 clear · F9 pay
+        </span>
+      </div>
+
+      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[1fr_22rem]">
+        {/* Basket ------------------------------------------------------- */}
+        <div className="flex min-h-0 flex-col rounded-lg border border-line bg-surface-0">
+          <div className="border-b border-line p-3">
+            <div className="relative">
+              <ScanLine className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-400" />
+              <input
+                ref={scanRef}
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && code.trim()) {
+                    e.preventDefault();
+                    scan.mutate(code.trim());
+                  }
+                }}
+                placeholder="Scan a barcode, or type a code and press Enter"
+                className="h-12 w-full rounded-md border border-line bg-surface-0 pl-11 pr-3 text-base text-ink-900 outline-none focus:border-brand-500"
+                autoComplete="off"
+                spellCheck={false}
+              />
             </div>
-            {Number(sale.change_due) > 0 && (
-              <div className="mt-1 text-sm text-ink-600">
-                Change due: <b>{money(Number(sale.change_due))} RWF</b>
-              </div>
+            {notice && (
+              <p
+                className={`mt-2 flex items-center gap-1.5 text-sm ${
+                  notice.tone === "warn" ? "text-warning-700" : "text-ink-600"
+                }`}
+              >
+                {notice.tone === "warn" && <TriangleAlert className="h-3.5 w-3.5" />}
+                {notice.text}
+              </p>
             )}
           </div>
-          <dl className="mb-4 space-y-1 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-ink-500">Subtotal (excl. VAT)</dt>
-              <dd className="font-mono">{money(Number(sale.subtotal))}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-ink-500">VAT</dt>
-              <dd className="font-mono">{money(Number(sale.tax_total))}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-ink-500">Tendered</dt>
-              <dd className="font-mono">{money(Number(sale.amount_tendered))}</dd>
-            </div>
-          </dl>
 
-          {status === "VOIDED" ? (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-center text-sm font-medium text-red-700">
-              This sale has been voided — stock returned.
-            </p>
-          ) : voiding ? (
-            <div className="flex flex-col gap-2">
-              <input
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Reason for voiding…"
-                className="rounded-md border border-line bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-600"
-                autoFocus
-              />
-              <div className="flex gap-2">
-                <Button variant="secondary" className="flex-1" onClick={() => setVoiding(false)}>
-                  Cancel
-                </Button>
-                <button
-                  onClick={() => voidSale.mutate()}
-                  disabled={!reason.trim() || voidSale.isPending}
-                  className="flex-1 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-40"
-                >
-                  {voidSale.isPending ? "Voiding…" : "Confirm void"}
-                </button>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {lines.length === 0 ? (
+              <div className="flex h-full items-center justify-center p-8 text-center text-sm text-ink-500">
+                Scan the first item to start a sale.
               </div>
+            ) : (
+              <ul className="divide-y divide-line">
+                {lines.map((line, index) => (
+                  <li key={line.product} className="flex items-center gap-3 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate text-ink-900">{line.label}</span>
+                        {line.is_controlled && <Badge tone="danger">Controlled</Badge>}
+                        {line.requires_prescription && !line.is_controlled && (
+                          <Badge tone="warning">Rx</Badge>
+                        )}
+                      </div>
+                      <div className="text-xs text-ink-500">
+                        {money(line.unit_price)} each
+                        {line.quantity > line.on_hand && (
+                          <span className="ml-2 text-danger-700">
+                            only {line.on_hand} in stock
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        aria-label="Less"
+                        className="rounded border border-line p-1 text-ink-600 hover:bg-surface-100"
+                        onClick={() => {
+                          setLines((c) =>
+                            c
+                              .map((l, i) =>
+                                i === index ? { ...l, quantity: l.quantity - 1 } : l,
+                              )
+                              .filter((l) => l.quantity > 0),
+                          );
+                          focusScan();
+                        }}
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="w-10 text-center tabular-nums text-ink-900">
+                        {line.quantity}
+                      </span>
+                      <button
+                        aria-label="More"
+                        className="rounded border border-line p-1 text-ink-600 hover:bg-surface-100"
+                        onClick={() => {
+                          setLines((c) =>
+                            c.map((l, i) => (i === index ? { ...l, quantity: l.quantity + 1 } : l)),
+                          );
+                          focusScan();
+                        }}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <span className="w-24 shrink-0 text-right tabular-nums text-ink-900">
+                      {money(Number(line.unit_price) * line.quantity)}
+                    </span>
+                    <button
+                      aria-label="Remove"
+                      className="shrink-0 rounded p-1 text-ink-400 hover:text-danger-600"
+                      onClick={() => {
+                        setLines((c) => c.filter((_, i) => i !== index));
+                        focusScan();
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
+        {/* Payment ------------------------------------------------------ */}
+        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+          <div className="rounded-lg border border-line bg-surface-0 p-3">
+            <dl className="space-y-1 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-ink-600">Subtotal</dt>
+                <dd className="tabular-nums">{money(gross)}</dd>
+              </div>
+              {discount > 0 && (
+                <div className="flex justify-between text-success-700">
+                  <dt>Discount</dt>
+                  <dd className="tabular-nums">−{money(discount)}</dd>
+                </div>
+              )}
+              <div className="flex justify-between text-ink-500">
+                <dt>of which VAT</dt>
+                <dd className="tabular-nums">{money(tax)}</dd>
+              </div>
+              <div className="flex justify-between border-t border-line pt-2 text-lg font-semibold text-ink-900">
+                <dt>Total</dt>
+                <dd className="tabular-nums">{money(net)}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div className="rounded-lg border border-line bg-surface-0 p-3">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Coupon
             </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              <Link
-                to="/documents"
-                className="flex flex-1 items-center justify-center gap-2 rounded-md border border-line bg-surface-0 px-3 py-2 text-sm font-semibold text-ink-900 hover:bg-surface-100"
+            <div className="flex gap-2">
+              <Input
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                placeholder="SAVE10"
+                disabled={!online}
+              />
+              <Button
+                variant="secondary"
+                onClick={() => applyCoupon.mutate(couponCode)}
+                disabled={!couponCode.trim() || applyCoupon.isPending || !online}
               >
-                <Receipt className="h-4 w-4" /> Receipt
-              </Link>
-              <Button variant="secondary" className="flex-1" onClick={onReturn}>
-                <RotateCcw className="h-4 w-4" /> Return
-              </Button>
-              <Button variant="secondary" className="flex-1" onClick={() => setVoiding(true)}>
-                Void sale
+                Apply
               </Button>
             </div>
-          )}
-          <Button className="mt-3 w-full" onClick={onClose}>
-            New sale
-          </Button>
+            {promotions.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {promotions.slice(0, 4).map((p) => (
+                  <button
+                    key={p.code}
+                    className="rounded border border-line px-1.5 py-0.5 text-xs text-ink-600 hover:bg-surface-100"
+                    onClick={() => {
+                      setCouponCode(p.code);
+                      applyCoupon.mutate(p.code);
+                    }}
+                    title={p.name}
+                  >
+                    {p.code}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!online && (
+              <p className="mt-2 text-xs text-ink-500">
+                Coupons need the server. The sale can still be completed.
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-line bg-surface-0 p-3">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Tender
+            </div>
+            <div className="space-y-2">
+              {TENDERS.map(({ key, label, hotkey, icon: Icon }) => (
+                <div key={key} className="flex items-center gap-2">
+                  <button
+                    className="flex w-32 shrink-0 items-center gap-1.5 rounded-md border border-line px-2 py-1.5 text-sm text-ink-700 hover:bg-surface-100"
+                    onClick={() => payExactly(key)}
+                    title={`${label} — ${hotkey}`}
+                  >
+                    <Icon className="h-4 w-4 text-ink-400" />
+                    {label}
+                    <span className="ml-auto text-[10px] text-ink-400">{hotkey}</span>
+                  </button>
+                  <Input
+                    value={tenders[key]}
+                    onChange={(e) => setTender(key, e.target.value)}
+                    className="text-right tabular-nums"
+                    placeholder="0"
+                  />
+                </div>
+              ))}
+            </div>
+            <dl className="mt-3 space-y-1 border-t border-line pt-2 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-ink-600">Tendered</dt>
+                <dd className="tabular-nums">{money(tendered)}</dd>
+              </div>
+              <div
+                className={`flex justify-between font-semibold ${
+                  outstanding > 0 ? "text-danger-700" : "text-success-700"
+                }`}
+              >
+                <dt>{outstanding > 0 ? "Still to pay" : "Change"}</dt>
+                <dd className="tabular-nums">
+                  {money(outstanding > 0 ? outstanding : change)}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <ErrorNote error={scan.error ?? applyCoupon.error} />
+
+          <div className="mt-auto flex gap-2">
+            <Button variant="ghost" onClick={reset} disabled={lines.length === 0}>
+              Clear (F8)
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={() => (needsPharmacist ? setDispensingOpen(true) : void takePayment())}
+              disabled={lines.length === 0 || outstanding > 0}
+            >
+              {needsPharmacist ? "Dispense & pay" : "Take payment"} (F9)
+            </Button>
+          </div>
         </div>
       </div>
+
+      {dispensingOpen && (
+        <DispensingDrawer
+          onClose={() => {
+            setDispensingOpen(false);
+            focusScan();
+          }}
+          onConfirm={(details) => {
+            setDispensingOpen(false);
+            void takePayment(details);
+          }}
+        />
+      )}
     </div>
   );
 }

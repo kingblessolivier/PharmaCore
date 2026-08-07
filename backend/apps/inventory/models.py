@@ -82,18 +82,10 @@ class StorageZone(models.Model):
         "Warehouse", null=True, blank=True, on_delete=models.SET_NULL, related_name="zones"
     )
     name = models.CharField(max_length=100)
-    zone_type = models.CharField(
-        max_length=30, choices=ZoneType.choices, default=ZoneType.AMBIENT
-    )
-    temp_min_celsius = models.DecimalField(
-        max_digits=5, decimal_places=2, default=15.00
-    )
-    temp_max_celsius = models.DecimalField(
-        max_digits=5, decimal_places=2, default=25.00
-    )
-    humidity_max_percent = models.DecimalField(
-        max_digits=5, decimal_places=2, default=65.00
-    )
+    zone_type = models.CharField(max_length=30, choices=ZoneType.choices, default=ZoneType.AMBIENT)
+    temp_min_celsius = models.DecimalField(max_digits=5, decimal_places=2, default=15.00)
+    temp_max_celsius = models.DecimalField(max_digits=5, decimal_places=2, default=25.00)
+    humidity_max_percent = models.DecimalField(max_digits=5, decimal_places=2, default=65.00)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -101,9 +93,7 @@ class StorageZone(models.Model):
     class Meta:
         ordering = ["organization", "name"]
         constraints = [
-            models.UniqueConstraint(
-                fields=["organization", "name"], name="uniq_org_storage_zone"
-            )
+            models.UniqueConstraint(fields=["organization", "name"], name="uniq_org_storage_zone")
         ]
 
     def __str__(self) -> str:
@@ -113,9 +103,7 @@ class StorageZone(models.Model):
 class BinLocation(models.Model):
     """Specific aisle/shelf/bin location within a storage zone."""
 
-    zone = models.ForeignKey(
-        StorageZone, on_delete=models.CASCADE, related_name="bins"
-    )
+    zone = models.ForeignKey(StorageZone, on_delete=models.CASCADE, related_name="bins")
     aisle = models.CharField(max_length=20, blank=True, default="")
     shelf = models.CharField(max_length=20, blank=True, default="")
     bin_code = models.CharField(max_length=50)  # e.g., Z1-A02-S03-B04
@@ -125,9 +113,7 @@ class BinLocation(models.Model):
     class Meta:
         ordering = ["zone", "bin_code"]
         constraints = [
-            models.UniqueConstraint(
-                fields=["zone", "bin_code"], name="uniq_zone_bin_code"
-            )
+            models.UniqueConstraint(fields=["zone", "bin_code"], name="uniq_zone_bin_code")
         ]
 
     def __str__(self) -> str:
@@ -184,6 +170,14 @@ class InventoryBatch(models.Model):
     # Held for approved orders (not yet dispatched). Free-to-allocate = available - reserved.
     quantity_reserved = models.PositiveIntegerField(default=0)
     wholesale_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    # What the *selling* entity paid, when this lot came from another member of
+    # the group. `wholesale_cost` is the transfer price and carries the seller's
+    # margin; the group has not earned that margin until the goods leave the
+    # group, so consolidation needs both numbers to eliminate the difference.
+    # Null means unknown — either an outside purchase, or a transfer made before
+    # this field existed. Consolidation reports those separately rather than
+    # assuming zero margin.
+    origin_unit_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     storage_location = models.CharField(max_length=100, blank=True, default="")
     warehouse = models.ForeignKey(
         "Warehouse", null=True, blank=True, on_delete=models.SET_NULL, related_name="batches"
@@ -257,9 +251,7 @@ class TemperatureSensor(models.Model):
     organization = models.ForeignKey(
         "iam.Organization", on_delete=models.CASCADE, related_name="temp_sensors"
     )
-    zone = models.ForeignKey(
-        StorageZone, on_delete=models.CASCADE, related_name="sensors"
-    )
+    zone = models.ForeignKey(StorageZone, on_delete=models.CASCADE, related_name="sensors")
     device_id = models.CharField(max_length=100)
     name = models.CharField(max_length=100)
     device_type = models.CharField(
@@ -269,9 +261,7 @@ class TemperatureSensor(models.Model):
     model_number = models.CharField(max_length=100, blank=True, default="")
     serial_number = models.CharField(max_length=100, blank=True, default="")
     # Stated measurement uncertainty, e.g. ±0.50 °C — feeds excursion judgement.
-    accuracy_celsius = models.DecimalField(
-        max_digits=4, decimal_places=2, null=True, blank=True
-    )
+    accuracy_celsius = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
     installed_on = models.DateField(null=True, blank=True)
     last_calibration_date = models.DateField(null=True, blank=True)
     calibration_due_date = models.DateField(null=True, blank=True)
@@ -321,18 +311,17 @@ class SensorCalibration(models.Model):
     next_due_on = models.DateField()
     calibrated_by = models.CharField(max_length=150, blank=True, default="")
     # Deviation the lab measured against the reference standard.
-    deviation_celsius = models.DecimalField(
-        max_digits=5, decimal_places=3, null=True, blank=True
-    )
-    accuracy_celsius = models.DecimalField(
-        max_digits=4, decimal_places=2, null=True, blank=True
-    )
+    deviation_celsius = models.DecimalField(max_digits=5, decimal_places=3, null=True, blank=True)
+    accuracy_celsius = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
     result = models.CharField(max_length=10, choices=Result.choices, default=Result.PASS)
     reference_standard = models.CharField(max_length=150, blank=True, default="")
     certificate_url = models.CharField(max_length=255, blank=True, default="")
     notes = models.TextField(blank=True, default="")
     recorded_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="+",
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -357,13 +346,9 @@ class TemperatureLog(models.Model):
         WARNING = "WARNING", "Warning"
         CRITICAL_BREACH = "CRITICAL_BREACH", "Critical Excursion Breach"
 
-    sensor = models.ForeignKey(
-        TemperatureSensor, on_delete=models.CASCADE, related_name="logs"
-    )
+    sensor = models.ForeignKey(TemperatureSensor, on_delete=models.CASCADE, related_name="logs")
     temperature_celsius = models.DecimalField(max_digits=5, decimal_places=2)
-    humidity_percent = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True
-    )
+    humidity_percent = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     excursion_status = models.CharField(
         max_length=25, choices=ExcursionStatus.choices, default=ExcursionStatus.NORMAL
     )
@@ -412,11 +397,17 @@ class ExcursionInvestigation(models.Model):
     )
     reference_no = models.CharField(max_length=100, unique=True)
     sensor = models.ForeignKey(
-        TemperatureSensor, null=True, blank=True, on_delete=models.SET_NULL,
+        TemperatureSensor,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="investigations",
     )
     zone = models.ForeignKey(
-        StorageZone, null=True, blank=True, on_delete=models.SET_NULL,
+        StorageZone,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="investigations",
     )
     started_at = models.DateTimeField()
@@ -440,11 +431,17 @@ class ExcursionInvestigation(models.Model):
     disposition_rationale = models.TextField(blank=True, default="")
     status = models.CharField(max_length=15, choices=Status.choices, default=Status.OPEN)
     opened_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="opened_excursions",
     )
     qa_approver = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="approved_excursions",
     )
     closed_at = models.DateTimeField(null=True, blank=True)
@@ -469,13 +466,9 @@ class QualityCheck(models.Model):
     batch = models.ForeignKey(
         InventoryBatch, on_delete=models.CASCADE, related_name="quality_checks"
     )
-    inspector = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE
-    )
+    inspector = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     inspection_date = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(
-        max_length=20, choices=Status.choices, default=Status.PENDING_REVIEW
-    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING_REVIEW)
     visual_integrity_ok = models.BooleanField(default=True)
     temp_indicator_ok = models.BooleanField(default=True)
     coa_document_url = models.CharField(max_length=255, blank=True, default="")
@@ -504,9 +497,7 @@ class BatchRecall(models.Model):
     product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT)
     batch_number = models.CharField(max_length=100)
     reason = models.TextField()
-    status = models.CharField(
-        max_length=20, choices=Status.choices, default=Status.INITIATED
-    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.INITIATED)
     recalled_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -537,14 +528,16 @@ class StockCount(models.Model):
     count_type = models.CharField(
         max_length=20, choices=CountType.choices, default=CountType.CYCLE_COUNT
     )
-    status = models.CharField(
-        max_length=20, choices=Status.choices, default=Status.DRAFT
-    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
     counter_user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="counted_audits"
     )
     approver_user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="approved_audits"
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="approved_audits",
     )
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -559,9 +552,7 @@ class StockCount(models.Model):
 class StockCountItem(models.Model):
     """Individual line item variance in a stock count."""
 
-    stock_count = models.ForeignKey(
-        StockCount, on_delete=models.CASCADE, related_name="items"
-    )
+    stock_count = models.ForeignKey(StockCount, on_delete=models.CASCADE, related_name="items")
     batch = models.ForeignKey(InventoryBatch, on_delete=models.CASCADE)
     system_qty = models.IntegerField()
     counted_qty = models.IntegerField()
@@ -592,14 +583,12 @@ class StockDisposal(models.Model):
         "iam.Organization", on_delete=models.CASCADE, related_name="disposals"
     )
     disposal_no = models.CharField(max_length=100, unique=True)
-    status = models.CharField(
-        max_length=20, choices=Status.choices, default=Status.DRAFT
-    )
-    reason = models.CharField(
-        max_length=20, choices=Reason.choices, default=Reason.EXPIRED
-    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    reason = models.CharField(max_length=20, choices=Reason.choices, default=Reason.EXPIRED)
     primary_witness = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="witnessed_disposals_primary"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="witnessed_disposals_primary",
     )
     secondary_witness_name = models.CharField(max_length=100, blank=True, default="")
     destruction_method = models.CharField(max_length=100, blank=True, default="INCINERATION")
@@ -660,7 +649,10 @@ class ReorderRule(models.Model):
     abc_class = models.CharField(max_length=1, choices=ABC.choices, blank=True, default="")
     xyz_class = models.CharField(max_length=1, choices=XYZ.choices, blank=True, default="")
     preferred_supplier = models.ForeignKey(
-        "catalog.Supplier", null=True, blank=True, on_delete=models.SET_NULL,
+        "catalog.Supplier",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="reorder_rules",
     )
     is_auto_calculated = models.BooleanField(default=True)
@@ -711,11 +703,17 @@ class SerialUnit(models.Model):
         "iam.Organization", on_delete=models.CASCADE, related_name="serial_units"
     )
     product = models.ForeignKey(
-        "catalog.Product", null=True, blank=True, on_delete=models.PROTECT,
+        "catalog.Product",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
         related_name="serial_units",
     )
     batch = models.ForeignKey(
-        InventoryBatch, null=True, blank=True, on_delete=models.SET_NULL,
+        InventoryBatch,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="serial_units",
     )
     level = models.CharField(max_length=10, choices=Level.choices, default=Level.EACH)
@@ -829,7 +827,10 @@ class EpcisEvent(models.Model):
     reference_type = models.CharField(max_length=50, blank=True, default="")
     reference_id = models.CharField(max_length=64, blank=True, default="")
     created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="+",
     )
 
@@ -889,7 +890,10 @@ class ConsignmentAgreement(models.Model):
     )
     # Owner of the goods when direction = SUPPLIER_OWNED.
     owner_supplier = models.ForeignKey(
-        "catalog.Supplier", null=True, blank=True, on_delete=models.PROTECT,
+        "catalog.Supplier",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
         related_name="consignment_agreements",
     )
     # Site holding the goods when direction = CUSTOMER_HELD.
@@ -917,7 +921,10 @@ class ConsignmentAgreement(models.Model):
     credit_limit = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     terms = models.TextField(blank=True, default="")
     created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="+",
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -932,10 +939,12 @@ class ConsignmentAgreement(models.Model):
 
     @property
     def counterparty_name(self) -> str:
-        if self.owner_supplier_id:
-            return self.owner_supplier.name
-        if self.holder_organization_id:
-            return self.holder_organization.name
+        supplier = self.owner_supplier
+        if supplier is not None:
+            return supplier.name
+        holder = self.holder_organization
+        if holder is not None:
+            return holder.name
         return self.holder_name
 
 
@@ -951,7 +960,10 @@ class ConsignmentConsumption(models.Model):
         ConsignmentAgreement, on_delete=models.CASCADE, related_name="consumptions"
     )
     batch = models.ForeignKey(
-        InventoryBatch, null=True, blank=True, on_delete=models.SET_NULL,
+        InventoryBatch,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="consignment_consumptions",
     )
     product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
@@ -964,7 +976,10 @@ class ConsignmentConsumption(models.Model):
     )
     trigger = models.CharField(max_length=30, blank=True, default="")
     settlement = models.ForeignKey(
-        "ConsignmentSettlement", null=True, blank=True, on_delete=models.SET_NULL,
+        "ConsignmentSettlement",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="consumptions",
     )
     consumed_at = models.DateTimeField(default=timezone.now)
@@ -998,12 +1013,18 @@ class ConsignmentSettlement(models.Model):
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.DRAFT)
     # The AP bill raised for a SUPPLIER_OWNED settlement (money we now owe).
     supplier_bill = models.ForeignKey(
-        "finance.SupplierBill", null=True, blank=True, on_delete=models.SET_NULL,
+        "finance.SupplierBill",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="consignment_settlements",
     )
     notes = models.TextField(blank=True, default="")
     created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="+",
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1099,20 +1120,24 @@ class PickWave(models.Model):
         Warehouse, null=True, blank=True, on_delete=models.SET_NULL, related_name="pick_waves"
     )
     wave_no = models.CharField(max_length=50, unique=True)
-    strategy = models.CharField(
-        max_length=15, choices=Strategy.choices, default=Strategy.DISCRETE
-    )
+    strategy = models.CharField(max_length=15, choices=Strategy.choices, default=Strategy.DISCRETE)
     status = models.CharField(max_length=15, choices=Status.choices, default=Status.DRAFT)
     planned_for = models.DateField(null=True, blank=True)
     zone = models.ForeignKey(
         StorageZone, null=True, blank=True, on_delete=models.SET_NULL, related_name="pick_waves"
     )
     assigned_to = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="assigned_waves",
     )
     created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="+",
     )
     notes = models.TextField(blank=True, default="")
@@ -1160,7 +1185,10 @@ class PickTask(models.Model):
     quantity_picked = models.PositiveIntegerField(default=0)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     picker = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="pick_tasks",
     )
     # The demand this line serves (e.g. a distribution stock order).

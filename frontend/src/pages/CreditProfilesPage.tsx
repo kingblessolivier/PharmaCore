@@ -1,231 +1,315 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
-import { useState, type FormEvent } from "react";
-import { Badge, Button, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
-import { api, ApiError } from "../lib/api";
-import { useAuth } from "../lib/auth";
-import { isAdmin } from "../lib/roles";
+import { Plus, ShieldAlert } from "lucide-react";
+import { useMemo, useState } from "react";
+import { DataGrid } from "../components/DataGrid";
+import {
+  Drawer,
+  ErrorNote,
+  Facts,
+  Field,
+  Grid,
+  Input,
+  Section,
+  Select,
+  Textarea,
+} from "../components/RecordKit";
+import { Badge, Button, PageHeader } from "../components/ui";
+import { api } from "../lib/api";
+import { money, shortDate } from "../lib/format";
 import type { CreditProfile, Organization, Paginated } from "../lib/types";
 
-function NewProfileModal({ onClose, orgId, orgs }: { onClose: () => void; orgId: number; orgs: Organization[] }) {
+/* -------------------------------------------------------------------------- */
+
+function NewProfileDrawer({
+  organizations,
+  onClose,
+}: {
+  organizations: Organization[];
+  onClose: () => void;
+}) {
   const qc = useQueryClient();
-  const [debtor, setDebtor] = useState<number>(orgs[0]?.id ?? 0);
-  const [limit, setLimit] = useState("0");
-  const [terms, setTerms] = useState("30");
-  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    creditor: "" as number | "",
+    debtor: "" as number | "",
+  });
 
   const create = useMutation({
     mutationFn: () =>
       api<CreditProfile>("/api/finance/credit-profiles/", {
         method: "POST",
-        body: JSON.stringify({ creditor: orgId, debtor, credit_limit: limit, terms_days: Number(terms) }),
+        body: JSON.stringify(form),
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["credit-profiles"] });
       onClose();
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : "Could not create this profile."),
   });
 
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    create.mutate();
-  }
-
   return (
-    <Modal title="New credit profile" onClose={onClose}>
-      <form onSubmit={submit} className="flex flex-col gap-4">
-        <SelectField label="Customer" value={debtor} onChange={(e) => setDebtor(Number(e.target.value))}>
-          {orgs.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.name}
-            </option>
-          ))}
-        </SelectField>
-        <div className="grid grid-cols-2 gap-3">
-          <TextField label="Initial credit limit (RWF)" type="number" value={limit} onChange={(e) => setLimit(e.target.value)} />
-          <TextField label="Terms (days)" type="number" value={terms} onChange={(e) => setTerms(e.target.value)} />
-        </div>
-        {error && <p className="text-sm text-danger">{error}</p>}
+    <Drawer
+      title="New credit profile"
+      subtitle="The terms one organization extends to another."
+      width="max-w-xl"
+      onClose={onClose}
+      footer={
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={create.isPending}>
-            {create.isPending ? "Saving…" : "Create"}
+          <Button
+            onClick={() => create.mutate()}
+            disabled={create.isPending || form.creditor === "" || form.debtor === ""}
+          >
+            {create.isPending ? "Creating…" : "Create profile"}
           </Button>
         </div>
-      </form>
-    </Modal>
+      }
+    >
+      <ErrorNote error={create.error} />
+      <Section title="Parties">
+        <Grid cols={2}>
+          <Field label="Creditor" hint="Usually the depot extending the credit.">
+            <Select
+              value={form.creditor}
+              onChange={(e) => setForm({ ...form, creditor: Number(e.target.value) || "" })}
+            >
+              <option value="">— choose —</option>
+              {organizations.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Debtor" hint="The buyer receiving the credit.">
+            <Select
+              value={form.debtor}
+              onChange={(e) => setForm({ ...form, debtor: Number(e.target.value) || "" })}
+            >
+              <option value="">— choose —</option>
+              {organizations
+                .filter((o) => o.id !== form.creditor)
+                .map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+            </Select>
+          </Field>
+        </Grid>
+        <p className="mt-2 text-xs text-ink-500">
+          {/* The control that makes credit limits mean something. */}
+          Limit, terms and holds are never edited directly — every change goes through the
+          approvals engine, so nobody can raise their own customer's limit.
+        </p>
+      </Section>
+    </Drawer>
   );
 }
 
-function OverrideModal({ onClose, profile }: { onClose: () => void; profile: CreditProfile }) {
-  const qc = useQueryClient();
-  const [limit, setLimit] = useState(profile.credit_limit);
-  const [terms, setTerms] = useState(String(profile.terms_days));
-  const [putOnHold, setPutOnHold] = useState(false);
-  const [holdReason, setHoldReason] = useState("");
-  const [reason, setReason] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+/* -------------------------------------------------------------------------- */
 
-  const submitOverride = useMutation({
+function ProfileDrawer({ profile, onClose }: { profile: CreditProfile; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [request, setRequest] = useState({
+    credit_limit: profile.credit_limit,
+    terms_days: profile.terms_days,
+    status: profile.status,
+    reason: "",
+  });
+
+  const override = useMutation({
     mutationFn: () =>
-      api<{ approval_request: number }>(`/api/finance/credit-profiles/${profile.id}/request-override/`, {
-        method: "POST",
-        body: JSON.stringify({
-          credit_limit: limit,
-          terms_days: Number(terms),
-          lift_hold: profile.status === "HOLD" && !putOnHold,
-          put_on_hold: putOnHold,
-          hold_reason: holdReason,
-          reason,
-        }),
-      }),
+      api<{ approval_request: number }>(
+        `/api/finance/credit-profiles/${profile.id}/request-override/`,
+        { method: "POST", body: JSON.stringify(request) },
+      ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["credit-profiles"] });
-      setDone(true);
+      onClose();
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : "Could not submit this override request."),
   });
 
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    submitOverride.mutate();
-  }
-
   return (
-    <Modal title={`Request a credit override — ${profile.debtor_name}`} onClose={onClose}>
-      {done ? (
-        <div className="flex flex-col gap-3">
-          <p className="text-sm text-ink-700">
-            Submitted for approval — it will not take effect until another approver decides it in
-            the <strong>Approvals inbox</strong> (no self-approval).
-          </p>
-          <div className="flex justify-end">
-            <Button onClick={onClose}>Done</Button>
-          </div>
+    <Drawer
+      title={`${profile.debtor_name} — credit from ${profile.creditor_name}`}
+      badge={
+        profile.status === "HOLD" ? (
+          <Badge tone="danger">On hold</Badge>
+        ) : (
+          <Badge tone="success">Active</Badge>
+        )
+      }
+      width="max-w-2xl"
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end">
+          <Button variant="ghost" onClick={onClose}>
+            Close
+          </Button>
         </div>
-      ) : (
-        <form onSubmit={submit} className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-3">
-            <TextField label="New credit limit (RWF)" type="number" value={limit} onChange={(e) => setLimit(e.target.value)} />
-            <TextField label="New terms (days)" type="number" value={terms} onChange={(e) => setTerms(e.target.value)} />
-          </div>
-          <label className="flex items-center gap-2 text-sm text-ink-700">
-            <input type="checkbox" checked={putOnHold} onChange={(e) => setPutOnHold(e.target.checked)} />
-            Put this customer on credit hold
-          </label>
-          {putOnHold && (
-            <TextField label="Hold reason" value={holdReason} onChange={(e) => setHoldReason(e.target.value)} required />
-          )}
-          <TextField label="Reason for this request" value={reason} onChange={(e) => setReason(e.target.value)} required />
-          {error && <p className="text-sm text-danger">{error}</p>}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={submitOverride.isPending}>
-              {submitOverride.isPending ? "Submitting…" : "Submit for approval"}
-            </Button>
-          </div>
-        </form>
-      )}
-    </Modal>
+      }
+    >
+      <ErrorNote error={override.error} />
+      <Section title="Current terms">
+        <Facts
+          rows={[
+            ["Credit limit", money(profile.credit_limit)],
+            ["Payment terms", `${profile.terms_days} days`],
+            ["Status", profile.status === "HOLD" ? "On hold" : "Active"],
+            ["Hold reason", profile.hold_reason || "—"],
+            ["Last changed", shortDate(profile.updated_at)],
+          ]}
+        />
+      </Section>
+
+      <Section
+        title="Request a change"
+        hint="Routed through the approvals engine — claim-to-lock, no self-approval."
+      >
+        <Grid cols={3}>
+          <Field label="Credit limit">
+            <Input
+              value={request.credit_limit}
+              onChange={(e) => setRequest({ ...request, credit_limit: e.target.value })}
+              className="text-right tabular-nums"
+            />
+          </Field>
+          <Field label="Terms (days)">
+            <Input
+              type="number"
+              value={request.terms_days}
+              onChange={(e) => setRequest({ ...request, terms_days: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="Status">
+            <Select
+              value={request.status}
+              onChange={(e) =>
+                setRequest({ ...request, status: e.target.value as CreditProfile["status"] })
+              }
+            >
+              <option value="ACTIVE">Active</option>
+              <option value="HOLD">On hold</option>
+            </Select>
+          </Field>
+        </Grid>
+        <Field label="Reason" hint="Approvers see this, so it has to say something.">
+          <Textarea
+            rows={2}
+            value={request.reason}
+            onChange={(e) => setRequest({ ...request, reason: e.target.value })}
+          />
+        </Field>
+        <Button
+          onClick={() => override.mutate()}
+          disabled={override.isPending || !request.reason.trim()}
+        >
+          <ShieldAlert className="h-4 w-4" />
+          {override.isPending ? "Submitting…" : "Submit for approval"}
+        </Button>
+      </Section>
+    </Drawer>
   );
 }
 
-export function CreditProfilesPage() {
-  const { user } = useAuth();
-  const admin = isAdmin(user);
-  const [adding, setAdding] = useState(false);
-  const [overriding, setOverriding] = useState<CreditProfile | null>(null);
-  const orgId = user?.organization ?? 0;
+/* -------------------------------------------------------------------------- */
 
-  const profilesQ = useQuery({
+export function CreditProfilesPage() {
+  const [creating, setCreating] = useState(false);
+  const [open, setOpen] = useState<CreditProfile | null>(null);
+
+  const { data, isLoading } = useQuery({
     queryKey: ["credit-profiles"],
-    queryFn: () => api<Paginated<CreditProfile>>("/api/finance/credit-profiles/"),
+    queryFn: () => api<Paginated<CreditProfile>>("/api/finance/credit-profiles/?page_size=200"),
   });
-  const orgsQ = useQuery({
+  const profiles = useMemo(() => data?.results ?? [], [data]);
+
+  const { data: orgData } = useQuery({
     queryKey: ["organizations"],
-    queryFn: () => api<Paginated<Organization>>("/api/organizations/"),
-    enabled: admin,
+    queryFn: () => api<Paginated<Organization>>("/api/organizations/?page_size=200"),
   });
+
+  const onHold = profiles.filter((p) => p.status === "HOLD").length;
 
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
-        title="Customer credit"
+        title="Credit control"
         action={
-          admin &&
-          orgId > 0 && (
-            <Button onClick={() => setAdding(true)}>
-              <Plus className="h-4 w-4" /> New profile
-            </Button>
-          )
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4" /> New profile
+          </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
-        Credit limit, terms, and holds are approval-gated — changes here only take effect once
-        decided in the Approvals inbox.
+      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
+        Who may buy on credit, how much, and on what terms. Changes go through approvals, so a
+        limit cannot be raised by the person who benefits from it.
       </p>
 
-      {profilesQ.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
+      {onHold > 0 && (
+        <div className="rounded-lg border border-warning-300 bg-warning-50 px-4 py-3 text-sm text-warning-800">
+          <strong>{onHold}</strong> customer{onHold === 1 ? " is" : "s are"} on credit hold and
+          cannot place new orders.
         </div>
       )}
 
-      {profilesQ.data && (
-        <div className="overflow-hidden rounded-lg border border-line bg-surface-0">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-2.5">Customer</th>
-                <th className="px-4 py-2.5">Creditor</th>
-                <th className="px-4 py-2.5 text-right">Limit</th>
-                <th className="px-4 py-2.5 text-right">Terms</th>
-                <th className="px-4 py-2.5">Status</th>
-                <th className="px-4 py-2.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {profilesQ.data.results.map((p) => (
-                <tr key={p.id} className="border-b border-line last:border-0 hover:bg-surface-100">
-                  <td className="px-4 py-2.5 font-medium">{p.debtor_name}</td>
-                  <td className="px-4 py-2.5 text-ink-700">{p.creditor_name}</td>
-                  <td className="px-4 py-2.5 text-right font-mono">
-                    {Number(p.credit_limit).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                  </td>
-                  <td className="px-4 py-2.5 text-right">net {p.terms_days}</td>
-                  <td className="px-4 py-2.5">
-                    <Badge tone={p.status === "HOLD" ? "neutral" : "depot"}>{p.status}</Badge>
-                    {p.status === "HOLD" && p.hold_reason && (
-                      <div className="mt-0.5 text-xs text-ink-500">{p.hold_reason}</div>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 text-right">
-                    <Button variant="secondary" onClick={() => setOverriding(p)}>
-                      Request override
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-              {profilesQ.data.results.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-ink-500">
-                    No credit profiles yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataGrid
+        rows={profiles}
+        loading={isLoading}
+        getRowId={(p) => p.id}
+        storageKey="finance.credit-profiles"
+        exportName="credit-profiles"
+        searchPlaceholder="Search customers…"
+        emptyMessage="No credit profiles yet."
+        onRowClick={(p) => setOpen(p)}
+        columns={[
+          { key: "debtor_name", header: "Customer", value: (p) => p.debtor_name },
+          { key: "creditor_name", header: "Credit from", value: (p) => p.creditor_name },
+          {
+            key: "credit_limit",
+            header: "Limit",
+            numeric: true,
+            align: "right",
+            value: (p) => Number(p.credit_limit),
+            render: (p) => money(p.credit_limit),
+          },
+          {
+            key: "terms_days",
+            header: "Terms",
+            numeric: true,
+            align: "right",
+            value: (p) => p.terms_days,
+            render: (p) => `${p.terms_days} days`,
+          },
+          {
+            key: "status",
+            header: "Status",
+            value: (p) => p.status,
+            render: (p) =>
+              p.status === "HOLD" ? (
+                <Badge tone="danger">On hold</Badge>
+              ) : (
+                <Badge tone="success">Active</Badge>
+              ),
+          },
+          { key: "hold_reason", header: "Hold reason", value: (p) => p.hold_reason },
+          {
+            key: "updated_at",
+            header: "Last changed",
+            value: (p) => p.updated_at,
+            render: (p) => shortDate(p.updated_at),
+          },
+        ]}
+      />
 
-      {adding && orgsQ.data && <NewProfileModal onClose={() => setAdding(false)} orgId={orgId} orgs={orgsQ.data.results} />}
-      {overriding && <OverrideModal onClose={() => setOverriding(null)} profile={overriding} />}
+      {creating && (
+        <NewProfileDrawer
+          organizations={orgData?.results ?? []}
+          onClose={() => setCreating(false)}
+        />
+      )}
+      {open && <ProfileDrawer profile={open} onClose={() => setOpen(null)} />}
     </div>
   );
 }

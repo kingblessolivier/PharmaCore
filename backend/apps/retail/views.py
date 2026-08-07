@@ -373,7 +373,9 @@ class ControlledSubstanceRegisterViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self) -> QuerySet[ControlledSubstanceRegister]:
         user = cast(User, self.request.user)
-        qs = ControlledSubstanceRegister.objects.select_related("organization", "product", "logged_by")
+        qs = ControlledSubstanceRegister.objects.select_related(
+            "organization", "product", "logged_by"
+        )
         if not _is_admin(user):
             qs = qs.filter(organization__in=organizations_visible_to(user))
         return qs
@@ -401,4 +403,3 @@ class ClinicalServiceRecordViewSet(viewsets.ModelViewSet):
         if not _is_admin(user):
             qs = qs.filter(organization__in=organizations_visible_to(user))
         return qs
-

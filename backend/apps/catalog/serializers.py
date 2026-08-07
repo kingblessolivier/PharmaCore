@@ -233,4 +233,3 @@ class ProductSubstituteSerializer(serializers.ModelSerializer):
             "notes",
         ]
         read_only_fields = ["id", "substitute_generic_name", "substitute_strength"]
-

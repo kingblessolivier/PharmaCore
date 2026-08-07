@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Banknote, Check, Download, Lock, Plus, Send } from "lucide-react";
 import { useState } from "react";
 import { DataGrid, type Column } from "../components/DataGrid";
-import { Badge, Button, Card, Modal, PageHeader, SelectField, TextField } from "../components/ui";
+import { Badge, Button, Card, PageHeader, SelectField, TextField } from "../components/ui";
+import { Drawer } from "../components/RecordKit";
 import { api, ApiError, downloadFile } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { Paginated, PaymentRun, SupplierBill } from "../lib/types";
@@ -73,7 +74,7 @@ function NewRunModal({ onClose, orgId }: { onClose: () => void; orgId: number })
   }
 
   return (
-    <Modal title="New payment run" onClose={onClose} size="xl">
+    <Drawer title="New payment run" onClose={onClose} width="max-w-4xl">
       <div className="flex flex-col gap-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <SelectField label="Channel" value={method} onChange={(e) => setMethod(e.target.value)}>
@@ -174,7 +175,7 @@ function NewRunModal({ onClose, orgId }: { onClose: () => void; orgId: number })
           </Button>
         </div>
       </div>
-    </Modal>
+    </Drawer>
   );
 }
 
@@ -193,7 +194,7 @@ function RunDetail({ run, onClose }: { run: PaymentRun; onClose: () => void }) {
   });
 
   return (
-    <Modal title={run.run_number} onClose={onClose} size="xl">
+    <Drawer title={run.run_number} onClose={onClose} width="max-w-4xl">
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div>
@@ -285,7 +286,7 @@ function RunDetail({ run, onClose }: { run: PaymentRun; onClose: () => void }) {
           )}
         </div>
       </div>
-    </Modal>
+    </Drawer>
   );
 }
 

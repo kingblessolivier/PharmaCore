@@ -1,5 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, FlaskConical, MoveRight, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  FlaskConical,
+  MoveRight,
+  PackageSearch,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -17,6 +25,7 @@ import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type {
   BinLocation,
+  InventoryBatch,
   Paginated,
   Product,
   PutawayRule,
@@ -72,6 +81,8 @@ export function PutawayRulesPage() {
   const [simResult, setSimResult] = useState<PutawaySuggestion | null>(null);
   const [form, setForm] = useState({ ...BLANK });
   const [error, setError] = useState("");
+  const [placing, setPlacing] = useState<InventoryBatch | null>(null);
+  const [chosenBin, setChosenBin] = useState(0);
 
   const rulesQuery = useQuery({
     queryKey: ["putaway-rules", orgId],
@@ -131,6 +142,39 @@ export function PutawayRulesPage() {
       setDeleting(null);
       void qc.invalidateQueries({ queryKey: ["putaway-rules"] });
     },
+  });
+
+  // Lots that have landed but have not been given a bin yet — the actual work queue.
+  const unbinnedQuery = useQuery({
+    queryKey: ["batches", "unbinned", orgId],
+    queryFn: () =>
+      api<Paginated<InventoryBatch>>(
+        `/api/inventory/batches/?organization=${orgId}&in_stock=1`,
+      ),
+    enabled: orgId > 0,
+    select: (page) => page.results.filter((b) => b.bin_location === null),
+  });
+
+  const suggestionQuery = useQuery({
+    queryKey: ["putaway-suggestion", placing?.id],
+    queryFn: () =>
+      api<PutawaySuggestion>(`/api/inventory/batches/${placing!.id}/putaway_suggestion/`),
+    enabled: placing !== null,
+  });
+
+  const applyPutawayMutation = useMutation({
+    mutationFn: () =>
+      api<InventoryBatch>(`/api/inventory/batches/${placing!.id}/putaway/`, {
+        method: "POST",
+        body: JSON.stringify({ bin_location: chosenBin }),
+      }),
+    onSuccess: () => {
+      setPlacing(null);
+      setChosenBin(0);
+      void qc.invalidateQueries({ queryKey: ["batches", "unbinned"] });
+      void qc.invalidateQueries({ queryKey: ["bin-locations"] });
+    },
+    onError: (e: Error) => setError(e.message),
   });
 
   const simulateMutation = useMutation({
@@ -298,6 +342,151 @@ export function PutawayRulesPage() {
           },
         ]}
       />
+
+      <h2 className="mb-2 mt-6 flex items-center gap-2 text-sm font-semibold text-ink-900">
+        <PackageSearch className="h-4 w-4 text-brand-600" />
+        Lots Awaiting Put-away
+      </h2>
+      <DataGrid<InventoryBatch>
+        rows={unbinnedQuery.data ?? []}
+        loading={unbinnedQuery.isLoading}
+        getRowId={(b) => b.id}
+        storageKey="unbinned-batches"
+        exportName="lots-awaiting-putaway"
+        searchPlaceholder="Search lots by product or batch…"
+        emptyMessage="Every lot on hand has a bin. Nothing is waiting to be put away."
+        initialDensity="compact"
+        columns={[
+          { key: "product_name", header: "Product" },
+          {
+            key: "batch_number",
+            header: "Batch",
+            render: (b) => <span className="font-mono">{b.batch_number}</span>,
+          },
+          { key: "expiry_date", header: "Expires" },
+          {
+            key: "quantity_available",
+            header: "Qty",
+            align: "right",
+            numeric: true,
+            value: (b) => b.quantity_available,
+          },
+          { key: "warehouse_name", header: "Warehouse", value: (b) => b.warehouse_name ?? "—" },
+          {
+            key: "storage_location",
+            header: "Noted Location",
+            value: (b) => b.storage_location || "—",
+          },
+          {
+            key: "actions",
+            header: "Actions",
+            align: "right",
+            fixed: true,
+            sortable: false,
+            render: (b) => (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setPlacing(b);
+                  setChosenBin(0);
+                }}
+              >
+                <MoveRight className="h-4 w-4" /> Put away
+              </Button>
+            ),
+          },
+        ]}
+      />
+
+      {placing && (
+        <Modal
+          title={`Put away ${placing.product_name}`}
+          onClose={() => {
+            setPlacing(null);
+            setChosenBin(0);
+          }}
+        >
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-ink-600">
+              Batch <span className="font-mono">{placing.batch_number}</span> ·{" "}
+              {placing.quantity_available} units · expires {placing.expiry_date}
+            </p>
+
+            {suggestionQuery.isLoading && (
+              <p className="text-sm text-ink-500">Working out where it should go…</p>
+            )}
+            {suggestionQuery.data && (
+              <Card className="p-4 text-sm">
+                <div className="flex items-center gap-2 font-semibold text-ink-900">
+                  {suggestionQuery.data.zone_name ?? "No zone"}
+                  <MoveRight className="h-4 w-4 text-ink-400" />
+                  <span className="font-mono">
+                    {suggestionQuery.data.bin_code ?? "no free bin"}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-ink-600">{suggestionQuery.data.reason}</p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  <Badge tone={suggestionQuery.data.storage_compliant ? "success" : "danger"}>
+                    {suggestionQuery.data.storage_compliant
+                      ? "Storage compliant"
+                      : "Not compliant"}
+                  </Badge>
+                  <Badge tone="neutral">
+                    requires {suggestionQuery.data.required_zone_type}
+                  </Badge>
+                </div>
+                {suggestionQuery.data.warning && (
+                  <div className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+                    {suggestionQuery.data.warning}
+                  </div>
+                )}
+                {suggestionQuery.data.bin_location && (
+                  <Button
+                    className="mt-3"
+                    onClick={() => {
+                      setChosenBin(suggestionQuery.data!.bin_location!);
+                      applyPutawayMutation.mutate();
+                    }}
+                    disabled={applyPutawayMutation.isPending}
+                  >
+                    Accept suggestion
+                  </Button>
+                )}
+              </Card>
+            )}
+
+            <SelectField
+              label="Or choose a bin yourself"
+              value={chosenBin}
+              onChange={(e) => setChosenBin(Number(e.target.value))}
+            >
+              <option value={0}>— Select bin —</option>
+              {(binsQuery.data?.results ?? []).map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.bin_code} ({b.zone_name}){b.is_occupied ? " — occupied" : ""}
+                </option>
+              ))}
+            </SelectField>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setPlacing(null);
+                  setChosenBin(0);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => applyPutawayMutation.mutate()}
+                disabled={!chosenBin || applyPutawayMutation.isPending}
+              >
+                {applyPutawayMutation.isPending ? "Placing…" : "Put Away"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {(creating || editing) && (
         <Modal title={editing ? `Edit ${editing.name}` : "Add Put-away Rule"} onClose={close}>

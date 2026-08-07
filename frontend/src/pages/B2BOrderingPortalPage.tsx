@@ -1,168 +1,387 @@
+/* -------------------------------------------------------------------------- */
+/* The storefront, as a retail pharmacy sees it.                               */
+/*                                                                             */
+/* Two rules shape this screen. A buyer sees only what the wholesaler chose to  */
+/* publish — never its real holding. And a buyer is never simply refused: what  */
+/* the depot cannot supply is recorded as demand it can import against, so the  */
+/* basket separates "coming now" from "being sourced" before anything is sent.  */
+/* -------------------------------------------------------------------------- */
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, ShoppingCart, AlertCircle } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { AlertTriangle, Clock, PackageSearch, ShoppingCart, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Button, Card, Modal, PageHeader, Spinner, TextField } from "../components/ui";
+import { DataGrid, type Column } from "../components/DataGrid";
+import { Drawer, Empty, ErrorNote, Facts, Field, Grid, Input, Section } from "../components/RecordKit";
+import { Badge, Button, PageHeader, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import type { DepotProductListing, Paginated, StockOrder } from "../lib/types";
+import { storefront, type StorefrontRow } from "../lib/distribution";
+import { money } from "../lib/format";
+import type { Organization, Paginated } from "../lib/types";
+
+interface BasketLine {
+  product: number;
+  name: string;
+  price: string;
+  /** What the buyer typed. */
+  quantity: number;
+  /** What the depot can actually ship today. */
+  available: number;
+  minOrder: number;
+}
 
 export function B2BOrderingPortalPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { user } = useAuth();
 
-  const [selectedListing, setSelectedListing] = useState<DepotProductListing | null>(null);
-  const [orderQty, setOrderQty] = useState("50");
+  const [depotId, setDepotId] = useState<number | null>(null);
+  const [basket, setBasket] = useState<BasketLine[]>([]);
+  const [picking, setPicking] = useState<StorefrontRow | null>(null);
+  const [qty, setQty] = useState("");
+  const [reviewing, setReviewing] = useState(false);
 
-  const listingsQuery = useQuery({
-    queryKey: ["b2b-portal-listings"],
-    queryFn: () => api<Paginated<DepotProductListing>>("/api/distribution/listings/"),
+  const depots = useQuery({
+    queryKey: ["supplying-depots"],
+    queryFn: () => api<Paginated<Organization>>("/api/organizations/?page_size=100"),
   });
 
-  const createOrderMutation = useMutation({
-    mutationFn: (listing: DepotProductListing) =>
-      api<StockOrder>("/api/distribution/orders/", {
-        method: "POST",
-        body: JSON.stringify({
-          supplier: listing.depot,
-          retail: user?.organization,
-          delivery_notes: `B2B Portal Order for ${listing.product_name}`,
-          lines: [
-            {
-              product: listing.product,
-              quantity_requested: Number(orderQty),
-              unit_price: listing.price_per_unit,
-            },
-          ],
-        }),
-      }),
+  const suppliers = useMemo(
+    () =>
+      // Seed and legacy data carry org types outside the model's choices
+      // (DISTRIBUTOR), so match on the string rather than the narrowed union.
+      (depots.data?.results ?? []).filter((o) =>
+        ["DEPOT", "DISTRIBUTOR"].includes(o.type as string),
+      ),
+    [depots.data],
+  );
+
+  const activeDepot = depotId ?? suppliers[0]?.id ?? null;
+
+  const shop = useQuery({
+    queryKey: ["storefront", activeDepot],
+    enabled: activeDepot != null,
+    queryFn: () => storefront(activeDepot as number),
+  });
+
+  const placeOrder = useMutation({
+    mutationFn: () =>
+      api<{ id: number; order_number: string; items: unknown[]; backorders: unknown[] }>(
+        "/api/distribution/orders/",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            depot: activeDepot,
+            retail: user?.organization,
+            items: basket.map((l) => ({ product: l.product, quantity_ordered: l.quantity })),
+          }),
+        },
+      ),
     onSuccess: () => {
-      setSelectedListing(null);
-      void qc.invalidateQueries({ queryKey: ["b2b-portal-listings"] });
+      setBasket([]);
+      setReviewing(false);
+      void qc.invalidateQueries({ queryKey: ["storefront"] });
       navigate("/distribution/orders");
     },
   });
 
-  function handleOrderSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (selectedListing && Number(orderQty) >= selectedListing.min_order_qty) {
-      createOrderMutation.mutate(selectedListing);
-    }
+  function addToBasket() {
+    if (!picking) return;
+    const wanted = Number(qty);
+    if (!Number.isFinite(wanted) || wanted <= 0) return;
+    setBasket((prev) => [
+      ...prev.filter((l) => l.product !== picking.product),
+      {
+        product: picking.product,
+        name: picking.product_name,
+        price: picking.price,
+        quantity: wanted,
+        available: picking.available,
+        minOrder: picking.min_order_qty,
+      },
+    ]);
+    setPicking(null);
+    setQty("");
   }
 
-  return (
-    <div className="max-w-6xl">
-      <button
-        onClick={() => navigate("/distribution")}
-        className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
-      >
-        <ArrowLeft className="h-4 w-4" /> Distribution Home
-      </button>
+  /* What will ship now versus what becomes a sourcing request. Shown before the
+     order is sent, because "you'll get 30 of the 100" is not a surprise anyone
+     wants after the fact. */
+  const shipNow = basket.reduce((sum, l) => sum + Math.min(l.quantity, l.available), 0);
+  const toSource = basket.reduce((sum, l) => sum + Math.max(0, l.quantity - l.available), 0);
+  const shipValue = basket.reduce(
+    (sum, l) => sum + Math.min(l.quantity, l.available) * Number(l.price),
+    0,
+  );
 
+  const columns: Column<StorefrontRow>[] = [
+    { key: "product_name", header: "Product", value: (r) => r.product_name },
+    {
+      key: "price",
+      header: "Price",
+      numeric: true,
+      align: "right",
+      value: (r) => Number(r.price),
+      render: (r) => money(r.price),
+    },
+    {
+      key: "available",
+      header: "Available",
+      numeric: true,
+      align: "right",
+      value: (r) => r.available,
+      render: (r) =>
+        r.available > 0 ? (
+          <span className="tabular-nums">{r.available}</span>
+        ) : (
+          <Badge tone="warning">Out of stock</Badge>
+        ),
+    },
+    {
+      key: "min_order_qty",
+      header: "Min order",
+      numeric: true,
+      align: "right",
+      value: (r) => r.min_order_qty,
+    },
+    {
+      key: "act",
+      header: "",
+      fixed: true,
+      render: (r) => (
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={(e) => {
+            e.stopPropagation();
+            setPicking(r);
+            setQty(String(Math.max(r.min_order_qty, 1)));
+          }}
+        >
+          Add
+        </Button>
+      ),
+    },
+  ];
+
+  if (depots.isLoading) return <Spinner />;
+
+  return (
+    <div className="space-y-4">
       <PageHeader
-        title="B2B Retailer Online Ordering Portal"
+        title="B2B ordering portal"
         action={
-          <Button onClick={() => navigate("/distribution/orders")}>
-            <ShoppingCart className="h-4 w-4" /> My Purchase Orders
-          </Button>
+          basket.length > 0 ? (
+            <Button onClick={() => setReviewing(true)}>
+              <ShoppingCart className="h-4 w-4" />
+              Review {basket.length} line{basket.length === 1 ? "" : "s"}
+            </Button>
+          ) : undefined
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
-        Browse verified depot offered stock, check wholesale tier pricing, and place instant B2B stock transfer orders.
+      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
+        Order from a wholesaler's published catalogue. Anything they cannot supply is recorded so they can source it.
       </p>
 
-      <div className="mb-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-        <span>Pharmacy Licence Verified (Rwanda Board of Pharmacy) · Credit Status: Active (30 Days Terms)</span>
-      </div>
+      {suppliers.length === 0 ? (
+        <Empty message="No wholesalers available No depot or distributor organisation is visible to you yet." />
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-ink-500">Buying from</span>
+            {suppliers.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => {
+                  setDepotId(s.id);
+                  setBasket([]);
+                }}
+                className={
+                  "rounded-full border px-3 py-1 text-sm transition " +
+                  (s.id === activeDepot
+                    ? "border-brand-500 bg-brand-50 text-brand-700"
+                    : "border-line text-ink-600 hover:bg-surface-1")
+                }
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
 
-      {listingsQuery.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
+          <DataGrid
+            rows={shop.data?.rows ?? []}
+            columns={columns}
+            getRowId={(r) => r.listing}
+            loading={shop.isLoading}
+            storageKey="b2b-storefront"
+            exportName="storefront"
+            searchPlaceholder="Search the catalogue…"
+            emptyMessage="This wholesaler has not published anything you can buy."
+          />
+
+          <p className="text-xs text-ink-500">
+            You are seeing what this wholesaler has chosen to offer. Their total stock may be
+            higher — the published quantity is what they will sell.
+          </p>
+        </>
       )}
 
-      {listingsQuery.data && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {listingsQuery.data.results.map((l) => (
-            <Card key={l.id} className="p-4 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Badge tone="brand">{l.depot_name}</Badge>
-                  <span className="text-xs font-mono text-ink-500">Min Order: {l.min_order_qty}</span>
-                </div>
-                <h3 className="font-semibold text-ink-900 text-base mb-1">{l.product_name}</h3>
-                <p className="text-xs text-ink-500 mb-3">{l.product_brand || "Generic Formulation"}</p>
-                <div className="flex items-baseline justify-between py-2 border-t border-line">
-                  <span className="text-xs text-ink-500">Available Offered</span>
-                  <span className="font-mono font-bold text-emerald-700">{l.available_for_order} units</span>
-                </div>
-              </div>
-              <div className="mt-4 pt-3 border-t border-line flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] uppercase tracking-wide text-ink-500">Wholesale Unit Price</span>
-                  <p className="font-mono font-bold text-ink-900 text-base">
-                    RWF {Number(l.price_per_unit).toLocaleString()}
-                  </p>
-                </div>
-                <Button size="sm" onClick={() => { setSelectedListing(l); setOrderQty(String(Math.max(l.min_order_qty, 10))); }}>
-                  Order Now
-                </Button>
-              </div>
-            </Card>
-          ))}
-          {listingsQuery.data.results.length === 0 && (
-            <div className="col-span-full py-12 text-center text-ink-500">
-              No depot listings published in the B2B portal yet.
-            </div>
-          )}
-        </div>
-      )}
-
-      {selectedListing && (
-        <Modal title={`Place B2B Order - ${selectedListing.product_name}`} onClose={() => setSelectedListing(null)}>
-          <form onSubmit={handleOrderSubmit} className="flex flex-col gap-4">
-            <div className="rounded-md border border-line bg-surface-100 p-3 text-xs text-ink-700">
-              <p className="font-semibold">{selectedListing.depot_name}</p>
-              <p>Wholesale Price: RWF {Number(selectedListing.price_per_unit).toLocaleString()} / unit</p>
-              <p>Available Offered: {selectedListing.available_for_order} units (MOQ: {selectedListing.min_order_qty} units)</p>
-            </div>
-
-            <TextField
-              label="Quantity Requested"
-              type="number"
-              value={orderQty}
-              onChange={(e) => setOrderQty(e.target.value)}
-              min={selectedListing.min_order_qty}
-              max={selectedListing.available_for_order}
-              required
-              autoFocus
-            />
-
-            {Number(orderQty) < selectedListing.min_order_qty && (
-              <div className="flex items-center gap-1.5 text-xs text-amber-700">
-                <AlertCircle className="h-4 w-4" /> Quantity is below depot minimum order threshold of {selectedListing.min_order_qty} units.
+      {/* ---------------------------- quantity ---------------------------- */}
+      {picking && (
+      <Drawer
+        onClose={() => setPicking(null)}
+        title={picking?.product_name ?? ""}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPicking(null)}>
+              Cancel
+            </Button>
+            <Button onClick={addToBasket}>Add to order</Button>
+          </>
+        }
+      >
+        {picking && (
+          <Section title="How many?">
+            <Facts
+                rows={[
+                  ["Price", money(picking.price)],
+                  ["Available now", String(picking.available)],
+                  ["Minimum order", String(picking.min_order_qty)],
+                ]}
+              />
+            <Grid>
+              <Field label="Quantity">
+                <Input
+                  type="number"
+                  min={1}
+                  value={qty}
+                  onChange={(e) => setQty(e.target.value)}
+                  autoFocus
+                />
+              </Field>
+            </Grid>
+            {Number(qty) > picking.available && (
+              <div className="mt-2 flex items-start gap-2 rounded-md bg-warning-50 p-2.5 text-xs text-warning-800">
+                <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  {picking.available > 0 ? (
+                    <>
+                      {picking.available} will ship now. The remaining{" "}
+                      {Number(qty) - picking.available} will be recorded as a sourcing request —
+                      the wholesaler sees it and can import against it.
+                    </>
+                  ) : (
+                    <>
+                      None is available today. The full {qty} will be recorded as a sourcing
+                      request rather than refused.
+                    </>
+                  )}
+                </span>
               </div>
             )}
+          </Section>
+        )}
+      </Drawer>
+      )}
 
-            <div className="flex items-center justify-between rounded-md bg-surface-200 p-3">
-              <span className="text-xs uppercase tracking-wider text-ink-500 font-semibold">Total Order Cost</span>
-              <span className="font-mono text-lg font-bold text-ink-900">
-                RWF {(Number(orderQty || 0) * Number(selectedListing.price_per_unit)).toLocaleString()}
+      {/* ----------------------------- review ----------------------------- */}
+      {reviewing && (
+      <Drawer
+        onClose={() => setReviewing(false)}
+        title="Review your order"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setReviewing(false)}>
+              Keep shopping
+            </Button>
+            <Button
+              onClick={() => placeOrder.mutate()}
+              disabled={placeOrder.isPending || basket.length === 0}
+            >
+              {placeOrder.isPending ? "Sending…" : "Place order"}
+            </Button>
+          </>
+        }
+      >
+        <Section title="Lines">
+          <div className="divide-y divide-line">
+            {basket.map((l) => {
+              const now = Math.min(l.quantity, l.available);
+              const later = l.quantity - now;
+              return (
+                <div key={l.product} className="flex items-start gap-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm text-ink-900">{l.name}</div>
+                    <div className="text-xs text-ink-500">
+                      {l.quantity} × {money(l.price)}
+                      {later > 0 && (
+                        <>
+                          {" · "}
+                          <span className="text-warning-700">
+                            {now} now, {later} to be sourced
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-sm tabular-nums text-ink-700">
+                    {money(now * Number(l.price))}
+                  </div>
+                  <button
+                    onClick={() => setBasket((p) => p.filter((x) => x.product !== l.product))}
+                    className="shrink-0 text-ink-400 hover:text-danger-600"
+                    aria-label={`Remove ${l.name}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </Section>
+
+        <Section title="What happens when you send this">
+          <Facts
+                rows={[
+                  ["Shipping now", `${shipNow} unit(s)`],
+                  ["Value of that", money(shipValue)],
+                  ["To be sourced", toSource > 0 ? `${toSource} unit(s)` : "Nothing"],
+                ]}
+              />
+          {toSource > 0 && (
+            <div className="mt-2 flex items-start gap-2 rounded-md bg-surface-1 p-2.5 text-xs text-ink-600">
+              <PackageSearch className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                You are only invoiced for what ships. The {toSource} unit(s) the wholesaler cannot
+                supply today are passed to them as a sourcing request — they can import against it
+                and fulfil you when it lands.
               </span>
             </div>
+          )}
+          {placeOrder.isError && (
+            <ErrorNote error={placeOrder.error} />
+          )}
+        </Section>
+      </Drawer>
+      )}
 
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="secondary" onClick={() => setSelectedListing(null)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createOrderMutation.isPending || Number(orderQty) < selectedListing.min_order_qty}>
-                {createOrderMutation.isPending ? "Submitting Order…" : "Confirm & Submit B2B Order"}
-              </Button>
-            </div>
-          </form>
-        </Modal>
+      {basket.length > 0 && !reviewing && (
+        <div className="fixed bottom-4 right-4 z-10">
+          <button
+            onClick={() => setReviewing(true)}
+            className="flex items-center gap-2 rounded-full bg-brand-600 px-4 py-2.5 text-sm text-white shadow-lg hover:bg-brand-700"
+          >
+            <ShoppingCart className="h-4 w-4" />
+            {basket.length} line{basket.length === 1 ? "" : "s"} · {money(shipValue)}
+            {toSource > 0 && (
+              <span className="flex items-center gap-1 rounded-full bg-white/20 px-1.5 py-0.5 text-xs">
+                <AlertTriangle className="h-3 w-3" />
+                {toSource} to source
+              </span>
+            )}
+          </button>
+        </div>
       )}
     </div>
   );

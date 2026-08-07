@@ -10,6 +10,8 @@ Revenue" etc. with real balances (even if those balances start at 0).
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.core.management.base import BaseCommand
 
 from apps.finance.services import ensure_default_accounts
@@ -17,18 +19,18 @@ from apps.iam.models import Organization
 
 
 class Command(BaseCommand):
-    help = "Seed the standard Chart of Accounts (12 control accounts) for every active organisation."
+    help = (
+        "Seed the standard Chart of Accounts (12 control accounts) for every active organisation."
+    )
 
-    def handle(self, *args, **options) -> None:
+    def handle(self, *args: Any, **options: Any) -> None:
         orgs = Organization.objects.filter(is_active=True)
         total_orgs = orgs.count()
         total_accounts = 0
         for org in orgs:
             accounts = ensure_default_accounts(org)
             total_accounts += len(accounts)
-            self.stdout.write(
-                f"  · {org.name}: {len(accounts)} accounts ready"
-            )
+            self.stdout.write(f"  · {org.name}: {len(accounts)} accounts ready")
         self.stdout.write(
             self.style.SUCCESS(
                 f"Seed complete — {total_orgs} organisation(s), "

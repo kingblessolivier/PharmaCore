@@ -1,216 +1,330 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, Tag } from "lucide-react";
-import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
-import { Badge, Button, Card, Modal, PageHeader, Spinner, TextField } from "../components/ui";
+import { Plus, TicketPercent } from "lucide-react";
+import { useMemo, useState } from "react";
+import { DataGrid } from "../components/DataGrid";
+import {
+  Drawer,
+  ErrorNote,
+  Facts,
+  Field,
+  Grid,
+  Input,
+  ProgressBar,
+  Section,
+  Select,
+} from "../components/RecordKit";
+import { Badge, Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
-import type { POSPromotion, Paginated } from "../lib/types";
+import { money, pct, shortDate } from "../lib/format";
+import type { Promotion, PromoType } from "../lib/retail";
+import type { Paginated } from "../lib/types";
 
-export function PromotionsPage() {
-  const navigate = useNavigate();
+const TYPE_LABEL: Record<PromoType, string> = {
+  PERCENT: "Percentage off",
+  FLAT: "Flat amount off",
+  BOGO: "Buy one get one",
+};
+
+/** In force is a fact about today, not a stored flag — a promotion can be
+ *  active and out of date, which is exactly how a dead coupon keeps being
+ *  offered at the counter. */
+function inForce(p: Promotion, on = new Date()): boolean {
+  if (!p.is_active) return false;
+  const today = on.toISOString().slice(0, 10);
+  if (today < p.valid_from || today > p.valid_until) return false;
+  return p.max_redemptions === 0 || p.times_redeemed < p.max_redemptions;
+}
+
+function statusOf(p: Promotion): { label: string; tone: "success" | "warning" | "default" } {
+  if (!p.is_active) return { label: "Switched off", tone: "default" };
+  const today = new Date().toISOString().slice(0, 10);
+  if (today < p.valid_from) return { label: "Scheduled", tone: "warning" };
+  if (today > p.valid_until) return { label: "Expired", tone: "default" };
+  if (p.max_redemptions && p.times_redeemed >= p.max_redemptions)
+    return { label: "Fully redeemed", tone: "warning" };
+  return { label: "Live", tone: "success" };
+}
+
+/* -------------------------------------------------------------------------- */
+
+function PromotionDrawer({
+  promotion,
+  onClose,
+}: {
+  promotion: Promotion | null;
+  onClose: () => void;
+}) {
   const qc = useQueryClient();
-  const [creating, setCreating] = useState(false);
-
-  const [code, setCode] = useState("RAMADAN2026");
-  const [name, setName] = useState("Ramadan Health & Wellness 10% Discount");
-  const [promoType, setPromoType] = useState<"PERCENT" | "FLAT" | "BOGO">("PERCENT");
-  const [discountValue, setDiscountValue] = useState("10.00");
-  const [minSpend, setMinSpend] = useState("10000.00");
-  const [validFrom, setValidFrom] = useState("2026-08-01");
-  const [validUntil, setValidUntil] = useState("2026-08-31");
-
-  const promosQuery = useQuery({
-    queryKey: ["promotions-list"],
-    queryFn: () => api<Paginated<POSPromotion>>("/api/retail/promotions/"),
+  const [form, setForm] = useState({
+    code: promotion?.code ?? "",
+    name: promotion?.name ?? "",
+    promo_type: (promotion?.promo_type ?? "PERCENT") as PromoType,
+    discount_value: promotion?.discount_value ?? "10",
+    min_spend: promotion?.min_spend ?? "0",
+    valid_from: promotion?.valid_from ?? new Date().toISOString().slice(0, 10),
+    valid_until: promotion?.valid_until ?? "",
+    max_redemptions: promotion?.max_redemptions ?? 0,
+    is_active: promotion?.is_active ?? true,
   });
+  const set = (patch: Partial<typeof form>) => setForm({ ...form, ...patch });
 
-  const createPromoMutation = useMutation({
+  const save = useMutation({
     mutationFn: () =>
-      api<POSPromotion>("/api/retail/promotions/", {
-        method: "POST",
-        body: JSON.stringify({
-          code: code,
-          name: name,
-          promo_type: promoType,
-          discount_value: discountValue,
-          min_spend: minSpend,
-          valid_from: validFrom,
-          valid_until: validUntil,
-          is_active: true,
-        }),
-      }),
+      api<Promotion>(
+        promotion ? `/api/retail/promotions/${promotion.id}/` : "/api/retail/promotions/",
+        { method: promotion ? "PATCH" : "POST", body: JSON.stringify(form) },
+      ),
     onSuccess: () => {
-      setCreating(false);
-      void qc.invalidateQueries({ queryKey: ["promotions-list"] });
+      void qc.invalidateQueries({ queryKey: ["promotions"] });
+      onClose();
     },
   });
 
-  function handleCreatePromo(e: FormEvent) {
-    e.preventDefault();
-    createPromoMutation.mutate();
-  }
+  const used = promotion?.times_redeemed ?? 0;
+  const cap = promotion?.max_redemptions ?? 0;
 
   return (
-    <div className="max-w-6xl">
-      <button
-        onClick={() => navigate("/pos")}
-        className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
-      >
-        <ArrowLeft className="h-4 w-4" /> Return to POS Counter
-      </button>
+    <Drawer
+      title={promotion ? `${promotion.code} · ${promotion.name}` : "New promotion"}
+      badge={
+        promotion ? (
+          <Badge tone={statusOf(promotion).tone}>{statusOf(promotion).label}</Badge>
+        ) : undefined
+      }
+      width="max-w-2xl"
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => save.mutate()}
+            disabled={save.isPending || !form.code.trim() || !form.valid_until}
+          >
+            {save.isPending ? "Saving…" : promotion ? "Save changes" : "Create promotion"}
+          </Button>
+        </div>
+      }
+    >
+      <ErrorNote error={save.error} />
 
+      {promotion && (
+        <Section title="Redemption">
+          <Facts
+            rows={[
+              ["Times redeemed", String(used)],
+              ["Limit", cap ? String(cap) : "Unlimited"],
+              ["Remaining", cap ? String(Math.max(cap - used, 0)) : "—"],
+            ]}
+          />
+          {cap > 0 && (
+            <div className="mt-3">
+              <ProgressBar
+                value={Math.min((used / cap) * 100, 100)}
+                label={`${used} of ${cap} used`}
+              />
+            </div>
+          )}
+        </Section>
+      )}
+
+      <Section title="Offer">
+        <Grid cols={2}>
+          <Field label="Code" hint="What the customer types or shows at the till.">
+            <Input
+              value={form.code}
+              onChange={(e) => set({ code: e.target.value.toUpperCase() })}
+              placeholder="SAVE10"
+            />
+          </Field>
+          <Field label="Name">
+            <Input value={form.name} onChange={(e) => set({ name: e.target.value })} />
+          </Field>
+          <Field label="Type">
+            <Select
+              value={form.promo_type}
+              onChange={(e) => set({ promo_type: e.target.value as PromoType })}
+            >
+              <option value="PERCENT">Percentage off</option>
+              <option value="FLAT">Flat amount off</option>
+              <option value="BOGO">Buy one get one</option>
+            </Select>
+          </Field>
+          <Field
+            label={form.promo_type === "PERCENT" ? "Percent" : "Amount (RWF)"}
+            hint={form.promo_type === "BOGO" ? "Ignored — BOGO gives one free per two." : undefined}
+          >
+            <Input
+              value={form.discount_value}
+              onChange={(e) => set({ discount_value: e.target.value })}
+              className="text-right tabular-nums"
+              disabled={form.promo_type === "BOGO"}
+            />
+          </Field>
+        </Grid>
+      </Section>
+
+      <Section title="Limits">
+        <Grid cols={2}>
+          <Field label="From">
+            <Input
+              type="date"
+              value={form.valid_from}
+              onChange={(e) => set({ valid_from: e.target.value })}
+            />
+          </Field>
+          <Field label="Until">
+            <Input
+              type="date"
+              value={form.valid_until}
+              onChange={(e) => set({ valid_until: e.target.value })}
+            />
+          </Field>
+          <Field label="Minimum spend" hint="Zero for no minimum.">
+            <Input
+              value={form.min_spend}
+              onChange={(e) => set({ min_spend: e.target.value })}
+              className="text-right tabular-nums"
+            />
+          </Field>
+          <Field
+            label="Redemption limit"
+            hint="Zero is unlimited. A coupon posted online with no cap gets redeemed by the whole city."
+          >
+            <Input
+              type="number"
+              min={0}
+              value={form.max_redemptions}
+              onChange={(e) => set({ max_redemptions: Number(e.target.value) })}
+            />
+          </Field>
+        </Grid>
+        <Field label="Active">
+          <Select
+            value={form.is_active ? "yes" : "no"}
+            onChange={(e) => set({ is_active: e.target.value === "yes" })}
+          >
+            <option value="yes">Active</option>
+            <option value="no">Switched off</option>
+          </Select>
+        </Field>
+      </Section>
+    </Drawer>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+export function PromotionsPage() {
+  const [open, setOpen] = useState<Promotion | null | "new">(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["promotions"],
+    queryFn: () => api<Paginated<Promotion>>("/api/retail/promotions/?page_size=200"),
+  });
+  const promotions = useMemo(() => data?.results ?? [], [data]);
+
+  const live = promotions.filter((p) => inForce(p)).length;
+  const stale = promotions.filter(
+    (p) => p.is_active && new Date().toISOString().slice(0, 10) > p.valid_until,
+  ).length;
+
+  return (
+    <div className="space-y-4">
       <PageHeader
-        title="POS Promotions, Coupons & Loyalty Discount Rules"
+        title="Promotions & coupons"
         action={
-          <Button onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4" /> Create Promo Offer
+          <Button onClick={() => setOpen("new")}>
+            <Plus className="h-4 w-4" /> New promotion
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
-        Configure seasonal promotions, coupon redemption codes, BOGO bundles, and min-spend discount thresholds at POS checkout.
+      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
+        Applied at the till, not just stored. A coupon that does not qualify is refused with a
+        reason the cashier can read out — "expired on 30 June", "spend 3,000 more".
       </p>
 
-      {promosQuery.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
+      <div className="flex flex-wrap gap-6 rounded-lg border border-line bg-surface-0 px-4 py-3 text-sm">
+        <span className="flex items-center gap-2 text-ink-600">
+          <TicketPercent className="h-4 w-4 text-ink-400" /> {live} live at the counter today
+        </span>
+        {stale > 0 && (
+          <Badge tone="warning">
+            {stale} still switched on but past their end date
+          </Badge>
+        )}
+      </div>
 
-      {promosQuery.data && (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-3">Coupon Code</th>
-                <th className="px-4 py-3">Campaign Name</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3 text-right">Discount</th>
-                <th className="px-4 py-3 text-right">Min Spend (RWF)</th>
-                <th className="px-4 py-3">Validity Window</th>
-                <th className="px-4 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {promosQuery.data.results.map((p) => (
-                <tr key={p.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                  <td className="px-4 py-3 font-mono font-bold text-brand-700">
-                    <div className="flex items-center gap-1.5">
-                      <Tag className="h-4 w-4 text-brand-600" />
-                      <span>{p.code}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 font-medium text-ink-900">{p.name}</td>
-                  <td className="px-4 py-3">
-                    <Badge tone="brand">{p.promo_type}</Badge>
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-emerald-700">
-                    {p.promo_type === "PERCENT" ? `${p.discount_value}%` : `RWF ${Number(p.discount_value).toLocaleString()}`}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-ink-900">
-                    RWF {Number(p.min_spend).toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-ink-700">
-                    {p.valid_from} → {p.valid_until}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge tone={p.is_active ? "success" : "neutral"}>
-                      {p.is_active ? "Active" : "Disabled"}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
-              {promosQuery.data.results.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-ink-500">
-                    No active promotional campaigns configured yet. Click "Create Promo Offer" above.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      <DataGrid
+        rows={promotions}
+        loading={isLoading}
+        getRowId={(p) => p.id}
+        storageKey="retail.promotions"
+        exportName="promotions"
+        searchPlaceholder="Search code or name…"
+        emptyMessage="No promotions configured."
+        onRowClick={(p) => setOpen(p)}
+        columns={[
+          { key: "code", header: "Code", value: (p) => p.code, width: "9rem" },
+          { key: "name", header: "Name", value: (p) => p.name },
+          {
+            key: "promo_type",
+            header: "Type",
+            value: (p) => TYPE_LABEL[p.promo_type],
+            render: (p) => <Badge tone="info">{TYPE_LABEL[p.promo_type]}</Badge>,
+          },
+          {
+            key: "discount_value",
+            header: "Value",
+            align: "right",
+            value: (p) => Number(p.discount_value),
+            render: (p) =>
+              p.promo_type === "PERCENT"
+                ? pct(p.discount_value)
+                : p.promo_type === "FLAT"
+                  ? money(p.discount_value)
+                  : "1 free per 2",
+          },
+          {
+            key: "min_spend",
+            header: "Min spend",
+            numeric: true,
+            align: "right",
+            value: (p) => Number(p.min_spend),
+            render: (p) => (Number(p.min_spend) > 0 ? money(p.min_spend) : "—"),
+          },
+          {
+            key: "window",
+            header: "In force",
+            value: (p) => p.valid_until,
+            render: (p) => `${shortDate(p.valid_from)} – ${shortDate(p.valid_until)}`,
+          },
+          {
+            key: "redeemed",
+            header: "Redeemed",
+            numeric: true,
+            align: "right",
+            value: (p) => p.times_redeemed,
+            render: (p) =>
+              p.max_redemptions
+                ? `${p.times_redeemed} / ${p.max_redemptions}`
+                : String(p.times_redeemed),
+          },
+          {
+            key: "status",
+            header: "Status",
+            value: (p) => statusOf(p).label,
+            render: (p) => <Badge tone={statusOf(p).tone}>{statusOf(p).label}</Badge>,
+          },
+        ]}
+      />
 
-      {creating && (
-        <Modal title="Create Retail Promotional Campaign" onClose={() => setCreating(false)}>
-          <form onSubmit={handleCreatePromo} className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-3">
-              <TextField
-                label="Coupon Code"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                required
-                autoFocus
-              />
-              <TextField
-                label="Campaign Name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-ink-500">
-                  Promo Type
-                </label>
-                <select
-                  className="w-full rounded-md border border-line bg-surface-50 px-3 py-2 text-sm text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  value={promoType}
-                  onChange={(e) => setPromoType(e.target.value as any)}
-                  required
-                >
-                  <option value="PERCENT">Percentage Off (%)</option>
-                  <option value="FLAT">Flat Amount (RWF)</option>
-                  <option value="BOGO">Buy One Get One</option>
-                </select>
-              </div>
-              <TextField
-                label="Discount Value"
-                type="number"
-                step="0.01"
-                value={discountValue}
-                onChange={(e) => setDiscountValue(e.target.value)}
-                required
-              />
-              <TextField
-                label="Min Spend Threshold (RWF)"
-                type="number"
-                value={minSpend}
-                onChange={(e) => setMinSpend(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <TextField
-                label="Valid From"
-                type="date"
-                value={validFrom}
-                onChange={(e) => setValidFrom(e.target.value)}
-                required
-              />
-              <TextField
-                label="Valid Until"
-                type="date"
-                value={validUntil}
-                onChange={(e) => setValidUntil(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="secondary" onClick={() => setCreating(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createPromoMutation.isPending}>
-                {createPromoMutation.isPending ? "Creating…" : "Confirm & Save Campaign"}
-              </Button>
-            </div>
-          </form>
-        </Modal>
+      {open !== null && (
+        <PromotionDrawer
+          promotion={open === "new" ? null : open}
+          onClose={() => setOpen(null)}
+        />
       )}
     </div>
   );

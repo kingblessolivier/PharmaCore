@@ -1,9 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Lock, LockOpen, AlertTriangle } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Circle,
+  FileDown,
+  Lock,
+  LockOpen,
+  MinusCircle,
+} from "lucide-react";
 import { useState } from "react";
-import { Button, PageHeader, Spinner } from "../components/ui";
+import { ChartFrame, Donut, VizRoot, Waterfall } from "../components/Charts";
+import { DataGrid } from "../components/DataGrid";
+import { Drawer, ErrorNote, Input, ProgressBar } from "../components/RecordKit";
+import { Badge, Button, PageHeader, Spinner } from "../components/ui";
 import { api, ApiError } from "../lib/api";
+import { useFinanceDocument } from "../lib/financeDocuments";
 import { useAuth } from "../lib/auth";
+import type { CloseReadiness, PeriodTask } from "../lib/finance";
 import type {
   AccountingPeriod,
   BalanceSheet,
@@ -90,6 +103,8 @@ export function FinanceStatementsPage() {
   const range = `organization=${orgId}&start=${start}&end=${end}`;
   const enabled = orgId > 0;
 
+  const pack = useFinanceDocument("financial-statements");
+
   const plQ = useQuery({
     queryKey: ["fin-pl", orgId, start, end],
     queryFn: () => api<ProfitAndLoss>(`/api/finance/reports/profit-and-loss/?${range}`),
@@ -170,6 +185,67 @@ export function FinanceStatementsPage() {
         <div className="flex justify-center py-10">
           <Spinner />
         </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-ink-500">
+          {/* A report you can look at is not a document you can file. */}
+          Statements on screen are live. The filed pack is a numbered, hashed PDF.
+        </p>
+        <Button
+          variant="secondary"
+          onClick={() => pack.mutate({ start, end })}
+          disabled={pack.isPending}
+        >
+          <FileDown className="h-4 w-4" />
+          {pack.isPending ? "Preparing…" : "Statements PDF"}
+        </Button>
+      </div>
+      {pack.data && (
+        <p className="text-xs text-ink-500">
+          Issued as <strong>{pack.data.doc_number}</strong>.
+        </p>
+      )}
+
+      {tab === "pl" && plQ.data && (
+        <VizRoot>
+          <div className="mb-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+            {/* Revenue down to net profit, one step at a time. A column of
+                numbers makes the reader do this subtraction in their head. */}
+            <ChartFrame
+              title="Revenue to net profit"
+              subtitle="What each layer of cost takes out."
+            >
+              <Waterfall
+                steps={[
+                  { label: "Revenue", value: Number(plQ.data.revenue), isTotal: true },
+                  { label: "Cost of sales", value: -Number(plQ.data.cogs) },
+                  { label: "Gross", value: Number(plQ.data.gross_profit), isTotal: true },
+                  { label: "Opex", value: -Number(plQ.data.operating_expenses) },
+                  { label: "Depreciation", value: -Number(plQ.data.depreciation) },
+                  { label: "Interest", value: -Number(plQ.data.finance_cost) },
+                  { label: "Tax", value: -Number(plQ.data.tax_expense) },
+                  { label: "Net", value: Number(plQ.data.net_profit), isTotal: true },
+                ]}
+              />
+            </ChartFrame>
+            <ChartFrame
+              title="Where the money goes"
+              subtitle="Cost of sales against everything else."
+            >
+              <Donut
+                slices={[
+                  { label: "Cost of sales", value: Number(plQ.data.cogs) },
+                  { label: "Operating expenses", value: Number(plQ.data.operating_expenses) },
+                  { label: "Depreciation", value: Number(plQ.data.depreciation) },
+                  { label: "Interest & tax", value: Number(plQ.data.finance_cost) + Number(plQ.data.tax_expense) },
+                  { label: "Net profit", value: Math.max(Number(plQ.data.net_profit), 0) },
+                ].filter((s) => s.value > 0)}
+                valueFormat={money}
+              />
+            </ChartFrame>
+          </div>
+        </VizRoot>
       )}
 
       {tab === "pl" && plQ.data && (
@@ -360,6 +436,34 @@ export function FinanceStatementsPage() {
               {pct(groupQ.data.group_net_margin_pct)}
             </span>
           </div>
+          {groupQ.data.eliminations.invoice_count > 0 && (
+            <div className="border-b border-line bg-surface-50 px-4 py-3 text-sm">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+                <span className="font-medium text-ink-900">Intercompany eliminated</span>
+                <span className="text-ink-600">
+                  Branches sum to{" "}
+                  <span className="tabular-nums">{money(groupQ.data.gross_totals.revenue)}</span>
+                </span>
+                <span className="text-ink-600">
+                  less internal trade{" "}
+                  <span className="tabular-nums">{money(groupQ.data.eliminations.revenue)}</span>
+                  {" "}({groupQ.data.eliminations.invoice_count} invoice
+                  {groupQ.data.eliminations.invoice_count === 1 ? "" : "s"})
+                </span>
+                <span className="font-semibold text-ink-900">
+                  group revenue{" "}
+                  <span className="tabular-nums">{money(groupQ.data.totals.revenue)}</span>
+                </span>
+              </div>
+              {/* A consolidation that quietly ignores a known limitation is worse
+                  than one that names it. */}
+              {groupQ.data.eliminations.unrealised_profit_note && (
+                <p className="mt-1 text-xs text-ink-500">
+                  {groupQ.data.eliminations.unrealised_profit_note}
+                </p>
+              )}
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
@@ -422,9 +526,133 @@ export function FinanceStatementsPage() {
   );
 }
 
+function ChecklistPanel({ period }: { period: AccountingPeriod }) {
+  const qc = useQueryClient();
+  const [waiving, setWaiving] = useState<number | null>(null);
+  const [reason, setReason] = useState("");
+
+  const { data } = useQuery({
+    queryKey: ["period-checklist", period.id],
+    queryFn: () =>
+      api<{ readiness: CloseReadiness; tasks: PeriodTask[] }>(
+        `/api/finance/periods/${period.id}/checklist/`,
+      ),
+  });
+
+  const settle = useMutation({
+    mutationFn: (vars: { taskId: number; status: "DONE" | "WAIVED"; notes: string }) =>
+      api(`/api/finance/periods/${period.id}/checklist/${vars.taskId}/`, {
+        method: "POST",
+        body: JSON.stringify({ status: vars.status, notes: vars.notes }),
+      }),
+    onSuccess: () => {
+      setWaiving(null);
+      setReason("");
+      void qc.invalidateQueries({ queryKey: ["period-checklist", period.id] });
+    },
+  });
+
+  if (!data) return null;
+  const { readiness, tasks } = data;
+
+  return (
+    <div className="rounded-lg border border-line bg-surface-0">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
+        <div>
+          <div className="text-sm font-semibold text-ink-900">Close checklist</div>
+          <div className="text-xs text-ink-500">
+            {/* A balanced trial balance only proves the double entry was arithmetically
+                consistent, not that anything real was recorded. */}
+            A set of books can balance perfectly and still be wrong. These are the checks that
+            make a month-end trustworthy.
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <ProgressBar value={readiness.completion_pct} label={`${readiness.completion_pct}%`} />
+          {readiness.is_ready ? (
+            <Badge tone="success">Ready to close</Badge>
+          ) : (
+            <Badge tone="warning">{readiness.blocking.length} blocking</Badge>
+          )}
+        </div>
+      </div>
+
+      <ul className="divide-y divide-line">
+        {tasks.map((task) => (
+          <li key={task.id} className="px-4 py-2.5">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5">
+                {task.status === "DONE" ? (
+                  <CheckCircle2 className="h-4 w-4 text-success-600" />
+                ) : task.status === "WAIVED" ? (
+                  <MinusCircle className="h-4 w-4 text-ink-400" />
+                ) : (
+                  <Circle
+                    className={`h-4 w-4 ${task.is_blocking ? "text-warning-600" : "text-ink-300"}`}
+                  />
+                )}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-ink-900">{task.title}</span>
+                  {!task.is_blocking && <Badge tone="default">advisory</Badge>}
+                </div>
+                <p className="text-xs text-ink-500">{task.description}</p>
+                {task.notes && (
+                  <p className="mt-1 text-xs italic text-ink-600">Waived: {task.notes}</p>
+                )}
+                {waiving === task.id && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <Input
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                      placeholder="Why is this being waived?"
+                      className="h-8 text-xs"
+                    />
+                    <Button
+                      variant="secondary"
+                      onClick={() =>
+                        settle.mutate({ taskId: task.id, status: "WAIVED", notes: reason })
+                      }
+                      disabled={!reason.trim() || settle.isPending}
+                    >
+                      Waive
+                    </Button>
+                    <Button variant="ghost" onClick={() => setWaiving(null)}>
+                      Cancel
+                    </Button>
+                  </div>
+                )}
+              </div>
+              {!task.is_settled && waiving !== task.id && (
+                <div className="flex shrink-0 items-center gap-3">
+                  <button
+                    className="text-xs text-brand-600 hover:underline"
+                    onClick={() => settle.mutate({ taskId: task.id, status: "DONE", notes: "" })}
+                  >
+                    Mark done
+                  </button>
+                  <button
+                    className="text-xs text-ink-500 hover:underline"
+                    onClick={() => setWaiving(task.id)}
+                  >
+                    Waive
+                  </button>
+                </div>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <ErrorNote error={settle.error} />
+    </div>
+  );
+}
+
 function PeriodClosePanel({ orgId, start, end }: { orgId: number; start: string; end: string }) {
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const [openChecklist, setOpenChecklist] = useState<AccountingPeriod | null>(null);
 
   const periodsQ = useQuery({
     queryKey: ["fin-periods", orgId],
@@ -455,11 +683,15 @@ function PeriodClosePanel({ orgId, start, end }: { orgId: number; start: string;
     onError: (e) => setError(e instanceof ApiError ? e.message : "Could not reopen."),
   });
 
+  const periods = periodsQ.data?.results ?? [];
+  const current = periods.find((p) => p.start_date === start && p.end_date === end);
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-0 px-4 py-3">
         <div className="text-sm text-ink-600">
-          Closing freezes {start} → {end}: no entry may be dated inside a closed period.
+          Closing freezes {start} to {end}: no entry may be dated inside a closed period, and
+          every blocking checklist item must be done or waived first.
         </div>
         <Button onClick={() => close.mutate()} disabled={close.isPending}>
           <Lock className="h-4 w-4" /> {close.isPending ? "Closing…" : "Close this period"}
@@ -467,62 +699,82 @@ function PeriodClosePanel({ orgId, start, end }: { orgId: number; start: string;
       </div>
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      <div className="overflow-hidden rounded-lg border border-line bg-surface-0">
-        <table className="w-full text-sm">
-          <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
-            <tr>
-              <th className="px-4 py-2">Period</th>
-              <th className="px-4 py-2">Kind</th>
-              <th className="px-4 py-2">Status</th>
-              <th className="px-4 py-2 text-right">Net profit at close</th>
-              <th className="px-4 py-2">Closed by</th>
-              <th className="px-4 py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {periodsQ.data?.results.map((p) => (
-              <tr key={p.id} className="border-b border-line last:border-0">
-                <td className="px-4 py-2 font-mono text-xs">
-                  {p.start_date} → {p.end_date}
-                </td>
-                <td className="px-4 py-2 text-ink-600">{p.kind}</td>
-                <td className="px-4 py-2">
-                  <span
-                    className={`inline-flex items-center gap-1 text-xs font-medium ${
-                      p.status === "CLOSED" ? "text-ink-700" : "text-green-700"
-                    }`}
-                  >
-                    {p.status === "CLOSED" ? (
-                      <Lock className="h-3 w-3" />
-                    ) : (
-                      <LockOpen className="h-3 w-3" />
-                    )}
-                    {p.status}
-                  </span>
-                </td>
-                <td className="px-4 py-2 text-right font-mono tabular-nums">
-                  {p.closing_totals?.net_profit ? money(p.closing_totals.net_profit) : "—"}
-                </td>
-                <td className="px-4 py-2 text-ink-600">{p.closed_by_name ?? "—"}</td>
-                <td className="px-4 py-2 text-right">
-                  {p.status === "CLOSED" && (
-                    <Button variant="secondary" onClick={() => reopen.mutate(p.id)}>
-                      Reopen
-                    </Button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {periodsQ.data && periodsQ.data.results.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-ink-500">
-                  No periods closed yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {current && <ChecklistPanel period={current} />}
+
+      <DataGrid
+        rows={periods}
+        loading={periodsQ.isLoading}
+        getRowId={(p) => p.id}
+        storageKey="finance.periods"
+        exportName="accounting-periods"
+        searchPlaceholder="Search periods…"
+        emptyMessage="No periods closed yet."
+        onRowClick={(p) => setOpenChecklist(p)}
+        columns={[
+          {
+            key: "period",
+            header: "Period",
+            value: (p) => p.end_date,
+            render: (p) => `${p.start_date} → ${p.end_date}`,
+          },
+          { key: "kind", header: "Kind", value: (p) => p.kind, width: "6rem" },
+          {
+            key: "status",
+            header: "Status",
+            value: (p) => p.status,
+            render: (p) =>
+              p.status === "CLOSED" ? (
+                <Badge tone="default">
+                  <Lock className="mr-1 inline h-3 w-3" />
+                  Closed
+                </Badge>
+              ) : (
+                <Badge tone="success">
+                  <LockOpen className="mr-1 inline h-3 w-3" />
+                  Open
+                </Badge>
+              ),
+          },
+          {
+            key: "net_profit",
+            header: "Net profit at close",
+            numeric: true,
+            align: "right",
+            value: (p) => Number(p.closing_totals?.net_profit ?? 0),
+            render: (p) =>
+              p.closing_totals?.net_profit ? money(p.closing_totals.net_profit) : "—",
+          },
+          { key: "closed_by", header: "Closed by", value: (p) => p.closed_by_name ?? "—" },
+          {
+            key: "actions",
+            header: "",
+            fixed: true,
+            sortable: false,
+            render: (p) =>
+              p.status === "CLOSED" ? (
+                <button
+                  className="text-xs text-brand-600 hover:underline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    reopen.mutate(p.id);
+                  }}
+                >
+                  Reopen
+                </button>
+              ) : null,
+          },
+        ]}
+      />
+
+      {openChecklist && openChecklist.id !== current?.id && (
+        <Drawer
+          title={`Checklist · ${openChecklist.start_date} → ${openChecklist.end_date}`}
+          width="max-w-3xl"
+          onClose={() => setOpenChecklist(null)}
+        >
+          <ChecklistPanel period={openChecklist} />
+        </Drawer>
+      )}
     </div>
   );
 }

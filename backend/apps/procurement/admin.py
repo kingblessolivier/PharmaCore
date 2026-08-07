@@ -134,7 +134,12 @@ class GoodsReceiptAdmin(admin.ModelAdmin):
 @admin.register(SupplierInvoice)
 class SupplierInvoiceAdmin(admin.ModelAdmin):
     list_display = (
-        "invoice_number", "supplier", "organization", "status", "match_result", "invoice_date"
+        "invoice_number",
+        "supplier",
+        "organization",
+        "status",
+        "match_result",
+        "invoice_date",
     )
     list_filter = ("status", "match_result", "organization")
     search_fields = ("invoice_number", "internal_number", "supplier__name")

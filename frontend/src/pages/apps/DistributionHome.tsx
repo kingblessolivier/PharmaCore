@@ -1,12 +1,27 @@
+/* -------------------------------------------------------------------------- */
+/* Distribution overview — what needs attention, not what the module does.     */
+/*                                                                             */
+/* The tiles used to be four all-time counts, one of which pointed at a route  */
+/* that did not exist and another of which silently showed the total instead   */
+/* of the pending subset. A count that is always right and never actionable is */
+/* worse than no count. These answer three questions a depot manager opens the */
+/* screen with: is my storefront healthy, who is waiting on me, and what is    */
+/* stuck.                                                                      */
+/* -------------------------------------------------------------------------- */
+
 import { useQuery } from "@tanstack/react-query";
 import {
-  Building2,
+  AlertTriangle,
+  CheckCircle2,
   ClipboardList,
+  EyeOff,
   FileCheck,
   PackageCheck,
   RotateCcw,
+  Ship,
   ShoppingCart,
   Store,
+  TrendingUp,
   Truck,
   Users,
 } from "lucide-react";
@@ -19,172 +34,322 @@ import {
   SectionGrid,
   StatTile,
 } from "../../components/AppHome";
-import { Badge, Card } from "../../components/ui";
 import { api } from "../../lib/api";
+import { overview } from "../../lib/distribution";
+import { money } from "../../lib/format";
+import { useDefaultOrg } from "../../lib/recordData";
 import type { Paginated, StockOrder } from "../../lib/types";
 
 export function DistributionHome() {
-  const ordersQuery = useQuery({
+  const { orgId } = useDefaultOrg();
+
+  const health = useQuery({
+    queryKey: ["distribution-overview", orgId],
+    enabled: orgId != null,
+    queryFn: () => overview(orgId as number),
+  });
+
+  const orders = useQuery({
     queryKey: ["count", "orders"],
     queryFn: () => api<Paginated<StockOrder>>("/api/distribution/orders/?page_size=1"),
     select: (r) => r.count,
   });
 
-  const pendingQuery = useQuery({
+  const pending = useQuery({
     queryKey: ["count", "orders-pending"],
-    queryFn: () => api<Paginated<StockOrder>>("/api/distribution/orders/?status=PENDING&page_size=1"),
+    queryFn: () =>
+      api<Paginated<StockOrder>>("/api/distribution/orders/?status=PENDING&page_size=1"),
     select: (r) => r.count,
   });
 
-  const inTransitQuery = useQuery({
+  const inTransit = useQuery({
     queryKey: ["count", "in-transit"],
     queryFn: () => api<Paginated<unknown>>("/api/distribution/in-transit/?page_size=1"),
     select: (r) => r.count,
   });
 
-  const grnQuery = useQuery({
+  const grns = useQuery({
     queryKey: ["count", "grn"],
-    queryFn: () => api<Paginated<unknown>>("/api/distribution/grn/?page_size=1"),
+    queryFn: () => api<Paginated<unknown>>("/api/distribution/grns/?page_size=1"),
     select: (r) => r.count,
   });
 
+  const store = health.data?.storefront;
+  const demand = health.data?.demand;
+  const returns = health.data?.returns;
+
   return (
-    <div className="flex flex-col gap-6 max-w-6xl">
+    <div className="flex max-w-6xl flex-col gap-6">
       <AppHeader
         icon={Truck}
         hue="#3B5BDB"
-        title="B2B Wholesale Distribution & Stock Transfer Engine"
-        subtitle="Whole-sale depot offerings, B2B purchase orders (Retail ➔ Depot), 1-click FEFO approval & dispatch, delivery notes, live in-transit tracking, and automated retail inventory provisioning."
+        title="Distribution"
+        subtitle="What you offer to retail pharmacies, what they ordered that you could not supply, and what is moving between you."
       />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Link to="/distribution/orders">
-          <StatTile label="Total B2B Orders" value={ordersQuery.data ?? 0} hint="all-time POs" />
+        <Link to="/distribution/listings">
+          <StatTile
+            label="On sale"
+            value={store?.published ?? 0}
+            hint={
+              store
+                ? `of ${store.products_held} product(s) you hold`
+                : "products published to buyers"
+            }
+          />
+        </Link>
+        <Link to="/distribution/demand">
+          <StatTile
+            label="Demand to source"
+            value={(demand?.units_open ?? 0).toLocaleString()}
+            hint={
+              demand && demand.units_sourcing > 0
+                ? `${demand.units_sourcing.toLocaleString()} more already on order`
+                : demand && demand.buyers_waiting > 0
+                  ? `${demand.buyers_waiting} pharmacy(ies) waiting`
+                  : "nothing outstanding"
+            }
+          />
         </Link>
         <Link to="/distribution/orders?status=PENDING">
-          <StatTile label="Pending Approval" value={pendingQuery.data ?? 0} hint="awaiting depot" />
+          <StatTile
+            label="Awaiting approval"
+            value={pending.data ?? 0}
+            hint={`of ${orders.data ?? 0} order(s) all-time`}
+          />
         </Link>
         <Link to="/distribution/in-transit">
-          <StatTile label="In-Transit Batches" value={inTransitQuery.data ?? 0} hint="en-route on trucks" />
-        </Link>
-        <Link to="/distribution/grn">
-          <StatTile label="Goods Received Notes" value={grnQuery.data ?? 0} hint="finalized GRNs" />
+          <StatTile
+            label="In transit"
+            value={inTransit.data ?? 0}
+            hint="batches on the road"
+          />
         </Link>
       </div>
+
+      <NeedsAttention
+        store={store}
+        demand={demand}
+        returns={returns}
+        loading={health.isLoading}
+      />
 
       <QuickActions>
-        <QuickAction to="/distribution/orders" icon={ClipboardList} label="B2B Purchase Orders" primary />
-        <QuickAction to="/distribution/in-transit" icon={Truck} label="Track In-Transit Stock" />
-        <QuickAction to="/distribution/grn" icon={PackageCheck} label="Inspect GRNs" />
+        <QuickAction to="/distribution/listings" icon={Store} label="Manage what you offer" primary />
+        <QuickAction to="/distribution/demand" icon={TrendingUp} label="Review unmet demand" />
+        <QuickAction to="/distribution/orders" icon={ClipboardList} label="B2B purchase orders" />
       </QuickActions>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card className="p-5 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2 pb-3 border-b border-line">
-              <Building2 className="h-4 w-4 text-blue-600" />
-              <h3 className="font-semibold text-sm text-ink-900">Wholesale Depot ➔ Retail Branch Rules</h3>
-            </div>
-            <div className="mt-4 flex flex-col gap-3 text-xs text-ink-700">
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-blue-900">
-                <div className="font-semibold text-sm">Automated Retail Stock Provisioning</div>
-                <p className="mt-1 text-blue-800">
-                  When a retail pharmacy buys stock from a wholesale depot via B2B PO, receiving (GRN) automatically provisions the medicine and batch into the retail pharmacy's inventory and catalog—leaving retail price configuration to the retail pharmacy.
-                </p>
-              </div>
-            </div>
-          </div>
-          <Link
-            to="/distribution/orders"
-            className="mt-4 flex items-center justify-center gap-2 rounded-md bg-surface-100 py-2 text-xs font-medium text-ink-700 hover:bg-surface-200"
-          >
-            Manage Purchase Orders
-          </Link>
-        </Card>
-
-        <Card className="p-5 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2 pb-3 border-b border-line">
-              <Truck className="h-4 w-4 text-brand-600" />
-              <h3 className="font-semibold text-sm text-ink-900">In-Transit Ledger & Zero Ghost Stock</h3>
-            </div>
-            <div className="mt-4 flex flex-col gap-3 text-xs">
-              <p className="text-ink-600">
-                Every unit is tracked at all times. Dispatch moves stock from depot on-hand into the In-Transit ledger; receiving lands it in retail on-hand.
-              </p>
-              <div className="flex items-center justify-between border-t border-line pt-2">
-                <span>Active In-Transit Shipments</span>
-                <Badge tone="warning">{inTransitQuery.data ?? 0} batches</Badge>
-              </div>
-            </div>
-          </div>
-          <Link
-            to="/distribution/in-transit"
-            className="mt-4 flex items-center justify-center gap-2 rounded-md bg-brand-50 py-2 text-xs font-medium text-brand-900 hover:bg-brand-100"
-          >
-            View In-Transit Ledger
-          </Link>
-        </Card>
-      </div>
 
       <div>
         <h2 className="mb-3 text-base font-semibold tracking-tight text-ink-900">
-          Distribution Subsystem Modules
+          Everything in distribution
         </h2>
         <SectionGrid>
           <SectionCard
-            icon={ClipboardList}
-            title="B2B Purchase Orders"
-            description="Create, approve, FEFO-reserve, dispatch, and track B2B order settlement."
-            to="/distribution/orders"
-            meta={ordersQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={Truck}
-            title="Live In-Transit Monitor"
-            description="Track stock currently en-route on delivery trucks between depots and retail branches."
-            to="/distribution/in-transit"
-            meta={inTransitQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={PackageCheck}
-            title="Goods Received Notes (GRN)"
-            description="Receipt verification, discrepancy logging, and automated retail inventory landing."
-            to="/distribution/grn"
-            meta={grnQuery.data ?? 0}
-          />
-          <SectionCard
             icon={Store}
-            title="Depot Offered Listings"
-            description="Expose offered inventory separate from physical warehouse stock, set buffers & prices."
+            title="Depot offered listings"
+            description="What you publish to buyers, what you hold back, and who may buy it."
             to="/distribution/listings"
+            meta={store?.published}
           />
           <SectionCard
             icon={ShoppingCart}
-            title="B2B Ordering Portal"
-            description="Retailer online portal to browse published depot offerings & place stock orders."
+            title="B2B ordering portal"
+            description="Buy from another wholesaler's published catalogue."
             to="/distribution/portal"
           />
           <SectionCard
+            icon={TrendingUp}
+            title="Unmet demand"
+            description="What pharmacies asked for that you could not supply — and the import it becomes."
+            to="/distribution/demand"
+            meta={demand?.products_open}
+          />
+          <SectionCard
+            icon={ClipboardList}
+            title="B2B purchase orders"
+            description="Approve, FEFO-reserve, dispatch and settle orders from retail pharmacies."
+            to="/distribution/orders"
+            meta={orders.data}
+          />
+          <SectionCard
+            icon={Truck}
+            title="In-transit stock"
+            description="Units that have left you but not yet been received, so nothing is counted twice or lost."
+            to="/distribution/in-transit"
+            meta={inTransit.data}
+          />
+          <SectionCard
+            icon={PackageCheck}
+            title="Goods received notes"
+            description="Receipt verification, discrepancy logging and stock landing."
+            to="/distribution/grn"
+            meta={grns.data}
+          />
+          <SectionCard
             icon={Users}
-            title="Field Sales & Reps"
-            description="Medical reps, territory beats, daily journey plans, van-sales & commission tracking."
+            title="Field sales & reps"
+            description="Territory performance against target, van stock and commission."
             to="/distribution/sales-reps"
           />
           <SectionCard
             icon={FileCheck}
-            title="Institutional Tenders"
-            description="Hospital & MOH tender bids, locked price contracts & scheduled call-offs."
+            title="Institutional tenders"
+            description="Awarded contracts, locked prices and how much committed volume is left."
             to="/distribution/tenders"
           />
           <SectionCard
             icon={RotateCcw}
-            title="Customer Returns"
-            description="Return-to-depot RFDA quality inspection, restock verification & credit notes."
+            title="Customer returns"
+            description="Inspect what came back, restock only what is fit to resell, credit only that."
             to="/distribution/returns"
+            meta={returns?.awaiting_inspection}
           />
         </SectionGrid>
       </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+function Row({
+  ok,
+  label,
+  detail,
+  to,
+  icon: Icon,
+}: {
+  ok: boolean;
+  label: string;
+  detail: string;
+  to: string;
+  icon: typeof Store;
+}) {
+  return (
+    <li className="flex items-start gap-2.5 py-2">
+      <span className="mt-0.5">
+        {ok ? (
+          <CheckCircle2 className="h-4 w-4 text-success-600" />
+        ) : (
+          <AlertTriangle className="h-4 w-4 text-warning-600" />
+        )}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 text-sm text-ink-900">
+          <Icon className="h-3.5 w-3.5 text-ink-400" />
+          {label}
+        </div>
+        <div className="text-xs text-ink-500">{detail}</div>
+      </div>
+      {!ok && (
+        <Link to={to} className="shrink-0 text-xs text-brand-600 hover:underline">
+          Open
+        </Link>
+      )}
+    </li>
+  );
+}
+
+function NeedsAttention({
+  store,
+  demand,
+  returns,
+  loading,
+}: {
+  store?: { published: number; withheld: number; unlisted: number; oversold: unknown[] };
+  demand?: {
+    units_open: number;
+    units_sourcing: number;
+    buyers_waiting: number;
+    oldest_days: number;
+    open_lines: number;
+  };
+  returns?: { awaiting_inspection: number; credited_amount: number };
+  loading: boolean;
+}) {
+  if (loading || !store || !demand || !returns) return null;
+
+  return (
+    <div className="rounded-lg border border-line bg-surface-0">
+      <div className="border-b border-line px-4 py-3">
+        <div className="text-sm font-semibold text-ink-900">Needs your attention</div>
+        <div className="text-xs text-ink-500">
+          Decisions only you can make: what to sell, what to import, what to take back.
+        </div>
+      </div>
+      <ul className="divide-y divide-line px-4">
+        <Row
+          ok={store.unlisted === 0}
+          icon={Store}
+          label={
+            store.unlisted === 0
+              ? "Everything you hold is listed"
+              : `${store.unlisted} product(s) you hold are not listed at all`
+          }
+          detail={
+            store.unlisted === 0
+              ? "Every product in your warehouse has a storefront listing."
+              : "No buyer can see or order them. Publish them, or leave them off deliberately."
+          }
+          to="/distribution/listings"
+        />
+        <Row
+          ok={store.oversold.length === 0}
+          icon={AlertTriangle}
+          label={
+            store.oversold.length === 0
+              ? "Nothing is over-published"
+              : `${store.oversold.length} listing(s) offer more than you can deliver`
+          }
+          detail={
+            store.oversold.length === 0
+              ? "Every published quantity is backed by stock you actually hold."
+              : "Buyers are capped at real stock, so these orders will quietly under-fill."
+          }
+          to="/distribution/listings"
+        />
+        <Row
+          ok={demand.open_lines === 0}
+          icon={Ship}
+          label={
+            demand.open_lines === 0
+              ? "No unsourced demand"
+              : `${demand.units_open.toLocaleString()} unit(s) wanted and not yet sourced`
+          }
+          detail={
+            demand.open_lines === 0
+              ? "Everything your customers asked for was either supplied or is being sourced."
+              : `${demand.buyers_waiting} pharmacy(ies) waiting, oldest ${demand.oldest_days} day(s). Raise a requisition to import against it.`
+          }
+          to="/distribution/demand"
+        />
+        <Row
+          ok={returns.awaiting_inspection === 0}
+          icon={RotateCcw}
+          label={
+            returns.awaiting_inspection === 0
+              ? "No returns waiting"
+              : `${returns.awaiting_inspection} return(s) awaiting inspection`
+          }
+          detail={
+            returns.awaiting_inspection === 0
+              ? `${money(returns.credited_amount)} credited to date.`
+              : "Goods are sitting at your depot uninspected — neither restocked nor credited."
+          }
+          to="/distribution/returns"
+        />
+        {store.withheld > 0 && (
+          <Row
+            ok
+            icon={EyeOff}
+            label={`${store.withheld} listing(s) deliberately withheld`}
+            detail="Invisible to buyers by your choice. Nothing to do — shown so it is never a surprise."
+            to="/distribution/listings"
+          />
+        )}
+      </ul>
     </div>
   );
 }

@@ -39,9 +39,24 @@ def retail_user(retail: Organization) -> User:
 
 @pytest.fixture
 def offered(depot: Organization, product: Product):
-    """The depot lists the product with a wholesale price (what a PO pulls)."""
-    from apps.inventory.models import PharmacyProduct
+    """The depot offers the product *and* holds it.
 
+    An order is now capped at what the depot can actually supply, so an offer with
+    no stock behind it fills nothing — the demand is recorded instead. These tests
+    are about pricing and settlement, so the depot is stocked.
+    """
+    from datetime import date, timedelta
+
+    from apps.inventory.models import InventoryBatch, PharmacyProduct
+
+    InventoryBatch.objects.create(
+        organization=depot,
+        product=product,
+        batch_number="ORD-TEST",
+        expiry_date=date.today() + timedelta(days=365),
+        quantity_available=1000,
+        status=InventoryBatch.Status.ACTIVE,
+    )
     return PharmacyProduct.objects.create(
         organization=depot, product=product, wholesale_price="12.00"
     )
@@ -74,15 +89,34 @@ def test_create_order_pulls_wholesale_price(
 
 
 @pytest.mark.django_db
-def test_order_rejected_if_depot_does_not_offer_product(
+def test_unoffered_product_is_recorded_as_demand_not_refused(
     retail_user: User, depot, retail, product
 ) -> None:
-    # No PharmacyProduct listing → depot doesn't offer it → 400.
+    """A depot that does not stock something still wants to know it was asked for.
+
+    This is the marketplace's whole point: the retailer's request becomes the
+    demand signal the depot imports against, instead of being thrown away.
+    """
     resp = _auth(retail_user).post(
         "/api/distribution/orders/", _payload(depot, retail, product), format="json"
     )
+    assert resp.status_code == 201, resp.content
+    body = resp.json()
+    assert body["items"] == [], "nothing could be supplied"
+    assert body["total_amount"] == 0.0, "nothing supplied, nothing owed"
+
+    backorder = body["backorders"][0]
+    assert backorder["quantity"] == 100
+    assert backorder["origin"] == "UNLISTED"
+
+
+@pytest.mark.django_db
+def test_backorder_can_be_declined_by_the_buyer(retail_user: User, depot, retail, product) -> None:
+    """A buyer who wants goods or nothing can still say so."""
+    payload = _payload(depot, retail, product) | {"allow_backorder": False}
+    resp = _auth(retail_user).post("/api/distribution/orders/", payload, format="json")
     assert resp.status_code == 400
-    assert "not offered" in str(resp.content)
+    assert "cannot be ordered" in str(resp.content)
 
 
 @pytest.mark.django_db
@@ -152,11 +186,22 @@ def test_depot_sees_incoming_order(depot, retail, product, retail_user, offered)
 @pytest.mark.django_db
 def test_inter_branch_transfer_between_two_retails(product) -> None:
     """A branch can source from another branch, not just a depot."""
-    from apps.inventory.models import PharmacyProduct
+    from datetime import date, timedelta
+
+    from apps.inventory.models import InventoryBatch, PharmacyProduct
 
     source = Organization.objects.create(name="Branch A", type=Organization.OrgType.RETAIL)
     dest = Organization.objects.create(name="Branch B", type=Organization.OrgType.RETAIL)
     PharmacyProduct.objects.create(organization=source, product=product, wholesale_price="12.00")
+    # The sending branch must actually hold the goods it is transferring.
+    InventoryBatch.objects.create(
+        organization=source,
+        product=product,
+        batch_number="XFER",
+        expiry_date=date.today() + timedelta(days=365),
+        quantity_available=100,
+        status=InventoryBatch.Status.ACTIVE,
+    )
     buyer = User.objects.create_user(username="bmgr", password="x", organization=dest)
     buyer.roles.add(Role.objects.get(code="ORG_ADMIN"))
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from django.db import transaction
 from django.utils import timezone
@@ -148,7 +148,9 @@ def open_investigation(
         max_temp_celsius=Decimal(str(round(max(temps), 2))) if temps else None,
         mkt_celsius=Decimal(str(mkt)) if mkt is not None else None,
         readings_count=len(temps),
-        severity=_severity_for(zone, min(temps) if temps else None, max(temps) if temps else None, minutes),
+        severity=_severity_for(
+            zone, min(temps) if temps else None, max(temps) if temps else None, minutes
+        ),
         opened_by=user,
     )
 
@@ -194,7 +196,7 @@ def close_investigation(
         ExcursionInvestigation.Disposition.QUARANTINE: InventoryBatch.Status.QUARANTINE,
         ExcursionInvestigation.Disposition.DESTROY: InventoryBatch.Status.QUARANTINE,
         ExcursionInvestigation.Disposition.RETURN_TO_SUPPLIER: InventoryBatch.Status.QUARANTINE,
-    }[disposition]
+    }[cast(Any, disposition)]
     investigation.affected_batches.all().update(status=target_status)
 
     investigation.disposition = disposition
@@ -230,16 +232,16 @@ def calibration_register(organization: Any) -> list[dict[str, Any]]:
                 "serial_number": sensor.serial_number,
                 "zone": sensor.zone_id,
                 "zone_name": sensor.zone.name,
-                "accuracy_celsius": str(sensor.accuracy_celsius) if sensor.accuracy_celsius else None,
+                "accuracy_celsius": (
+                    str(sensor.accuracy_celsius) if sensor.accuracy_celsius else None
+                ),
                 "last_calibration_date": (
                     sensor.last_calibration_date.isoformat()
                     if sensor.last_calibration_date
                     else None
                 ),
                 "calibration_due_date": (
-                    sensor.calibration_due_date.isoformat()
-                    if sensor.calibration_due_date
-                    else None
+                    sensor.calibration_due_date.isoformat() if sensor.calibration_due_date else None
                 ),
                 "calibration_state": sensor.calibration_state,
                 "latest_certificate_no": latest.certificate_no if latest else None,
@@ -248,7 +250,9 @@ def calibration_register(organization: Any) -> list[dict[str, Any]]:
                 "is_active": sensor.is_active,
             }
         )
-    rows.sort(key=lambda r: {"OVERDUE": 0, "DUE_SOON": 1, "UNKNOWN": 2, "VALID": 3}[
-        r["calibration_state"]
-    ])
+    rows.sort(
+        key=lambda r: {"OVERDUE": 0, "DUE_SOON": 1, "UNKNOWN": 2, "VALID": 3}[
+            r["calibration_state"]
+        ]
+    )
     return rows

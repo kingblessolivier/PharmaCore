@@ -1,224 +1,403 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CreditCard, Plus } from "lucide-react";
-import { useState, type FormEvent } from "react";
-import { Button, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
-import { api, ApiError } from "../lib/api";
-import { useAuth } from "../lib/auth";
+import { Banknote, Plus } from "lucide-react";
+import { useMemo, useState } from "react";
+import { DataGrid } from "../components/DataGrid";
+import {
+  Drawer,
+  ErrorNote,
+  Facts,
+  Field,
+  Grid,
+  Input,
+  Section,
+  Select,
+  Textarea,
+} from "../components/RecordKit";
+import { Badge, Button, PageHeader } from "../components/ui";
+import { api } from "../lib/api";
+import { money, shortDate } from "../lib/format";
+import { useDefaultOrg } from "../lib/recordData";
 import type { Paginated, Supplier, SupplierBill } from "../lib/types";
 
-const money = (n: string | number) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
-
-const STATUS_TONE: Record<string, string> = {
-  UNPAID: "text-red-700 bg-red-50",
-  PARTIAL: "text-amber-700 bg-amber-50",
-  PAID: "text-green-700 bg-green-50",
+const STATUS_TONE: Record<string, "warning" | "info" | "success" | "danger" | "default"> = {
+  UNPAID: "warning",
+  PARTIAL: "info",
+  PAID: "success",
+  OVERDUE: "danger",
+  CANCELLED: "default",
 };
 
-function NewBillModal({ onClose, orgId }: { onClose: () => void; orgId: number }) {
-  const qc = useQueryClient();
-  const [supplier, setSupplier] = useState<number>(0);
-  const [billNumber, setBillNumber] = useState("");
-  const [billDate, setBillDate] = useState(new Date().toISOString().slice(0, 10));
-  const [dueDate, setDueDate] = useState("");
-  const [amount, setAmount] = useState("");
-  const [error, setError] = useState<string | null>(null);
+const METHODS: [string, string][] = [
+  ["BANK_TRANSFER", "Bank transfer"],
+  ["MOBILE_MONEY", "Mobile money"],
+  ["CASH", "Cash"],
+  ["CHEQUE", "Cheque"],
+];
 
-  const suppliersQ = useQuery({
-    queryKey: ["suppliers"],
-    queryFn: () => api<Paginated<Supplier>>("/api/catalog/suppliers/"),
+/** Overdue is a fact about today, not a stored status — a bill can sit UNPAID
+ * and be perfectly current, or be a month past due and look identical. */
+function isOverdue(bill: SupplierBill): boolean {
+  if (bill.status === "PAID" || !bill.due_date) return false;
+  return new Date(bill.due_date) < new Date(new Date().toDateString());
+}
+
+/* -------------------------------------------------------------------------- */
+
+function NewBillDrawer({
+  orgId,
+  suppliers,
+  onClose,
+}: {
+  orgId: number | null;
+  suppliers: Supplier[];
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    supplier: "" as number | "",
+    bill_number: "",
+    bill_date: new Date().toISOString().slice(0, 10),
+    due_date: "",
+    total_amount: "",
+    vat_amount: "0",
+    notes: "",
   });
+  const set = (patch: Partial<typeof form>) => setForm({ ...form, ...patch });
 
   const create = useMutation({
     mutationFn: () =>
       api<SupplierBill>("/api/finance/supplier-bills/", {
         method: "POST",
-        body: JSON.stringify({
-          organization: orgId,
-          supplier,
-          bill_number: billNumber,
-          bill_date: billDate,
-          due_date: dueDate || null,
-          total_amount: amount,
-        }),
+        body: JSON.stringify({ ...form, organization: orgId }),
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["supplier-bills"] });
       onClose();
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : "Could not record this bill."),
   });
 
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!supplier) {
-      setError("Choose a supplier.");
-      return;
-    }
-    create.mutate();
-  }
-
   return (
-    <Modal title="Record a supplier bill" onClose={onClose}>
-      <form onSubmit={submit} className="flex flex-col gap-4">
-        <SelectField label="Supplier" value={supplier} onChange={(e) => setSupplier(Number(e.target.value))}>
-          <option value={0}>Select a supplier…</option>
-          {suppliersQ.data?.results.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </SelectField>
-        <div className="grid grid-cols-2 gap-3">
-          <TextField label="Bill number" value={billNumber} onChange={(e) => setBillNumber(e.target.value)} />
-          <TextField label="Total amount (RWF)" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <TextField label="Bill date" type="date" value={billDate} onChange={(e) => setBillDate(e.target.value)} required />
-          <TextField label="Due date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-        </div>
-        {error && <p className="text-sm text-danger">{error}</p>}
+    <Drawer
+      title="New supplier bill"
+      width="max-w-2xl"
+      onClose={onClose}
+      footer={
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={create.isPending}>
+          <Button
+            onClick={() => create.mutate()}
+            disabled={
+              create.isPending ||
+              form.supplier === "" ||
+              !form.bill_number.trim() ||
+              !form.due_date ||
+              Number(form.total_amount) <= 0
+            }
+          >
             {create.isPending ? "Saving…" : "Record bill"}
           </Button>
         </div>
-      </form>
-    </Modal>
+      }
+    >
+      <ErrorNote error={create.error} />
+      <Section title="Bill">
+        <Grid cols={2}>
+          <Field label="Supplier">
+            <Select
+              value={form.supplier}
+              onChange={(e) => set({ supplier: Number(e.target.value) || "" })}
+            >
+              <option value="">— choose —</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Bill number">
+            <Input
+              value={form.bill_number}
+              onChange={(e) => set({ bill_number: e.target.value })}
+            />
+          </Field>
+          <Field label="Bill date">
+            <Input
+              type="date"
+              value={form.bill_date}
+              onChange={(e) => set({ bill_date: e.target.value })}
+            />
+          </Field>
+          <Field label="Due date">
+            <Input
+              type="date"
+              value={form.due_date}
+              onChange={(e) => set({ due_date: e.target.value })}
+            />
+          </Field>
+          <Field label="Total (VAT inclusive)">
+            <Input
+              value={form.total_amount}
+              onChange={(e) => set({ total_amount: e.target.value })}
+              className="text-right tabular-nums"
+            />
+          </Field>
+          <Field label="Of which VAT">
+            <Input
+              value={form.vat_amount}
+              onChange={(e) => set({ vat_amount: e.target.value })}
+              className="text-right tabular-nums"
+            />
+          </Field>
+        </Grid>
+        <Field label="Notes">
+          <Textarea rows={2} value={form.notes} onChange={(e) => set({ notes: e.target.value })} />
+        </Field>
+      </Section>
+    </Drawer>
   );
 }
 
-function PayBillModal({ onClose, bill }: { onClose: () => void; bill: SupplierBill }) {
+/* -------------------------------------------------------------------------- */
+
+function BillDrawer({ bill, onClose }: { bill: SupplierBill; onClose: () => void }) {
   const qc = useQueryClient();
-  const [amount, setAmount] = useState(bill.amount_due);
-  const [reference, setReference] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [payment, setPayment] = useState({
+    amount: bill.amount_due,
+    method: "BANK_TRANSFER",
+    reference: "",
+  });
 
   const pay = useMutation({
     mutationFn: () =>
       api<SupplierBill>(`/api/finance/supplier-bills/${bill.id}/record-payment/`, {
         method: "POST",
-        body: JSON.stringify({ amount, method: "BANK_TRANSFER", reference }),
+        body: JSON.stringify(payment),
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["supplier-bills"] });
       onClose();
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : "Could not record this payment."),
   });
 
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    pay.mutate();
-  }
-
   return (
-    <Modal title={`Pay ${bill.supplier_name}`} onClose={onClose}>
-      <form onSubmit={submit} className="flex flex-col gap-4">
-        <p className="text-sm text-ink-500">Amount due: RWF {money(bill.amount_due)}</p>
-        <TextField label="Amount (RWF)" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required />
-        <TextField label="Reference" value={reference} onChange={(e) => setReference(e.target.value)} />
-        {error && <p className="text-sm text-danger">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={pay.isPending}>
-            {pay.isPending ? "Recording…" : "Record payment"}
+    <Drawer
+      title={`${bill.bill_number} · ${bill.supplier_name}`}
+      subtitle={bill.due_date ? `Due ${shortDate(bill.due_date)}` : "No due date"}
+      badge={
+        <Badge tone={isOverdue(bill) ? "danger" : (STATUS_TONE[bill.status] ?? "default")}>
+          {isOverdue(bill) ? "Overdue" : bill.status}
+        </Badge>
+      }
+      width="max-w-2xl"
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end">
+          <Button variant="ghost" onClick={onClose}>
+            Close
           </Button>
         </div>
-      </form>
-    </Modal>
+      }
+    >
+      <ErrorNote error={pay.error} />
+      <Section title="Bill">
+        <Facts
+          rows={[
+            ["Bill date", shortDate(bill.bill_date)],
+            ["Due date", bill.due_date ? shortDate(bill.due_date) : "—"],
+            ["Total", money(bill.total_amount)],
+            ["VAT", money(bill.vat_amount)],
+            ["Paid", money(bill.amount_paid)],
+            ["Outstanding", money(bill.amount_due)],
+          ]}
+        />
+      </Section>
+
+      {bill.payments.length > 0 && (
+        <Section title="Payments">
+          <ul className="divide-y divide-line text-sm">
+            {bill.payments.map((p) => (
+              <li key={p.id} className="flex items-center justify-between py-2">
+                <span className="text-ink-700">
+                  {shortDate(p.paid_at)} · {p.method}
+                </span>
+                <span className="flex items-center gap-3">
+                  <span className="text-xs text-ink-500">{p.reference}</span>
+                  <span className="tabular-nums text-ink-900">{money(p.amount)}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      {Number(bill.amount_due) > 0 && (
+        <Section title="Record a payment">
+          <Grid cols={3}>
+            <Field label="Amount">
+              <Input
+                value={payment.amount}
+                onChange={(e) => setPayment({ ...payment, amount: e.target.value })}
+                className="text-right tabular-nums"
+              />
+            </Field>
+            <Field label="Method">
+              <Select
+                value={payment.method}
+                onChange={(e) => setPayment({ ...payment, method: e.target.value })}
+              >
+                {METHODS.map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Reference">
+              <Input
+                value={payment.reference}
+                onChange={(e) => setPayment({ ...payment, reference: e.target.value })}
+              />
+            </Field>
+          </Grid>
+          <Button onClick={() => pay.mutate()} disabled={pay.isPending}>
+            <Banknote className="h-4 w-4" /> {pay.isPending ? "Posting…" : "Record payment"}
+          </Button>
+        </Section>
+      )}
+    </Drawer>
   );
 }
 
-export function SupplierBillsPage() {
-  const { user } = useAuth();
-  const [adding, setAdding] = useState(false);
-  const [paying, setPaying] = useState<SupplierBill | null>(null);
-  const orgId = user?.organization ?? 0;
+/* -------------------------------------------------------------------------- */
 
-  const billsQ = useQuery({
+export function SupplierBillsPage() {
+  const { orgId } = useDefaultOrg();
+  const [creating, setCreating] = useState(false);
+  const [open, setOpen] = useState<SupplierBill | null>(null);
+
+  const { data, isLoading } = useQuery({
     queryKey: ["supplier-bills", orgId],
-    queryFn: () => api<Paginated<SupplierBill>>(`/api/finance/supplier-bills/?organization=${orgId}`),
-    enabled: orgId > 0,
+    enabled: orgId !== null,
+    queryFn: () =>
+      api<Paginated<SupplierBill>>(
+        `/api/finance/supplier-bills/?organization=${orgId}&page_size=200`,
+      ),
+  });
+  const bills = useMemo(() => data?.results ?? [], [data]);
+
+  const { data: supplierData } = useQuery({
+    queryKey: ["suppliers"],
+    queryFn: () => api<Paginated<Supplier>>("/api/catalog/suppliers/?page_size=200"),
   });
 
+  const totals = useMemo(() => {
+    const open = bills.filter((b) => b.status !== "PAID");
+    return {
+      outstanding: open.reduce((s, b) => s + Number(b.amount_due), 0),
+      overdue: bills.filter(isOverdue).reduce((s, b) => s + Number(b.amount_due), 0),
+      overdueCount: bills.filter(isOverdue).length,
+    };
+  }, [bills]);
+
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
-        title="Supplier bills (AP)"
+        title="Supplier bills"
         action={
-          orgId > 0 && (
-            <Button onClick={() => setAdding(true)}>
-              <Plus className="h-4 w-4" /> Record bill
-            </Button>
-          )
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4" /> New bill
+          </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
-        Each bill posts to the ledger immediately (Dr expense / Cr Accounts Payable); a payment
-        posts Dr Accounts Payable / Cr Cash &amp; Bank and rolls up the settlement status.
-      </p>
 
-      {billsQ.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
+      <div className="flex flex-wrap gap-6 rounded-lg border border-line bg-surface-0 px-4 py-3 text-sm">
+        <span>
+          <span className="text-ink-500">Outstanding </span>
+          <strong className="tabular-nums">{money(totals.outstanding)}</strong>
+        </span>
+        <span>
+          <span className="text-ink-500">Overdue </span>
+          <strong
+            className={`tabular-nums ${totals.overdue > 0 ? "text-danger-700" : "text-ink-900"}`}
+          >
+            {money(totals.overdue)}
+          </strong>
+          {totals.overdueCount > 0 && (
+            <span className="ml-1 text-ink-500">
+              ({totals.overdueCount} bill{totals.overdueCount === 1 ? "" : "s"})
+            </span>
+          )}
+        </span>
+      </div>
+
+      <DataGrid
+        rows={bills}
+        loading={isLoading}
+        getRowId={(b) => b.id}
+        storageKey="finance.supplier-bills"
+        exportName="supplier-bills"
+        searchPlaceholder="Search bills or suppliers…"
+        emptyMessage="No supplier bills recorded."
+        onRowClick={(b) => setOpen(b)}
+        columns={[
+          { key: "bill_number", header: "Bill", value: (b) => b.bill_number, width: "10rem" },
+          { key: "supplier_name", header: "Supplier", value: (b) => b.supplier_name },
+          {
+            key: "bill_date",
+            header: "Date",
+            value: (b) => b.bill_date,
+            render: (b) => shortDate(b.bill_date),
+          },
+          {
+            key: "due_date",
+            header: "Due",
+            value: (b) => b.due_date ?? "",
+            render: (b) => (
+              <span className={isOverdue(b) ? "text-danger-700" : undefined}>
+                {b.due_date ? shortDate(b.due_date) : "—"}
+              </span>
+            ),
+          },
+          {
+            key: "total_amount",
+            header: "Total",
+            numeric: true,
+            align: "right",
+            value: (b) => Number(b.total_amount),
+            render: (b) => money(b.total_amount),
+          },
+          {
+            key: "amount_due",
+            header: "Outstanding",
+            numeric: true,
+            align: "right",
+            value: (b) => Number(b.amount_due),
+            render: (b) => money(b.amount_due),
+          },
+          {
+            key: "status",
+            header: "Status",
+            value: (b) => (isOverdue(b) ? "OVERDUE" : b.status),
+            render: (b) => (
+              <Badge tone={isOverdue(b) ? "danger" : (STATUS_TONE[b.status] ?? "default")}>
+                {isOverdue(b) ? "Overdue" : b.status}
+              </Badge>
+            ),
+          },
+        ]}
+      />
+
+      {creating && (
+        <NewBillDrawer
+          orgId={orgId}
+          suppliers={supplierData?.results ?? []}
+          onClose={() => setCreating(false)}
+        />
       )}
-
-      {billsQ.data && (
-        <div className="overflow-hidden rounded-lg border border-line bg-surface-0">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-2.5">Bill</th>
-                <th className="px-4 py-2.5">Supplier</th>
-                <th className="px-4 py-2.5">Due</th>
-                <th className="px-4 py-2.5 text-right">Total</th>
-                <th className="px-4 py-2.5 text-right">Due</th>
-                <th className="px-4 py-2.5">Status</th>
-                <th className="px-4 py-2.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {billsQ.data.results.map((b) => (
-                <tr key={b.id} className="border-b border-line last:border-0 hover:bg-surface-100">
-                  <td className="px-4 py-2.5 font-mono">{b.bill_number || `#${b.id}`}</td>
-                  <td className="px-4 py-2.5 font-medium">{b.supplier_name}</td>
-                  <td className="px-4 py-2.5 text-ink-700">{b.due_date ?? "—"}</td>
-                  <td className="px-4 py-2.5 text-right font-mono">{money(b.total_amount)}</td>
-                  <td className="px-4 py-2.5 text-right font-mono">{money(b.amount_due)}</td>
-                  <td className="px-4 py-2.5">
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_TONE[b.status]}`}>
-                      {b.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-right">
-                    {b.status !== "PAID" && (
-                      <Button variant="secondary" onClick={() => setPaying(b)}>
-                        <CreditCard className="h-3.5 w-3.5" /> Pay
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {billsQ.data.results.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-ink-500">
-                    No supplier bills yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {adding && <NewBillModal onClose={() => setAdding(false)} orgId={orgId} />}
-      {paying && <PayBillModal onClose={() => setPaying(null)} bill={paying} />}
+      {open && <BillDrawer bill={open} onClose={() => setOpen(null)} />}
     </div>
   );
 }

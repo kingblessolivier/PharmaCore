@@ -1,201 +1,295 @@
 import { useQuery } from "@tanstack/react-query";
-import { Printer } from "lucide-react";
-import { useState } from "react";
-import { Button, Card, PageHeader, SelectField, TextField } from "../components/ui";
+import { FileBarChart, FileDown } from "lucide-react";
+import { useMemo, useState } from "react";
+import { DataGrid } from "../components/DataGrid";
+import { Facts, Field, Input, Section, Select } from "../components/RecordKit";
+import { Badge, Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
-import { useAuth } from "../lib/auth";
-import type { ArAging, Organization, Paginated, StatementOfAccount } from "../lib/types";
+import { money, shortDate } from "../lib/format";
+import { useFinanceDocument } from "../lib/financeDocuments";
+import { useDefaultOrg } from "../lib/recordData";
+import type {
+  ArAging,
+  ArAgingRow,
+  CustomerStatementLine,
+  Organization,
+  Paginated,
+  StatementOfAccount,
+} from "../lib/types";
 
-const money = (n: string | number) =>
-  Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-function monthStart(): string {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth() - 2, 1).toISOString().slice(0, 10);
+/** Everything past `current`. An aging report exists to separate what is merely
+ * outstanding from what is actually late — the total alone hides that. */
+function overdue(row: ArAgingRow): number {
+  return (
+    Number(row.days_1_30) + Number(row.days_31_60) + Number(row.days_61_90) + Number(row.days_90_plus)
+  );
 }
 
 export function CustomerStatementPage() {
-  const { user } = useAuth();
-  const orgId = user?.organization ?? 0;
-  const [customer, setCustomer] = useState(0);
-  const [start, setStart] = useState(monthStart());
-  const [end, setEnd] = useState(new Date().toISOString().slice(0, 10));
+  const { orgId } = useDefaultOrg();
+  const [customer, setCustomer] = useState<number | "">("");
+  const today = new Date();
+  const [start, setStart] = useState(
+    new Date(today.getFullYear(), today.getMonth() - 2, 1).toISOString().slice(0, 10),
+  );
+  const [end, setEnd] = useState(today.toISOString().slice(0, 10));
 
-  const customersQ = useQuery({
-    queryKey: ["organizations", "customers"],
-    queryFn: () => api<Paginated<Organization>>("/api/iam/organizations/?page_size=200"),
+  const statementPdf = useFinanceDocument("statement");
+
+  const { data: orgData } = useQuery({
+    queryKey: ["organizations"],
+    queryFn: () => api<Paginated<Organization>>("/api/organizations/?page_size=200"),
   });
 
-  const agingQ = useQuery({
+  const { data: aging, isLoading } = useQuery({
     queryKey: ["ar-aging", orgId],
+    enabled: orgId !== null,
     queryFn: () => api<ArAging>(`/api/finance/reports/ar-aging/?organization=${orgId}`),
-    enabled: orgId > 0,
   });
 
-  const statementQ = useQuery({
+  const { data: statement } = useQuery({
     queryKey: ["statement", orgId, customer, start, end],
+    enabled: orgId !== null && customer !== "",
     queryFn: () =>
       api<StatementOfAccount>(
-        `/api/finance/reports/statement/?organization=${orgId}&customer=${customer}&start=${start}&end=${end}`,
+        `/api/finance/reports/statement/?organization=${orgId}&customer=${customer}` +
+          `&start=${start}&end=${end}`,
       ),
-    enabled: orgId > 0 && customer > 0,
   });
 
-  const statement = statementQ.data;
+  const rows = useMemo(() => aging?.customers ?? [], [aging]);
+  const totals = aging?.totals;
 
   return (
-    <div>
-      <PageHeader
-        title="Statement of account"
-        action={
-          statement && (
-            <Button variant="secondary" onClick={() => window.print()}>
-              <Printer className="h-4 w-4" /> Print
-            </Button>
-          )
-        }
+    <div className="space-y-4">
+      <PageHeader title="Customer statements" />
+      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
+        What each customer owes and how old it is, then the full transaction history behind any
+        one balance.
+      </p>
+
+      {totals && (
+        <div className="flex flex-wrap gap-x-8 gap-y-2 rounded-lg border border-line bg-surface-0 px-4 py-3 text-sm">
+          <span className="flex items-center gap-2 text-ink-600">
+            <FileBarChart className="h-4 w-4 text-ink-400" /> As at {shortDate(aging.as_of)}
+          </span>
+          <span>
+            <span className="text-ink-500">Current </span>
+            <strong className="tabular-nums">{money(totals.current)}</strong>
+          </span>
+          <span>
+            <span className="text-ink-500">1–30 </span>
+            <strong className="tabular-nums">{money(totals.days_1_30)}</strong>
+          </span>
+          <span>
+            <span className="text-ink-500">31–60 </span>
+            <strong className="tabular-nums">{money(totals.days_31_60)}</strong>
+          </span>
+          <span>
+            <span className="text-ink-500">61–90 </span>
+            <strong className="tabular-nums">{money(totals.days_61_90)}</strong>
+          </span>
+          <span>
+            <span className="text-ink-500">90+ </span>
+            <strong className="tabular-nums text-danger-700">{money(totals.days_90_plus)}</strong>
+          </span>
+          <span>
+            <span className="text-ink-500">Outstanding </span>
+            <strong className="tabular-nums">{money(totals.outstanding)}</strong>
+          </span>
+        </div>
+      )}
+
+      <DataGrid
+        rows={rows}
+        loading={isLoading}
+        getRowId={(r) => r.customer_id}
+        storageKey="finance.ar-aging"
+        exportName="ar-aging"
+        searchPlaceholder="Search customers…"
+        emptyMessage="No customer balances outstanding."
+        onRowClick={(r) => setCustomer(r.customer_id)}
+        columns={[
+          { key: "customer_name", header: "Customer", value: (r) => r.customer_name },
+          {
+            key: "current",
+            header: "Current",
+            numeric: true,
+            align: "right",
+            value: (r) => Number(r.current),
+            render: (r) => money(r.current),
+          },
+          {
+            key: "days_1_30",
+            header: "1–30",
+            numeric: true,
+            align: "right",
+            value: (r) => Number(r.days_1_30),
+            render: (r) => money(r.days_1_30),
+          },
+          {
+            key: "days_31_60",
+            header: "31–60",
+            numeric: true,
+            align: "right",
+            value: (r) => Number(r.days_31_60),
+            render: (r) => money(r.days_31_60),
+          },
+          {
+            key: "days_61_90",
+            header: "61–90",
+            numeric: true,
+            align: "right",
+            value: (r) => Number(r.days_61_90),
+            render: (r) => money(r.days_61_90),
+          },
+          {
+            key: "days_90_plus",
+            header: "90+",
+            numeric: true,
+            align: "right",
+            value: (r) => Number(r.days_90_plus),
+            render: (r) =>
+              Number(r.days_90_plus) > 0 ? (
+                <span className="text-danger-700">{money(r.days_90_plus)}</span>
+              ) : (
+                money(r.days_90_plus)
+              ),
+          },
+          {
+            key: "overdue",
+            header: "Overdue",
+            numeric: true,
+            align: "right",
+            value: (r) => overdue(r),
+            render: (r) => (
+              <span className={overdue(r) > 0 ? "text-danger-700" : "text-ink-500"}>
+                {money(overdue(r))}
+              </span>
+            ),
+          },
+          {
+            key: "outstanding",
+            header: "Total",
+            numeric: true,
+            align: "right",
+            value: (r) => Number(r.outstanding),
+            render: (r) => <span className="font-semibold">{money(r.outstanding)}</span>,
+          },
+        ]}
       />
 
-      <Card className="mb-4 p-4 print:hidden">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <SelectField
-            label="Customer"
-            value={customer}
-            onChange={(e) => setCustomer(Number(e.target.value))}
-          >
-            <option value={0}>Select a customer…</option>
-            {customersQ.data?.results
-              .filter((o) => o.id !== orgId)
-              .map((o) => (
+      <Section title="Statement of account">
+        <div className="mb-3 flex flex-wrap items-end gap-3">
+          <Field label="Customer">
+            <Select
+              value={customer}
+              onChange={(e) => setCustomer(Number(e.target.value) || "")}
+            >
+              <option value="">— choose a customer —</option>
+              {(orgData?.results ?? []).map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.name}
                 </option>
               ))}
-          </SelectField>
-          <TextField
-            label="From"
-            type="date"
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-          />
-          <TextField label="To" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+            </Select>
+          </Field>
+          <Field label="From">
+            <Input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+          </Field>
+          <Field label="To">
+            <Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+          </Field>
         </div>
-      </Card>
 
-      {!customer && (
-        <Card title="Aged receivables by customer">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
-                  <th className="py-2">Customer</th>
-                  <th className="py-2 text-right">Current</th>
-                  <th className="py-2 text-right">1–30</th>
-                  <th className="py-2 text-right">31–60</th>
-                  <th className="py-2 text-right">61–90</th>
-                  <th className="py-2 text-right">90+</th>
-                  <th className="py-2 text-right">Outstanding</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(agingQ.data?.customers ?? []).map((row) => (
-                  <tr
-                    key={row.customer_id}
-                    className="cursor-pointer border-b border-line/60 hover:bg-surface-100"
-                    onClick={() => setCustomer(row.customer_id)}
-                  >
-                    <td className="py-2 font-medium">{row.customer_name}</td>
-                    <td className="py-2 text-right tabular-nums">{money(row.current)}</td>
-                    <td className="py-2 text-right tabular-nums">{money(row.days_1_30)}</td>
-                    <td className="py-2 text-right tabular-nums">{money(row.days_31_60)}</td>
-                    <td className="py-2 text-right tabular-nums text-red-700">
-                      {money(row.days_61_90)}
-                    </td>
-                    <td className="py-2 text-right tabular-nums text-red-800">
-                      {money(row.days_90_plus)}
-                    </td>
-                    <td className="py-2 text-right font-semibold tabular-nums">
-                      {money(row.outstanding)}
-                    </td>
-                  </tr>
-                ))}
-                {(agingQ.data?.customers ?? []).length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="py-6 text-center text-ink-500">
-                      Nothing outstanding.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-
-      {statement && (
-        <Card className="p-6">
-          <div className="mb-4 flex items-start justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-ink-900">{statement.customer_name}</h2>
-              <p className="text-sm text-ink-500">
-                Statement · {statement.start} to {statement.end}
-              </p>
+        {customer === "" ? (
+          <p className="text-sm text-ink-500">
+            Pick a customer above, or click a row in the aging table.
+          </p>
+        ) : statement ? (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <Facts
+                rows={[
+                  ["Customer", statement.customer_name],
+                  ["Opening balance", money(statement.opening_balance)],
+                  ["Closing balance", money(statement.closing_balance)],
+                ]}
+              />
+              <Button
+                variant="secondary"
+                onClick={() => statementPdf.mutate({ customer, start, end })}
+                disabled={statementPdf.isPending}
+              >
+                <FileDown className="h-4 w-4" />
+                {statementPdf.isPending ? "Preparing…" : "Statement PDF"}
+              </Button>
             </div>
-            <div className="text-right">
-              <p className="text-xs uppercase tracking-wide text-ink-500">Closing balance</p>
-              <p className="text-2xl font-semibold tabular-nums text-ink-900">
-                {money(statement.closing_balance)}
+            {statementPdf.data && (
+              <p className="text-xs text-ink-500">
+                Issued as <strong>{statementPdf.data.doc_number}</strong> — numbered, hashed and
+                QR-verifiable, so the customer can check it was not altered.
               </p>
-            </div>
+            )}
+            <DataGrid<CustomerStatementLine>
+              rows={statement.lines}
+              getRowId={(l) => `${l.date}:${l.reference}:${l.balance}`}
+              storageKey="finance.statement-lines"
+              exportName={`statement-${customer}`}
+              searchPlaceholder="Search transactions…"
+              emptyMessage="No transactions in this window."
+              initialDensity="compact"
+              columns={[
+                {
+                  key: "date",
+                  header: "Date",
+                  value: (l) => l.date,
+                  render: (l) => shortDate(l.date),
+                  width: "7rem",
+                },
+                {
+                  key: "kind",
+                  header: "Type",
+                  value: (l) => l.kind,
+                  render: (l) => (
+                    <Badge tone={l.kind === "INVOICE" ? "info" : "success"}>
+                      {l.kind === "INVOICE" ? "Invoice" : "Receipt"}
+                    </Badge>
+                  ),
+                },
+                { key: "reference", header: "Reference", value: (l) => l.reference },
+                { key: "description", header: "Description", value: (l) => l.description },
+                {
+                  key: "debit",
+                  header: "Charged",
+                  numeric: true,
+                  align: "right",
+                  value: (l) => Number(l.debit),
+                  render: (l) => (Number(l.debit) ? money(l.debit) : ""),
+                },
+                {
+                  key: "credit",
+                  header: "Paid",
+                  numeric: true,
+                  align: "right",
+                  value: (l) => Number(l.credit),
+                  render: (l) => (Number(l.credit) ? money(l.credit) : ""),
+                },
+                {
+                  key: "balance",
+                  header: "Balance",
+                  numeric: true,
+                  align: "right",
+                  value: (l) => Number(l.balance),
+                  render: (l) => money(l.balance),
+                },
+              ]}
+            />
           </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
-                  <th className="py-2">Date</th>
-                  <th className="py-2">Reference</th>
-                  <th className="py-2">Detail</th>
-                  <th className="py-2 text-right">Charge</th>
-                  <th className="py-2 text-right">Payment</th>
-                  <th className="py-2 text-right">Balance</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b border-line/60 bg-surface-100">
-                  <td className="py-2" colSpan={5}>
-                    Opening balance
-                  </td>
-                  <td className="py-2 text-right font-semibold tabular-nums">
-                    {money(statement.opening_balance)}
-                  </td>
-                </tr>
-                {statement.lines.map((line, i) => (
-                  <tr key={`${line.reference}-${i}`} className="border-b border-line/60">
-                    <td className="py-2">{line.date}</td>
-                    <td className="py-2 font-medium">{line.reference}</td>
-                    <td className="py-2 text-ink-500">{line.description}</td>
-                    <td className="py-2 text-right tabular-nums">
-                      {Number(line.debit) > 0 ? money(line.debit) : ""}
-                    </td>
-                    <td className="py-2 text-right tabular-nums text-green-700">
-                      {Number(line.credit) > 0 ? money(line.credit) : ""}
-                    </td>
-                    <td className="py-2 text-right tabular-nums">{money(line.balance)}</td>
-                  </tr>
-                ))}
-                {statement.lines.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="py-6 text-center text-ink-500">
-                      No activity in this window.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
+        ) : (
+          <p className="text-sm text-ink-500">Loading the statement…</p>
+        )}
+      </Section>
     </div>
   );
 }

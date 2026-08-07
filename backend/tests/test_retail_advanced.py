@@ -1,10 +1,17 @@
-from decimal import Decimal
 from datetime import date, timedelta
+from decimal import Decimal
+
 import pytest
-from django.utils import timezone
-from apps.iam.models import Organization, User
 from apps.catalog.models import Product
-from apps.retail.models import Prescription, ControlledSubstanceRegister, POSPromotion, ClinicalService, ClinicalServiceRecord
+from apps.iam.models import Organization
+from apps.retail.models import (
+    ClinicalService,
+    ClinicalServiceRecord,
+    ControlledSubstanceRegister,
+    POSPromotion,
+    Prescription,
+)
+
 
 @pytest.mark.django_db
 def test_prescription_lifecycle():
@@ -26,10 +33,16 @@ def test_prescription_lifecycle():
     assert rx.remaining_refills == 2
     assert str(rx) == "Rx #RX-TEST-001 · Test Patient"
 
+
 @pytest.mark.django_db
 def test_controlled_substance_register():
     org = Organization.objects.create(name="Test Pharmacy", type="RETAIL_PHARMACY")
-    p = Product.objects.create(generic_name="Morphine 10mg", dosage_form="TABLET", strength="10mg", is_controlled_substance=True)
+    p = Product.objects.create(
+        generic_name="Morphine 10mg",
+        dosage_form="TABLET",
+        strength="10mg",
+        is_controlled_substance=True,
+    )
     log = ControlledSubstanceRegister.objects.create(
         organization=org,
         product=p,
@@ -43,6 +56,7 @@ def test_controlled_substance_register():
     )
     assert log.running_balance == 90
     assert "Morphine 10mg" in str(log)
+
 
 @pytest.mark.django_db
 def test_pos_promotion_and_clinical_service():

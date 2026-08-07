@@ -18,8 +18,8 @@ import {
   SupplierSelect,
   Textarea,
   TotalsRow,
-} from "../components/ProcurementKit";
-import { useDefaultOrg } from "../lib/procurementData";
+} from "../components/RecordKit";
+import { useDefaultOrg } from "../lib/recordData";
 import { Badge, Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
 import {

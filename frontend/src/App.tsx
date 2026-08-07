@@ -40,9 +40,13 @@ import { TaxEbmPage } from "./pages/TaxEbmPage";
 import { VatPage } from "./pages/VatPage";
 import { TaxPaymentsPage } from "./pages/TaxPaymentsPage";
 import { BudgetsPage } from "./pages/BudgetsPage";
+import { TaxCodesPage } from "./pages/TaxCodesPage";
+import { TenantSettingsPage } from "./pages/TenantSettingsPage";
+import { StatutoryRatesPage } from "./pages/StatutoryRatesPage";
 import { AttendancePage } from "./pages/AttendancePage";
 import { ShiftRosterPage } from "./pages/ShiftRosterPage";
 import { LeavePage } from "./pages/LeavePage";
+import { DemandBoardPage } from "./pages/DemandBoardPage";
 import { DepotListingsPage } from "./pages/DepotListingsPage";
 import { B2BOrderingPortalPage } from "./pages/B2BOrderingPortalPage";
 import { FieldSalesPage } from "./pages/FieldSalesPage";
@@ -57,6 +61,9 @@ import { RetailHome } from "./pages/apps/RetailHome";
 import { CatalogHome } from "./pages/apps/CatalogHome";
 import { DistributionHome } from "./pages/apps/DistributionHome";
 import { FinanceHome } from "./pages/apps/FinanceHome";
+import { CostCentresPage } from "./pages/CostCentresPage";
+import { SchedulesPage } from "./pages/SchedulesPage";
+import { BankReconciliationPage } from "./pages/BankReconciliationPage";
 import { PeopleHome } from "./pages/apps/PeopleHome";
 
 import { LowStockPage } from "./pages/LowStockPage";
@@ -96,6 +103,13 @@ import { ImportsPage } from "./pages/ImportsPage";
 import { GoodsReceiptsPage } from "./pages/GoodsReceiptsPage";
 import { SupplierInvoicesPage } from "./pages/SupplierInvoicesPage";
 
+import { TimesheetsPage } from "./pages/TimesheetsPage";
+import { LoansPage } from "./pages/LoansPage";
+import { RecruitmentPage } from "./pages/RecruitmentPage";
+import { OffboardingPage } from "./pages/OffboardingPage";
+import { StatutoryFilingsPage } from "./pages/StatutoryFilingsPage";
+import { FinanceCockpitPage } from "./pages/FinanceCockpitPage";
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
 });
@@ -122,8 +136,16 @@ function RequireRoles({ roles, children }: { roles: string[]; children: ReactNod
 }
 const adminOnly = (el: ReactNode) => <RequireRoles roles={[]}>{el}</RequireRoles>;
 const forPharmacy = (el: ReactNode) => <RequireRoles roles={["PHARMACIST"]}>{el}</RequireRoles>;
-const forFinance = (el: ReactNode) => <RequireRoles roles={["ACCOUNTANT"]}>{el}</RequireRoles>;
-const forHR = (el: ReactNode) => <RequireRoles roles={["HR_MANAGER"]}>{el}</RequireRoles>;
+// ORG_ADMIN is included so an organisation without a dedicated accountant or HR manager
+// can still reach the area via their admin role. The list is also where the sidebar
+// mirrors it (AppShell.tsx), so a user opening Finance from a tile and a link are
+// gated consistently.
+const forFinance = (el: ReactNode) => (
+  <RequireRoles roles={["ACCOUNTANT", "ORG_ADMIN"]}>{el}</RequireRoles>
+);
+const forHR = (el: ReactNode) => (
+  <RequireRoles roles={["HR_MANAGER", "ORG_ADMIN"]}>{el}</RequireRoles>
+);
 const forProcurement = (el: ReactNode) => (
   <RequireRoles roles={["PROCUREMENT_OFFICER", "ACCOUNTANT", "WAREHOUSE_CLERK", "PHARMACIST"]}>
     {el}
@@ -173,6 +195,7 @@ function App() {
               <Route path="/distribution/grn" element={forPharmacy(<GrnPage />)} />
               <Route path="/distribution/in-transit" element={forPharmacy(<InTransitPage />)} />
               <Route path="/distribution/listings" element={forPharmacy(<DepotListingsPage />)} />
+              <Route path="/distribution/demand" element={forPharmacy(<DemandBoardPage />)} />
               <Route path="/distribution/portal" element={forPharmacy(<B2BOrderingPortalPage />)} />
               <Route path="/distribution/sales-reps" element={forPharmacy(<FieldSalesPage />)} />
               <Route path="/distribution/tenders" element={forPharmacy(<InstitutionalTendersPage />)} />
@@ -199,9 +222,11 @@ function App() {
               <Route path="/orders" element={forPharmacy(<OrdersPage />)} />
               <Route path="/pos" element={<PosPage />} />
               <Route path="/finance" element={forFinance(<FinanceHome />)} />
+              <Route path="/finance/cockpit" element={forFinance(<FinanceCockpitPage />)} />
               <Route path="/finance/aging" element={forFinance(<FinancePage />)} />
               <Route path="/finance/accounts" element={forFinance(<ChartOfAccountsPage />)} />
               <Route path="/finance/journal" element={forFinance(<JournalPage />)} />
+              <Route path="/finance/cost-centres" element={forFinance(<CostCentresPage />)} />
               <Route path="/finance/credit" element={forFinance(<CreditProfilesPage />)} />
               <Route path="/finance/payables" element={forFinance(<SupplierBillsPage />)} />
               <Route path="/finance/payment-runs" element={forFinance(<PaymentRunsPage />)} />
@@ -209,12 +234,22 @@ function App() {
               <Route path="/finance/dunning" element={forFinance(<DunningPage />)} />
               <Route path="/finance/statement" element={forFinance(<CustomerStatementPage />)} />
               <Route path="/finance/banking" element={forFinance(<BankingPage />)} />
+              <Route
+                path="/finance/reconciliation"
+                element={forFinance(<BankReconciliationPage />)}
+              />
               <Route path="/finance/statements" element={forFinance(<FinanceStatementsPage />)} />
               <Route path="/finance/assets" element={forFinance(<FixedAssetsPage />)} />
               <Route path="/finance/tax-ebm" element={forFinance(<TaxEbmPage />)} />
               <Route path="/finance/tax" element={forFinance(<VatPage />)} />
               <Route path="/finance/tax/payments" element={forFinance(<TaxPaymentsPage />)} />
               <Route path="/finance/budgets" element={forFinance(<BudgetsPage />)} />
+              <Route path="/finance/schedules" element={forFinance(<SchedulesPage />)} />
+              <Route path="/finance/tax-codes" element={forFinance(<TaxCodesPage />)} />
+              <Route
+                path="/finance/tenant-settings"
+                element={forFinance(<TenantSettingsPage />)}
+              />
               <Route path="/people" element={forHR(<PeopleHome />)} />
               <Route path="/people/employees" element={forHR(<EmployeesPage />)} />
               <Route path="/people/employees/:id" element={forHR(<EmployeeDetailPage />)} />
@@ -222,6 +257,12 @@ function App() {
               <Route path="/people/attendance" element={forHR(<AttendancePage />)} />
               <Route path="/people/roster" element={forHR(<ShiftRosterPage />)} />
               <Route path="/people/leave" element={forHR(<LeavePage />)} />
+              <Route path="/people/timesheets" element={forHR(<TimesheetsPage />)} />
+              <Route path="/people/loans" element={forHR(<LoansPage />)} />
+              <Route path="/people/recruitment" element={forHR(<RecruitmentPage />)} />
+              <Route path="/people/offboarding" element={forHR(<OffboardingPage />)} />
+              <Route path="/people/filings" element={forHR(<StatutoryFilingsPage />)} />
+              <Route path="/people/statutory-rates" element={forHR(<StatutoryRatesPage />)} />
               <Route path="/approvals" element={<ApprovalsInboxPage />} />
               <Route path="/documents" element={<DocumentsPage />} />
             </Route>

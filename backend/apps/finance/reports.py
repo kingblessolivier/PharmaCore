@@ -19,6 +19,7 @@ from django.db.models import Case, DecimalField, F, Q, Sum, When
 from django.db.models.functions import Coalesce
 
 from apps.finance.models import Account, JournalEntry, JournalLine, SupplierBill
+from apps.finance.services import default_classification
 from apps.iam.models import Organization
 
 _MONEY: DecimalField = DecimalField(max_digits=16, decimal_places=2)
@@ -35,6 +36,7 @@ class AccountBalance:
     code: str
     name: str
     account_type: str
+    classification: str
     normal_balance: str
     debit: Decimal
     credit: Decimal
@@ -102,12 +104,19 @@ def account_balances(
             code=a.code,
             name=a.name,
             account_type=a.account_type,
+            classification=a.classification or default_classification(a.account_type),
             normal_balance=a.normal_balance,
             debit=_q(a.debit),
             credit=_q(a.credit),
         )
         for a in rows
     ]
+
+
+def _by_classification(balances: list[AccountBalance], *kinds: str) -> Decimal:
+    """Signed total of every account rolling into the given statement lines."""
+    wanted = set(kinds)
+    return sum((b.signed for b in balances if b.classification in wanted), ZERO)
 
 
 def trial_balance(organization: Organization, *, as_of: date | None = None) -> dict[str, Any]:
@@ -148,41 +157,62 @@ def profit_and_loss(organization: Organization, *, start: date, end: date) -> di
     EBITDA here = net profit + depreciation (interest/tax lines are modelled as
     ordinary expense accounts until the tax module books them separately).
     """
+    C = Account.Classification
     balances = account_balances(organization, start=start, end=end)
 
-    revenue = sum((b.signed for b in balances if b.account_type == Account.Type.REVENUE), ZERO)
-    cogs = sum((b.signed for b in balances if b.code.startswith("5")), ZERO)
-    all_expense = sum((b.signed for b in balances if b.account_type == Account.Type.EXPENSE), ZERO)
-    opex = all_expense - cogs
-    depreciation = sum((b.signed for b in balances if b.code.startswith("65")), ZERO)
+    revenue = _by_classification(balances, C.REVENUE)
+    other_income = _by_classification(balances, C.OTHER_INCOME)
+    cogs = _by_classification(balances, C.COGS)
+    opex = _by_classification(balances, C.OPERATING_EXPENSE)
+    depreciation = _by_classification(balances, C.DEPRECIATION)
+    finance_cost = _by_classification(balances, C.FINANCE_COST)
+    tax_expense = _by_classification(balances, C.TAX_EXPENSE)
 
     gross_profit = revenue - cogs
-    net_profit = revenue - all_expense
+    # Operating profit is before interest and tax; EBITDA adds depreciation back
+    # on top of that. Computing EBITDA as "net profit + depreciation" (which is
+    # what this did) understates it by exactly the interest and tax charged.
+    operating_profit = gross_profit + other_income - opex - depreciation
+    ebitda = operating_profit + depreciation
+    net_profit = operating_profit - finance_cost - tax_expense
 
     def pct(numerator: Decimal) -> Decimal:
         return _q(numerator / revenue * 100) if revenue else ZERO
+
+    def lines(*kinds: str) -> list[dict[str, Any]]:
+        wanted = set(kinds)
+        return [
+            {
+                "code": b.code,
+                "name": b.name,
+                "classification": b.classification,
+                "amount": _q(b.signed),
+            }
+            for b in balances
+            if b.classification in wanted and b.signed
+        ]
 
     return {
         "start": start,
         "end": end,
         "revenue": _q(revenue),
+        "other_income": _q(other_income),
         "cogs": _q(cogs),
         "gross_profit": _q(gross_profit),
         "gross_margin_pct": pct(gross_profit),
         "operating_expenses": _q(opex),
+        "depreciation": _q(depreciation),
+        "operating_profit": _q(operating_profit),
+        "operating_margin_pct": pct(operating_profit),
+        "finance_cost": _q(finance_cost),
+        "tax_expense": _q(tax_expense),
         "net_profit": _q(net_profit),
         "net_margin_pct": pct(net_profit),
-        "ebitda": _q(net_profit + depreciation),
-        "expense_lines": [
-            {"code": b.code, "name": b.name, "amount": _q(b.signed)}
-            for b in balances
-            if b.account_type == Account.Type.EXPENSE and b.signed
-        ],
-        "revenue_lines": [
-            {"code": b.code, "name": b.name, "amount": _q(b.signed)}
-            for b in balances
-            if b.account_type == Account.Type.REVENUE and b.signed
-        ],
+        "ebitda": _q(ebitda),
+        "ebitda_margin_pct": pct(ebitda),
+        "revenue_lines": lines(C.REVENUE, C.OTHER_INCOME),
+        "cogs_lines": lines(C.COGS),
+        "expense_lines": lines(C.OPERATING_EXPENSE, C.DEPRECIATION, C.FINANCE_COST, C.TAX_EXPENSE),
     }
 
 
@@ -194,6 +224,7 @@ def balance_sheet(organization: Organization, *, as_of: date | None = None) -> d
     their net rolls into retained earnings. That roll-up is what makes the sheet
     balance, so it is computed here rather than assumed.
     """
+    C = Account.Classification
     balances = account_balances(organization, end=as_of)
 
     assets = sum((b.signed for b in balances if b.account_type == Account.Type.ASSET), ZERO)
@@ -208,23 +239,57 @@ def balance_sheet(organization: Organization, *, as_of: date | None = None) -> d
     retained_earnings = revenue - expenses
     total_equity = contributed_equity + retained_earnings
 
-    def section(kind: str) -> list[dict[str, Any]]:
+    current_assets = _by_classification(balances, C.CURRENT_ASSET)
+    non_current_assets = _by_classification(balances, C.NON_CURRENT_ASSET)
+    current_liabilities = _by_classification(balances, C.CURRENT_LIABILITY)
+    non_current_liabilities = _by_classification(balances, C.NON_CURRENT_LIABILITY)
+
+    def section(*kinds: str) -> list[dict[str, Any]]:
+        wanted = set(kinds)
         return [
-            {"code": b.code, "name": b.name, "amount": _q(b.signed)}
+            {
+                "code": b.code,
+                "name": b.name,
+                "classification": b.classification,
+                "amount": _q(b.signed),
+            }
             for b in balances
-            if b.account_type == kind and b.signed
+            if b.classification in wanted and b.signed
         ]
+
+    # Inventory is the pharmacy's biggest and least liquid current asset, so the
+    # quick ratio (which excludes it) is the honest solvency read — a pharmacy can
+    # look comfortable on the current ratio and still not be able to pay a supplier.
+    inventory = sum((b.signed for b in balances if b.code == "1500"), ZERO)
+    quick_assets = current_assets - inventory
+
+    def ratio(numerator: Decimal, denominator: Decimal) -> Decimal | None:
+        return _q(numerator / denominator) if denominator else None
 
     return {
         "as_of": as_of,
-        "assets": section(Account.Type.ASSET),
-        "liabilities": section(Account.Type.LIABILITY),
-        "equity": section(Account.Type.EQUITY),
+        # Grouped sections — a balance sheet is read current-vs-non-current, not
+        # as one flat list of accounts.
+        "current_assets": section(C.CURRENT_ASSET),
+        "non_current_assets": section(C.NON_CURRENT_ASSET),
+        "current_liabilities": section(C.CURRENT_LIABILITY),
+        "non_current_liabilities": section(C.NON_CURRENT_LIABILITY),
+        "equity": section(C.EQUITY),
+        # Flat sections kept for callers that predate the grouping.
+        "assets": section(C.CURRENT_ASSET, C.NON_CURRENT_ASSET),
+        "liabilities": section(C.CURRENT_LIABILITY, C.NON_CURRENT_LIABILITY),
+        "total_current_assets": _q(current_assets),
+        "total_non_current_assets": _q(non_current_assets),
+        "total_current_liabilities": _q(current_liabilities),
+        "total_non_current_liabilities": _q(non_current_liabilities),
         "total_assets": _q(assets),
         "total_liabilities": _q(liabilities),
         "contributed_equity": _q(contributed_equity),
         "retained_earnings": _q(retained_earnings),
         "total_equity": _q(total_equity),
+        "working_capital": _q(current_assets - current_liabilities),
+        "current_ratio": ratio(current_assets, current_liabilities),
+        "quick_ratio": ratio(quick_assets, current_liabilities),
         "balanced": _q(assets) == _q(liabilities + total_equity),
     }
 
@@ -514,18 +579,179 @@ def consolidated(organizations: list[Organization], *, start: date, end: date) -
         for key in totals:
             totals[key] += row[key]
 
-    group_revenue = totals["revenue"]
+    # Eliminate trade between members of the group. Summing the branches counts a
+    # depot's sale to its own retail branch as group revenue and the branch's
+    # purchase as group cost — the same goods twice on their way through one
+    # business. A group has not earned anything until it sells to someone outside
+    # itself, so those internal legs come back out here.
+    eliminations = intercompany_eliminations(organizations, start=start, end=end)
+    gross = {k: _q(v) for k, v in totals.items()}
+    consolidated_totals = dict(gross)
+    consolidated_totals["revenue"] = _q(gross["revenue"] - eliminations["revenue"])
+    consolidated_totals["cogs"] = _q(gross["cogs"] - eliminations["cogs"])
+    consolidated_totals["gross_profit"] = _q(
+        consolidated_totals["revenue"] - consolidated_totals["cogs"]
+    )
+    consolidated_totals["net_profit"] = _q(gross["net_profit"] - eliminations["profit_effect"])
+    # Intercompany receivables and payables are the same debt seen from both ends.
+    consolidated_totals["total_assets"] = _q(gross["total_assets"] - eliminations["receivable"])
+    consolidated_totals["total_liabilities"] = _q(
+        gross["total_liabilities"] - eliminations["payable"]
+    )
+
+    group_revenue = consolidated_totals["revenue"]
     return {
         "start": start,
         "end": end,
         "branches": per_branch,
-        "totals": {k: _q(v) for k, v in totals.items()},
+        # What the branches add up to before anything is netted off.
+        "gross_totals": gross,
+        "eliminations": eliminations,
+        "totals": consolidated_totals,
         "group_gross_margin_pct": (
-            _q(totals["gross_profit"] / group_revenue * 100) if group_revenue else ZERO
+            _q(consolidated_totals["gross_profit"] / group_revenue * 100) if group_revenue else ZERO
         ),
         "group_net_margin_pct": (
-            _q(totals["net_profit"] / group_revenue * 100) if group_revenue else ZERO
+            _q(consolidated_totals["net_profit"] / group_revenue * 100) if group_revenue else ZERO
         ),
+    }
+
+
+def intercompany_eliminations(
+    organizations: list[Organization], *, start: date, end: date
+) -> dict[str, Any]:
+    """Trade between members of the group, which must not appear in group results.
+
+    An invoice raised by one group member on another is identified directly: both
+    the seller (``organization``) and the buyer (``customer``) are inside the
+    consolidation set.
+
+    What is eliminated here:
+
+    * **Revenue and cost** — the seller's revenue and the buyer's matching cost,
+      netted so group turnover reflects only sales to outside customers.
+    * **Receivables and payables** — the same debt recorded twice, once as an
+      asset and once as a liability. It cancels.
+
+    What is **not** eliminated, and is reported rather than hidden: **unrealised
+    profit in closing stock**. Goods transferred at a margin and still sitting on
+    the buying branch's shelf carry profit the group has not actually earned.
+    Removing it correctly needs the transfer price of each remaining batch, which
+    the stock records do not yet carry. ``unrealised_profit_note`` says so
+    explicitly, because a consolidation that quietly ignores a known limitation is
+    worse than one that names it.
+    """
+    from .models import CustomerInvoice
+
+    ids = [o.pk for o in organizations]
+    if len(ids) < 2:
+        return {
+            "revenue": ZERO,
+            "cogs": ZERO,
+            "profit_effect": ZERO,
+            "receivable": ZERO,
+            "payable": ZERO,
+            "invoice_count": 0,
+            "unrealised_profit_note": "",
+        }
+
+    internal = CustomerInvoice.objects.filter(
+        organization_id__in=ids,
+        customer_id__in=ids,
+        invoice_date__gte=start,
+        invoice_date__lte=end,
+    ).exclude(status=CustomerInvoice.Status.CANCELLED)
+
+    net_of_vat = ZERO
+    outstanding = ZERO
+    count = 0
+    for invoice in internal:
+        count += 1
+        # VAT on an internal invoice is recovered by the buyer, so it never was
+        # group income; strip it before eliminating.
+        net_of_vat += _q(invoice.total_amount) - _q(invoice.vat_amount)
+        outstanding += _q(invoice.total_amount) - _q(getattr(invoice, "amount_paid", ZERO))
+
+    unrealised = unrealised_profit_in_stock(organizations, as_of=end)
+
+    return {
+        "revenue": _q(net_of_vat),
+        # The buyer booked the same amount as its cost of purchase, so removing
+        # both legs leaves group profit unchanged — which is the correct result
+        # for goods that have been sold on outside the group.
+        "cogs": _q(net_of_vat),
+        # Goods still sitting inside the group carry the seller's margin. The
+        # group has not earned that, so it comes out of group profit.
+        "profit_effect": _q(unrealised["unrealised_profit"]),
+        "receivable": _q(outstanding),
+        "payable": _q(outstanding),
+        "invoice_count": count,
+        "unrealised_profit": str(_q(unrealised["unrealised_profit"])),
+        "unrealised_detail": unrealised,
+        "unrealised_profit_note": unrealised["note"],
+    }
+
+
+def unrealised_profit_in_stock(organizations: list[Organization], *, as_of: date) -> dict[str, Any]:
+    """Margin sitting in stock that one group member bought from another.
+
+    When a depot sells to its own branch at a markup, the branch carries the goods
+    at the transfer price. Until they are sold to someone outside the group, that
+    markup is not profit the group has earned — it is one pocket paying another.
+
+    ``InventoryBatch.origin_unit_cost`` records what the selling entity itself
+    paid, which is what makes the elimination possible. Batches transferred before
+    that field existed have no origin cost; those are counted and reported rather
+    than assumed to be zero-margin, because assuming would understate the
+    adjustment and nobody would ever know.
+    """
+    from apps.inventory.models import InventoryBatch
+
+    ids = [o.pk for o in organizations]
+    if len(ids) < 2:
+        return {
+            "unrealised_profit": ZERO,
+            "batches": 0,
+            "unmeasured_batches": 0,
+            "stock_at_transfer_price": ZERO,
+            "note": "",
+        }
+
+    batches = InventoryBatch.objects.filter(
+        organization_id__in=ids,
+        source_org_id__in=ids,
+        quantity_available__gt=0,
+    ).exclude(source_org_id=F("organization_id"))
+
+    unrealised = ZERO
+    at_transfer = ZERO
+    measured = unmeasured = 0
+    for batch in batches:
+        quantity = Decimal(batch.quantity_available)
+        transfer_price = _q(batch.wholesale_cost or 0)
+        at_transfer += _q(transfer_price * quantity)
+        if batch.origin_unit_cost is None or transfer_price == 0:
+            unmeasured += 1
+            continue
+        measured += 1
+        margin = transfer_price - _q(batch.origin_unit_cost)
+        if margin > 0:
+            unrealised += _q(margin * quantity)
+
+    note = ""
+    if unmeasured:
+        note = (
+            f"{unmeasured} transferred batch(es) carry no origin cost, so their margin "
+            "is not eliminated. The adjustment below is therefore a floor, not the "
+            "full figure."
+        )
+
+    return {
+        "unrealised_profit": _q(unrealised),
+        "batches": measured,
+        "unmeasured_batches": unmeasured,
+        "stock_at_transfer_price": _q(at_transfer),
+        "note": note,
     }
 
 

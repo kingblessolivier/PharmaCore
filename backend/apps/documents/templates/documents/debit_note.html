@@ -1,0 +1,18 @@
+{% extends "documents/base.html" %}
+{% block content %}
+<table class="parties">
+  <tr>
+    <td style="width:55%"><div class="plabel">To</div>{{ supplier_name }}</td>
+    <td style="width:45%"><div class="plabel">Against</div>{{ against }}<br><span class="muted">{{ issued_on }}</span></td>
+  </tr>
+</table>
+<p class="muted">Reason: {{ reason }}</p>
+<table>
+  <tr><th>Description</th><th class="right">Amount ({{ currency }})</th></tr>
+  {% for l in lines %}
+  <tr><td>{{ l.description }}</td><td class="right">{{ l.amount }}</td></tr>
+  {% endfor %}
+  <tr><td class="right"><b>Total charged back</b></td><td class="right"><b>{{ total }}</b></td></tr>
+</table>
+<p class="muted">This note reduces the amount payable to you. Please adjust your statement accordingly.</p>
+{% endblock %}

@@ -24,6 +24,7 @@ from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
 
 from apps.catalog.models import Supplier
+from apps.core.lookups import lookup_pk
 from apps.iam.audit import record_audit
 from apps.iam.models import Organization, User
 from apps.iam.scoping import organizations_visible_to
@@ -133,9 +134,7 @@ class _AuditedViewSet(viewsets.ModelViewSet):
         if self.owner_field:
             extra[self.owner_field] = cast(User, self.request.user)
         if self.number_field and self.number_kind and organization is not None:
-            extra[self.number_field] = services.next_document_number(
-                organization, self.number_kind
-            )
+            extra[self.number_field] = services.next_document_number(organization, self.number_kind)
         obj = serializer.save(**extra)
         self._audit("CREATE", obj)
 
@@ -170,21 +169,17 @@ class SupplierProfileViewSet(_AuditedViewSet):
             qs = qs.filter(standing=standing.upper())
         search = self.request.query_params.get("search")
         if search:
-            qs = qs.filter(
-                Q(supplier__name__icontains=search) | Q(trading_name__icontains=search)
-            )
+            qs = qs.filter(Q(supplier__name__icontains=search) | Q(trading_name__icontains=search))
         return qs
 
     @action(detail=False, methods=["post"])
     def ensure(self, request: Request) -> Response:
         """Create the procurement profile for a catalog supplier that lacks one."""
-        supplier = Supplier.objects.filter(pk=request.data.get("supplier")).first()
+        supplier = Supplier.objects.filter(pk=lookup_pk(request.data.get("supplier"))).first()
         if supplier is None:
             raise ValidationError({"supplier": "Unknown supplier."})
         profile = services.get_or_create_profile(supplier)
-        return Response(
-            SupplierProfileSerializer(profile).data, status=status.HTTP_201_CREATED
-        )
+        return Response(SupplierProfileSerializer(profile).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
     def set_standing(self, request: Request, pk: str | None = None) -> Response:
@@ -204,7 +199,7 @@ class SupplierProfileViewSet(_AuditedViewSet):
     def score(self, request: Request, pk: str | None = None) -> Response:
         """Recompute the scorecard from actual receipts over a period."""
         profile = self.get_object()
-        org = Organization.objects.filter(pk=request.data.get("organization")).first()
+        org = Organization.objects.filter(pk=lookup_pk(request.data.get("organization"))).first()
         if org is None:
             org = self.visible_orgs().first()
         if org is None:
@@ -273,9 +268,7 @@ class SupplierPriceAgreementViewSet(_AuditedViewSet):
     queryset = SupplierPriceAgreement.objects.select_related("supplier", "product").all()
 
     def get_queryset(self) -> QuerySet[SupplierPriceAgreement]:
-        qs = SupplierPriceAgreement.objects.select_related(
-            "supplier", "product", "organization"
-        )
+        qs = SupplierPriceAgreement.objects.select_related("supplier", "product", "organization")
         supplier = self.request.query_params.get("supplier")
         if supplier:
             qs = qs.filter(supplier_id=supplier)
@@ -353,11 +346,11 @@ class PurchaseRequisitionViewSet(_AuditedViewSet):
     @action(detail=False, methods=["post"])
     def consolidate(self, request: Request) -> Response:
         """HQ: merge several approved requisitions into one supplier PO."""
-        org = Organization.objects.filter(pk=request.data.get("organization")).first()
+        org = Organization.objects.filter(pk=lookup_pk(request.data.get("organization"))).first()
         if org is None:
             raise ValidationError({"organization": "An organization is required."})
         self.guard_org(org)
-        supplier = Supplier.objects.filter(pk=request.data.get("supplier")).first()
+        supplier = Supplier.objects.filter(pk=lookup_pk(request.data.get("supplier"))).first()
         if supplier is None:
             raise ValidationError({"supplier": "A supplier is required."})
         ids = request.data.get("requisitions") or []
@@ -368,7 +361,9 @@ class PurchaseRequisitionViewSet(_AuditedViewSet):
         )
         if len(requisitions) != len(ids):
             raise ValidationError({"requisitions": "One or more requisitions are not visible."})
-        deliver_to = Organization.objects.filter(pk=request.data.get("deliver_to")).first()
+        deliver_to = Organization.objects.filter(
+            pk=lookup_pk(request.data.get("deliver_to"))
+        ).first()
         try:
             order = services.consolidate_requisitions(
                 organization=org,
@@ -440,11 +435,13 @@ class SupplierQuoteViewSet(_AuditedViewSet):
     manage_actions = ("award", "shortlist")
 
     def get_queryset(self) -> QuerySet[SupplierQuote]:
-        qs = SupplierQuote.objects.filter(
-            rfq__organization__in=self.visible_orgs()
-        ).select_related("supplier", "rfq").prefetch_related("lines__product")
+        qs = (
+            SupplierQuote.objects.filter(rfq__organization__in=self.visible_orgs())
+            .select_related("supplier", "rfq")
+            .prefetch_related("lines__product")
+        )
         rfq = self.request.query_params.get("rfq")
-        return qs.filter(rfq_id=rfq) if rfq else qs
+        return qs.filter(rfq_id=lookup_pk(rfq)) if rfq else qs
 
     def perform_create(self, serializer: BaseSerializer[Any]) -> None:
         rfq = serializer.validated_data.get("rfq")
@@ -637,7 +634,7 @@ class ImportConsignmentViewSet(_AuditedViewSet):
     def attach_order(self, request: Request, pk: str | None = None) -> Response:
         consignment = self.get_object()
         order = PurchaseOrder.objects.filter(
-            pk=request.data.get("order"), organization__in=self.visible_orgs()
+            pk=lookup_pk(request.data.get("order")), organization__in=self.visible_orgs()
         ).first()
         if order is None:
             raise ValidationError({"order": "Unknown purchase order."})
@@ -650,7 +647,7 @@ class ImportConsignmentViewSet(_AuditedViewSet):
     @action(detail=True, methods=["post"])
     def detach_order(self, request: Request, pk: str | None = None) -> Response:
         consignment = self.get_object()
-        order = consignment.orders.filter(pk=request.data.get("order")).first()
+        order = consignment.orders.filter(pk=lookup_pk(request.data.get("order"))).first()
         if order is None:
             raise ValidationError({"order": "That order is not on this consignment."})
         order.consignment = None
@@ -684,7 +681,7 @@ class LandedCostComponentViewSet(_AuditedViewSet):
             consignment__organization__in=self.visible_orgs()
         ).select_related("consignment")
         consignment = self.request.query_params.get("consignment")
-        return qs.filter(consignment_id=consignment) if consignment else qs
+        return qs.filter(consignment_id=lookup_pk(consignment)) if consignment else qs
 
     def perform_create(self, serializer: BaseSerializer[Any]) -> None:
         consignment = serializer.validated_data.get("consignment")
@@ -725,7 +722,7 @@ class GoodsReceiptViewSet(_AuditedViewSet):
             qs = qs.filter(status=status_param.upper())
         order = self.request.query_params.get("order")
         if order:
-            qs = qs.filter(order_id=order)
+            qs = qs.filter(order_id=lookup_pk(order))
         return qs
 
     def perform_create(self, serializer: BaseSerializer[Any]) -> None:
@@ -738,7 +735,7 @@ class GoodsReceiptViewSet(_AuditedViewSet):
             received_by=cast(User, self.request.user),
             organization=organization,
             grn_number=services.next_document_number(
-                organization, NumberSequence.Kind.GOODS_RECEIPT
+                cast(Organization, organization), NumberSequence.Kind.GOODS_RECEIPT
             ),
         )
         self._audit("CREATE", obj)
@@ -845,9 +842,9 @@ class SupplierNoteViewSet(_AuditedViewSet):
     manage_actions = ("issue", "settle")
 
     def get_queryset(self) -> QuerySet[SupplierNote]:
-        qs = SupplierNote.objects.filter(
-            organization__in=self.visible_orgs()
-        ).select_related("organization", "supplier", "invoice")
+        qs = SupplierNote.objects.filter(organization__in=self.visible_orgs()).select_related(
+            "organization", "supplier", "invoice"
+        )
         supplier = self.request.query_params.get("supplier")
         if supplier:
             qs = qs.filter(supplier_id=supplier)
@@ -864,9 +861,11 @@ class SupplierNoteViewSet(_AuditedViewSet):
             created_by=cast(User, self.request.user),
             note_number=services.next_document_number(
                 organization,
-                NumberSequence.Kind.DEBIT_NOTE
-                if kind == SupplierNote.Kind.DEBIT
-                else NumberSequence.Kind.CREDIT_NOTE,
+                (
+                    NumberSequence.Kind.DEBIT_NOTE
+                    if kind == SupplierNote.Kind.DEBIT
+                    else NumberSequence.Kind.CREDIT_NOTE
+                ),
             ),
         )
         self._audit("CREATE", obj)
@@ -906,13 +905,15 @@ class SupplierStatementView(APIView):
         user = cast(User, request.user)
         orgs = organizations_visible_to(user)
         org = (
-            orgs.filter(pk=request.query_params.get("organization")).first()
+            orgs.filter(pk=lookup_pk(request.query_params.get("organization"))).first()
             if request.query_params.get("organization")
             else orgs.first()
         )
         if org is None:
             raise NotFound("No visible organization.")
-        supplier = Supplier.objects.filter(pk=request.query_params.get("supplier")).first()
+        supplier = Supplier.objects.filter(
+            pk=lookup_pk(request.query_params.get("supplier"))
+        ).first()
         if supplier is None:
             raise ValidationError({"supplier": "A supplier id is required."})
         today = date.today()

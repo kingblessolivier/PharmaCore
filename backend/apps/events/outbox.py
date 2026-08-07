@@ -10,9 +10,12 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from apps.events.models import OutboxEvent
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +57,7 @@ def publish(
     source_line_id: str | int = "",
     organization_id: int | None = None,
     user: Any | None = None,
-) -> "OutboxEvent":
+) -> OutboxEvent:
     """Schedule an outbox row to be written at transaction commit.
 
     If we're not inside an ``atomic`` block the row is written immediately —

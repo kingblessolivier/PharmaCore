@@ -9,11 +9,7 @@ The numbering primitive must be:
 
 from __future__ import annotations
 
-import threading
-
 import pytest
-from django.db import connection, connections
-
 from apps.procurement.models import NumberSequence
 
 pytestmark = pytest.mark.django_db

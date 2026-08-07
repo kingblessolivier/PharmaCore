@@ -7,6 +7,12 @@
 >
 > Version 0.1 · 2026-08-03
 
+
+> **Current reference:** the endpoint list below is the *design* surface (v1,
+> indicative). Every route the project actually serves is generated from the URL
+> resolver into [docs/reference/api.md](reference/api.md) and checked in CI. Read
+> this document for conventions; read that one for the live surface.
+
 ---
 
 ## 1. Conventions

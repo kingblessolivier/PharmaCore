@@ -8,6 +8,7 @@ set, never a migration. The first invocation backfills all four classes at their
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 
 from django.core.management.base import BaseCommand
 
@@ -17,16 +18,34 @@ from apps.iam.models import Organization
 # (code, description, rate_pct, withholding_pct)
 _DEFAULT_CODES: list[tuple[str, str, str, float, float]] = [
     ("A", "Class A — Exempt", "Exempt supplies (e.g. certain medical services).", 0.0, 0.0),
-    ("B", "Class B — Standard 18%", "Standard-rated supplies (e.g. cosmetics, sundries).", 18.0, 15.0),
-    ("C", "Class C — Zero-rated", "Zero-rated supplies (e.g. medicines, medical supplies).", 0.0, 0.0),
-    ("D", "Class D — Special handling", "Special-handling supplies (e.g. exported services).", 18.0, 0.0),
+    (
+        "B",
+        "Class B — Standard 18%",
+        "Standard-rated supplies (e.g. cosmetics, sundries).",
+        18.0,
+        15.0,
+    ),
+    (
+        "C",
+        "Class C — Zero-rated",
+        "Zero-rated supplies (e.g. medicines, medical supplies).",
+        0.0,
+        0.0,
+    ),
+    (
+        "D",
+        "Class D — Special handling",
+        "Special-handling supplies (e.g. exported services).",
+        18.0,
+        0.0,
+    ),
 ]
 
 
 class Command(BaseCommand):
     help = "Seed the Rwanda VAT tax codes (A/B/C/D) for every active organisation."
 
-    def handle(self, *args, **options) -> None:
+    def handle(self, *args: Any, **options: Any) -> None:
         orgs = Organization.objects.filter(is_active=True)
         total_orgs = orgs.count()
         total_rows = 0

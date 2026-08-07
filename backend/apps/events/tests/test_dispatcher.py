@@ -9,7 +9,6 @@ The dispatcher is the consumer side of the bus. These tests cover:
 
 from __future__ import annotations
 
-import io
 import pytest
 
 from apps.events.events import EventType
@@ -89,6 +88,7 @@ def test_dispatcher_retries_on_handler_failure(organization, monkeypatch):
 
 def test_dispatcher_dead_letters_after_max_retries(organization, monkeypatch):
     """After OutboxEvent.MAX_RETRIES failures the event moves to DEAD."""
+
     def handler(ev):
         raise RuntimeError("always fails")
 
@@ -135,6 +135,7 @@ def test_dispatcher_only_processes_pending_rows(organization):
 
 def test_dispatcher_clears_lock_after_dispatch(organization):
     """After successful dispatch the soft lock is cleared (admin view shows it free)."""
+
     def handler(ev):
         pass
 

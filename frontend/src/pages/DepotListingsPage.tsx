@@ -1,218 +1,407 @@
+/* -------------------------------------------------------------------------- */
+/* What this depot puts on the market — and what it deliberately holds back.   */
+/*                                                                             */
+/* Withholding is a first-class operation here, not an accident of low stock.  */
+/* A depot may hold 5,000 and offer 800; it may hold stock and offer none. The */
+/* screen therefore always shows both numbers side by side, because the gap    */
+/* between them is the decision being made.                                    */
+/* -------------------------------------------------------------------------- */
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, EyeOff, Plus } from "lucide-react";
-import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
-import { Badge, Button, Card, Modal, PageHeader, Spinner, TextField } from "../components/ui";
+import { AlertTriangle, EyeOff, Plus } from "lucide-react";
+import { useState } from "react";
+import { DataGrid, type Column } from "../components/DataGrid";
+import {
+  Drawer,
+  ErrorNote,
+  Facts,
+  Field,
+  Grid,
+  Input,
+  ProductPicker,
+  Section,
+  Select,
+} from "../components/RecordKit";
+import { Badge, Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
-import { useAuth } from "../lib/auth";
-import type { DepotProductListing, Paginated, Product } from "../lib/types";
+import { publishListing, storefront, type DepotListing } from "../lib/distribution";
+import { money } from "../lib/format";
+import { useDefaultOrg } from "../lib/recordData";
+import type { Paginated } from "../lib/types";
+
+interface Draft {
+  id?: number;
+  product: number | null;
+  offered_qty: string;
+  buffer_qty: string;
+  price_per_unit: string;
+  min_order_qty: string;
+  customer_segment: string;
+  is_published: boolean;
+}
+
+const BLANK: Draft = {
+  product: null,
+  offered_qty: "0",
+  buffer_qty: "0",
+  price_per_unit: "0",
+  min_order_qty: "1",
+  customer_segment: "ALL",
+  is_published: true,
+};
 
 export function DepotListingsPage() {
-  const navigate = useNavigate();
+  const { orgId } = useDefaultOrg();
   const qc = useQueryClient();
-  const { user } = useAuth();
-  const [creating, setCreating] = useState(false);
+  const [draft, setDraft] = useState<Draft | null>(null);
 
-  const [productId, setProductId] = useState("");
-  const [offeredQty, setOfferedQty] = useState("100");
-  const [bufferQty, setBufferQty] = useState("10");
-  const [pricePerUnit, setPricePerUnit] = useState("2500");
-
-  const listingsQuery = useQuery({
-    queryKey: ["depot-listings"],
-    queryFn: () => api<Paginated<DepotProductListing>>("/api/distribution/listings/"),
+  const listings = useQuery({
+    queryKey: ["depot-listings", orgId],
+    enabled: orgId != null,
+    queryFn: () => api<Paginated<DepotListing>>(`/api/distribution/listings/?depot=${orgId ?? 0}`),
   });
 
-  const productsQuery = useQuery({
-    queryKey: ["catalog-products-for-listings"],
-    queryFn: () => api<Paginated<Product>>("/api/catalog/products/"),
+  /* The seller's view of their own storefront carries the coverage summary —
+     how much of what they hold is actually on sale. */
+  const shop = useQuery({
+    queryKey: ["storefront-depot", orgId],
+    enabled: orgId != null,
+    queryFn: () => storefront(orgId as number, { asDepot: true }),
   });
 
-  const createListingMutation = useMutation({
-    mutationFn: () =>
-      api<DepotProductListing>("/api/distribution/listings/", {
-        method: "POST",
-        body: JSON.stringify({
-          depot: user?.organization,
-          product: Number(productId),
-          offered_qty: Number(offeredQty),
-          buffer_qty: Number(bufferQty),
-          price_per_unit: pricePerUnit,
-          is_published: true,
-        }),
+  const save = useMutation({
+    mutationFn: (d: Draft) =>
+      publishListing({
+        depot: orgId as number,
+        product: d.product as number,
+        offered_qty: Number(d.offered_qty),
+        buffer_qty: Number(d.buffer_qty),
+        price_per_unit: d.price_per_unit,
+        min_order_qty: Number(d.min_order_qty),
+        customer_segment: d.customer_segment,
+        is_published: d.is_published,
       }),
     onSuccess: () => {
-      setCreating(false);
-      setProductId("");
+      setDraft(null);
       void qc.invalidateQueries({ queryKey: ["depot-listings"] });
+      void qc.invalidateQueries({ queryKey: ["storefront-depot"] });
     },
   });
 
-  const togglePublishMutation = useMutation({
-    mutationFn: ({ id, is_published }: { id: number; is_published: boolean }) =>
-      api<DepotProductListing>(`/api/distribution/listings/${id}/`, {
-        method: "PATCH",
-        body: JSON.stringify({ is_published: !is_published }),
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["depot-listings"] });
-    },
-  });
+  const coverage = shop.data?.coverage;
 
-  function submitCreate(e: FormEvent) {
-    e.preventDefault();
-    if (productId && Number(offeredQty) > 0) createListingMutation.mutate();
-  }
+  const columns: Column<DepotListing>[] = [
+    {
+      key: "product_name",
+      header: "Product",
+      value: (r) => r.product_brand || r.product_name,
+      render: (r) => (
+        <div className="min-w-0">
+          <div className="truncate text-ink-900">{r.product_brand || r.product_name}</div>
+          {r.product_brand && <div className="truncate text-xs text-ink-500">{r.product_name}</div>}
+        </div>
+      ),
+    },
+    {
+      key: "price_per_unit",
+      header: "Price",
+      numeric: true,
+      align: "right",
+      value: (r) => Number(r.price_per_unit),
+      render: (r) => money(r.price_per_unit),
+    },
+    {
+      key: "offered_qty",
+      header: "Offered",
+      numeric: true,
+      align: "right",
+      value: (r) => r.offered_qty,
+    },
+    {
+      key: "buffer_qty",
+      header: "Held back",
+      numeric: true,
+      align: "right",
+      value: (r) => r.buffer_qty,
+      render: (r) => (r.buffer_qty > 0 ? <span className="tabular-nums">{r.buffer_qty}</span> : "—"),
+    },
+    {
+      key: "stock_on_hand",
+      header: "You hold",
+      numeric: true,
+      align: "right",
+      value: (r) => r.stock_on_hand,
+    },
+    {
+      key: "available_now",
+      header: "Buyers can take",
+      numeric: true,
+      align: "right",
+      value: (r) => r.available_now,
+      render: (r) => (
+        <div className="text-right">
+          <div className="tabular-nums text-ink-900">{r.available_now}</div>
+          {r.availability_note && (
+            <div className="text-xs text-ink-500">{r.availability_note}</div>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "customer_segment",
+      header: "Offered to",
+      value: (r) => r.customer_segment,
+      render: (r) =>
+        r.customer_segment && r.customer_segment !== "ALL" ? (
+          <Badge tone="info">{r.customer_segment}</Badge>
+        ) : (
+          <span className="text-ink-500">Everyone</span>
+        ),
+    },
+    {
+      key: "is_published",
+      header: "Status",
+      value: (r) => (r.is_published ? "On sale" : "Withheld"),
+      render: (r) =>
+        r.is_published ? (
+          <Badge tone="success">On sale</Badge>
+        ) : (
+          <Badge tone="neutral">
+            <EyeOff className="mr-1 inline h-3 w-3" />
+            Withheld
+          </Badge>
+        ),
+    },
+  ];
 
   return (
-    <div className="max-w-6xl">
-      <button
-        onClick={() => navigate("/distribution")}
-        className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
-      >
-        <ArrowLeft className="h-4 w-4" /> Distribution Home
-      </button>
-
+    <div className="space-y-4">
       <PageHeader
-        title="Depot Offered Stock Listings & Pricing Cockpit"
+        title="Depot offered listings"
         action={
-          <Button onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4" /> Publish New Listing
+          <Button onClick={() => setDraft({ ...BLANK })}>
+            <Plus className="h-4 w-4" /> Offer a product
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
-        Expose inventory offered for sale (`offered_qty`) independently from physical warehouse stock (`on_hand`). Retailers can only view and order published listings.
+      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
+        What you put on the market. Stock you hold but do not publish stays invisible to buyers.
       </p>
 
-      {listingsQuery.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
+      {coverage && (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Tile label="Products you hold" value={coverage.products_held} />
+          <Tile label="On sale" value={coverage.published} tone="success" />
+          <Tile label="Withheld" value={coverage.withheld} />
+          <Tile
+            label="Never listed"
+            value={coverage.unlisted}
+            hint={coverage.unlisted > 0 ? "Held but never offered to anyone" : undefined}
+          />
         </div>
       )}
 
-      {listingsQuery.data && (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-3">Product Name</th>
-                <th className="px-4 py-3 text-right">Offered Qty</th>
-                <th className="px-4 py-3 text-right">Buffer Holdback</th>
-                <th className="px-4 py-3 text-right">Retailer Available</th>
-                <th className="px-4 py-3 text-right">Listing Price (RWF)</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {listingsQuery.data.results.map((l) => (
-                <tr key={l.id} className="border-b border-line last:border-0 hover:bg-surface-50">
-                  <td className="px-4 py-3 font-medium text-ink-900">
-                    {l.product_name}
-                    {l.product_brand && <span className="ml-1.5 text-xs text-ink-500">({l.product_brand})</span>}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-ink-900">{l.offered_qty} units</td>
-                  <td className="px-4 py-3 text-right font-mono text-ink-500">{l.buffer_qty} units</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-emerald-700">
-                    {l.available_for_order} units
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-ink-900">
-                    RWF {Number(l.price_per_unit).toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge tone={l.is_published ? "success" : "neutral"}>
-                      {l.is_published ? "Published" : "Draft / Hold"}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => togglePublishMutation.mutate({ id: l.id, is_published: l.is_published })}
-                      disabled={togglePublishMutation.isPending}
-                    >
-                      {l.is_published ? (
-                        <>
-                          <EyeOff className="h-3.5 w-3.5" /> Unpublish
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle2 className="h-3.5 w-3.5" /> Publish
-                        </>
-                      )}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-              {listingsQuery.data.results.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-ink-500">
-                    No depot product listings published yet. Click "Publish New Listing" above to offer products.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-      )}
-
-      {creating && (
-        <Modal title="Publish Depot Stock Listing" onClose={() => setCreating(false)}>
-          <form onSubmit={submitCreate} className="flex flex-col gap-4">
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-ink-500">
-                Select Medicine / Product
-              </label>
-              <select
-                className="w-full rounded-md border border-line bg-surface-50 px-3 py-2 text-sm text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                value={productId}
-                onChange={(e) => setProductId(e.target.value)}
-                required
-              >
-                <option value="">-- Choose Product from Catalog --</option>
-                {productsQuery.data?.results.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.generic_name} {p.brand_name ? `(${p.brand_name})` : ""} - {p.dosage_form} {p.strength}
-                  </option>
+      {coverage && coverage.oversold.length > 0 && (
+        <div className="rounded-lg border border-warning-200 bg-warning-50 p-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning-600" />
+            <div className="min-w-0 text-sm">
+              <div className="font-medium text-warning-900">
+                {coverage.oversold.length} listing(s) offer more than you can deliver
+              </div>
+              <div className="mt-0.5 text-xs text-warning-800">
+                Buyers are capped at what you actually hold, so these will quietly under-fill.
+                Either restock or lower the offered quantity.
+              </div>
+              <ul className="mt-1.5 space-y-0.5 text-xs text-warning-800">
+                {coverage.oversold.slice(0, 5).map((o) => (
+                  <li key={o.product}>
+                    {o.product_name} — offering {o.offered}, can deliver {o.sellable}
+                  </li>
                 ))}
-              </select>
+              </ul>
             </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <TextField
-                label="Offered Quantity"
-                type="number"
-                value={offeredQty}
-                onChange={(e) => setOfferedQty(e.target.value)}
-                required
-              />
-              <TextField
-                label="Buffer Holdback Qty"
-                type="number"
-                value={bufferQty}
-                onChange={(e) => setBufferQty(e.target.value)}
-                required
-              />
-            </div>
-            <TextField
-              label="Listing Price per Unit (RWF)"
-              type="number"
-              value={pricePerUnit}
-              onChange={(e) => setPricePerUnit(e.target.value)}
-              required
-            />
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setCreating(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createListingMutation.isPending || !productId}>
-                {createListingMutation.isPending ? "Publishing…" : "Publish Listing"}
-              </Button>
-            </div>
-          </form>
-        </Modal>
+          </div>
+        </div>
       )}
+
+      <DataGrid
+        rows={listings.data?.results ?? []}
+        columns={columns}
+        getRowId={(r) => r.id}
+        loading={listings.isLoading}
+        storageKey="depot-listings"
+        exportName="depot-listings"
+        searchPlaceholder="Search your listings…"
+        emptyMessage="You have not offered anything yet."
+        onRowClick={(r) =>
+          setDraft({
+            id: r.id,
+            product: r.product,
+            offered_qty: String(r.offered_qty),
+            buffer_qty: String(r.buffer_qty),
+            price_per_unit: r.price_per_unit,
+            min_order_qty: String(r.min_order_qty),
+            customer_segment: r.customer_segment || "ALL",
+            is_published: r.is_published,
+          })
+        }
+      />
+
+      {draft && (
+      <Drawer
+        onClose={() => setDraft(null)}
+        title={draft?.id ? "Edit offer" : "Offer a product"}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDraft(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => draft && save.mutate(draft)}
+              disabled={save.isPending || !draft?.product}
+            >
+              {save.isPending ? "Saving…" : "Save offer"}
+            </Button>
+          </>
+        }
+      >
+        {draft && (
+          <>
+            <Section title="Product & price">
+              <Grid>
+                <Field label="Product">
+                  <ProductPicker
+                    value={draft.product}
+                    onChange={(id) => setDraft({ ...draft, product: id })}
+                    disabled={Boolean(draft.id)}
+                  />
+                </Field>
+                <Field label="Price per unit">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={draft.price_per_unit}
+                    onChange={(e) => setDraft({ ...draft, price_per_unit: e.target.value })}
+                  />
+                </Field>
+              </Grid>
+            </Section>
+
+            <Section
+              title="How much to offer"
+              hint="The quantity you publish, and how much you keep back for yourself."
+            >
+              <Grid>
+                <Field label="Offered quantity">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={draft.offered_qty}
+                    onChange={(e) => setDraft({ ...draft, offered_qty: e.target.value })}
+                  />
+                </Field>
+                <Field
+                  label="Hold back"
+                  hint="Reserved for your own use. Buyers can never reach it."
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    value={draft.buffer_qty}
+                    onChange={(e) => setDraft({ ...draft, buffer_qty: e.target.value })}
+                  />
+                </Field>
+                <Field label="Minimum order">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={draft.min_order_qty}
+                    onChange={(e) => setDraft({ ...draft, min_order_qty: e.target.value })}
+                  />
+                </Field>
+              </Grid>
+            </Section>
+
+            <Section title="Who may buy it">
+              <Grid>
+                <Field
+                  label="Customer segment"
+                  hint="ALL, an organisation type (RETAIL), or a district you deliver to."
+                >
+                  <Input
+                    value={draft.customer_segment}
+                    onChange={(e) =>
+                      setDraft({ ...draft, customer_segment: e.target.value.toUpperCase() })
+                    }
+                  />
+                </Field>
+                <Field label="Visibility">
+                  <Select
+                    value={draft.is_published ? "yes" : "no"}
+                    onChange={(e) => setDraft({ ...draft, is_published: e.target.value === "yes" })}
+                  >
+                    <option value="yes">On sale — buyers can see and order it</option>
+                    <option value="no">Withheld — invisible to buyers</option>
+                  </Select>
+                </Field>
+              </Grid>
+              {!draft.is_published && (
+                <p className="mt-2 text-xs text-ink-500">
+                  Withheld listings keep their settings. Buyers see nothing at all — not the price,
+                  not that you hold it.
+                </p>
+              )}
+            </Section>
+
+            <Section title="What buyers will see">
+              <Facts
+                rows={[
+                  ["Published price", money(draft.price_per_unit)],
+                  ["Offered", draft.is_published ? `${draft.offered_qty} unit(s)` : "Nothing"],
+                  ["Minimum order", `${draft.min_order_qty} unit(s)`],
+                ]}
+              />
+              <p className="mt-2 text-xs text-ink-500">
+                Buyers are capped at the smaller of your offered quantity and what you actually
+                hold, after the held-back amount. They never see your real stock level.
+              </p>
+            </Section>
+
+            {save.isError && (
+              <ErrorNote error={save.error} />
+            )}
+          </>
+        )}
+      </Drawer>
+      )}
+    </div>
+  );
+}
+
+function Tile({
+  label,
+  value,
+  tone,
+  hint,
+}: {
+  label: string;
+  value: number;
+  tone?: "success";
+  hint?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-line bg-surface-0 p-3">
+      <div className="text-xs text-ink-500">{label}</div>
+      <div
+        className={
+          "mt-0.5 text-xl tabular-nums " +
+          (tone === "success" ? "text-success-700" : "text-ink-900")
+        }
+      >
+        {value}
+      </div>
+      {hint && <div className="mt-0.5 text-xs text-ink-500">{hint}</div>}
     </div>
   );
 }
