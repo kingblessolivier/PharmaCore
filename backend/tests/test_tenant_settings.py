@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from apps.finance.models import TenantSettings
 from apps.finance.services import tenant_settings_for
 
@@ -30,7 +29,7 @@ def test_second_call_returns_the_same_row(organization):
 
 
 def test_one_tenant_one_settings_row(organization):
-    s = tenant_settings_for(organization)
+    tenant_settings_for(organization)
     # A second create should fail at the DB layer (OneToOne + UNIQUE).
     from django.db import IntegrityError
 

@@ -69,9 +69,10 @@ def _rule_matches(rule: PutawayRule, product: Any, abc_class: str) -> bool:
         return False
     if rule.match_abc_class and rule.match_abc_class != abc_class:
         return False
-    if rule.match_zone_type and rule.match_zone_type != _zone_type_for_product(product):
-        return False
-    return True
+    # Named rather than inlined into `return not (...)`: every criterion above is a
+    # guard clause, and collapsing only the last one would break that symmetry.
+    zone_mismatch = rule.match_zone_type and rule.match_zone_type != _zone_type_for_product(product)
+    return not zone_mismatch
 
 
 def _first_free_bin(zone: StorageZone) -> BinLocation | None:
@@ -107,9 +108,13 @@ def suggest_putaway(
         if not _rule_matches(rule, product, abc_class):
             continue
 
-        if rule.strategy == PutawayRule.Strategy.FIXED_BIN and rule.target_bin_id:
+        if rule.strategy == PutawayRule.Strategy.FIXED_BIN and rule.target_bin is not None:
             return _putaway_result(
-                rule, rule.target_bin.zone, rule.target_bin, required_zone_type, quantity,
+                rule,
+                rule.target_bin.zone,
+                rule.target_bin,
+                required_zone_type,
+                quantity,
                 "Fixed slot on the matching rule.",
             )
 
@@ -128,10 +133,9 @@ def suggest_putaway(
             )
             why = f"ABC velocity: class {abc_class or '—'} placement."
         elif rule.strategy == PutawayRule.Strategy.BULK_THEN_PICK:
-            bin_location = (
-                zone.bins.filter(is_occupied=False, shelf__iexact="BULK").first()
-                or _first_free_bin(zone)
-            )
+            bin_location = zone.bins.filter(
+                is_occupied=False, shelf__iexact="BULK"
+            ).first() or _first_free_bin(zone)
             why = "Bulk slot first, overflow to the pick face."
         else:
             bin_location = _first_free_bin(zone)
@@ -170,7 +174,7 @@ def _putaway_result(
     quantity: int,
     why: str,
 ) -> dict[str, Any]:
-    compliant = bool(zone) and zone.zone_type == required_zone_type
+    compliant = zone is not None and zone.zone_type == required_zone_type
     return {
         "rule": rule.id if rule else None,
         "rule_name": rule.name if rule else None,
@@ -259,9 +263,7 @@ def build_pick_tasks(
             .order_by("expiry_date", "batch_number")
         )
         if wave.warehouse_id:
-            batches = batches.filter(
-                Q(warehouse_id=wave.warehouse_id) | Q(warehouse__isnull=True)
-            )
+            batches = batches.filter(Q(warehouse_id=wave.warehouse_id) | Q(warehouse__isnull=True))
         if wave.zone_id:
             batches = batches.filter(bin_location__zone_id=wave.zone_id)
 
@@ -279,7 +281,7 @@ def build_pick_tasks(
                     batch=batch,
                     batch_number=batch.batch_number,
                     expiry_date=batch.expiry_date,
-                    zone=batch.bin_location.zone if batch.bin_location_id else None,
+                    zone=batch.bin_location.zone if batch.bin_location else None,
                     bin_location=batch.bin_location,
                     quantity_requested=take,
                     reference_type=demand.get("reference_type", ""),
@@ -333,9 +335,9 @@ def release_wave(*, wave: PickWave, user: User | None = None) -> PickWave:
         raise ValueError("Build pick tasks before releasing the wave.")
 
     for task in wave.tasks.select_for_update().select_related("batch"):
-        if task.status != PickTask.Status.PENDING or task.batch_id is None:
-            continue
         batch = task.batch
+        if task.status != PickTask.Status.PENDING or batch is None:
+            continue
         free = batch.quantity_available - batch.quantity_reserved
         if free < task.quantity_requested:
             task.status = PickTask.Status.SHORT
@@ -390,9 +392,7 @@ def confirm_pick(
     )
     if task.status == PickTask.Status.SHORT:
         task.short_reason = short_reason or "Short picked at the bin."
-    task.save(
-        update_fields=["quantity_picked", "picker", "picked_at", "status", "short_reason"]
-    )
+    task.save(update_fields=["quantity_picked", "picker", "picked_at", "status", "short_reason"])
 
     wave = task.wave
     open_tasks = wave.tasks.filter(
@@ -410,8 +410,8 @@ def cancel_wave(*, wave: PickWave, user: User | None = None) -> PickWave:
     if wave.status in (PickWave.Status.PICKED, PickWave.Status.CANCELLED):
         raise ValueError("A completed or cancelled wave cannot be cancelled again.")
     for task in wave.tasks.select_for_update().select_related("batch"):
-        if task.status == PickTask.Status.ASSIGNED and task.batch_id:
-            batch = task.batch
+        batch = task.batch
+        if task.status == PickTask.Status.ASSIGNED and batch is not None:
             batch.quantity_reserved = max(0, batch.quantity_reserved - task.quantity_requested)
             batch.save(update_fields=["quantity_reserved", "updated_at"])
         if task.status != PickTask.Status.PICKED:
@@ -439,11 +439,11 @@ def record_consignment_consumption(
     draw-down. Title on consigned stock passes at consumption, which is exactly the
     moment this row is written.
     """
-    if not batch.is_consignment or not batch.consignment_agreement_id:
+    agreement = batch.consignment_agreement
+    if not batch.is_consignment or agreement is None:
         return None
     if quantity <= 0:
         return None
-    agreement = batch.consignment_agreement
     if agreement.status != ConsignmentAgreement.Status.ACTIVE:
         return None
 

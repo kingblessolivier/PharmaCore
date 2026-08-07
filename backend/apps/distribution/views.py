@@ -153,6 +153,25 @@ class StockOrderViewSet(viewsets.ModelViewSet):
                 qs = qs.filter(depot_id=int(org_param))
             elif role == "retail":
                 qs = qs.filter(retail_id=int(org_param))
+        # A status filter was being sent by the overview and silently ignored, so
+        # the "pending approval" count was really the total order count. An ignored
+        # filter is worse than a rejected one — the number looks plausible.
+        status = self.request.query_params.get("status")
+        if status:
+            valid = {choice.value for choice in StockOrder.Status}
+            if status not in valid:
+                raise ValidationError({"status": f"Must be one of {sorted(valid)}."})
+            qs = qs.filter(status=status)
+        payment_status = self.request.query_params.get("payment_status")
+        if payment_status:
+            valid = {choice.value for choice in StockOrder.PaymentStatus}
+            if payment_status not in valid:
+                raise ValidationError({"payment_status": f"Must be one of {sorted(valid)}."})
+            qs = qs.filter(payment_status=payment_status)
+        for key, field in (("depot", "depot_id"), ("retail", "retail_id")):
+            raw = self.request.query_params.get(key)
+            if raw and raw.isdigit():
+                qs = qs.filter(**{field: int(raw)})
         return qs
 
     def perform_create(self, serializer: BaseSerializer[Any]) -> None:
@@ -507,4 +526,3 @@ class CustomerReturnViewSet(viewsets.ModelViewSet):
             visible = organizations_visible_to(user)
             qs = qs.filter(Q(depot__in=visible) | Q(retail__in=visible))
         return qs
-

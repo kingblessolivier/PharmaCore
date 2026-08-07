@@ -125,9 +125,7 @@ class MeView(APIView):
         admin_id = _token_claim(request, "act_as_admin_id")
         if admin_id:
             admin = User.objects.filter(pk=admin_id).first()
-            data["impersonator"] = (
-                {"id": admin.pk, "username": admin.username} if admin else None
-            )
+            data["impersonator"] = {"id": admin.pk, "username": admin.username} if admin else None
         return Response(data)
 
 
@@ -706,9 +704,7 @@ class UserViewSet(viewsets.ModelViewSet):
         completed = Sale.objects.filter(cashier=user, status=Sale.Status.COMPLETED)
         counts = {
             row["action"]: row["n"]
-            for row in AuditLog.objects.filter(user=user)
-            .values("action")
-            .annotate(n=Count("id"))
+            for row in AuditLog.objects.filter(user=user).values("action").annotate(n=Count("id"))
         }
         return Response(
             {

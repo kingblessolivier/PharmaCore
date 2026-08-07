@@ -7,6 +7,8 @@ Cancellable pre-dispatch. Later slices add allocation, shipment, and GRN.
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from django.conf import settings
 from django.db import models
 
@@ -258,12 +260,17 @@ class Reservation(models.Model):
 
 
 class DepotProductListing(models.Model):
-    """Depot offered stock listing (decoupled from physical warehouse on-hand). ROADMAP '5. Distribution'."""
+    """Depot offered stock listing, decoupled from physical warehouse on-hand.
+
+    ROADMAP '5. Distribution'.
+    """
 
     depot = models.ForeignKey(
         "iam.Organization", on_delete=models.CASCADE, related_name="depot_listings"
     )
-    product = models.ForeignKey("catalog.Product", on_delete=models.CASCADE, related_name="depot_listings")
+    product = models.ForeignKey(
+        "catalog.Product", on_delete=models.CASCADE, related_name="depot_listings"
+    )
     offered_qty = models.PositiveIntegerField(default=0)
     buffer_qty = models.PositiveIntegerField(default=0)
     price_per_unit = models.DecimalField(max_digits=14, decimal_places=2)
@@ -280,7 +287,7 @@ class DepotProductListing(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.depot.name} · {self.product.name} (Offered: {self.offered_qty})"
+        return f"{self.depot.name} · {self.product} (Offered: {self.offered_qty})"
 
     @property
     def available_for_order(self) -> int:
@@ -293,8 +300,16 @@ class SalesRepresentative(models.Model):
     organization = models.ForeignKey(
         "iam.Organization", on_delete=models.CASCADE, related_name="sales_reps"
     )
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="sales_rep_profile")
-    employee = models.ForeignKey("hr.Employee", null=True, blank=True, on_delete=models.SET_NULL, related_name="sales_reps")
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="sales_rep_profile"
+    )
+    employee = models.ForeignKey(
+        "hr.Employee",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sales_reps",
+    )
     territory_code = models.CharField(max_length=50, default="KIGALI-CENTRAL")
     monthly_sales_target = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     commission_rate_pct = models.DecimalField(max_digits=5, decimal_places=2, default=2.50)
@@ -311,8 +326,12 @@ class SalesRepresentative(models.Model):
 class JourneyPlan(models.Model):
     """Rep scheduled customer beat/visit plan. ROADMAP '5. Distribution'."""
 
-    rep = models.ForeignKey(SalesRepresentative, on_delete=models.CASCADE, related_name="journey_plans")
-    customer_org = models.ForeignKey("iam.Organization", on_delete=models.CASCADE, related_name="rep_visits")
+    rep = models.ForeignKey(
+        SalesRepresentative, on_delete=models.CASCADE, related_name="journey_plans"
+    )
+    customer_org = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="rep_visits"
+    )
     planned_date = models.DateField()
     is_completed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -332,13 +351,31 @@ class SalesVisitLog(models.Model):
         VAN_SALE = "VAN_SALE", "Van sale (sell-from-stock)"
         CALL_ONLY = "CALL_ONLY", "Detailing / Call only"
 
-    journey_plan = models.ForeignKey(JourneyPlan, null=True, blank=True, on_delete=models.SET_NULL, related_name="visit_logs")
-    rep = models.ForeignKey(SalesRepresentative, on_delete=models.CASCADE, related_name="visit_logs")
-    customer_org = models.ForeignKey("iam.Organization", on_delete=models.CASCADE, related_name="completed_visits")
-    visit_type = models.CharField(max_length=20, choices=VisitType.choices, default=VisitType.PRE_SALE)
+    journey_plan = models.ForeignKey(
+        JourneyPlan,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="visit_logs",
+    )
+    rep = models.ForeignKey(
+        SalesRepresentative, on_delete=models.CASCADE, related_name="visit_logs"
+    )
+    customer_org = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="completed_visits"
+    )
+    visit_type = models.CharField(
+        max_length=20, choices=VisitType.choices, default=VisitType.PRE_SALE
+    )
     visited_at = models.DateTimeField(auto_now_add=True)
     notes = models.TextField(blank=True, default="")
-    order = models.ForeignKey(StockOrder, null=True, blank=True, on_delete=models.SET_NULL, related_name="visit_origin")
+    order = models.ForeignKey(
+        StockOrder,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="visit_origin",
+    )
     sales_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
 
     class Meta:
@@ -351,7 +388,9 @@ class SalesVisitLog(models.Model):
 class VanStock(models.Model):
     """Inventory assigned to a van for sell-from-stock sales. ROADMAP '5. Distribution'."""
 
-    rep = models.ForeignKey(SalesRepresentative, on_delete=models.CASCADE, related_name="van_stocks")
+    rep = models.ForeignKey(
+        SalesRepresentative, on_delete=models.CASCADE, related_name="van_stocks"
+    )
     product = models.ForeignKey("catalog.Product", on_delete=models.CASCADE)
     batch_number = models.CharField(max_length=50)
     quantity = models.PositiveIntegerField(default=0)
@@ -359,19 +398,25 @@ class VanStock(models.Model):
     class Meta:
         ordering = ["rep", "product"]
         constraints = [
-            models.UniqueConstraint(fields=["rep", "product", "batch_number"], name="uniq_van_stock_item")
+            models.UniqueConstraint(
+                fields=["rep", "product", "batch_number"], name="uniq_van_stock_item"
+            )
         ]
 
     def __str__(self) -> str:
-        return f"Van {self.rep} · {self.product.name} ({self.quantity} units)"
+        return f"Van {self.rep} · {self.product} ({self.quantity} units)"
 
 
 class TenderContract(models.Model):
     """Institutional / B2G Tender Contract & Locked Price Agreement. ROADMAP '5. Distribution'."""
 
     tender_number = models.CharField(max_length=50, unique=True)
-    depot = models.ForeignKey("iam.Organization", on_delete=models.CASCADE, related_name="tender_contracts")
-    client_org = models.ForeignKey("iam.Organization", on_delete=models.CASCADE, related_name="awarded_tenders")
+    depot = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="tender_contracts"
+    )
+    client_org = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="awarded_tenders"
+    )
     product = models.ForeignKey("catalog.Product", on_delete=models.CASCADE)
     contract_price = models.DecimalField(max_digits=14, decimal_places=2)
     total_committed_qty = models.PositiveIntegerField()
@@ -401,8 +446,12 @@ class CustomerReturn(models.Model):
         REJECTED = "REJECTED", "Rejected (Damaged / Invalid)"
 
     return_number = models.CharField(max_length=40, unique=True)
-    depot = models.ForeignKey("iam.Organization", on_delete=models.CASCADE, related_name="incoming_returns")
-    retail = models.ForeignKey("iam.Organization", on_delete=models.CASCADE, related_name="outgoing_returns")
+    depot = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="incoming_returns"
+    )
+    retail = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="outgoing_returns"
+    )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.REQUESTED)
     reason = models.TextField(blank=True, default="")
     credit_note_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -414,3 +463,157 @@ class CustomerReturn(models.Model):
     def __str__(self) -> str:
         return f"Return {self.return_number} from {self.retail.name}"
 
+
+class BackorderLine(models.Model):
+    """Demand a depot could not meet — the signal it imports against.
+
+    When a retailer asks for something the depot does not stock, has withdrawn, or
+    holds too little of, refusing the line throws away the most valuable thing in a
+    marketplace: a customer telling you what to buy. The unmet quantity is captured
+    here instead, aggregated across every retailer, and converted into a purchase
+    requisition that feeds the existing procurement and import flow.
+    """
+
+    class Status(models.TextChoices):
+        OPEN = "OPEN", "Open — awaiting sourcing"
+        SOURCING = "SOURCING", "Being sourced"
+        FULFILLED = "FULFILLED", "Fulfilled"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    class Origin(models.TextChoices):
+        UNLISTED = "UNLISTED", "Not offered by the depot"
+        WITHDRAWN = "WITHDRAWN", "Withdrawn from sale"
+        SHORT = "SHORT", "Offered but insufficient stock"
+        SEGMENT = "SEGMENT", "Outside the offer's segment"
+        REQUEST = "REQUEST", "Direct buyer request"
+
+    depot = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="incoming_demand"
+    )
+    retail = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="outgoing_demand"
+    )
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    order = models.ForeignKey(
+        StockOrder,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="backorders",
+    )
+    quantity = models.PositiveIntegerField()
+    quantity_fulfilled = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
+    origin = models.CharField(max_length=12, choices=Origin.choices, default=Origin.SHORT)
+    note = models.CharField(max_length=255, blank=True, default="")
+    # Set once the demand has been rolled into a procurement requisition, so the
+    # same demand is never sourced twice.
+    requisition = models.ForeignKey(
+        "procurement.PurchaseRequisition",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="source_backorders",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["depot", "status"]),
+            models.Index(fields=["depot", "product", "status"]),
+            models.Index(fields=["retail", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.quantity}× {self.product} wanted by {self.retail.name}"
+
+    @property
+    def quantity_outstanding(self) -> int:
+        return max(0, self.quantity - self.quantity_fulfilled)
+
+    @property
+    def is_open(self) -> bool:
+        return self.status in (self.Status.OPEN, self.Status.SOURCING)
+
+
+class VanStockMovement(models.Model):
+    """A load-out, sale or return against a rep's van.
+
+    ``VanStock`` holds the running quantity; this is the audit trail that explains
+    every change to it. Without it a van's stock is a number nobody can reconcile.
+    """
+
+    class Kind(models.TextChoices):
+        LOAD = "LOAD", "Loaded from depot"
+        SALE = "SALE", "Sold from van"
+        RETURN = "RETURN", "Returned to depot"
+        ADJUST = "ADJUST", "Adjustment"
+
+    rep = models.ForeignKey(
+        SalesRepresentative, on_delete=models.CASCADE, related_name="van_movements"
+    )
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    batch_number = models.CharField(max_length=50)
+    kind = models.CharField(max_length=10, choices=Kind.choices)
+    quantity = models.IntegerField(help_text="Signed: positive adds to the van, negative removes.")
+    visit = models.ForeignKey(
+        SalesVisitLog, null=True, blank=True, on_delete=models.SET_NULL, related_name="van_moves"
+    )
+    reference = models.CharField(max_length=100, blank=True, default="")
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["rep", "created_at"])]
+
+    def __str__(self) -> str:
+        return f"{self.get_kind_display()} {self.quantity}× {self.product}"
+
+
+class CustomerReturnLine(models.Model):
+    """What was physically sent back, and what the depot accepted.
+
+    The header's ``credit_note_amount`` used to be a number typed by a human with
+    nothing behind it. Credit is now the sum of these lines: accepted units at the
+    price they were sold for. Rejected units are recorded but never credited and
+    never restocked.
+    """
+
+    return_request = models.ForeignKey(
+        CustomerReturn, on_delete=models.CASCADE, related_name="lines"
+    )
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    batch_number = models.CharField(max_length=100, blank=True, default="")
+    expiry_date = models.DateField(null=True, blank=True)
+    quantity_returned = models.PositiveIntegerField()
+    quantity_accepted = models.PositiveIntegerField(default=0)
+    quantity_rejected = models.PositiveIntegerField(default=0)
+    unit_price = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    inspection_note = models.CharField(max_length=255, blank=True, default="")
+    # Set when the accepted units are written back into depot stock, so a second
+    # approval can never restock the same goods twice.
+    restocked_batch = models.ForeignKey(
+        "inventory.InventoryBatch",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return f"{self.quantity_returned}× {self.product} returned"
+
+    @property
+    def credit_amount(self) -> Decimal:
+        return (Decimal(self.unit_price) * self.quantity_accepted).quantize(Decimal("0.01"))

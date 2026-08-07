@@ -1,0 +1,23 @@
+{% extends "documents/base.html" %}
+{% block content %}
+<table class="parties">
+  <tr>
+    <td style="width:55%"><div class="plabel">Entry</div>{{ entry_number }}<br><span class="muted">{{ description }}</span></td>
+    <td style="width:45%"><div class="plabel">Posted</div>{{ entry_date }}<br><span class="muted">Source: {{ source }}</span></td>
+  </tr>
+</table>
+<table>
+  <tr><th>Account</th><th>Cost centre</th><th>Memo</th><th class="right">Debit</th><th class="right">Credit</th></tr>
+  {% for l in lines %}
+  <tr><td>{{ l.account }}</td><td>{{ l.cost_centre }}</td><td>{{ l.memo }}</td><td class="right">{{ l.debit }}</td><td class="right">{{ l.credit }}</td></tr>
+  {% endfor %}
+  <tr><td colspan="3" class="right"><b>Totals</b></td><td class="right"><b>{{ total_debit }}</b></td><td class="right"><b>{{ total_credit }}</b></td></tr>
+</table>
+<p class="muted">A posted entry is immutable. Corrections are made by a new reversing entry, never by editing this one.</p>
+<table class="parties" style="margin-top:24px">
+  <tr>
+    <td style="width:50%"><div class="plabel">Prepared by</div>{{ posted_by }}<br><br>___________________</td>
+    <td style="width:50%"><div class="plabel">Reviewed by</div><br><br>___________________</td>
+  </tr>
+</table>
+{% endblock %}

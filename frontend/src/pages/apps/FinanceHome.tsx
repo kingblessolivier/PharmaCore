@@ -8,9 +8,11 @@ import {
   ScrollText,
   Wallet,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
-import type { FinancePerformance, VatReturn } from "../../lib/types";
+import type { AccountingPeriod, FinancePerformance, Paginated, VatReturn } from "../../lib/types";
+import type { CloseReadiness, MoneyMap, MoneySourceRow, PeriodTask } from "../../lib/finance";
 import { AppHeader, SectionCard, SectionGrid, StatTile } from "../../components/AppHome";
 import { Spinner } from "../../components/ui";
 
@@ -96,6 +98,193 @@ function RevenueVsCogs({ series }: { series: FinancePerformance["series"] }) {
       )}
       <p className="mt-2 text-[11px] text-ink-500">Figure under each month is gross profit.</p>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Are the books complete? — the operating half of the Finance home.            */
+/*                                                                              */
+/* The KPI tiles above say what the numbers are. These two panels say whether   */
+/* to believe them: every way money moves through the business, and whether the */
+/* month has actually been closed properly.                                     */
+/* -------------------------------------------------------------------------- */
+
+function Panel({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-line bg-surface-0">
+      <div className="border-b border-line px-4 py-3">
+        <div className="text-sm font-semibold text-ink-900">{title}</div>
+        {subtitle && <div className="text-xs text-ink-500">{subtitle}</div>}
+      </div>
+      <div className="px-4 py-3">{children}</div>
+    </div>
+  );
+}
+
+const DIRECTION_LABEL: Record<string, string> = {
+  INFLOW: "Money in",
+  OUTFLOW: "Money out",
+  INTERNAL: "Internal",
+};
+
+function MoneyMapPanel({ orgId, start, end }: { orgId: number; start: string; end: string }) {
+  const { data } = useQuery({
+    queryKey: ["money-map", orgId, start, end],
+    enabled: orgId > 0,
+    queryFn: () =>
+      api<MoneyMap>(
+        `/api/finance/operations/money-map/?organization=${orgId}&start=${start}&end=${end}`,
+      ),
+  });
+  if (!data) return null;
+
+  const grouped: Record<string, MoneySourceRow[]> = { INFLOW: [], OUTFLOW: [], INTERNAL: [] };
+  for (const row of data.rows) grouped[row.direction]?.push(row);
+
+  return (
+    <Panel
+      title="Money map"
+      subtitle={`${data.wired} of ${data.total_sources} sources reach the ledger`}
+    >
+      {data.unwired.length > 0 && (
+        <div className="mb-3 rounded-md border border-danger-300 bg-danger-50 px-3 py-2 text-sm text-danger-700">
+          {data.unwired.length} money source
+          {data.unwired.length === 1 ? " has" : "s have"} no posting path at all:{" "}
+          {data.unwired.join(", ")}.
+        </div>
+      )}
+      <div className="grid gap-4 sm:grid-cols-3">
+        {(["INFLOW", "OUTFLOW", "INTERNAL"] as const).map((direction) => (
+          <div key={direction}>
+            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+              {DIRECTION_LABEL[direction]}
+            </div>
+            <ul className="space-y-1">
+              {grouped[direction].map((row) => (
+                <li key={row.key} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        !row.wired
+                          ? "bg-danger-500"
+                          : row.is_idle
+                            ? "bg-warning-500"
+                            : "bg-success-500"
+                      }`}
+                      aria-hidden
+                    />
+                    <span className="truncate text-ink-700" title={row.treatment}>
+                      {row.label}
+                    </span>
+                  </span>
+                  <span
+                    className={`shrink-0 tabular-nums text-xs ${
+                      row.is_idle ? "text-warning-700" : "text-ink-500"
+                    }`}
+                  >
+                    {row.postings}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-ink-500">
+        {/* A wired source that posted nothing is either genuinely idle or quietly
+            broken, and only someone who knows the business can tell which. */}
+        Counts are postings this period. Amber means wired but silent all month — either the
+        business genuinely did none, or something stopped reaching the books.
+      </p>
+    </Panel>
+  );
+}
+
+function CloseReadinessPanel({ orgId, start, end }: { orgId: number; start: string; end: string }) {
+  const { data: periods } = useQuery({
+    queryKey: ["fin-periods", orgId],
+    enabled: orgId > 0,
+    queryFn: () => api<Paginated<AccountingPeriod>>(`/api/finance/periods/?organization=${orgId}`),
+  });
+
+  const period = periods?.results.find((p) => p.start_date === start && p.end_date === end);
+
+  const { data: checklist } = useQuery({
+    queryKey: ["period-checklist", period?.id],
+    enabled: period !== undefined,
+    queryFn: () =>
+      api<{ readiness: CloseReadiness; tasks: PeriodTask[] }>(
+        `/api/finance/periods/${period!.id}/checklist/`,
+      ),
+  });
+
+  return (
+    <Panel title="Month-end" subtitle="Whether the books for this period are finished">
+      {period === undefined ? (
+        <p className="text-sm text-ink-500">
+          No close started for this period yet. Open{" "}
+          <Link to="/finance/statements" className="text-brand-600 hover:underline">
+            Periods &amp; close
+          </Link>{" "}
+          to begin the checklist.
+        </p>
+      ) : checklist === undefined ? (
+        <p className="text-sm text-ink-500">Loading the checklist…</p>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-ink-700">
+              {checklist.readiness.done} done · {checklist.readiness.waived} waived ·{" "}
+              {checklist.readiness.outstanding} outstanding
+            </span>
+            <span
+              className={`text-xs font-semibold ${
+                checklist.readiness.is_ready ? "text-success-700" : "text-warning-700"
+              }`}
+            >
+              {checklist.readiness.is_ready ? "Ready to close" : "Not ready"}
+            </span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-surface-200">
+            <div
+              className={`h-full rounded-full ${
+                checklist.readiness.is_ready ? "bg-success-500" : "bg-warning-500"
+              }`}
+              style={{ width: `${checklist.readiness.completion_pct}%` }}
+            />
+          </div>
+          {checklist.readiness.blocking.length > 0 && (
+            <ul className="space-y-1 text-sm text-ink-600">
+              {checklist.readiness.blocking.slice(0, 5).map((task) => (
+                <li key={task.code} className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-warning-500" aria-hidden />
+                  {task.title}
+                </li>
+              ))}
+              {checklist.readiness.blocking.length > 5 && (
+                <li className="text-xs text-ink-500">
+                  and {checklist.readiness.blocking.length - 5} more
+                </li>
+              )}
+            </ul>
+          )}
+          <Link
+            to="/finance/statements"
+            className="inline-block text-sm text-brand-600 hover:underline"
+          >
+            Open the checklist →
+          </Link>
+        </div>
+      )}
+    </Panel>
   );
 }
 
@@ -296,6 +485,11 @@ export function FinanceHome() {
           </div>
         </>
       )}
+
+      <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
+        <MoneyMapPanel orgId={orgId} start={period.start} end={period.end} />
+        <CloseReadinessPanel orgId={orgId} start={period.start} end={period.end} />
+      </div>
 
       <SectionGrid>
         <SectionCard

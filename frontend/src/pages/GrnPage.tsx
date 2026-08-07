@@ -11,7 +11,7 @@ export function GrnPage() {
 
   const grnQuery = useQuery({
     queryKey: ["grn-list"],
-    queryFn: () => api<Paginated<GoodsReceivedNote>>("/api/distribution/grn/"),
+    queryFn: () => api<Paginated<GoodsReceivedNote>>("/api/distribution/grns/"),
   });
 
   return (

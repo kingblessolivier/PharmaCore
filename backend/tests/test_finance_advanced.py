@@ -2,7 +2,16 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from apps.finance.models import Account, Budget, FixedAsset, TaxRecord
+from apps.finance.budgeting import budget_variance
+from apps.finance.models import (
+    Budget,
+    BudgetLine,
+    CostCentre,
+    FixedAsset,
+    JournalLine,
+    TaxRecord,
+)
+from apps.finance.services import ensure_default_accounts, post_journal
 from apps.iam.models import Department, Organization
 
 pytestmark = pytest.mark.django_db
@@ -41,22 +50,57 @@ def test_ebm_tax_record_creation():
     assert "EBM-001-2026-8812" in str(tax_rec)
 
 
-def test_budget_variance_calculation():
+def test_budget_variance_reads_actuals_from_the_ledger():
+    """Rewritten for the redesign: `Budget.actual_amount` no longer exists.
+
+    The old version of this test created a budget with a hand-typed actual and
+    asserted the subtraction — which is exactly the defect the redesign removed,
+    because nothing computed that column. Actuals now come from posted journal
+    lines and cannot be supplied by a caller.
+
+    Fuller coverage lives in tests/test_finance_ledger_spine.py; this keeps the
+    guarantee asserted where the old behaviour used to be.
+    """
     org = Organization.objects.create(name="Kigali Retail Pharmacy", type="RETAIL")
     dept = Department.objects.create(organization=org, code="PHARM", name="Pharmacy Dispensing")
-    account = Account.objects.create(
-        organization=org,
-        code="5000",
-        name="Dispensing Supplies Expense",
-        account_type=Account.Type.EXPENSE,
-        normal_balance=Account.Balance.DEBIT,
+    accounts = ensure_default_accounts(org)
+    centre = CostCentre.objects.create(
+        organization=org, code="PHARM", name="Pharmacy Dispensing", department=dept
     )
-    budget = Budget.objects.create(
-        organization=org,
-        department=dept,
-        financial_year=2026,
-        account=account,
-        budgeted_amount=Decimal("500000.00"),
-        actual_amount=Decimal("350000.00"),
+
+    budget = Budget.objects.create(organization=org, name="FY2026 operating", financial_year=2026)
+    BudgetLine.objects.create(
+        budget=budget,
+        account=accounts["6110"],
+        cost_centre=centre,
+        period_month=6,
+        amount=Decimal("500000.00"),
     )
-    assert budget.variance == Decimal("150000.00")
+    post_journal(
+        organization=org,
+        entry_date=date(2026, 6, 30),
+        description="Dispensing supplies",
+        cost_centre=centre,
+        lines=[
+            {
+                "account": accounts["6110"],
+                "side": JournalLine.Side.DEBIT,
+                "amount": Decimal("350000.00"),
+                "memo": "",
+            },
+            {
+                "account": accounts["1100"],
+                "side": JournalLine.Side.CREDIT,
+                "amount": Decimal("350000.00"),
+                "memo": "",
+            },
+        ],
+    )
+
+    result = budget_variance(budget, start=date(2026, 6, 1), end=date(2026, 6, 30))
+    row = next(r for r in result["rows"] if r["code"] == "6110")
+    assert row["budget"] == "500000.00"
+    assert row["actual"] == "350000.00"
+    assert row["variance"] == "150000.00"
+    # Under plan on a cost is good news.
+    assert row["verdict"] == "FAVOURABLE"

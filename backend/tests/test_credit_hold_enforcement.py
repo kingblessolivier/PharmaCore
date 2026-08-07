@@ -16,7 +16,7 @@ from apps.catalog.models import Product
 from apps.finance.models import CreditProfile
 from apps.finance.services import record_customer_invoice
 from apps.iam.models import Organization, Role, User
-from apps.inventory.models import PharmacyProduct
+from apps.inventory.models import InventoryBatch, PharmacyProduct
 from rest_framework.test import APIClient
 
 
@@ -37,6 +37,18 @@ def product(db: None) -> Product:
 
 @pytest.fixture
 def offering(depot: Organization, product: Product) -> PharmacyProduct:
+    # The depot must actually hold the goods. Since the storefront caps an order
+    # at available stock, an unstocked depot supplies nothing, commits no credit
+    # and simply records the demand — so these limit tests need real stock behind
+    # the offer to exercise the limit at all.
+    InventoryBatch.objects.create(
+        organization=depot,
+        product=product,
+        batch_number="CREDIT-TEST",
+        expiry_date=date.today() + timedelta(days=365),
+        quantity_available=1000,
+        status=InventoryBatch.Status.ACTIVE,
+    )
     return PharmacyProduct.objects.create(
         organization=depot, product=product, wholesale_price=Decimal("1000"), is_active=True
     )

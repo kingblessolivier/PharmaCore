@@ -1,0 +1,33 @@
+{% extends "documents/base.html" %}
+{% block content %}
+<table class="parties">
+  <tr>
+    <td style="width:55%"><div class="plabel">Statement for</div>{{ customer_name }}</td>
+    <td style="width:45%"><div class="plabel">Period</div>{{ start }} to {{ end }}</td>
+  </tr>
+</table>
+<table>
+  <tr><th>Date</th><th>Type</th><th>Reference</th><th>Description</th><th class="right">Charged</th><th class="right">Paid</th><th class="right">Balance</th></tr>
+  <tr><td colspan="6"><b>Balance brought forward</b></td><td class="right"><b>{{ opening_balance }}</b></td></tr>
+  {% for l in lines %}
+  <tr>
+    <td>{{ l.date }}</td><td>{{ l.kind }}</td><td>{{ l.reference }}</td><td>{{ l.description }}</td>
+    <td class="right">{% if l.debit %}{{ l.debit }}{% endif %}</td>
+    <td class="right">{% if l.credit %}{{ l.credit }}{% endif %}</td>
+    <td class="right">{{ l.balance }}</td>
+  </tr>
+  {% endfor %}
+  <tr><td colspan="6" class="right"><b>Balance now due (RWF)</b></td><td class="right"><b>{{ closing_balance }}</b></td></tr>
+</table>
+{% if aging %}
+<table style="margin-top:10px">
+  <tr><th>Current</th><th class="right">1&ndash;30</th><th class="right">31&ndash;60</th><th class="right">61&ndash;90</th><th class="right">90+</th></tr>
+  <tr>
+    <td>{{ aging.current }}</td><td class="right">{{ aging.days_1_30 }}</td><td class="right">{{ aging.days_31_60 }}</td>
+    <td class="right">{{ aging.days_61_90 }}</td><td class="right">{{ aging.days_90_plus }}</td>
+  </tr>
+</table>
+<p class="muted">How old the debt is, not just how much. Amounts past 90 days are materially less likely to be recovered.</p>
+{% endif %}
+<p class="muted">Please quote the reference above when paying. Queries on any line should be raised before the due date.</p>
+{% endblock %}

@@ -17,12 +17,9 @@ from decimal import Decimal
 import pytest
 from apps.catalog.models import Product, Supplier
 from apps.finance.models import (
-    Account,
-    BankAccount,
     JournalEntry,
     JournalLine,
     TaxCode,
-    TaxPayment,
     TaxRecord,
 )
 from apps.finance.reports import vat_return
@@ -36,7 +33,6 @@ from apps.iam.models import Organization, User
 from apps.inventory.models import InventoryBatch, PharmacyProduct
 from apps.retail.models import Sale, SaleItem
 from apps.retail.services import complete_sale
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -68,9 +64,12 @@ def listing_b(org: Organization, product_b: Product) -> PharmacyProduct:
 @pytest.fixture
 def batch_b(org: Organization, product_b: Product) -> InventoryBatch:
     return InventoryBatch.objects.create(
-        organization=org, product=product_b, batch_number="B-FEFO",
+        organization=org,
+        product=product_b,
+        batch_number="B-FEFO",
         expiry_date=date(2026, 12, 31),
-        quantity_available=10, wholesale_cost=Decimal("700.00"),
+        quantity_available=10,
+        wholesale_cost=Decimal("700.00"),
     )
 
 
@@ -109,12 +108,13 @@ def test_tax_code_unique_on_effective_from(org: Organization) -> None:
     TaxCode.objects.create(
         organization=org, code="B", rate_pct=Decimal("18"), effective_from=date(2025, 1, 1)
     )
-    with pytest.raises(IntegrityError):
-        with transaction.atomic():
-            TaxCode.objects.create(
-                organization=org, code="B", rate_pct=Decimal("18"),
-                effective_from=date(2025, 1, 1),
-            )
+    with pytest.raises(IntegrityError), transaction.atomic():
+        TaxCode.objects.create(
+            organization=org,
+            code="B",
+            rate_pct=Decimal("18"),
+            effective_from=date(2025, 1, 1),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -124,19 +124,24 @@ def test_tax_code_unique_on_effective_from(org: Organization) -> None:
 
 @pytest.mark.django_db
 def test_supplier_bill_with_vat_splits_three_lines(
-    org: Organization, supplier: Supplier,
+    org: Organization,
+    supplier: Supplier,
 ) -> None:
     """A 118,000 RWF bill with 18% VAT splits as:
-       Dr Expense (net)    100,000
-       Dr VAT Input         18,000
-       Cr Accounts Payable 118,000
+    Dr Expense (net)    100,000
+    Dr VAT Input         18,000
+    Cr Accounts Payable 118,000
     """
-    accounts = ensure_default_accounts(org)
+    ensure_default_accounts(org)
     bill = record_supplier_bill(
-        organization=org, supplier=supplier,
-        bill_number="INV-2025-001", bill_date=date.today(),
-        due_date=date.today(), total_amount=Decimal("118000.00"),
-        vat_amount=Decimal("18000.00"), tax_class="B",
+        organization=org,
+        supplier=supplier,
+        bill_number="INV-2025-001",
+        bill_date=date.today(),
+        due_date=date.today(),
+        total_amount=Decimal("118000.00"),
+        vat_amount=Decimal("18000.00"),
+        tax_class="B",
         user=None,
     )
     bill.refresh_from_db()
@@ -150,14 +155,19 @@ def test_supplier_bill_with_vat_splits_three_lines(
 
 @pytest.mark.django_db
 def test_supplier_bill_without_vat_posts_one_line(
-    org: Organization, supplier: Supplier,
+    org: Organization,
+    supplier: Supplier,
 ) -> None:
     """A zero-rated supplier (or VAT-exempt import) posts single-line Dr Expense / Cr AP."""
     record_supplier_bill(
-        organization=org, supplier=supplier,
-        bill_number="INV-2025-002", bill_date=date.today(),
-        due_date=date.today(), total_amount=Decimal("50000.00"),
-        vat_amount=Decimal("0"), tax_class="C",
+        organization=org,
+        supplier=supplier,
+        bill_number="INV-2025-002",
+        bill_date=date.today(),
+        due_date=date.today(),
+        total_amount=Decimal("50000.00"),
+        vat_amount=Decimal("0"),
+        tax_class="C",
         user=None,
     )
     entry = JournalEntry.objects.filter(reference_type="supplier_bill").latest("id")
@@ -168,13 +178,17 @@ def test_supplier_bill_without_vat_posts_one_line(
 
 @pytest.mark.django_db
 def test_supplier_bill_rejects_vat_exceeding_total(
-    org: Organization, supplier: Supplier,
+    org: Organization,
+    supplier: Supplier,
 ) -> None:
     with pytest.raises(ValueError, match="vat_amount cannot exceed total_amount"):
         record_supplier_bill(
-            organization=org, supplier=supplier,
-            bill_number="INV-2025-BAD", bill_date=date.today(),
-            due_date=date.today(), total_amount=Decimal("1000.00"),
+            organization=org,
+            supplier=supplier,
+            bill_number="INV-2025-BAD",
+            bill_date=date.today(),
+            due_date=date.today(),
+            total_amount=Decimal("1000.00"),
             vat_amount=Decimal("2000.00"),
             user=None,
         )
@@ -187,17 +201,21 @@ def test_supplier_bill_rejects_vat_exceeding_total(
 
 @pytest.mark.django_db
 def test_vat_output_accumulates_across_sales(
-    org: Organization, product_b: Product, listing_b: PharmacyProduct,
-    batch_b: InventoryBatch, cashier: User,
+    org: Organization,
+    product_b: Product,
+    listing_b: PharmacyProduct,
+    batch_b: InventoryBatch,
+    cashier: User,
 ) -> None:
     """Each B-class sale adds 18% VAT Output on the GL control account."""
     ensure_default_accounts(org)
     for _ in range(3):
-        sale = Sale.objects.create(
-            organization=org, sale_number=f"TEST-{uuid.uuid4().hex[:8]}"
-        )
+        sale = Sale.objects.create(organization=org, sale_number=f"TEST-{uuid.uuid4().hex[:8]}")
         SaleItem.objects.create(
-            sale=sale, product=product_b, quantity=1, unit_price=Decimal("1180.00"),
+            sale=sale,
+            product=product_b,
+            quantity=1,
+            unit_price=Decimal("1180.00"),
             tax_rate=Decimal("18"),
         )
         complete_sale(sale=sale, payments=[{"method": "CASH", "amount": "1180.00"}], user=cashier)
@@ -215,23 +233,35 @@ def test_vat_output_accumulates_across_sales(
 
 @pytest.mark.django_db
 def test_vat_return_computes_net_payable(
-    org: Organization, product_b: Product, listing_b: PharmacyProduct,
-    batch_b: InventoryBatch, supplier: Supplier, cashier: User,
+    org: Organization,
+    product_b: Product,
+    listing_b: PharmacyProduct,
+    batch_b: InventoryBatch,
+    supplier: Supplier,
+    cashier: User,
 ) -> None:
     """After 1 sale (180 VAT Output) + 1 supplier bill (180 VAT Input):
-       net_payable = 180 − 180 = 0."""
+    net_payable = 180 − 180 = 0."""
     ensure_default_accounts(org)
     sale = Sale.objects.create(organization=org, sale_number=f"TEST-{uuid.uuid4().hex[:8]}")
     SaleItem.objects.create(
-        sale=sale, product=product_b, quantity=1, unit_price=Decimal("1180.00"),
+        sale=sale,
+        product=product_b,
+        quantity=1,
+        unit_price=Decimal("1180.00"),
         tax_rate=Decimal("18"),
     )
     complete_sale(sale=sale, payments=[{"method": "CASH", "amount": "1180.00"}], user=cashier)
     record_supplier_bill(
-        organization=org, supplier=supplier, bill_number="INV-VAT",
-        bill_date=date.today(), due_date=date.today(),
-        total_amount=Decimal("1180.00"), vat_amount=Decimal("180.00"),
-        tax_class="B", user=None,
+        organization=org,
+        supplier=supplier,
+        bill_number="INV-VAT",
+        bill_date=date.today(),
+        due_date=date.today(),
+        total_amount=Decimal("1180.00"),
+        vat_amount=Decimal("180.00"),
+        tax_class="B",
+        user=None,
     )
 
     today = date.today()
@@ -273,9 +303,12 @@ def test_tax_payment_posts_balanced_entry(org: Organization) -> None:
 def test_tax_payment_rejects_non_positive_amount(org: Organization) -> None:
     with pytest.raises(ValueError, match="Tax payment amount must be positive"):
         record_tax_payment(
-            organization=org, paid_on=date.today(),
-            period_start=date.today(), period_end=date.today(),
-            amount=Decimal("0"), user=None,
+            organization=org,
+            paid_on=date.today(),
+            period_start=date.today(),
+            period_end=date.today(),
+            amount=Decimal("0"),
+            user=None,
         )
 
 
@@ -313,8 +346,10 @@ def test_ebm_mirror_rejects_zero_vat(org: Organization) -> None:
     post a zero-line entry."""
     ensure_default_accounts(org)
     record = TaxRecord.objects.create(
-        organization=org, receipt_number="EBM-ZERO",
-        taxable_amount=Decimal("0"), vat_amount=Decimal("0"),
+        organization=org,
+        receipt_number="EBM-ZERO",
+        taxable_amount=Decimal("0"),
+        vat_amount=Decimal("0"),
     )
     with pytest.raises(ValueError, match="no VAT to mirror"):
         mirror_ebm_to_ledger(tax_record=record, user=None)
@@ -327,7 +362,8 @@ def test_ebm_mirror_rejects_zero_vat(org: Organization) -> None:
 
 @pytest.mark.django_db
 def test_tax_payment_routes_through_approval_inbox(
-    org: Organization, cashier: User,
+    org: Organization,
+    cashier: User,
 ) -> None:
     """request_tax_payment returns an ApprovalRequest rather than posting
     directly — no surprise bank wires."""
@@ -336,7 +372,8 @@ def test_tax_payment_routes_through_approval_inbox(
 
     ensure_default_accounts(org)
     req = request_tax_payment(
-        organization=org, requested_by=cashier,
+        organization=org,
+        requested_by=cashier,
         paid_on=date.today(),
         period_start=date.today().replace(day=1),
         period_end=date.today(),

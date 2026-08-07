@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 import json
-from decimal import Decimal
-from pathlib import Path
 
 import pytest
-
 from apps.finance.models import Account, JournalEntry, OpeningBalance
 from apps.finance.services import (
     OpeningBalanceValidationError,
@@ -176,9 +173,10 @@ def test_import_with_apply_writes_opening_journal(organization, chart_of_account
     assert je is not None
     assert je.lines.count() == 2
     # The OpeningBalance rows are now marked applied.
-    assert OpeningBalance.objects.filter(
-        organization=organization, applied_at__isnull=True
-    ).count() == 0
+    assert (
+        OpeningBalance.objects.filter(organization=organization, applied_at__isnull=True).count()
+        == 0
+    )
 
 
 def test_validation_failure_does_not_persist_rows(organization, chart_of_accounts):
@@ -267,7 +265,9 @@ def test_import_opening_balances_command_runs_end_to_end(tmp_path, organization,
     assert OpeningBalance.objects.filter(organization=organization).count() == 2
 
 
-def test_import_opening_balances_command_validation_error_exits(tmp_path, organization, chart_of_accounts):
+def test_import_opening_balances_command_validation_error_exits(
+    tmp_path, organization, chart_of_accounts
+):
     """The command surfaces validation errors before any persist."""
     from django.core.management import call_command
     from django.core.management.base import CommandError

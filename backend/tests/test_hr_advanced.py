@@ -2,9 +2,9 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from django.utils import timezone
 from apps.hr.models import AttendanceLog, Employee, LeaveRequest, ShiftRoster
 from apps.iam.models import Organization, User
+from django.utils import timezone
 
 pytestmark = pytest.mark.django_db
 

@@ -30,7 +30,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from django.db import transaction
 from django.db.models import QuerySet
@@ -42,7 +42,7 @@ from apps.approvals.services import request_approval
 from apps.documents.models import DocType, Document
 from apps.documents.services import generate_document
 from apps.finance.models import Account, JournalLine, SupplierBill
-from apps.finance.services import ensure_default_accounts, post_journal
+from apps.finance.services import JournalLineInput, ensure_default_accounts, post_journal
 from apps.iam.audit import record_audit
 from apps.iam.models import Organization, User
 from apps.inventory.models import InventoryBatch, QualityCheck
@@ -186,9 +186,7 @@ def assert_supplier_orderable(supplier: Any) -> None:
         )
     issues = supplier_licence_issues(supplier)
     if issues:
-        raise ProcurementError(
-            f"{supplier.name} is not qualified to supply: " + " ".join(issues)
-        )
+        raise ProcurementError(f"{supplier.name} is not qualified to supply: " + " ".join(issues))
 
 
 @transaction.atomic
@@ -198,10 +196,14 @@ def set_supplier_standing(
     """Preferred / approved / probation / suspended / blacklisted — always audited."""
     if standing not in SupplierProfile.Standing.values:
         raise ProcurementError(f"'{standing}' is not a valid supplier standing.")
-    if standing in {
-        SupplierProfile.Standing.SUSPENDED,
-        SupplierProfile.Standing.BLACKLISTED,
-    } and not reason.strip():
+    if (
+        standing
+        in {
+            SupplierProfile.Standing.SUSPENDED,
+            SupplierProfile.Standing.BLACKLISTED,
+        }
+        and not reason.strip()
+    ):
         raise ProcurementError("Suspending or blacklisting a supplier requires a reason.")
     previous = profile.standing
     profile.standing = standing
@@ -824,7 +826,8 @@ def refresh_order_status(order: PurchaseOrder) -> PurchaseOrder:
     if received == 0:
         return order
     new_status = (
-        PurchaseOrder.Status.RECEIVED if order.is_fully_received
+        PurchaseOrder.Status.RECEIVED
+        if order.is_fully_received
         else PurchaseOrder.Status.PARTIALLY_RECEIVED
     )
     if order.status != new_status:
@@ -867,9 +870,11 @@ def allocate_landed_costs(
     pool = consignment.landed_cost_total
     by_quantity = consignment.allocation_basis == "QUANTITY"
     weights: list[Decimal] = [
-        Decimal(ln.quantity_ordered)
-        if by_quantity
-        else _q(ln.line_subtotal * ln.order.exchange_rate)
+        (
+            Decimal(ln.quantity_ordered)
+            if by_quantity
+            else _q(ln.line_subtotal * ln.order.exchange_rate)
+        )
         for ln in lines
     ]
     total_weight = sum(weights, ZERO)
@@ -991,7 +996,7 @@ def build_receipt_draft(
     receipt = GoodsReceipt.objects.create(
         grn_number=next_document_number(order.organization, NumberSequence.Kind.GOODS_RECEIPT),
         order=order,
-        organization=order.destination,
+        organization=cast(Any, order.destination),
         consignment=order.consignment,
         received_on=received_on or date.today(),
         requires_qc=needs_qc,
@@ -1171,7 +1176,7 @@ def _post_receipt_journal(receipt: GoodsReceipt, user: User | None) -> None:
         description=f"Goods received {receipt.grn_number} — {receipt.order.supplier.name}",
         lines=[
             {
-                "account": accounts["1200"],
+                "account": accounts["1500"],  # 1500 Inventory on Hand (1200 is Bank)
                 "side": JournalLine.Side.DEBIT,
                 "amount": value,
                 "memo": f"PO {receipt.order.po_number}",
@@ -1245,8 +1250,13 @@ def run_three_way_match(*, invoice: SupplierInvoice, user: User | None = None) -
 
     detail: list[dict[str, Any]] = []
     qty_variance = price_variance = False
+    invoice_order = invoice.order
     has_receipt = bool(
-        receipt or invoice.order.receipts.filter(status=GoodsReceipt.Status.POSTED).exists()
+        receipt
+        or (
+            invoice_order is not None
+            and invoice_order.receipts.filter(status=GoodsReceipt.Status.POSTED).exists()
+        )
     )
 
     for line in invoice.lines.select_related("order_line", "product").all():
@@ -1486,15 +1496,15 @@ def post_supplier_invoice(*, invoice: SupplierInvoice, user: User | None) -> Sup
         organization=invoice.organization,
         entry_date=invoice.invoice_date,
         description=f"Supplier invoice {invoice.invoice_number} — {invoice.supplier.name}",
-        lines=lines,
+        lines=cast(list[JournalLineInput], lines),
         reference_type="supplier_invoice",
         reference_id=str(invoice.pk),
         user=user,
     )
 
     for line in invoice.lines.select_related("order_line").all():
-        if line.order_line_id:
-            order_line = line.order_line
+        order_line = line.order_line
+        if order_line is not None:
             order_line.quantity_invoiced += int(line.quantity)
             order_line.save(update_fields=["quantity_invoiced"])
 
@@ -1538,9 +1548,11 @@ def issue_supplier_note(*, note: SupplierNote, user: User | None) -> SupplierNot
     if not note.note_number:
         note.note_number = next_document_number(
             note.organization,
-            NumberSequence.Kind.DEBIT_NOTE
-            if kind == SupplierNote.Kind.DEBIT
-            else NumberSequence.Kind.CREDIT_NOTE,
+            (
+                NumberSequence.Kind.DEBIT_NOTE
+                if kind == SupplierNote.Kind.DEBIT
+                else NumberSequence.Kind.CREDIT_NOTE
+            ),
         )
     note.status = SupplierNote.Status.ISSUED
     note.save(update_fields=["note_number", "status", "updated_at"])
@@ -1572,8 +1584,8 @@ def issue_supplier_note(*, note: SupplierNote, user: User | None) -> SupplierNot
 
     # Keep the payable honest: a note reduces what is actually owed on the bill.
     invoice = note.invoice
-    if invoice and invoice.finance_bill_id:
-        bill = invoice.finance_bill
+    bill = invoice.finance_bill if invoice is not None else None
+    if bill is not None:
         bill.total_amount = max(Decimal("0.00"), _q(bill.total_amount - amount))
         if bill.amount_paid >= bill.total_amount:
             bill.status = SupplierBill.Status.PAID

@@ -24,6 +24,7 @@ from apps.retail.models import (
     Dispensing,
     DrawerSession,
     Payment,
+    Prescription,
     Sale,
     SaleBatchAllocation,
     SaleItem,
@@ -248,6 +249,40 @@ def complete_sale(
     # reality: Dr Cash & Bank / Cr Sales Revenue + VAT Output, then the COGS
     # leg at the FEFO batch's wholesale_cost (Dr COGS / Cr Inventory).
     post_sale_journal(sale=sale, user=user)
+
+    # Everything below is the till doing what a person used to be asked to
+    # remember. Each is idempotent on the sale, so a retried completion cannot
+    # double-log a narcotic or issue a second fiscal receipt.
+    from apps.retail.counter import (
+        consume_prescription,
+        fiscalise_sale,
+        record_controlled_dispensing,
+        redeem_promotion,
+    )
+
+    # Count the coupon only now. Counting it when it was applied would burn one
+    # of a limited promotion's uses on a basket that was abandoned or voided.
+    redeem_promotion(sale=sale)
+
+    # Statutory running-balance register for controlled drugs. Previously a
+    # separate screen someone typed into afterwards, which guarantees it drifts
+    # from the stock it is supposed to account for.
+    record_controlled_dispensing(sale=sale, user=user)
+
+    # Rwandan retail must fiscalise. The TaxRecord model existed and nothing
+    # called it, so no sale in the system had an EBM record.
+    fiscalise_sale(sale=sale, user=user)
+
+    # Dispensing against a prescription uses up a fill. Without this the refill
+    # counter never moves and a prescription can be filled indefinitely.
+    reference = (dispensing or {}).get("prescription_id")
+    if reference:
+        prescription = Prescription.objects.filter(
+            pk=reference, organization=sale.organization
+        ).first()
+        if prescription is not None:
+            consume_prescription(sale=sale, prescription=prescription, user=user)
+
     _generate_receipt(sale, user)
     return sale
 
@@ -387,29 +422,18 @@ def drawer_report(session: DrawerSession) -> dict[str, Any]:
     separately for the shift total but don't change what's in the till.
     """
     completed = session.sales.filter(status=Sale.Status.COMPLETED)
-    cash_in = (
-        Payment.objects.filter(
-            sale__drawer_session=session,
-            sale__status=Sale.Status.COMPLETED,
-            method=Payment.Method.CASH,
-        ).aggregate(s=Sum("amount"))["s"]
-        or Decimal("0")
-    )
+    cash_in = Payment.objects.filter(
+        sale__drawer_session=session,
+        sale__status=Sale.Status.COMPLETED,
+        method=Payment.Method.CASH,
+    ).aggregate(s=Sum("amount"))["s"] or Decimal("0")
     change_out = completed.aggregate(s=Sum("change_due"))["s"] or Decimal("0")
-    refunds = (
-        SaleReturn.objects.filter(sale__drawer_session=session).aggregate(s=Sum("refund_amount"))[
-            "s"
-        ]
-        or Decimal("0")
-    )
-    noncash = (
-        Payment.objects.filter(
-            sale__drawer_session=session, sale__status=Sale.Status.COMPLETED
-        )
-        .exclude(method=Payment.Method.CASH)
-        .aggregate(s=Sum("amount"))["s"]
-        or Decimal("0")
-    )
+    refunds = SaleReturn.objects.filter(sale__drawer_session=session).aggregate(
+        s=Sum("refund_amount")
+    )["s"] or Decimal("0")
+    noncash = Payment.objects.filter(
+        sale__drawer_session=session, sale__status=Sale.Status.COMPLETED
+    ).exclude(method=Payment.Method.CASH).aggregate(s=Sum("amount"))["s"] or Decimal("0")
     expected = session.opening_float + cash_in - change_out - refunds
     # Money as strings, matching the rest of the API (DRF coerces decimals to strings).
     return {
@@ -449,4 +473,11 @@ def close_drawer(
             "closed_by",
         ]
     )
+
+    # A till shortage is a real cost. It used to be computed here, stored, and
+    # never posted, so cash losses never reached the P&L and the GL cash balance
+    # drifted from the drawer by the whole variance.
+    from apps.finance.operations import post_drawer_variance
+
+    post_drawer_variance(drawer=session, user=user)
     return session

@@ -7,6 +7,7 @@ import {
   BookOpen,
   Boxes,
   Building2,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ClipboardList,
@@ -27,7 +28,9 @@ import {
   Shield,
   ShieldCheck,
   ShoppingCart,
+  Sliders,
   Store,
+  TrendingUp,
   Truck,
   RotateCcw,
   UserCheck,
@@ -322,6 +325,11 @@ interface NavGroup {
    * the side nav shows ONLY this group (Oracle/Workspace behaviour: pick an app,
    * see that app's contents). Omit for always-visible groups (e.g. Dashboard). */
   match?: string[];
+  /** Groups sharing an `app` key render together as sections of one app. An app with
+   * enough surface to need sub-headings (Finance has six jobs, not one list) is still
+   * one app; without this, `activeApp` picks the first matching group and the rest of
+   * the app disappears from the nav. */
+  app?: string;
 }
 
 // Side nav grouped by subsystem, per docs/design/04-navigation.md §3.1 — Company,
@@ -358,6 +366,7 @@ const NAV: NavGroup[] = [
       { to: "/distribution/grn", label: "Goods Received Notes", icon: PackageCheck },
       { to: "/distribution/listings", label: "Depot Offered Listings", icon: Store },
       { to: "/distribution/portal", label: "B2B Ordering Portal", icon: ShoppingCart },
+      { to: "/distribution/demand", label: "Unmet Demand", icon: TrendingUp },
       { to: "/distribution/sales-reps", label: "Field Sales & Reps", icon: Users },
       { to: "/distribution/tenders", label: "Institutional Tenders", icon: FileText },
       { to: "/distribution/returns", label: "Customer Returns", icon: RotateCcw },
@@ -406,34 +415,93 @@ const NAV: NavGroup[] = [
     match: ["/retail", "/pos"],
     items: [
       { to: "/retail", label: "Retail Overview", icon: ShoppingCart, end: true },
-      { to: "/pos", label: "Point of sale", icon: ShoppingCart },
+      { to: "/pos", label: "Point of sale counter", icon: ShoppingCart },
+      { to: "/retail/prescriptions", label: "Prescriptions & Refills", icon: FileText },
+      { to: "/retail/controlled-drugs", label: "Controlled Drugs Log", icon: Shield },
+      { to: "/retail/promotions", label: "Promotions & Coupons", icon: CreditCard },
+      { to: "/retail/clinical-services", label: "Clinical Services", icon: ClipboardList },
     ],
   },
   {
+    // Finance is one app with six jobs, not one list of twenty tables. The old nav
+    // named tables — five separate receivables entries, four separate tax entries —
+    // so a user could not predict where anything lived. These sections name the work
+    // instead. See docs/development/finance-redesign-plan.md §2A.
     label: "Finance",
-    roles: ["ACCOUNTANT"],
+    app: "finance",
+    roles: ["ACCOUNTANT", "ORG_ADMIN"],
     match: ["/finance"],
     items: [
-      { to: "/finance", label: "Overview", icon: Wallet, end: true },
-      { to: "/finance/aging", label: "Receivables & payables", icon: CreditCard },
-      { to: "/finance/accounts", label: "Chart of accounts", icon: BookOpen },
-      { to: "/finance/journal", label: "Journal", icon: ScrollText },
-      { to: "/finance/receivables", label: "Receivables (AR)", icon: Receipt },
-      { to: "/finance/dunning", label: "Collections & dunning", icon: Gavel },
+      { to: "/finance", label: "Home", icon: Wallet, end: true },
+      { to: "/finance/cockpit", label: "Performance cockpit", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Money in",
+    app: "finance",
+    roles: ["ACCOUNTANT", "ORG_ADMIN"],
+    items: [
+      { to: "/finance/receivables", label: "Customer invoices", icon: Receipt },
       { to: "/finance/statement", label: "Customer statements", icon: FileBarChart },
-      { to: "/finance/credit", label: "Customer credit", icon: Wallet },
-      { to: "/finance/payables", label: "Supplier bills (AP)", icon: CreditCard },
+      { to: "/finance/dunning", label: "Collections & dunning", icon: Gavel },
+      { to: "/finance/credit", label: "Credit control", icon: Wallet },
+      { to: "/finance/aging", label: "Aging", icon: CreditCard },
+    ],
+  },
+  {
+    label: "Money out",
+    app: "finance",
+    roles: ["ACCOUNTANT", "ORG_ADMIN"],
+    items: [
+      { to: "/finance/payables", label: "Supplier bills", icon: CreditCard },
       { to: "/finance/payment-runs", label: "Payment runs", icon: Banknote },
-      { to: "/finance/banking", label: "Banking & cash", icon: Landmark },
-      { to: "/finance/statements", label: "Statements & close", icon: FileBarChart },
-      { to: "/finance/assets", label: "Fixed Assets", icon: BookOpen },
-      { to: "/finance/tax-ebm", label: "Tax & EBM Audit", icon: ScrollText },
-      { to: "/finance/budgets", label: "Budgets & Variance", icon: FileBarChart },
+    ],
+  },
+  {
+    label: "Cash & bank",
+    app: "finance",
+    roles: ["ACCOUNTANT", "ORG_ADMIN"],
+    items: [
+      { to: "/finance/banking", label: "Accounts & cash book", icon: Landmark },
+      { to: "/finance/reconciliation", label: "Bank reconciliation", icon: CheckCircle2 },
+    ],
+  },
+  {
+    label: "Ledger & close",
+    app: "finance",
+    roles: ["ACCOUNTANT", "ORG_ADMIN"],
+    items: [
+      { to: "/finance/accounts", label: "Chart of accounts", icon: BookOpen },
+      { to: "/finance/cost-centres", label: "Cost centres", icon: Building2 },
+      { to: "/finance/journal", label: "Journal", icon: ScrollText },
+      { to: "/finance/statements", label: "Periods & close", icon: FileBarChart },
+      { to: "/finance/schedules", label: "Accruals & prepayments", icon: Clock },
+      { to: "/finance/assets", label: "Fixed assets", icon: BookOpen },
+    ],
+  },
+  {
+    label: "Tax & compliance",
+    app: "finance",
+    roles: ["ACCOUNTANT", "ORG_ADMIN"],
+    items: [
+      { to: "/finance/tax", label: "VAT return", icon: ScrollText },
+      { to: "/finance/tax-ebm", label: "EBM audit", icon: ScrollText },
+      { to: "/finance/tax/payments", label: "RRA payments", icon: Landmark },
+      { to: "/finance/tax-codes", label: "Tax codes", icon: Receipt },
+    ],
+  },
+  {
+    label: "Performance",
+    app: "finance",
+    roles: ["ACCOUNTANT", "ORG_ADMIN"],
+    items: [
+      { to: "/finance/budgets", label: "Budgets & variance", icon: FileBarChart },
+      { to: "/finance/tenant-settings", label: "Finance settings", icon: Sliders },
     ],
   },
   {
     label: "People",
-    roles: ["HR_MANAGER"],
+    roles: ["HR_MANAGER", "ORG_ADMIN"],
     match: ["/people"],
     items: [
       { to: "/people", label: "Overview", icon: Users, end: true },
@@ -441,7 +509,13 @@ const NAV: NavGroup[] = [
       { to: "/people/attendance", label: "Time & Attendance", icon: Clock },
       { to: "/people/roster", label: "Shift Rosters", icon: Calendar },
       { to: "/people/leave", label: "Leave & Accrual", icon: UserCheck },
+      { to: "/people/timesheets", label: "Timesheets", icon: ClipboardList },
       { to: "/people/payroll", label: "Payroll", icon: Wallet },
+      { to: "/people/loans", label: "Loans & Advances", icon: CreditCard },
+      { to: "/people/recruitment", label: "Recruitment", icon: UserCheck },
+      { to: "/people/offboarding", label: "Offboarding", icon: LogOut },
+      { to: "/people/filings", label: "Statutory Filings", icon: FileText },
+      { to: "/people/statutory-rates", label: "Statutory rates", icon: ScrollText },
     ],
   },
   {
@@ -515,7 +589,13 @@ export function AppShell() {
     (g.match ?? []).some((p) => path === p || path.startsWith(p + "/")),
   );
   const nav = activeApp
-    ? visible.filter((g) => g === activeApp || (g.match ?? []).length === 0)
+    ? visible.filter(
+        (g) =>
+          g === activeApp ||
+          // Sibling sections of the same app (see NavGroup.app).
+          (activeApp.app !== undefined && g.app === activeApp.app) ||
+          (g.match ?? []).length === 0,
+      )
     : visible;
 
   useEffect(() => {

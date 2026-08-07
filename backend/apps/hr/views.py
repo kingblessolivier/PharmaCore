@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import cast
 
 from django.db.models import QuerySet
@@ -13,6 +14,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 
+from apps.core.lookups import lookup_pk
 from apps.hr.models import (
     AttendanceLog,
     Employee,
@@ -32,6 +34,7 @@ from apps.hr.serializers import (
     ShiftRosterSerializer,
     StatutoryRateSerializer,
 )
+from apps.hr.services import clock_attendance
 from apps.hr.services import request_termination as request_termination_approval
 from apps.iam.audit import record_audit
 from apps.iam.models import User
@@ -216,11 +219,50 @@ class AttendanceLogViewSet(viewsets.ModelViewSet):
         qs = AttendanceLog.objects.select_related("employee")
         if not (user.is_superuser or user.has_role("SYS_ADMIN")):
             qs = qs.filter(employee__organization__in=organizations_visible_to(user))
+        # Filter to the caller's own employee records (e.g. for the clock-in
+        # toolbar — the front-end needs to know whether the user has already
+        # punched in today).
+        user_param = self.request.query_params.get("user")
+        if user_param and user_param.isdigit():
+            qs = qs.filter(employee__user_id=int(user_param))
+        date_param = self.request.query_params.get("date")
+        if date_param:
+            qs = qs.filter(date=date_param)
         return qs
 
     def perform_create(self, serializer: BaseSerializer) -> None:
         _require_hr_manage(cast(User, self.request.user))
         serializer.save()
+
+    @action(detail=False, methods=["post"], url_path="clock")
+    def clock(self, request: Request) -> Response:
+        """Toggle today's attendance for the caller. Resolves the employee from
+        the user's employee record; HR users can pass ``?employee_id=<id>`` to
+        act on behalf of someone else (e.g. a manager marking the floor)."""
+        user = cast(User, request.user)
+        direction = str(request.data.get("direction", "")).upper()
+        if direction not in {"IN", "OUT"}:
+            raise ValidationError("direction must be 'IN' or 'OUT'.")
+
+        override_id = request.query_params.get("employee_id")
+        if override_id:
+            _require_hr_manage(user)
+            try:
+                employee = Employee.objects.get(pk=int(override_id))
+            except (Employee.DoesNotExist, ValueError, TypeError) as exc:
+                raise ValidationError("Unknown employee_id.") from exc
+        else:
+            employee = Employee.objects.filter(user=user).first()  # type: ignore[assignment]
+            if employee is None:
+                raise ValidationError(
+                    "No employee record is linked to this user — cannot clock in/out."
+                )
+
+        try:
+            log = clock_attendance(employee=employee, direction=direction, user=user)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        return Response(AttendanceLogSerializer(log).data, status=201)
 
 
 class ShiftRosterViewSet(viewsets.ModelViewSet):
@@ -250,16 +292,66 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             qs = qs.filter(employee__organization__in=organizations_visible_to(user))
         return qs
 
-    def perform_create(self, serializer: BaseSerializer) -> None:
-        serializer.save()
+    def create(self, request: Request, *args: object, **kwargs: object) -> Response:
+        """Book leave through the service so it is held against a real balance.
+
+        Creating the row directly would let two requests spend the same day and
+        would let someone book leave they have not accrued.
+        """
+        from apps.hr import services_people as people
+        from apps.hr.models import Employee, LeaveType
+
+        employee = Employee.objects.filter(
+            pk=lookup_pk(request.data.get("employee")),
+            organization__in=organizations_visible_to(cast(User, request.user)),
+        ).first()
+        if employee is None:
+            raise ValidationError({"employee": "Unknown or not visible."})
+
+        code = str(request.data.get("leave_type", "ANNUAL")).upper()
+        leave_type = LeaveType.objects.filter(organization=employee.organization, code=code).first()
+        if leave_type is None:
+            raise ValidationError(
+                {
+                    "leave_type": f"'{code}' is not configured for {employee.organization.name}. "
+                    "Seed the organization's leave types first."
+                }
+            )
+        try:
+            leave = people.request_leave(
+                employee=employee,
+                leave_type=leave_type,
+                start_date=date.fromisoformat(str(request.data["start_date"])),
+                end_date=date.fromisoformat(str(request.data["end_date"])),
+                reason=str(request.data.get("reason", "")),
+                user=cast(User, request.user),
+            )
+        except (KeyError, ValueError) as exc:
+            raise ValidationError(str(exc)) from exc
+        return Response(LeaveRequestSerializer(leave).data, status=201)
 
     @action(detail=True, methods=["post"])
     def approve(self, request: Request, pk: str | None = None) -> Response:
+        return self._decide(request, approve=True)
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request: Request, pk: str | None = None) -> Response:
+        return self._decide(request, approve=False)
+
+    def _decide(self, request: Request, *, approve: bool) -> Response:
+        """Approve or reject, converting or releasing the days held on the balance."""
+        from apps.hr import services_people as people
+
         user = cast(User, request.user)
         _require_hr_manage(user)
         leave = self.get_object()
-        leave.status = LeaveRequest.Status.APPROVED
-        leave.approved_by = user
-        leave.save(update_fields=["status", "approved_by"])
+        try:
+            people.decide_leave(
+                request=leave,
+                approve=approve,
+                user=user,
+                note=str(request.data.get("note", "")),
+            )
+        except people.PeopleError as exc:
+            raise ValidationError(str(exc)) from exc
         return Response(LeaveRequestSerializer(leave).data)
-

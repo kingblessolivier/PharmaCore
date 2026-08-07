@@ -15,6 +15,21 @@ from apps.distribution.views import (
     StockOrderViewSet,
     TenderContractViewSet,
 )
+from apps.distribution.views_marketplace import (
+    AvailabilityView,
+    BackorderViewSet,
+    DemandBoardView,
+    DistributionOverviewView,
+    PublishListingView,
+    RepPerformanceView,
+    ReturnActionsView,
+    SourceDemandView,
+    StorefrontView,
+    VanActionsView,
+    VanManifestView,
+    VanMovementViewSet,
+    VanStockViewSet,
+)
 
 router = DefaultRouter()
 router.register("orders", StockOrderViewSet, basename="order")
@@ -26,8 +41,25 @@ router.register("journey-plans", JourneyPlanViewSet, basename="journey-plan")
 router.register("visit-logs", SalesVisitLogViewSet, basename="visit-log")
 router.register("tenders", TenderContractViewSet, basename="tender")
 router.register("returns", CustomerReturnViewSet, basename="customer-return")
+router.register("backorders", BackorderViewSet, basename="backorder")
+router.register("van-stock", VanStockViewSet, basename="van-stock")
+router.register("van-movements", VanMovementViewSet, basename="van-movement")
 
 urlpatterns = [
     path("aging/", AgingView.as_view(), name="aging"),
+    path("overview/", DistributionOverviewView.as_view(), name="distribution-overview"),
+    # Storefront
+    path("storefront/", StorefrontView.as_view(), name="storefront"),
+    path("storefront/availability/", AvailabilityView.as_view(), name="availability"),
+    path("storefront/publish/", PublishListingView.as_view(), name="publish-listing"),
+    # Demand-driven sourcing
+    path("demand/", DemandBoardView.as_view(), name="demand-board"),
+    path("demand/source/", SourceDemandView.as_view(), name="source-demand"),
+    # Returns
+    path("returns/<int:pk>/<str:verb>/", ReturnActionsView.as_view(), name="return-actions"),
+    # Van sales
+    path("sales-reps/<int:pk>/van/", VanManifestView.as_view(), name="van-manifest"),
+    path("sales-reps/<int:pk>/van/<str:verb>/", VanActionsView.as_view(), name="van-actions"),
+    path("rep-performance/", RepPerformanceView.as_view(), name="rep-performance"),
     *router.urls,
 ]

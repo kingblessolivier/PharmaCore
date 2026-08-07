@@ -1,17 +1,17 @@
-/** Shared building blocks for the Procurement screens.
+/** Shared building blocks for record screens (Procurement, Finance, People…).
  *
- * Procurement documents are all the same shape — a header you fill in plus a
- * table of lines — so they get one interaction model: a right-hand **drawer**
- * (the record stays in context, the list stays behind it) with an inline line
- * editor. Every page below uses these, which is what makes the subsystem feel
- * like one product instead of eight forms.
+ * Records across the workspace are the same shape — a header you fill in plus
+ * (often) a table of lines — so they get one interaction model: a list built on
+ * `DataGrid`, and a right-hand **drawer** for the record itself (the list stays
+ * in context behind it) with an inline line editor. Using these everywhere is
+ * what makes twenty screens feel like one product instead of twenty forms.
  */
 
 import { AlertTriangle, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ApiError } from "../lib/api";
-import { statusTone } from "../lib/procurement";
-import { productLabel, useProducts, useSuppliers } from "../lib/procurementData";
+import { statusTone } from "../lib/format";
+import { productLabel, useEmployees, useProducts, useSuppliers } from "../lib/recordData";
 import { Badge, Button } from "./ui";
 
 /* -------------------------------------------------------------------------- */
@@ -280,6 +280,67 @@ export function SupplierSelect({
   );
 }
 
+export function EmployeeSelect({
+  value,
+  onChange,
+  organization,
+  disabled,
+  allowBlank = false,
+  placeholder = "— select an employee —",
+}: {
+  value: number | null;
+  onChange: (id: number | null) => void;
+  organization?: number | null;
+  disabled?: boolean;
+  allowBlank?: boolean;
+  placeholder?: string;
+}) {
+  const { data: employees = [] } = useEmployees(organization);
+  return (
+    <Select
+      value={value ?? ""}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+    >
+      {(allowBlank || value === null) && <option value="">{placeholder}</option>}
+      {employees.map((e) => (
+        <option key={e.id} value={e.id}>
+          {e.employee_number ? `${e.employee_number} · ` : ""}
+          {e.full_name}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
+/** A labelled progress bar — onboarding %, clearance %, loan repayment. */
+export function ProgressBar({
+  value,
+  label,
+  tone,
+}: {
+  value: number | string;
+  label?: string;
+  tone?: "brand" | "success" | "warning" | "danger";
+}) {
+  const pct = Math.max(0, Math.min(100, Number(value)));
+  const auto = pct >= 100 ? "success" : pct >= 50 ? "brand" : "warning";
+  const colours = {
+    brand: "bg-brand-600",
+    success: "bg-green-500",
+    warning: "bg-amber-500",
+    danger: "bg-red-500",
+  } as const;
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-surface-100">
+        <div className={`h-full ${colours[tone ?? auto]}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="tabular-nums text-xs text-ink-600">{label ?? `${pct.toFixed(0)}%`}</span>
+    </div>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Editable line table                                                        */
 /* -------------------------------------------------------------------------- */
@@ -287,7 +348,7 @@ export function SupplierSelect({
 export interface LineColumn<T> {
   header: string;
   width?: string;
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
   /** Render the cell. `set` patches the row; omit to render a read-only cell. */
   cell: (row: T, set: (patch: Partial<T>) => void, index: number) => ReactNode;
 }
@@ -326,7 +387,9 @@ export function LineEditor<T>({
                 <th
                   key={c.header}
                   style={c.width ? { width: c.width } : undefined}
-                  className={`px-2.5 py-2 font-semibold ${c.align === "right" ? "text-right" : ""}`}
+                  className={`px-2.5 py-2 font-semibold ${
+                    c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : ""
+                  }`}
                 >
                   {c.header}
                 </th>
@@ -340,7 +403,13 @@ export function LineEditor<T>({
                 {columns.map((c) => (
                   <td
                     key={c.header}
-                    className={`px-2.5 py-1.5 ${c.align === "right" ? "text-right tabular-nums" : ""}`}
+                    className={`px-2.5 py-1.5 ${
+                      c.align === "right"
+                        ? "text-right tabular-nums"
+                        : c.align === "center"
+                          ? "text-center"
+                          : ""
+                    }`}
                   >
                     {c.cell(row, (patch) => set(index, patch), index)}
                   </td>

@@ -13,19 +13,16 @@ from decimal import Decimal
 
 import pytest
 from apps.catalog.models import Product
-from apps.finance.models import Account, BankAccount, JournalEntry, JournalLine
+from apps.finance.models import JournalEntry
 from apps.finance.services import (
     ensure_default_accounts,
     post_inventory_adjustment,
-    post_sale_journal,
-    post_writeoff,
 )
 from apps.iam.models import Organization, User
 from apps.inventory.models import InventoryBatch, PharmacyProduct
 from apps.inventory.services import log_wastage
-from apps.retail.models import Sale, SaleItem, Payment
+from apps.retail.models import Sale, SaleItem
 from apps.retail.services import complete_sale
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -88,9 +85,7 @@ def _open_sale(org: Organization, product: Product, qty: int) -> Sale:
     # create several sales in the same test without a viewset roundtrip.
     import uuid
 
-    sale = Sale.objects.create(
-        organization=org, sale_number=f"TEST-{uuid.uuid4().hex[:8]}"
-    )
+    sale = Sale.objects.create(organization=org, sale_number=f"TEST-{uuid.uuid4().hex[:8]}")
     SaleItem.objects.create(
         sale=sale,
         product=product,
@@ -108,14 +103,17 @@ def _open_sale(org: Organization, product: Product, qty: int) -> Sale:
 
 @pytest.mark.django_db
 def test_sale_with_vat_posts_balanced_entries(
-    org: Organization, product_b: Product, listing_b: PharmacyProduct,
-    batch_b: InventoryBatch, cashier: User,
+    org: Organization,
+    product_b: Product,
+    listing_b: PharmacyProduct,
+    batch_b: InventoryBatch,
+    cashier: User,
 ) -> None:
     """A B-class (18%) sale posts:
-      Entry 1 (revenue):  Dr Cash 1180  / Cr Revenue 1000 + Cr VAT 180
-      Entry 2 (COGS):     Dr COGS 700    / Cr Inventory 700   (1 unit × wholesale)
+    Entry 1 (revenue):  Dr Cash 1180  / Cr Revenue 1000 + Cr VAT 180
+    Entry 2 (COGS):     Dr COGS 700    / Cr Inventory 700   (1 unit × wholesale)
     """
-    accounts = ensure_default_accounts(org)
+    ensure_default_accounts(org)
     sale = _open_sale(org, product_b, qty=1)
     complete_sale(
         sale=sale,
@@ -139,13 +137,19 @@ def test_sale_with_vat_posts_balanced_entries(
 
 @pytest.mark.django_db
 def test_zero_rated_sale_posts_no_vat_line(
-    org: Organization, product_a: Product, listing_a: PharmacyProduct, cashier: User,
+    org: Organization,
+    product_a: Product,
+    listing_a: PharmacyProduct,
+    cashier: User,
 ) -> None:
     """A-class medicine (0% VAT) — full sale goes to Sales Revenue, no VAT Output."""
     InventoryBatch.objects.create(
-        organization=org, product=product_a, batch_number="A-2025-01",
+        organization=org,
+        product=product_a,
+        batch_number="A-2025-01",
         expiry_date=date.today() + timedelta(days=300),
-        quantity_available=5, wholesale_cost=Decimal("250.00"),
+        quantity_available=5,
+        wholesale_cost=Decimal("250.00"),
     )
     sale = _open_sale(org, product_a, qty=2)
     complete_sale(sale=sale, payments=[{"method": "CASH", "amount": "1000.00"}], user=cashier)
@@ -160,14 +164,19 @@ def test_zero_rated_sale_posts_no_vat_line(
 
 @pytest.mark.django_db
 def test_journal_balances_for_every_sale_post(
-    org: Organization, product_b: Product, listing_b: PharmacyProduct,
-    batch_b: InventoryBatch, cashier: User,
+    org: Organization,
+    product_b: Product,
+    listing_b: PharmacyProduct,
+    batch_b: InventoryBatch,
+    cashier: User,
 ) -> None:
     """Every posted journal entry must balance (Σdebits = Σcredits) — the
     leader's cockpit only works if the books are in order."""
     for qty in (1, 3, 5):
         sale = _open_sale(org, product_b, qty=qty)
-        complete_sale(sale=sale, payments=[{"method": "CASH", "amount": str(qty * 1180)}], user=cashier)
+        complete_sale(
+            sale=sale, payments=[{"method": "CASH", "amount": str(qty * 1180)}], user=cashier
+        )
 
     for entry in JournalEntry.objects.filter(organization=org):
         debits = sum(ln.amount for ln in entry.lines.all() if ln.side == "DEBIT")
@@ -177,8 +186,11 @@ def test_journal_balances_for_every_sale_post(
 
 @pytest.mark.django_db
 def test_period_closed_blocks_sale_posting(
-    org: Organization, product_b: Product, listing_b: PharmacyProduct,
-    batch_b: InventoryBatch, cashier: User,
+    org: Organization,
+    product_b: Product,
+    listing_b: PharmacyProduct,
+    batch_b: InventoryBatch,
+    cashier: User,
 ) -> None:
     """A sale can't post inside a closed period — closes must be final."""
     from apps.finance.models import AccountingPeriod
@@ -186,7 +198,8 @@ def test_period_closed_blocks_sale_posting(
 
     today = date.today()
     AccountingPeriod.objects.create(
-        organization=org, kind=AccountingPeriod.Kind.MONTH,
+        organization=org,
+        kind=AccountingPeriod.Kind.MONTH,
         start_date=today.replace(day=1),
         end_date=today,
         status=AccountingPeriod.Status.CLOSED,
@@ -203,7 +216,8 @@ def test_period_closed_blocks_sale_posting(
 
 @pytest.mark.django_db
 def test_positive_variance_reverses_cogs(
-    org: Organization, batch_b: InventoryBatch,
+    org: Organization,
+    batch_b: InventoryBatch,
 ) -> None:
     """Found stock (positive delta): Dr Inventory / Cr COGS — a gain."""
     ensure_default_accounts(org)
@@ -211,9 +225,12 @@ def test_positive_variance_reverses_cogs(
     batch_b.save(update_fields=["wholesale_cost"])
 
     post_inventory_adjustment(
-        batch=batch_b, delta=2, unit_cost=None,
+        batch=batch_b,
+        delta=2,
+        unit_cost=None,
         reason="Stock count SC-001 found 2 extra",
-        reference_type="stock_count", reference_id="1",
+        reference_type="stock_count",
+        reference_id="1",
         user=None,
     )
 
@@ -225,14 +242,19 @@ def test_positive_variance_reverses_cogs(
 
 @pytest.mark.django_db
 def test_negative_variance_books_shrinkage(
-    org: Organization, batch_b: InventoryBatch,
+    org: Organization,
+    batch_b: InventoryBatch,
 ) -> None:
     """Missing stock (negative delta): Dr COGS / Cr Inventory — shrinkage expense."""
     ensure_default_accounts(org)
     post_inventory_adjustment(
-        batch=batch_b, delta=-3, unit_cost=None,
+        batch=batch_b,
+        delta=-3,
+        unit_cost=None,
         reason="Stock count SC-002 — 3 missing",
-        reference_type="stock_count", reference_id="2", user=None,
+        reference_type="stock_count",
+        reference_id="2",
+        user=None,
     )
     entry = JournalEntry.objects.get(organization=org, reference_type="stock_count")
     lines = {ln.account.code: (ln.side, ln.amount) for ln in entry.lines.all()}
@@ -247,13 +269,18 @@ def test_negative_variance_books_shrinkage(
 
 @pytest.mark.django_db
 def test_wastage_auto_posts_writeoff(
-    org: Organization, batch_b: InventoryBatch,
+    org: Organization,
+    batch_b: InventoryBatch,
 ) -> None:
     """log_wastage reduces on-hand AND posts Dr Inventory Adjustment / Cr Inventory."""
     ensure_default_accounts(org)
     log_wastage(
-        batch=batch_b, quantity=2, reason="Expired lot",
-        reference_type="wastage", reference_id="W-1", user=None,
+        batch=batch_b,
+        quantity=2,
+        reason="Expired lot",
+        reference_type="wastage",
+        reference_id="W-1",
+        user=None,
     )
     batch_b.refresh_from_db()
     assert batch_b.quantity_available == 8
@@ -271,7 +298,10 @@ def test_wastage_auto_posts_writeoff(
 
 @pytest.mark.django_db
 def test_inventory_valuation_and_stock_turns(
-    org: Organization, batch_b: InventoryBatch, cashier: User, listing_b: PharmacyProduct,
+    org: Organization,
+    batch_b: InventoryBatch,
+    cashier: User,
+    listing_b: PharmacyProduct,
 ) -> None:
     """On-hand × wholesale_cost flows into the performance cockpit."""
     from apps.finance.reports import _inventory_value, performance

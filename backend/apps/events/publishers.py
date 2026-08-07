@@ -16,8 +16,6 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from django.db import transaction
-
 from apps.events.events import EventType
 from apps.events.outbox import publish
 from apps.iam.models import Organization, User
@@ -119,9 +117,7 @@ def publish_approval_decided(
     user: User | None,
     approve: bool,
 ) -> None:
-    event = (
-        EventType.APPROVAL_GRANTED if approve else EventType.APPROVAL_REJECTED
-    )
+    event = EventType.APPROVAL_GRANTED if approve else EventType.APPROVAL_REJECTED
     publish(
         event_type=event,
         payload={"approval_id": str(approval_id), "decision": "approve" if approve else "reject"},

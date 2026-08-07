@@ -5,6 +5,8 @@ The full event-detail UI lands in F1.4 alongside the dispatcher command.
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.contrib import admin
 
 from .models import OutboxEvent
@@ -38,5 +40,5 @@ class OutboxEventAdmin(admin.ModelAdmin):
         "created_by",
     )
 
-    def has_add_permission(self, request):  # events come from publish()
+    def has_add_permission(self, request: Any) -> bool:  # events come from publish()
         return False

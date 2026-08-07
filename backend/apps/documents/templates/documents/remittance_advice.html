@@ -1,0 +1,23 @@
+{% extends "documents/base.html" %}
+{% block content %}
+<table class="parties">
+  <tr>
+    <td style="width:55%"><div class="plabel">Paying</div>{{ supplier_name }}</td>
+    <td style="width:45%"><div class="plabel">Payment run</div>{{ run_number }}<br><span class="muted">Value date {{ value_date }}</span></td>
+  </tr>
+</table>
+<p class="muted">This advice confirms which invoices the payment settles, so it can be applied without guesswork.</p>
+<table>
+  <tr><th>Invoice</th><th>Invoice date</th><th class="right">Invoice total</th><th class="right">Amount paid</th></tr>
+  {% for l in lines %}
+  <tr><td>{{ l.bill_number }}</td><td>{{ l.bill_date }}</td><td class="right">{{ l.total }}</td><td class="right">{{ l.amount }}</td></tr>
+  {% endfor %}
+  <tr><td colspan="3" class="right"><b>Total remitted ({{ currency }})</b></td><td class="right"><b>{{ total }}</b></td></tr>
+</table>
+<table class="parties" style="margin-top:10px">
+  <tr>
+    <td style="width:50%"><div class="plabel">Method</div>{{ method }}</td>
+    <td style="width:50%"><div class="plabel">Bank reference</div>{{ reference }}</td>
+  </tr>
+</table>
+{% endblock %}

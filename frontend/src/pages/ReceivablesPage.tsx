@@ -1,11 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, HandCoins, Plus } from "lucide-react";
+import { AlertTriangle, HandCoins, Plus, Receipt, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { DataGrid, type Column } from "../components/DataGrid";
-import { Badge, Button, Card, Modal, PageHeader, SelectField, TextField } from "../components/ui";
+import { Badge, Button, Card, PageHeader, SelectField, TextField } from "../components/ui";
+import { Drawer } from "../components/RecordKit";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import type { ArAging, CustomerInvoice, Organization, Paginated } from "../lib/types";
+import type {
+  ArAging,
+  CustomerInvoice,
+  CustomerReceipt,
+  Organization,
+  Paginated,
+} from "../lib/types";
 
 const money = (n: string | number) =>
   Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
@@ -75,7 +82,7 @@ function NewInvoiceModal({ onClose, orgId }: { onClose: () => void; orgId: numbe
   }
 
   return (
-    <Modal title="Raise a customer invoice" onClose={onClose} size="lg">
+    <Drawer title="Raise a customer invoice" onClose={onClose} width="max-w-3xl">
       <form onSubmit={submit} className="flex flex-col gap-4">
         <SelectField
           label="Customer"
@@ -146,7 +153,7 @@ function NewInvoiceModal({ onClose, orgId }: { onClose: () => void; orgId: numbe
           </Button>
         </div>
       </form>
-    </Modal>
+    </Drawer>
   );
 }
 
@@ -175,7 +182,7 @@ function ReceiptModal({ invoice, onClose }: { invoice: CustomerInvoice; onClose:
   const overpaying = Number(amount) > Number(invoice.amount_due);
 
   return (
-    <Modal title={`Receive against ${invoice.invoice_number}`} onClose={onClose}>
+    <Drawer title={`Receive against ${invoice.invoice_number}`} onClose={onClose} width="max-w-2xl">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -223,7 +230,7 @@ function ReceiptModal({ invoice, onClose }: { invoice: CustomerInvoice; onClose:
           </Button>
         </div>
       </form>
-    </Modal>
+    </Drawer>
   );
 }
 
@@ -256,11 +263,248 @@ function AgingStrip({ orgId }: { orgId: number }) {
   );
 }
 
+/** Read-only drill-down for a single invoice: lines (if any), totals, payments
+ * already posted against it, and the running balance. The user comes here by
+ * clicking a row in the grid. */
+function InvoiceDetailDrawer({
+  invoiceId,
+  onClose,
+  onRecordReceipt,
+  onCancel,
+}: {
+  invoiceId: number;
+  onClose: () => void;
+  onRecordReceipt: (i: CustomerInvoice) => void;
+  onCancel: (i: CustomerInvoice) => void;
+}) {
+  const invoiceQ = useQuery({
+    queryKey: ["customer-invoice", invoiceId],
+    queryFn: () => api<CustomerInvoice>(`/api/finance/customer-invoices/${invoiceId}/`),
+  });
+  const receiptsQ = useQuery({
+    queryKey: ["customer-invoice-receipts", invoiceId],
+    queryFn: () =>
+      api<Paginated<CustomerReceipt>>(
+        `/api/finance/customer-receipts/?invoice=${invoiceId}&page_size=100`,
+      ),
+  });
+
+  const inv = invoiceQ.data;
+  const receipts = receiptsQ.data?.results ?? [];
+  const canCancel = inv && inv.status !== "CANCELLED" && Number(inv.amount_paid) === 0;
+
+  return (
+    <Drawer title={inv ? `Invoice ${inv.invoice_number}` : "Invoice"} onClose={onClose} width="max-w-3xl">
+      {invoiceQ.isLoading && (
+        <div className="flex justify-center py-8">
+          <p className="text-sm text-ink-500">Loading…</p>
+        </div>
+      )}
+      {inv && (
+        <div className="flex flex-col gap-4">
+          <div className="rounded-md bg-surface-100 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="font-semibold text-ink-900">{inv.customer_name}</div>
+                <div className="text-xs text-ink-500">
+                  Raised {inv.invoice_date} · Due {inv.due_date} · Tax class {inv.tax_class}
+                </div>
+              </div>
+              <Badge tone={STATUS_TONE[inv.status] ?? "neutral"}>{inv.status}</Badge>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+              <div>
+                <div className="text-xs text-ink-500">Total</div>
+                <div className="font-mono font-semibold tabular-nums">
+                  {money(inv.total_amount)}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-ink-500">VAT</div>
+                <div className="font-mono tabular-nums">{money(inv.vat_amount)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-ink-500">Paid</div>
+                <div className="font-mono tabular-nums">{money(inv.amount_paid)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-ink-500">Outstanding</div>
+                <div className="font-mono font-semibold tabular-nums">
+                  {money(inv.amount_due)}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {inv.notes && (
+            <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-900">{inv.notes}</p>
+          )}
+
+          <div>
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Receipts posted ({receipts.length})
+            </h3>
+            {receiptsQ.isLoading ? (
+              <p className="text-xs text-ink-500">Loading receipts…</p>
+            ) : receipts.length === 0 ? (
+              <p className="rounded-md border border-dashed border-line py-3 text-center text-xs text-ink-500">
+                No receipts yet — record one to settle part or all of this invoice.
+              </p>
+            ) : (
+              <div className="overflow-hidden rounded-md border border-line">
+                <table className="w-full text-sm">
+                  <thead className="bg-surface-50 text-left text-xs uppercase tracking-wide text-ink-500">
+                    <tr>
+                      <th className="px-3 py-2">Receipt #</th>
+                      <th className="px-3 py-2">Received on</th>
+                      <th className="px-3 py-2">Method</th>
+                      <th className="px-3 py-2">Reference</th>
+                      <th className="px-3 py-2 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {receipts.map((r) => (
+                      <tr key={r.id} className="border-t border-line">
+                        <td className="px-3 py-2 font-mono text-xs">{r.receipt_number}</td>
+                        <td className="px-3 py-2">{r.received_on}</td>
+                        <td className="px-3 py-2">
+                          <Badge tone="neutral">{r.method}</Badge>
+                        </td>
+                        <td className="px-3 py-2 text-xs text-ink-700">
+                          {r.reference || <span className="text-ink-400">—</span>}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono font-semibold tabular-nums">
+                          {money(r.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-2">
+            {canCancel && (
+              <Button
+                variant="secondary"
+                onClick={() => onCancel(inv)}
+                className="text-red-700"
+              >
+                <AlertTriangle className="h-4 w-4" /> Cancel invoice
+              </Button>
+            )}
+            {inv.status !== "PAID" && inv.status !== "CANCELLED" && (
+              <Button onClick={() => onRecordReceipt(inv)}>
+                <Receipt className="h-4 w-4" /> Record receipt
+              </Button>
+            )}
+            <Button variant="secondary" onClick={onClose}>
+              <X className="h-4 w-4" /> Close
+            </Button>
+          </div>
+        </div>
+      )}
+    </Drawer>
+  );
+}
+
+/** Modal that walks the user through cancelling an invoice. Posts to
+ * ``POST /api/finance/customer-invoices/{id}/cancel/`` which writes a reversal
+ * entry to the GL (Dr Revenue / Dr VAT / Cr AR) and stamps the invoice as
+ * CANCELLED. The action refuses on receipted invoices — the user must issue
+ * refunds first. */
+function CancelInvoiceModal({
+  invoice,
+  onClose,
+}: {
+  invoice: CustomerInvoice;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const cancel = useMutation({
+    mutationFn: () =>
+      api<CustomerInvoice>(`/api/finance/customer-invoices/${invoice.id}/cancel/`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["customer-invoices"] });
+      void qc.invalidateQueries({ queryKey: ["ar-aging"] });
+      void qc.invalidateQueries({ queryKey: ["customer-invoice", invoice.id] });
+      onClose();
+    },
+    onError: (e) =>
+      setError(
+        e instanceof ApiError
+          ? e.message
+          : "Could not cancel this invoice — see your administrator.",
+      ),
+  });
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (!reason.trim()) {
+      setError("A reason is required for the audit trail.");
+      return;
+    }
+    cancel.mutate();
+  }
+
+  return (
+    <Drawer
+      title={`Cancel invoice ${invoice.invoice_number}`}
+      onClose={onClose}
+     width="max-w-2xl">
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        <div className="rounded-md bg-red-50 p-3 text-sm text-red-900">
+          <p className="font-semibold">This action voids the invoice.</p>
+          <p className="mt-1 text-xs">
+            The system posts a reversal entry to the GL — <strong>Dr Revenue</strong>{" "}
+            (net) and <strong>Dr VAT Output</strong> (vat) against{" "}
+            <strong>Cr Accounts Receivable</strong> for the full invoice total of{" "}
+            <strong>RWF {money(invoice.total_amount)}</strong>. The original
+            invoice line is preserved in the audit log; only the status flips
+            to <code>CANCELLED</code>.
+          </p>
+        </div>
+        <TextField
+          label="Reason (audit trail)"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          required
+          placeholder="e.g. Raised in error · Customer disputed · Wrong pricing"
+          autoFocus
+        />
+        {error && <p className="text-sm text-danger">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Keep invoice
+          </Button>
+          <Button
+            type="submit"
+            variant="danger"
+            disabled={cancel.isPending}
+          >
+            {cancel.isPending ? "Cancelling…" : "Cancel invoice"}
+          </Button>
+        </div>
+      </form>
+    </Drawer>
+  );
+}
+
 export function ReceivablesPage() {
   const { user } = useAuth();
   const orgId = user?.organization ?? 0;
   const [raising, setRaising] = useState(false);
   const [receipting, setReceipting] = useState<CustomerInvoice | null>(null);
+  const [cancelling, setCancelling] = useState<CustomerInvoice | null>(null);
+  const [viewing, setViewing] = useState<CustomerInvoice | null>(null);
   const [onlyOpen, setOnlyOpen] = useState(true);
 
   const invoicesQ = useQuery({
@@ -356,6 +600,7 @@ export function ReceivablesPage() {
         exportName="customer-invoices"
         searchPlaceholder="Search by customer or invoice number…"
         emptyMessage={onlyOpen ? "Nothing outstanding — every invoice is settled." : "No invoices yet."}
+        onRowClick={(r) => setViewing(r)}
         toolbar={
           <label className="flex items-center gap-2 text-sm text-ink-700">
             <input
@@ -368,9 +613,32 @@ export function ReceivablesPage() {
           </label>
         }
       />
+      <p className="mt-2 text-xs text-ink-500">
+        Tip: click any row to open its detail drawer (receipts posted, outstanding balance).
+      </p>
       {raising && <NewInvoiceModal orgId={orgId} onClose={() => setRaising(false)} />}
       {receipting && (
         <ReceiptModal invoice={receipting} onClose={() => setReceipting(null)} />
+      )}
+      {viewing && (
+        <InvoiceDetailDrawer
+          invoiceId={viewing.id}
+          onClose={() => setViewing(null)}
+          onRecordReceipt={(i) => {
+            setViewing(null);
+            setReceipting(i);
+          }}
+          onCancel={(i) => {
+            setViewing(null);
+            setCancelling(i);
+          }}
+        />
+      )}
+      {cancelling && (
+        <CancelInvoiceModal
+          invoice={cancelling}
+          onClose={() => setCancelling(null)}
+        />
       )}
     </div>
   );

@@ -618,27 +618,9 @@ export interface ProcurementOverview {
 }
 
 // --- shared helpers --------------------------------------------------------
-
-/** Whole-RWF money for screen. Cost precision stays server-side. */
-export function money(value: Money | number | null | undefined, currency = "RWF"): string {
-  const n = Number(value ?? 0);
-  return `${currency} ${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-}
-
-export function num(value: Money | number | null | undefined): number {
-  return Number(value ?? 0);
-}
-
-/** Badge tone per document status — one vocabulary across every procurement grid. */
-export function statusTone(status: string): string {
-  if (["APPROVED", "MATCHED", "POSTED", "RECEIVED", "CLEARED", "LANDED", "SETTLED", "PREFERRED"].includes(status))
-    return "success";
-  if (["PENDING_APPROVAL", "SUBMITTED", "SENT", "PARTIALLY_RECEIVED", "AT_CUSTOMS", "SHIPPED", "ARRIVED", "PROBATION", "ISSUED"].includes(status))
-    return "warning";
-  if (["REJECTED", "CANCELLED", "VARIANCE", "BLACKLISTED", "SUSPENDED"].includes(status))
-    return "danger";
-  return "neutral";
-}
+// Formatting and the status vocabulary are app-wide (see lib/format.ts); these
+// re-exports keep the procurement pages' imports short.
+export { money, num, statusTone } from "./format";
 
 export const INCOTERMS = [
   "EXW", "FCA", "FAS", "FOB", "CFR", "CIF", "CPT", "CIP", "DAP", "DPU", "DDP",

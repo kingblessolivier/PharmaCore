@@ -34,12 +34,18 @@ def receive_intake(
     reference_id: str = "",
     source_supplier: object | None = None,
     source_org: object | None = None,
+    origin_unit_cost: Decimal | None = None,
 ) -> InventoryBatch:
     """Receive stock into an org: create/find the batch, add quantity, and append a
     movement (INTAKE by default; TRANSFER_IN for a GRN). One transaction.
 
     ``source_supplier`` / ``source_org`` record where the lot came from (recall
-    traceability); they are set when the batch is first created."""
+    traceability); they are set when the batch is first created.
+
+    ``origin_unit_cost`` is the *selling* entity's own cost when the lot came from
+    another member of the group. `wholesale_cost` is the transfer price and carries
+    that entity's margin, which the group has not earned until the goods leave the
+    group — consolidation needs both figures to eliminate the difference."""
     batch, created = InventoryBatch.objects.select_for_update().get_or_create(
         organization=organization,
         product=product,
@@ -51,12 +57,17 @@ def receive_intake(
             "storage_location": storage_location,
             "source_supplier": source_supplier,
             "source_org": source_org,
+            "origin_unit_cost": origin_unit_cost,
         },
     )
     batch.quantity_available += quantity
     if wholesale_cost is not None:
         batch.wholesale_cost = wholesale_cost
-    batch.save(update_fields=["quantity_available", "wholesale_cost", "updated_at"])
+    if origin_unit_cost is not None:
+        batch.origin_unit_cost = origin_unit_cost
+    batch.save(
+        update_fields=["quantity_available", "wholesale_cost", "origin_unit_cost", "updated_at"]
+    )
 
     # Any stock received into an org lists the product in that org's catalog (prices
     # left blank for staff to set). This is why a retail pharmacy never re-adds
@@ -114,8 +125,13 @@ def adjust_stock(
 
 @transaction.atomic
 def log_wastage(
-    *, batch: InventoryBatch, quantity: int, reason: str = "", user: User | None = None,
-    reference_type: str = "wastage", reference_id: str = "",
+    *,
+    batch: InventoryBatch,
+    quantity: int,
+    reason: str = "",
+    user: User | None = None,
+    reference_type: str = "wastage",
+    reference_id: str = "",
 ) -> InventoryBatch:
     """Remove expired/damaged stock from a batch (never below zero). Auto-posts
     the GL writeoff entry so the books move with the physical loss."""

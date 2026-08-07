@@ -1,0 +1,60 @@
+{% extends "documents/base.html" %}
+{% block content %}
+<table class="parties">
+  <tr>
+    <td style="width:55%"><div class="plabel">Entity</div>{{ organization.name }}</td>
+    <td style="width:45%"><div class="plabel">Period</div>{{ start }} to {{ end }}</td>
+  </tr>
+</table>
+
+<div class="plabel" style="margin-top:12px">Profit &amp; loss</div>
+<table>
+  <tr><th>Line</th><th class="right">Amount (RWF)</th><th class="right">Margin</th></tr>
+  <tr><td>Revenue</td><td class="right">{{ pnl.revenue }}</td><td class="right"></td></tr>
+  <tr><td>Cost of sales</td><td class="right">({{ pnl.cogs }})</td><td class="right"></td></tr>
+  <tr><td><b>Gross profit</b></td><td class="right"><b>{{ pnl.gross_profit }}</b></td><td class="right">{{ pnl.gross_margin_pct }}%</td></tr>
+  <tr><td>Operating expenses</td><td class="right">({{ pnl.operating_expenses }})</td><td class="right"></td></tr>
+  <tr><td>Depreciation</td><td class="right">({{ pnl.depreciation }})</td><td class="right"></td></tr>
+  <tr><td><b>Operating profit</b></td><td class="right"><b>{{ pnl.operating_profit }}</b></td><td class="right">{{ pnl.operating_margin_pct }}%</td></tr>
+  <tr><td>Finance cost</td><td class="right">({{ pnl.finance_cost }})</td><td class="right"></td></tr>
+  <tr><td>Tax</td><td class="right">({{ pnl.tax_expense }})</td><td class="right"></td></tr>
+  <tr><td><b>Net profit</b></td><td class="right"><b>{{ pnl.net_profit }}</b></td><td class="right">{{ pnl.net_margin_pct }}%</td></tr>
+  <tr><td>EBITDA</td><td class="right">{{ pnl.ebitda }}</td><td class="right">{{ pnl.ebitda_margin_pct }}%</td></tr>
+</table>
+
+<div class="plabel" style="margin-top:12px">Balance sheet as at {{ end }}</div>
+<table>
+  <tr><th>Line</th><th class="right">Amount (RWF)</th></tr>
+  <tr><td>Current assets</td><td class="right">{{ bs.total_current_assets }}</td></tr>
+  <tr><td>Non-current assets</td><td class="right">{{ bs.total_non_current_assets }}</td></tr>
+  <tr><td><b>Total assets</b></td><td class="right"><b>{{ bs.total_assets }}</b></td></tr>
+  <tr><td>Current liabilities</td><td class="right">{{ bs.total_current_liabilities }}</td></tr>
+  <tr><td>Non-current liabilities</td><td class="right">{{ bs.total_non_current_liabilities }}</td></tr>
+  <tr><td><b>Total liabilities</b></td><td class="right"><b>{{ bs.total_liabilities }}</b></td></tr>
+  <tr><td>Contributed equity</td><td class="right">{{ bs.contributed_equity }}</td></tr>
+  <tr><td>Retained earnings</td><td class="right">{{ bs.retained_earnings }}</td></tr>
+  <tr><td><b>Total equity</b></td><td class="right"><b>{{ bs.total_equity }}</b></td></tr>
+  <tr><td>Working capital</td><td class="right">{{ bs.working_capital }}</td></tr>
+  <tr><td>Current ratio / quick ratio</td><td class="right">{{ bs.current_ratio|default:"&mdash;" }} / {{ bs.quick_ratio|default:"&mdash;" }}</td></tr>
+</table>
+<p class="muted">
+  {% if bs.balanced %}The balance sheet balances: assets equal liabilities plus equity.
+  {% else %}<b>Warning:</b> this balance sheet does not balance and must not be relied on.{% endif %}
+  The quick ratio excludes inventory, which for a pharmacy is most of current assets and the least liquid part of it.
+</p>
+
+<div class="plabel" style="margin-top:12px">Trial balance as at {{ end }}</div>
+<table>
+  <tr><th>Code</th><th>Account</th><th class="right">Debit</th><th class="right">Credit</th></tr>
+  {% for a in tb.accounts %}
+  <tr><td>{{ a.code }}</td><td>{{ a.name }}</td><td class="right">{{ a.debit }}</td><td class="right">{{ a.credit }}</td></tr>
+  {% endfor %}
+  <tr><td colspan="2" class="right"><b>Totals</b></td><td class="right"><b>{{ tb.total_debit }}</b></td><td class="right"><b>{{ tb.total_credit }}</b></td></tr>
+</table>
+<table class="parties" style="margin-top:24px">
+  <tr>
+    <td style="width:50%"><div class="plabel">Prepared by</div>{{ prepared_by }}<br><br>___________________</td>
+    <td style="width:50%"><div class="plabel">Approved by</div><br><br>___________________</td>
+  </tr>
+</table>
+{% endblock %}

@@ -12,6 +12,11 @@ extend-exclude = ["**/migrations/*"]
 select = ["E", "F", "I", "UP", "B", "C4", "SIM"]
 ignore = []
 
+[tool.ruff.lint.per-file-ignores]
+# A standalone Django script must call django.setup() before importing any app
+# module, so its imports cannot all sit at the top of the file.
+"seed_demo_runner.py" = ["E402"]
+
 [tool.black]
 line-length = 100
 target-version = ["py312"]
@@ -28,6 +33,13 @@ exclude = ['migrations/']
 [[tool.mypy.overrides]]
 module = ["*.migrations.*"]
 ignore_errors = true
+
+# Tests assert behaviour; they are not an API anyone types against. The root
+# ``tests/`` tree is not type-checked at all, so requiring annotations only for
+# the few suites that happen to live inside an app package was inconsistent.
+[[tool.mypy.overrides]]
+module = ["*.tests.*"]
+disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
 module = ["xhtml2pdf.*", "segno.*", "apscheduler.*"]

@@ -1,0 +1,28 @@
+{% extends "documents/base.html" %}
+{% block content %}
+<table class="parties">
+  <tr>
+    <td style="width:55%"><div class="plabel">Paid to</div>{{ payee }}</td>
+    <td style="width:45%"><div class="plabel">Date</div>{{ paid_on }}</td>
+  </tr>
+</table>
+<table>
+  <tr><th>Being payment of</th><th>Reference</th><th class="right">Amount ({{ currency }})</th></tr>
+  <tr><td>{{ purpose }}</td><td>{{ reference }}</td><td class="right">{{ amount }}</td></tr>
+  <tr><td colspan="2" class="right"><b>Total</b></td><td class="right"><b>{{ amount }}</b></td></tr>
+</table>
+<p class="muted">Amount in words: {{ amount_words }}</p>
+<table>
+  <tr><th>Account</th><th>Cost centre</th><th class="right">Debit</th><th class="right">Credit</th></tr>
+  {% for l in lines %}
+  <tr><td>{{ l.account }}</td><td>{{ l.cost_centre }}</td><td class="right">{{ l.debit }}</td><td class="right">{{ l.credit }}</td></tr>
+  {% endfor %}
+</table>
+<table class="parties" style="margin-top:24px">
+  <tr>
+    <td style="width:33%"><div class="plabel">Prepared by</div>{{ prepared_by }}<br><br>___________________</td>
+    <td style="width:33%"><div class="plabel">Approved by</div><br><br>___________________</td>
+    <td style="width:34%"><div class="plabel">Received by</div><br><br>___________________</td>
+  </tr>
+</table>
+{% endblock %}

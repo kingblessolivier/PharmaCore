@@ -55,41 +55,62 @@ class Employee(models.Model):
     # ---- Finacle-grade R/O/C fields for the People module ----
     # Personal / identity
     gender = models.CharField(
-        max_length=10, blank=True, default="",
+        max_length=10,
+        blank=True,
+        default="",
         help_text="M / F / Other — used for headcount reporting and pension scheme flags.",
     )
     dob = models.DateField(
-        null=True, blank=True,
-        help_text="Date of birth — drives annual-leave entitlement (Law 66/2018 §55: 25 days if ≥55y).",
+        null=True,
+        blank=True,
+        help_text=(
+            "Date of birth — drives annual-leave entitlement " "(Law 66/2018 §55: 25 days if ≥55y)."
+        ),
     )
     photo = models.URLField(
-        blank=True, default="",
+        blank=True,
+        default="",
         help_text="URL of the employee's profile photo (badge).",
     )
     # Contract lifecycle
     probation_end = models.DateField(
-        null=True, blank=True,
+        null=True,
+        blank=True,
         help_text="Last day of the probation period (auto-confirmation trigger).",
     )
     contract_end = models.DateField(
-        null=True, blank=True,
+        null=True,
+        blank=True,
         help_text="End date of a fixed-term contract (CDD); blank for permanent (CDI).",
     )
     # Payroll classification
     pay_group = models.CharField(
-        max_length=20, blank=True, default="",
-        help_text="Salary band — pharmacist, technician, cashier, driver, manager. Drives default salary structure.",
+        max_length=20,
+        blank=True,
+        default="",
+        help_text=(
+            "Salary band — pharmacist, technician, cashier, driver, manager. "
+            "Drives default salary structure."
+        ),
     )
     pay_frequency = models.CharField(
-        max_length=10, blank=True, default="MONTHLY",
+        max_length=10,
+        blank=True,
+        default="MONTHLY",
         help_text="Pay period — MONTHLY (Law 66/2018 default) or FORTNIGHTLY.",
     )
     tin = models.CharField(
-        max_length=30, blank=True, default="",
+        max_length=30,
+        blank=True,
+        default="",
         help_text="RRA TIN — Rwanda tax-identification number; printed on annual PIT summaries.",
     )
     supervisor = models.ForeignKey(
-        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="reports",
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reports",
         help_text="Direct manager — used by the approvals engine for leave / loan routing.",
     )
     # Professional licence driving dispensing rights (pharmacist/technician).
@@ -101,6 +122,56 @@ class Employee(models.Model):
     next_of_kin_phone = models.CharField(max_length=20, blank=True, default="")
     emergency_contact_phone = models.CharField(max_length=20, blank=True, default="")
     address = models.TextField(blank=True, default="")
+
+    # ---- Personal (completes the statutory + payroll field set) ----
+    middle_name = models.CharField(max_length=100, blank=True, default="")
+    marital_status = models.CharField(
+        max_length=12,
+        blank=True,
+        default="",
+        help_text="SINGLE / MARRIED / DIVORCED / WIDOWED — reported on RSSB declarations.",
+    )
+    dependants_count = models.PositiveIntegerField(
+        default=0, help_text="Declared dependants — drives CBHI household cover."
+    )
+    nationality = models.CharField(max_length=60, blank=True, default="Rwandan")
+    personal_email = models.EmailField(
+        blank=True, default="", help_text="Where the payslip goes after offboarding."
+    )
+    personal_phone = models.CharField(max_length=20, blank=True, default="")
+    district = models.CharField(max_length=100, blank=True, default="")
+    sector = models.CharField(max_length=100, blank=True, default="")
+    cell = models.CharField(max_length=100, blank=True, default="")
+    village = models.CharField(max_length=100, blank=True, default="")
+    has_disability = models.BooleanField(default=False)
+    disability_note = models.CharField(max_length=200, blank=True, default="")
+
+    # ---- Right to work (non-Rwandan staff) ----
+    work_permit_number = models.CharField(max_length=60, blank=True, default="")
+    work_permit_expiry = models.DateField(
+        null=True, blank=True, help_text="Blocks roster assignment once past."
+    )
+    passport_number = models.CharField(max_length=40, blank=True, default="")
+
+    # ---- Statutory & settlement ----
+    rama_number = models.CharField(
+        max_length=30, blank=True, default="", help_text="RAMA medical scheme member number."
+    )
+    cbhi_number = models.CharField(max_length=30, blank=True, default="")
+    is_rama_member = models.BooleanField(
+        default=False, help_text="Opts the employee into the 7.5%+7.5% RAMA deduction on basic."
+    )
+    bank_name = models.CharField(max_length=150, blank=True, default="")
+    bank_branch = models.CharField(max_length=150, blank=True, default="")
+    bank_account_name = models.CharField(max_length=150, blank=True, default="")
+    payment_method = models.CharField(
+        max_length=15, blank=True, default="BANK", help_text="BANK / MOMO / CASH."
+    )
+
+    # ---- Exit (mirrors the Termination record for quick reads) ----
+    termination_reason = models.CharField(max_length=30, blank=True, default="")
+    is_eligible_for_rehire = models.BooleanField(default=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -277,7 +348,9 @@ class AttendanceLog(models.Model):
     class Meta:
         ordering = ["-date"]
         constraints = [
-            models.UniqueConstraint(fields=["employee", "date"], name="uniq_attendance_per_employee_day")
+            models.UniqueConstraint(
+                fields=["employee", "date"], name="uniq_attendance_per_employee_day"
+            )
         ]
 
     def __str__(self) -> str:
@@ -285,7 +358,10 @@ class AttendanceLog(models.Model):
 
 
 class ShiftRoster(models.Model):
-    """Credential-based shift scheduling with mandatory pharmacist coverage guard. ROADMAP '10. People'."""
+    """Credential-based shift scheduling with a mandatory pharmacist coverage guard.
+
+    ROADMAP '10. People'.
+    """
 
     class ShiftType(models.TextChoices):
         MORNING = "MORNING", "Morning shift (07:00 – 15:00)"
@@ -298,14 +374,18 @@ class ShiftRoster(models.Model):
     )
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="shift_rosters")
     date = models.DateField()
-    shift_type = models.CharField(max_length=20, choices=ShiftType.choices, default=ShiftType.FULL_DAY)
+    shift_type = models.CharField(
+        max_length=20, choices=ShiftType.choices, default=ShiftType.FULL_DAY
+    )
     requires_pharmacist_license = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["date", "shift_type"]
         constraints = [
-            models.UniqueConstraint(fields=["organization", "employee", "date"], name="uniq_shift_roster")
+            models.UniqueConstraint(
+                fields=["organization", "employee", "date"], name="uniq_shift_roster"
+            )
         ]
 
     def __str__(self) -> str:
@@ -328,7 +408,9 @@ class LeaveRequest(models.Model):
         REJECTED = "REJECTED", "Rejected"
 
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="leave_requests")
-    leave_type = models.CharField(max_length=20, choices=LeaveType.choices, default=LeaveType.ANNUAL)
+    leave_type = models.CharField(
+        max_length=20, choices=LeaveType.choices, default=LeaveType.ANNUAL
+    )
     start_date = models.DateField()
     end_date = models.DateField()
     days_count = models.PositiveIntegerField(default=1)
@@ -345,3 +427,37 @@ class LeaveRequest(models.Model):
     def __str__(self) -> str:
         return f"{self.employee} · {self.leave_type} ({self.days_count} days)"
 
+
+# ---------------------------------------------------------------------------
+# The rest of the People model lives in models_people.py so this module stays
+# readable. They are ordinary `hr` models — Django resolves the app label from
+# the package path — and are re-exported here so `from apps.hr.models import X`
+# keeps working everywhere.
+# ---------------------------------------------------------------------------
+
+from apps.hr.models_people import (  # noqa: E402,F401
+    Applicant,
+    ChecklistItem,
+    CompetencyAssessment,
+    CPDRecord,
+    DisciplinaryAction,
+    EmploymentContract,
+    FinalSettlement,
+    InterviewSlot,
+    JobRequisition,
+    LeaveAccrual,
+    LeaveBalance,
+    LeaveType,
+    LoanAdvance,
+    LoanInstallment,
+    OnboardingChecklist,
+    PayrollAdjustment,
+    PerformanceReview,
+    SalaryComponent,
+    SalaryRevision,
+    SalaryStructure,
+    StatutoryFiling,
+    Termination,
+    Timesheet,
+    TrainingRecord,
+)

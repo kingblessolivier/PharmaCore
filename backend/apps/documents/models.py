@@ -21,6 +21,15 @@ class DocType(models.TextChoices):
     CREDIT_NOTE = "CREDIT_NOTE", "Credit note"
     RECEIPT = "RECEIPT", "Receipt"
     PAYSLIP = "PAYSLIP", "Payslip"
+    # Finance. A report you can only look at is not a document you can send,
+    # file, and later prove was not altered — these close that gap.
+    DEBIT_NOTE = "DEBIT_NOTE", "Debit note"
+    STATEMENT = "STATEMENT", "Statement of account"
+    REMITTANCE_ADVICE = "REMITTANCE_ADVICE", "Remittance advice"
+    PAYMENT_VOUCHER = "PAYMENT_VOUCHER", "Payment voucher"
+    JOURNAL_VOUCHER = "JOURNAL_VOUCHER", "Journal voucher"
+    FINANCIAL_STATEMENT = "FINANCIAL_STATEMENT", "Financial statements"
+    VAT_RETURN = "VAT_RETURN", "VAT return"
 
 
 # Per-type human prefix for the document number.
@@ -33,6 +42,13 @@ DOC_PREFIX: dict[str, str] = {
     DocType.CREDIT_NOTE: "CN",
     DocType.RECEIPT: "RCT",
     DocType.PAYSLIP: "PAY",
+    DocType.DEBIT_NOTE: "DBN",
+    DocType.STATEMENT: "STMT",
+    DocType.REMITTANCE_ADVICE: "RA",
+    DocType.PAYMENT_VOUCHER: "PV",
+    DocType.JOURNAL_VOUCHER: "JV",
+    DocType.FINANCIAL_STATEMENT: "FS",
+    DocType.VAT_RETURN: "VAT",
 }
 
 
@@ -62,7 +78,10 @@ class Document(models.Model):
         "iam.Organization", on_delete=models.CASCADE, related_name="documents"
     )
     doc_type = models.CharField(max_length=30, choices=DocType.choices)
-    doc_number = models.CharField(max_length=40, unique=True)
+    # Numbering is allocated per organization (see DocumentSequence), so the number
+    # is unique *within a tenant* — not globally. A global unique made the second
+    # organization to issue a PO collide with the first one's PO-YYYY-00001.
+    doc_number = models.CharField(max_length=40)
     reference_type = models.CharField(max_length=50, blank=True, default="")
     reference_id = models.CharField(max_length=64, blank=True, default="")
     file = models.FileField(upload_to="documents/%Y/%m/")
@@ -75,6 +94,11 @@ class Document(models.Model):
 
     class Meta:
         ordering = ["-generated_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "doc_number"], name="uniq_document_number_per_org"
+            )
+        ]
         indexes = [
             models.Index(fields=["reference_type", "reference_id"]),
             models.Index(fields=["organization", "doc_type"]),

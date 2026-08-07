@@ -26,12 +26,15 @@ router.register("ingredients", ActiveIngredientViewSet, basename="ingredient")
 router.register("product-ingredients", ProductIngredientViewSet, basename="product-ingredient")
 router.register("product-barcodes", ProductBarcodeViewSet, basename="product-barcode")
 router.register("product-interactions", ProductInteractionViewSet, basename="product-interaction")
-router.register("product-contraindications", ProductContraindicationViewSet, basename="product-contraindication")
+router.register(
+    "product-contraindications", ProductContraindicationViewSet, basename="product-contraindication"
+)
 router.register("price-lists", PriceListViewSet, basename="price-list")
 router.register("product-prices", ProductPriceViewSet, basename="product-price")
 router.register("formulary-items", FormularyItemViewSet, basename="formulary-item")
-router.register("product-uom-conversions", ProductUomConversionViewSet, basename="product-uom-conversion")
+router.register(
+    "product-uom-conversions", ProductUomConversionViewSet, basename="product-uom-conversion"
+)
 router.register("product-substitutes", ProductSubstituteViewSet, basename="product-substitute")
 
 urlpatterns = router.urls
-

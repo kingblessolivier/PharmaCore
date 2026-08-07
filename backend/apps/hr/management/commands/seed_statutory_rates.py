@@ -17,11 +17,11 @@ loads whatever is in effect on the period's end date.
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 
 from django.core.management.base import BaseCommand
 
 from apps.hr.models import StatutoryRate
-
 
 # Anything you'd want seeded with no expiry (open-ended; a 2026 / 2027 / ...
 # bump is a new row, never an edit).
@@ -42,7 +42,7 @@ PHASED_RATES = [
 class Command(BaseCommand):
     help = "Seed (or refresh) the Rwanda statutory rates — idempotent."
 
-    def handle(self, *args, **options) -> None:
+    def handle(self, *args: Any, **options: Any) -> None:
         seeded_root = 0
         for rate_type, band_min, band_max, rate_pct, eff_from in ROOT_RATES:
             _, created = StatutoryRate.objects.get_or_create(

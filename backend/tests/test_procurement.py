@@ -517,7 +517,10 @@ def test_order_scoped_to_visible_organizations(
 
 
 def test_landed_cost_allocation_lands_in_unit_cost(
-    depot: Organization, qualified_supplier: Supplier, product: Product, product_b: Product,
+    depot: Organization,
+    qualified_supplier: Supplier,
+    product: Product,
+    product_b: Product,
     buyer: User,
 ) -> None:
     client = _auth(buyer)
@@ -651,9 +654,7 @@ def test_goods_receipt_lands_stock_in_quarantine_with_qc(
     client = _auth(buyer)
     order = _approved_order(client, depot, qualified_supplier, product, approver)
 
-    resp = client.post(
-        f"/api/procurement/orders/{order['id']}/start_receipt/", {}, format="json"
-    )
+    resp = client.post(f"/api/procurement/orders/{order['id']}/start_receipt/", {}, format="json")
     assert resp.status_code == 201, resp.content
     receipt = resp.json()
     assert receipt["grn_number"].startswith("GRN-")
@@ -714,7 +715,7 @@ def test_goods_receipt_lands_stock_in_quarantine_with_qc(
         reference_type="goods_receipt", reference_id=str(receipt["id"])
     )
     assert entry.total_debit == entry.total_credit == 195000.0
-    assert set(entry.lines.values_list("account__code", flat=True)) == {"1200", "2150"}
+    assert set(entry.lines.values_list("account__code", flat=True)) == {"1500", "2150"}
 
 
 def test_receipt_refuses_missing_batch_or_expired_stock(
@@ -845,7 +846,8 @@ def test_three_way_match_clean_invoice_posts_to_the_ledger(
     line.save(update_fields=["unit_price"])
 
     resp = client.post(
-        "/api/procurement/invoices/", _invoice_payload(depot, qualified_supplier, receipt),
+        "/api/procurement/invoices/",
+        _invoice_payload(depot, qualified_supplier, receipt),
         format="json",
     )
     assert resp.status_code == 201, resp.content
@@ -870,13 +872,9 @@ def test_three_way_match_clean_invoice_posts_to_the_ledger(
     assert bill.total_amount == Decimal("325000.00")
     assert bill.reference_type == "procurement.supplier_invoice"
 
-    entry = JournalEntry.objects.get(
-        reference_type="supplier_invoice", reference_id=str(stored.pk)
-    )
+    entry = JournalEntry.objects.get(reference_type="supplier_invoice", reference_id=str(stored.pk))
     assert entry.total_debit == entry.total_credit == 325000.0
-    codes = dict(
-        entry.lines.values_list("account__code", "side")
-    )
+    codes = dict(entry.lines.values_list("account__code", "side"))
     assert codes["2150"] == JournalLine.Side.DEBIT  # GRNI cleared
     assert codes["2100"] == JournalLine.Side.CREDIT  # payable raised
 
@@ -888,9 +886,7 @@ def test_three_way_match_flags_quantity_and_price_variance(
     depot: Organization, qualified_supplier: Supplier, product: Product, buyer: User, approver: User
 ) -> None:
     client = _auth(buyer)
-    receipt = _post_full_receipt(
-        client, depot, qualified_supplier, product, approver, quantity=60
-    )
+    receipt = _post_full_receipt(client, depot, qualified_supplier, product, approver, quantity=60)
     order = PurchaseOrder.objects.get(pk=receipt["order"])
     order.currency = "RWF"
     order.exchange_rate = Decimal("1")
@@ -926,9 +922,7 @@ def test_three_way_match_flags_quantity_and_price_variance(
     )
     assert resp.status_code == 200, resp.content
     _approve(resp.json()["approval_id"], approver)
-    assert (
-        SupplierInvoice.objects.get(pk=invoice["id"]).status == SupplierInvoice.Status.APPROVED
-    )
+    assert SupplierInvoice.objects.get(pk=invoice["id"]).status == SupplierInvoice.Status.APPROVED
 
 
 def test_invoice_without_a_receipt_cannot_match_clean(
@@ -981,7 +975,8 @@ def test_debit_note_reduces_the_payable_and_posts(
     line.save(update_fields=["unit_price"])
 
     invoice = client.post(
-        "/api/procurement/invoices/", _invoice_payload(depot, qualified_supplier, receipt),
+        "/api/procurement/invoices/",
+        _invoice_payload(depot, qualified_supplier, receipt),
         format="json",
     ).json()
     client.post(f"/api/procurement/invoices/{invoice['id']}/match/", {}, format="json")
@@ -1040,7 +1035,8 @@ def test_supplier_statement_reconciles(
     line.save(update_fields=["unit_price"])
 
     invoice = client.post(
-        "/api/procurement/invoices/", _invoice_payload(depot, qualified_supplier, receipt),
+        "/api/procurement/invoices/",
+        _invoice_payload(depot, qualified_supplier, receipt),
         format="json",
     ).json()
     client.post(f"/api/procurement/invoices/{invoice['id']}/match/", {}, format="json")

@@ -1,26 +1,120 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
-import { useState, type FormEvent } from "react";
-import { Button, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
-import { api, ApiError } from "../lib/api";
-import { useAuth } from "../lib/auth";
-import type { Account, BalanceSide, JournalEntry, JournalLine, Paginated } from "../lib/types";
+import { FileDown, Plus, ScrollText } from "lucide-react";
+import { useMemo, useState } from "react";
+import { DataGrid } from "../components/DataGrid";
+import {
+  Drawer,
+  ErrorNote,
+  Facts,
+  Field,
+  Grid,
+  Input,
+  LineEditor,
+  Section,
+  Select,
+  TotalsRow,
+} from "../components/RecordKit";
+import { Badge, Button, PageHeader } from "../components/ui";
+import { api } from "../lib/api";
+import { money, shortDate } from "../lib/format";
+import type { CostCentre } from "../lib/finance";
+import { useFinanceDocument } from "../lib/financeDocuments";
+import { useDefaultOrg } from "../lib/recordData";
+import type { Account, Paginated } from "../lib/types";
 
-const money = (n: number | string) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+type Side = "DEBIT" | "CREDIT";
 
-function NewEntryModal({ onClose, orgId, accounts }: { onClose: () => void; orgId: number; accounts: Account[] }) {
+interface JournalLine {
+  id: number;
+  account: number;
+  account_code?: string;
+  account_name?: string;
+  cost_centre: number | null;
+  cost_centre_code?: string;
+  cost_centre_name?: string;
+  side: Side;
+  amount: string;
+  memo: string;
+  is_reconciled: boolean;
+}
+
+interface JournalEntry {
+  id: number;
+  organization: number;
+  organization_name?: string;
+  entry_number: string;
+  entry_date: string;
+  description: string;
+  source_module: string;
+  reference_type: string;
+  reference_id: string;
+  status: "POSTED" | "REVERSED";
+  total_debit: number;
+  total_credit: number;
+  lines: JournalLine[];
+  created_at: string;
+}
+
+const SOURCE_LABEL: Record<string, string> = {
+  SALES: "Sales & dispensing",
+  PROCUREMENT: "Procurement & imports",
+  INVENTORY: "Inventory & stock",
+  PAYROLL: "Payroll & people",
+  TREASURY: "Treasury & banking",
+  TAX: "Tax & statutory",
+  CLOSE: "Period close",
+  MANUAL: "Manual journal",
+};
+
+const SOURCE_TONE: Record<string, "info" | "success" | "warning" | "default"> = {
+  SALES: "success",
+  PROCUREMENT: "info",
+  INVENTORY: "info",
+  PAYROLL: "info",
+  TREASURY: "info",
+  TAX: "warning",
+  CLOSE: "warning",
+  MANUAL: "default",
+};
+
+interface DraftLine {
+  account: number | "";
+  cost_centre: number | "";
+  side: Side;
+  amount: string;
+  memo: string;
+}
+
+/* -------------------------------------------------------------------------- */
+
+function NewEntryDrawer({
+  orgId,
+  accounts,
+  centres,
+  onClose,
+}: {
+  orgId: number | null;
+  accounts: Account[];
+  centres: CostCentre[];
+  onClose: () => void;
+}) {
   const qc = useQueryClient();
-  const [description, setDescription] = useState("");
-  const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10));
-  const [lines, setLines] = useState<JournalLine[]>([
-    { account: accounts[0]?.id ?? 0, side: "DEBIT", amount: "" },
-    { account: accounts[0]?.id ?? 0, side: "CREDIT", amount: "" },
+  const [head, setHead] = useState({
+    entry_date: new Date().toISOString().slice(0, 10),
+    description: "",
+  });
+  const [lines, setLines] = useState<DraftLine[]>([
+    { account: "", cost_centre: "", side: "DEBIT", amount: "", memo: "" },
+    { account: "", cost_centre: "", side: "CREDIT", amount: "", memo: "" },
   ]);
-  const [error, setError] = useState<string | null>(null);
 
-  const debit = lines.filter((l) => l.side === "DEBIT").reduce((s, l) => s + (Number(l.amount) || 0), 0);
-  const credit = lines.filter((l) => l.side === "CREDIT").reduce((s, l) => s + (Number(l.amount) || 0), 0);
-  const balanced = debit === credit && debit > 0;
+  const debit = lines
+    .filter((l) => l.side === "DEBIT")
+    .reduce((s, l) => s + Number(l.amount || 0), 0);
+  const credit = lines
+    .filter((l) => l.side === "CREDIT")
+    .reduce((s, l) => s + Number(l.amount || 0), 0);
+  const balanced = debit > 0 && debit === credit;
 
   const create = useMutation({
     mutationFn: () =>
@@ -28,203 +122,391 @@ function NewEntryModal({ onClose, orgId, accounts }: { onClose: () => void; orgI
         method: "POST",
         body: JSON.stringify({
           organization: orgId,
-          entry_date: entryDate,
-          description,
-          lines: lines.map((l) => ({ account: l.account, side: l.side, amount: l.amount, memo: l.memo ?? "" })),
+          entry_date: head.entry_date,
+          description: head.description,
+          lines: lines
+            .filter((l) => l.account !== "" && Number(l.amount) > 0)
+            .map((l) => ({
+              account: l.account,
+              cost_centre: l.cost_centre === "" ? null : l.cost_centre,
+              side: l.side,
+              amount: l.amount,
+              memo: l.memo,
+            })),
         }),
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["journal-entries"] });
       onClose();
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : "Could not post this entry."),
   });
 
-  function updateLine(i: number, patch: Partial<JournalLine>) {
-    setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
-  }
-  function addLine() {
-    setLines((prev) => [...prev, { account: accounts[0]?.id ?? 0, side: "DEBIT", amount: "" }]);
-  }
-  function removeLine(i: number) {
-    setLines((prev) => prev.filter((_, idx) => idx !== i));
-  }
-
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!balanced) {
-      setError("Debits must equal credits before posting.");
-      return;
-    }
-    create.mutate();
-  }
-
   return (
-    <Modal title="Post a manual journal entry" onClose={onClose}>
-      <form onSubmit={submit} className="flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-3">
-          <TextField
-            label="Date"
-            type="date"
-            value={entryDate}
-            onChange={(e) => setEntryDate(e.target.value)}
-            required
-          />
-          <TextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+    <Drawer
+      title="New journal entry"
+      subtitle="Posted entries are immutable — a correction is a new reversing entry, never an edit."
+      width="max-w-4xl"
+      onClose={onClose}
+      footer={
+        <div className="flex items-center justify-between gap-2">
+          <span className={`text-sm ${balanced ? "text-ink-500" : "text-danger-700"}`}>
+            {balanced
+              ? "Balanced."
+              : `Out of balance by ${money(Math.abs(debit - credit))} — debits must equal credits.`}
+          </span>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={() => create.mutate()} disabled={create.isPending || !balanced}>
+              {create.isPending ? "Posting…" : "Post entry"}
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-col gap-2">
-          {lines.map((line, i) => (
-            <div key={i} className="grid grid-cols-[1fr_100px_120px_32px] items-end gap-2">
-              <SelectField
-                label={i === 0 ? "Account" : undefined}
-                value={line.account}
-                onChange={(e) => updateLine(i, { account: Number(e.target.value) })}
-              >
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.code} · {a.name}
-                  </option>
-                ))}
-              </SelectField>
-              <SelectField
-                label={i === 0 ? "Side" : undefined}
-                value={line.side}
-                onChange={(e) => updateLine(i, { side: e.target.value as BalanceSide })}
-              >
-                <option value="DEBIT">Debit</option>
-                <option value="CREDIT">Credit</option>
-              </SelectField>
-              <TextField
-                label={i === 0 ? "Amount" : undefined}
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={line.amount}
-                onChange={(e) => updateLine(i, { amount: e.target.value })}
-                required
-              />
-              <button
-                type="button"
-                onClick={() => removeLine(i)}
-                disabled={lines.length <= 2}
-                className="mb-0.5 rounded-md p-2 text-ink-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
-                aria-label="Remove line"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
-        </div>
-        <Button type="button" variant="secondary" onClick={addLine} className="self-start">
-          <Plus className="h-4 w-4" /> Add line
-        </Button>
-        <div className={`flex justify-between rounded-md px-3 py-2 text-sm ${balanced ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>
-          <span>Debits: {money(debit)}</span>
-          <span>Credits: {money(credit)}</span>
-        </div>
-        {error && <p className="text-sm text-danger">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={create.isPending || !balanced}>
-            {create.isPending ? "Posting…" : "Post entry"}
-          </Button>
-        </div>
-      </form>
-    </Modal>
+      }
+    >
+      <ErrorNote error={create.error} />
+      <Section title="Entry">
+        <Grid cols={2}>
+          <Field label="Date">
+            <Input
+              type="date"
+              value={head.entry_date}
+              onChange={(e) => setHead({ ...head, entry_date: e.target.value })}
+            />
+          </Field>
+          <Field label="Description">
+            <Input
+              value={head.description}
+              onChange={(e) => setHead({ ...head, description: e.target.value })}
+              placeholder="What this entry records"
+            />
+          </Field>
+        </Grid>
+      </Section>
+
+      <Section
+        title="Lines"
+        hint="Tag a cost centre so the ledger can be read by branch. Control-account legs — VAT, AP, bank — belong to the entity and can be left unallocated."
+      >
+        <LineEditor<DraftLine>
+          rows={lines}
+          onChange={setLines}
+          addLabel="Add line"
+          makeRow={() => ({
+            account: "",
+            cost_centre: "",
+            side: "DEBIT",
+            amount: "",
+            memo: "",
+          })}
+          columns={[
+            {
+              header: "Account",
+              width: "17rem",
+              cell: (row, set) => (
+                <Select
+                  value={row.account}
+                  onChange={(e) => set({ account: Number(e.target.value) || "" })}
+                >
+                  <option value="">— choose —</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.code} · {a.name}
+                    </option>
+                  ))}
+                </Select>
+              ),
+            },
+            {
+              header: "Cost centre",
+              width: "11rem",
+              cell: (row, set) => (
+                <Select
+                  value={row.cost_centre}
+                  onChange={(e) => set({ cost_centre: Number(e.target.value) || "" })}
+                >
+                  <option value="">Unallocated</option>
+                  {centres.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.code}
+                    </option>
+                  ))}
+                </Select>
+              ),
+            },
+            {
+              header: "Side",
+              width: "7rem",
+              cell: (row, set) => (
+                <Select
+                  value={row.side}
+                  onChange={(e) => set({ side: e.target.value as Side })}
+                >
+                  <option value="DEBIT">Debit</option>
+                  <option value="CREDIT">Credit</option>
+                </Select>
+              ),
+            },
+            {
+              header: "Amount",
+              width: "9rem",
+              align: "right",
+              cell: (row, set) => (
+                <Input
+                  value={row.amount}
+                  onChange={(e) => set({ amount: e.target.value })}
+                  className="text-right tabular-nums"
+                />
+              ),
+            },
+            {
+              header: "Memo",
+              cell: (row, set) => (
+                <Input value={row.memo} onChange={(e) => set({ memo: e.target.value })} />
+              ),
+            },
+          ]}
+          footer={
+            <>
+              <TotalsRow span={4} label="Debits" value={money(debit)} />
+              <TotalsRow span={4} label="Credits" value={money(credit)} strong />
+            </>
+          }
+        />
+      </Section>
+    </Drawer>
   );
 }
 
-export function JournalPage() {
-  const { user } = useAuth();
-  const [adding, setAdding] = useState(false);
-  const [expanded, setExpanded] = useState<number | null>(null);
-  const orgId = user?.organization ?? 0;
+/* -------------------------------------------------------------------------- */
 
-  const accountsQ = useQuery({
-    queryKey: ["accounts", orgId],
-    queryFn: () => api<Paginated<Account>>(`/api/finance/accounts/?organization=${orgId}`),
-    enabled: orgId > 0,
-  });
-  const entriesQ = useQuery({
+function EntryDrawer({ entry, onClose }: { entry: JournalEntry; onClose: () => void }) {
+  const voucher = useFinanceDocument("journal-voucher");
+  return (
+    <Drawer
+      title={entry.entry_number || `Entry #${entry.id}`}
+      subtitle={entry.description}
+      badge={
+        entry.status === "REVERSED" ? (
+          <Badge tone="warning">Reversed</Badge>
+        ) : (
+          <Badge tone={SOURCE_TONE[entry.source_module] ?? "default"}>
+            {SOURCE_LABEL[entry.source_module] ?? entry.source_module}
+          </Badge>
+        )
+      }
+      width="max-w-3xl"
+      onClose={onClose}
+      footer={
+        <div className="flex justify-between gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => voucher.mutate({ entry: entry.id })}
+            disabled={voucher.isPending}
+          >
+            <FileDown className="h-4 w-4" />
+            {voucher.isPending ? "Preparing…" : "Journal voucher"}
+          </Button>
+          <Button variant="ghost" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      }
+    >
+      <Section title="Entry">
+        <Facts
+          rows={[
+            ["Date", shortDate(entry.entry_date)],
+            ["Source", SOURCE_LABEL[entry.source_module] ?? entry.source_module],
+            [
+              "Reference",
+              entry.reference_type ? `${entry.reference_type} · ${entry.reference_id}` : "—",
+            ],
+            ["Debits", money(entry.total_debit)],
+            ["Credits", money(entry.total_credit)],
+          ]}
+        />
+      </Section>
+      <Section title="Lines">
+        <div className="overflow-x-auto rounded-lg border border-line">
+          <table className="w-full min-w-[560px] text-sm">
+            <thead className="border-b border-line bg-surface-50 text-left text-[11px] uppercase tracking-wide text-ink-500">
+              <tr>
+                <th className="px-3 py-2">Account</th>
+                <th className="px-3 py-2">Cost centre</th>
+                <th className="px-3 py-2">Memo</th>
+                <th className="px-3 py-2 text-right">Debit</th>
+                <th className="px-3 py-2 text-right">Credit</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {entry.lines.map((line) => (
+                <tr key={line.id}>
+                  <td className="px-3 py-2">
+                    <span className="text-ink-900">{line.account_code}</span>{" "}
+                    <span className="text-ink-600">{line.account_name}</span>
+                  </td>
+                  <td className="px-3 py-2 text-ink-600">{line.cost_centre_code ?? "—"}</td>
+                  <td className="px-3 py-2 text-ink-600">{line.memo}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {line.side === "DEBIT" ? money(line.amount) : ""}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {line.side === "CREDIT" ? money(line.amount) : ""}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+    </Drawer>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+export function JournalPage() {
+  const { orgId } = useDefaultOrg();
+  const [creating, setCreating] = useState(false);
+  const [open, setOpen] = useState<JournalEntry | null>(null);
+  const [source, setSource] = useState("");
+
+  const { data, isLoading } = useQuery({
     queryKey: ["journal-entries", orgId],
-    queryFn: () => api<Paginated<JournalEntry>>(`/api/finance/journal-entries/?organization=${orgId}`),
+    enabled: orgId !== null,
+    queryFn: () =>
+      api<Paginated<JournalEntry>>(
+        `/api/finance/journal-entries/?organization=${orgId}&page_size=200`,
+      ),
+  });
+  const entries = useMemo(() => data?.results ?? [], [data]);
+  const filtered = useMemo(
+    () => (source ? entries.filter((e) => e.source_module === source) : entries),
+    [entries, source],
+  );
+
+  const { data: accountData } = useQuery({
+    queryKey: ["accounts", orgId],
+    enabled: orgId !== null,
+    queryFn: () =>
+      api<Paginated<Account>>(`/api/finance/accounts/?organization=${orgId}&page_size=500`),
+  });
+  const { data: centreData } = useQuery({
+    queryKey: ["cost-centres", orgId],
+    enabled: orgId !== null,
+    queryFn: () =>
+      api<Paginated<CostCentre>>(`/api/finance/cost-centres/?organization=${orgId}&page_size=200`),
   });
 
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="Journal"
         action={
-          orgId > 0 && (
-            <Button onClick={() => setAdding(true)} disabled={!accountsQ.data?.results.length}>
-              <Plus className="h-4 w-4" /> Post entry
-            </Button>
-          )
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4" /> New entry
+          </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
-        Every posting is a balanced, immutable double entry — auto-posted from B2B settlement, or
-        posted manually here. A correction is a new reversing entry, never an edit.
+      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
+        Every posting in the books, and which part of the business produced it. Entries are
+        immutable once posted — a correction is a new reversing entry, never an edit.
       </p>
 
-      {entriesQ.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
+      <DataGrid
+        rows={filtered}
+        loading={isLoading}
+        getRowId={(e) => e.id}
+        storageKey="finance.journal"
+        exportName="journal"
+        searchPlaceholder="Search entries…"
+        emptyMessage="No journal entries yet."
+        initialDensity="compact"
+        onRowClick={(e) => setOpen(e)}
+        toolbar={
+          <Select
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            className="h-8 text-xs"
+          >
+            <option value="">All sources</option>
+            {Object.entries(SOURCE_LABEL).map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </Select>
+        }
+        columns={[
+          {
+            key: "entry_number",
+            header: "Entry",
+            value: (e) => e.entry_number,
+            render: (e) => (
+              <span className="flex items-center gap-2">
+                <ScrollText className="h-3.5 w-3.5 text-ink-400" />
+                {e.entry_number || `#${e.id}`}
+              </span>
+            ),
+          },
+          {
+            key: "entry_date",
+            header: "Date",
+            value: (e) => e.entry_date,
+            render: (e) => shortDate(e.entry_date),
+            width: "7rem",
+          },
+          { key: "description", header: "Description", value: (e) => e.description },
+          {
+            key: "source_module",
+            header: "Source",
+            value: (e) => SOURCE_LABEL[e.source_module] ?? e.source_module,
+            render: (e) => (
+              <Badge tone={SOURCE_TONE[e.source_module] ?? "default"}>
+                {SOURCE_LABEL[e.source_module] ?? e.source_module}
+              </Badge>
+            ),
+          },
+          {
+            key: "cost_centres",
+            header: "Cost centres",
+            sortable: false,
+            value: (e) =>
+              [...new Set(e.lines.map((l) => l.cost_centre_code).filter(Boolean))].join(", "),
+          },
+          {
+            key: "total_debit",
+            header: "Amount",
+            numeric: true,
+            align: "right",
+            value: (e) => e.total_debit,
+            render: (e) => money(e.total_debit),
+          },
+          {
+            key: "status",
+            header: "Status",
+            value: (e) => e.status,
+            render: (e) =>
+              e.status === "REVERSED" ? (
+                <Badge tone="warning">Reversed</Badge>
+              ) : (
+                <Badge tone="success">Posted</Badge>
+              ),
+          },
+        ]}
+      />
 
-      {entriesQ.data && (
-        <div className="flex flex-col gap-2">
-          {entriesQ.data.results.map((e) => (
-            <div key={e.id} className="rounded-lg border border-line bg-surface-0">
-              <button
-                onClick={() => setExpanded(expanded === e.id ? null : e.id)}
-                className="flex w-full items-center justify-between px-4 py-3 text-left"
-              >
-                <div>
-                  <span className="font-mono text-sm font-semibold">{e.entry_number}</span>
-                  <span className="ml-2 text-sm text-ink-700">{e.description}</span>
-                  <span className="ml-2 text-xs text-ink-500">{e.entry_date}</span>
-                </div>
-                <span className="font-mono text-sm font-semibold text-ink-900">{money(e.total_debit)} RWF</span>
-              </button>
-              {expanded === e.id && (
-                <table className="w-full border-t border-line text-sm">
-                  <thead className="text-left text-xs uppercase tracking-wide text-ink-500">
-                    <tr>
-                      <th className="px-4 py-2">Account</th>
-                      <th className="px-4 py-2">Side</th>
-                      <th className="px-4 py-2 text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {e.lines.map((l) => (
-                      <tr key={l.id} className="border-t border-line">
-                        <td className="px-4 py-2">
-                          {l.account_code} · {l.account_name}
-                        </td>
-                        <td className="px-4 py-2">{l.side}</td>
-                        <td className="px-4 py-2 text-right font-mono">{money(l.amount)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          ))}
-          {entriesQ.data.results.length === 0 && (
-            <div className="rounded-lg border border-dashed border-line py-10 text-center text-sm text-ink-500">
-              No journal entries yet.
-            </div>
-          )}
-        </div>
+      {creating && (
+        <NewEntryDrawer
+          orgId={orgId}
+          accounts={accountData?.results ?? []}
+          centres={centreData?.results ?? []}
+          onClose={() => setCreating(false)}
+        />
       )}
-
-      {adding && accountsQ.data && (
-        <NewEntryModal onClose={() => setAdding(false)} orgId={orgId} accounts={accountsQ.data.results} />
-      )}
+      {open && <EntryDrawer entry={open} onClose={() => setOpen(null)} />}
     </div>
   );
 }

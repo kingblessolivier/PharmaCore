@@ -7,7 +7,7 @@ import csv
 import io
 from collections.abc import Sequence
 from decimal import Decimal
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 from django.db import transaction
 from django.utils import timezone
@@ -25,6 +25,7 @@ from apps.finance.models import (
     CustomerInvoice,
     CustomerReceipt,
     DunningNotice,
+    FixedAsset,
     JournalEntry,
     JournalLine,
     OpeningBalance,
@@ -46,15 +47,33 @@ _CONTROL_ACCOUNTS: list[tuple[str, str, str, str]] = [
     ("1100", "Cash on Hand", Account.Type.ASSET, Account.Balance.DEBIT),
     ("1200", "Bank", Account.Type.ASSET, Account.Balance.DEBIT),
     ("1300", "Mobile Money", Account.Type.ASSET, Account.Balance.DEBIT),
+    # Card takings are not cash until the acquirer settles, usually T+1/T+2 and
+    # net of a fee. Debiting cash on the day of the sale overstates the bank and
+    # makes every till count short by the card total.
+    ("1150", "Card Settlement in Transit", Account.Type.ASSET, Account.Balance.DEBIT),
     # VAT charged by suppliers, recoverable from the RRA on the next return —
     # an asset, and the input side of every VAT return.
     ("1350", "VAT Input — Recoverable", Account.Type.ASSET, Account.Balance.DEBIT),
     ("1400", "Accounts Receivable — Trade", Account.Type.ASSET, Account.Balance.DEBIT),
     ("1500", "Inventory on Hand", Account.Type.ASSET, Account.Balance.DEBIT),
+    # IAS 2: stock is carried at the lower of cost and net realisable value.
+    # Stock that will not sell before it expires is not worth its cost, and the
+    # write-down belongs on the balance sheet as a contra-asset, not only in a
+    # dashboard.
+    (
+        "1590",
+        "Provision for Expiring & Slow-Moving Stock",
+        Account.Type.ASSET,
+        Account.Balance.CREDIT,
+    ),
+    # Cost paid for but not yet consumed — released to the P&L month by month
+    # so an annual insurance premium does not wreck one month and flatter eleven.
+    ("1600", "Prepayments", Account.Type.ASSET, Account.Balance.DEBIT),
     ("1700", "Fixed Assets (cost)", Account.Type.ASSET, Account.Balance.DEBIT),
     ("1701", "Accumulated Depreciation", Account.Type.ASSET, Account.Balance.CREDIT),
     # Trade payables.
     ("2100", "Accounts Payable — Trade", Account.Type.LIABILITY, Account.Balance.CREDIT),
+    ("2170", "Accruals", Account.Type.LIABILITY, Account.Balance.CREDIT),
     # Money held for a customer but not yet earned (overpayments, credit notes,
     # returns). Kept out of 2100 so the AP ageing is purely supplier debt.
     (
@@ -69,7 +88,10 @@ _CONTROL_ACCOUNTS: list[tuple[str, str, str, str]] = [
     ("2200", "PAYE Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
     ("2210", "RSSB Pension Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
     ("2220", "RSSB Maternity Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
-    ("2230", "CBHI Payable", Account.Type.ASSET, Account.Balance.DEBIT),
+    # CBHI is withheld from the employee and owed onward — a liability, like every
+    # other 2200-level statutory payable. (It was typed ASSET/DEBIT, which put it
+    # on the wrong side of the balance sheet and inverted the Statutory Due read.)
+    ("2230", "CBHI Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
     ("2240", "Occupational Hazards Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
     ("2250", "RAMA Payable", Account.Type.LIABILITY, Account.Balance.CREDIT),
     # Tax + regulatory liabilities (output VAT, EBM device-levy, WHT).
@@ -85,6 +107,10 @@ _CONTROL_ACCOUNTS: list[tuple[str, str, str, str]] = [
     ("4100", "Retail Revenue", Account.Type.REVENUE, Account.Balance.CREDIT),
     ("4200", "Wholesale Revenue", Account.Type.REVENUE, Account.Balance.CREDIT),
     ("4300", "Services Revenue", Account.Type.REVENUE, Account.Balance.CREDIT),
+    # Contra-revenue: a debit balance that nets against revenue. Kept separate so
+    # "what we gave away in promotions" is a number somebody can look at, rather
+    # than a quiet reduction in the top line.
+    ("4900", "Discounts Allowed", Account.Type.REVENUE, Account.Balance.DEBIT),
     # Cost of sales / inventory adjustments / shrinkage.
     ("5000", "Cost of Goods Sold", Account.Type.EXPENSE, Account.Balance.DEBIT),
     ("5100", "Inventory Adjustments", Account.Type.EXPENSE, Account.Balance.DEBIT),
@@ -97,12 +123,93 @@ _CONTROL_ACCOUNTS: list[tuple[str, str, str, str]] = [
     ("6120", "Employer Maternity Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
     ("6130", "Occupational Hazards Insurance Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
     ("6140", "RAMA Employer Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
+    # Retail cash & card handling.
+    ("6150", "Card & Payment Charges", Account.Type.EXPENSE, Account.Balance.DEBIT),
+    ("6160", "Cash Over / Short", Account.Type.EXPENSE, Account.Balance.DEBIT),
+    # Depreciation has its own line because EBITDA is defined by adding it back.
+    # Without an account classified DEPRECIATION the add-back is always zero and
+    # EBITDA silently equals operating profit.
+    ("6500", "Depreciation Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
     # Statutory tax expense (corporate income tax — distinct from withholding).
     ("7000", "Tax Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
     # Realised FX difference between the rate a foreign bill was booked at and
     # the rate it was settled at. A gain posts as a credit to the same account.
     ("7100", "FX Gain / Loss", Account.Type.EXPENSE, Account.Balance.DEBIT),
 ]
+
+
+# Where each control account lands on a published statement. Kept as a lookup
+# keyed by code so the tuple above stays the single list of "which accounts
+# exist", and classification stays the single answer to "which line does it roll
+# into". Reports read this, never the account code — adding "5500 Marketing"
+# must not silently become cost of sales.
+_CLASSIFICATIONS: dict[str, str] = {
+    # Current assets
+    "1100": Account.Classification.CURRENT_ASSET,
+    "1200": Account.Classification.CURRENT_ASSET,
+    "1300": Account.Classification.CURRENT_ASSET,
+    "1350": Account.Classification.CURRENT_ASSET,
+    "1400": Account.Classification.CURRENT_ASSET,
+    "1500": Account.Classification.CURRENT_ASSET,
+    "1600": Account.Classification.CURRENT_ASSET,
+    "1150": Account.Classification.CURRENT_ASSET,
+    # Contra-asset: nets against inventory inside current assets.
+    "1590": Account.Classification.CURRENT_ASSET,
+    # Non-current assets (cost and its contra)
+    "1700": Account.Classification.NON_CURRENT_ASSET,
+    "1701": Account.Classification.NON_CURRENT_ASSET,
+    # Current liabilities — trade, customer credits and the statutory sub-ledger,
+    # all of which fall due inside twelve months.
+    "2100": Account.Classification.CURRENT_LIABILITY,
+    "2150": Account.Classification.CURRENT_LIABILITY,
+    "2170": Account.Classification.CURRENT_LIABILITY,
+    "2160": Account.Classification.CURRENT_LIABILITY,
+    "2200": Account.Classification.CURRENT_LIABILITY,
+    "2210": Account.Classification.CURRENT_LIABILITY,
+    "2220": Account.Classification.CURRENT_LIABILITY,
+    "2230": Account.Classification.CURRENT_LIABILITY,
+    "2240": Account.Classification.CURRENT_LIABILITY,
+    "2250": Account.Classification.CURRENT_LIABILITY,
+    "2300": Account.Classification.CURRENT_LIABILITY,
+    "2400": Account.Classification.CURRENT_LIABILITY,
+    "2500": Account.Classification.CURRENT_LIABILITY,
+    "2600": Account.Classification.CURRENT_LIABILITY,
+    # Equity
+    "3000": Account.Classification.EQUITY,
+    # Revenue
+    "4100": Account.Classification.REVENUE,
+    "4200": Account.Classification.REVENUE,
+    "4300": Account.Classification.REVENUE,
+    "4900": Account.Classification.REVENUE,
+    # Cost of sales — only what actually belongs above the gross-profit line.
+    "5000": Account.Classification.COGS,
+    "5100": Account.Classification.COGS,
+    "5900": Account.Classification.COGS,
+    # Operating expenses
+    "6100": Account.Classification.OPERATING_EXPENSE,
+    "6110": Account.Classification.OPERATING_EXPENSE,
+    "6120": Account.Classification.OPERATING_EXPENSE,
+    "6130": Account.Classification.OPERATING_EXPENSE,
+    "6140": Account.Classification.OPERATING_EXPENSE,
+    "6150": Account.Classification.OPERATING_EXPENSE,
+    "6160": Account.Classification.OPERATING_EXPENSE,
+    # Its own statement line, and the one EBITDA adds back.
+    "6500": Account.Classification.DEPRECIATION,
+    # Below the operating line — these are exactly what EBITDA adds back.
+    "7000": Account.Classification.TAX_EXPENSE,
+    "7100": Account.Classification.FINANCE_COST,
+}
+
+
+def default_classification(account_type: str) -> str:
+    """Fallback for a hand-created account with no classification set."""
+    return {
+        Account.Type.ASSET: Account.Classification.CURRENT_ASSET,
+        Account.Type.LIABILITY: Account.Classification.CURRENT_LIABILITY,
+        Account.Type.EQUITY: Account.Classification.EQUITY,
+        Account.Type.REVENUE: Account.Classification.REVENUE,
+        Account.Type.EXPENSE: Account.Classification.OPERATING_EXPENSE,
+    }.get(cast(Any, account_type), Account.Classification.OPERATING_EXPENSE)
 
 
 # Pre-F3 codes that were renamed/restructured when the statutory sub-ledger was
@@ -131,6 +238,35 @@ _LEGACY_ACCOUNT_REMAP: list[tuple[str, str, str, str, str]] = [
     ("6000", "6100", "Salaries & Wages Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
     ("6100", "6110", "Employer RSSB Pension Expense", Account.Type.EXPENSE, Account.Balance.DEBIT),
 ]
+
+
+# Monetary under IAS 21: a fixed number of currency units, so a rate move changes
+# what they are worth and they must be retranslated. Inventory, prepayments and
+# fixed assets are deliberately absent — those are non-monetary and stay at the
+# rate on the day they were acquired.
+_MONETARY_CODES: frozenset[str] = frozenset(
+    {
+        "1100",
+        "1150",
+        "1200",
+        "1300",
+        "1400",  # cash, card in transit, bank, MoMo, AR
+        "2100",
+        "2150",
+        "2160",
+        "2170",  # AP, GRNI, customer deposits, accruals
+        "2200",
+        "2210",
+        "2220",
+        "2230",
+        "2240",
+        "2250",
+        "2300",
+        "2400",
+        "2500",
+        "2600",
+    }
+)
 
 
 def ensure_default_accounts(organization: Organization) -> dict[str, Account]:
@@ -166,18 +302,40 @@ def ensure_default_accounts(organization: Organization) -> dict[str, Account]:
                 "name": name,
                 "account_type": acc_type,
                 "normal_balance": normal_balance,
+                "classification": _CLASSIFICATIONS.get(code, default_classification(acc_type)),
+                "is_monetary": code in _MONETARY_CODES,
                 "is_system": True,
             },
         )
+        # Backfill: tenants created before classification existed have blank
+        # values, and the reports need them populated to group correctly.
+        if not account.classification:
+            account.classification = _CLASSIFICATIONS.get(code, default_classification(acc_type))
+            account.save(update_fields=["classification", "updated_at"])
+        # Same reasoning for the monetary flag: a control account created before
+        # the field existed must not be silently treated as non-monetary, or its
+        # foreign balance would never be retranslated.
+        should_be_monetary = code in _MONETARY_CODES
+        if account.is_monetary != should_be_monetary:
+            account.is_monetary = should_be_monetary
+            account.save(update_fields=["is_monetary", "updated_at"])
         by_code[code] = account
     return by_code
 
 
-class JournalLineInput(TypedDict):
+class JournalLineInput(TypedDict, total=False):
     account: Account
     side: str
     amount: Decimal
     memo: str
+    # The analysis dimension. Optional: control-account legs (VAT, AP, bank)
+    # belong to the entity rather than to any one branch or department.
+    cost_centre: Any
+    # Multi-currency. `amount` is always base currency; these keep the figure the
+    # transaction was struck in, which is what revaluation needs.
+    currency: str
+    amount_fc: Decimal
+    exchange_rate: Decimal
 
 
 class PeriodClosedError(ValueError):
@@ -212,6 +370,8 @@ def post_journal(
     reference_type: str = "",
     reference_id: str = "",
     user: User | None = None,
+    source_module: str = JournalEntry.Source.MANUAL,
+    cost_centre: Any = None,
 ) -> JournalEntry:
     """Create a balanced journal entry. Raises ValueError if debits != credits, or
     PeriodClosedError if the entry would land inside a closed period.
@@ -250,6 +410,7 @@ def post_journal(
         description=description,
         reference_type=reference_type,
         reference_id=reference_id,
+        source_module=source_module,
         posted_by=user,
     )
     entry.entry_number = f"JE-{organization.pk}-{entry.pk:06d}"
@@ -261,6 +422,14 @@ def post_journal(
             side=ln["side"],
             amount=ln["amount"],
             memo=ln.get("memo", ""),
+            # A per-line centre wins over the entry-wide default, so a single
+            # entry can still split rent across two branches.
+            cost_centre=ln.get("cost_centre") or cost_centre,
+            # Without these the line forgets what currency it was struck in, and
+            # a foreign balance can never be retranslated.
+            currency=ln.get("currency") or "RWF",
+            amount_fc=ln.get("amount_fc"),
+            exchange_rate=ln.get("exchange_rate") or Decimal("1"),
         )
         for ln in lines
     )
@@ -927,6 +1096,15 @@ def close_period(
     if period.status == AccountingPeriod.Status.CLOSED:
         raise ValueError("That period is already closed.")
 
+    # A balanced trial balance only proves the double entry was arithmetically
+    # consistent — the checklist is what proves anything real was recorded.
+    from apps.finance.closing import CloseBlocked, assert_period_closable
+
+    try:
+        assert_period_closable(period)
+    except CloseBlocked as exc:
+        raise ValueError(str(exc)) from exc
+
     tb = reports.trial_balance(organization, as_of=end_date)
     pl = reports.profit_and_loss(organization, start=start_date, end=end_date)
     bs = reports.balance_sheet(organization, as_of=end_date)
@@ -1040,6 +1218,48 @@ def reopen_period(*, period: AccountingPeriod, user: User | None, reason: str) -
 # ---------------------------------------------------------------------------
 
 
+# Where each POS tender actually lands. Cash goes in the drawer; mobile money
+# goes to the MoMo float; a card payment is not money yet — the acquirer settles
+# it later, so it is a receivable until it clears.
+_TENDER_ACCOUNTS: dict[str, str] = {
+    "CASH": "1100",
+    "MOBILE_MONEY": "1300",
+    "CARD": "1150",
+}
+
+
+def _tender_debits(sale: Any, total: Decimal) -> list[tuple[str, Decimal, str]]:
+    """(account code, amount, memo) for each way the customer paid.
+
+    Falls back to cash for the whole total when no tender rows exist — some sales
+    predate the Payment model and an API caller may not supply them. Any gap
+    between the tenders and the sale total is also put to cash, with a memo that
+    says so: the entry must balance, and a silent rounding fudge would be worse
+    than a labelled one.
+    """
+    tenders: dict[str, Decimal] = {}
+    for payment in sale.payments.all():
+        code = _TENDER_ACCOUNTS.get(payment.method)
+        if code is None or payment.amount <= 0:
+            continue
+        tenders[code] = tenders.get(code, Decimal("0")) + payment.amount
+
+    if not tenders:
+        return [("1100", total, "Cash & equivalents at POS (no tender recorded)")]
+
+    labels = {
+        "1100": "Cash taken at the till",
+        "1300": "Mobile money received",
+        "1150": "Card takings awaiting settlement",
+    }
+    rows = [(code, amount, labels[code]) for code, amount in sorted(tenders.items())]
+
+    difference = total - sum(amount for _, amount in tenders.items())
+    if difference != 0:
+        rows.append(("1100", difference, "Unallocated tender difference — review the till"))
+    return rows
+
+
 @transaction.atomic
 def post_sale_journal(*, sale: Any, user: User | None) -> JournalEntry | None:
     """Auto-post a completed retail sale to the GL.
@@ -1070,20 +1290,52 @@ def post_sale_journal(*, sale: Any, user: User | None) -> JournalEntry | None:
     if total <= 0:
         return None
 
+    # Where the money actually landed. The POS records split tenders
+    # (retail.Payment: cash + MoMo + card), and debiting cash for all of them —
+    # which is what this used to do — puts card and mobile-money takings in the
+    # drawer. Every till then counts short by the non-cash total, MoMo can never
+    # be reconciled, and card money that has not arrived yet is reported as cash.
     revenue_lines: list[JournalLineInput] = [
         {
-            "account": accounts["1100"],
+            "account": accounts[code],
             "side": JournalLine.Side.DEBIT,
-            "amount": total,
-            "memo": "Cash & equivalents at POS",
-        },
+            "amount": amount,
+            "memo": memo,
+        }
+        for code, amount, memo in _tender_debits(sale, total)
+    ]
+    revenue_lines.append(
         {
             "account": accounts["4100"],
             "side": JournalLine.Side.CREDIT,
             "amount": revenue_net,
             "memo": "Sales revenue (net of VAT)",
-        },
-    ]
+        }
+    )
+
+    # A basket discount is applied after the lines are priced, so it has to be
+    # split back across net and VAT in the same proportion. VAT is due on the
+    # consideration actually received — charging it on the pre-discount amount
+    # would overstate output VAT on every promotion, and that figure is filed.
+    discount = Decimal(str(getattr(sale, "discount_amount", 0) or 0))
+    discount_vat = Decimal("0")
+    if discount > 0:
+        gross = revenue_net + vat_output
+        discount_vat = (
+            (discount * vat_output / gross).quantize(Decimal("0.01")) if gross else Decimal("0")
+        )
+        discount_net = discount - discount_vat
+        if discount_net > 0:
+            revenue_lines.append(
+                {
+                    "account": accounts["4900"],
+                    "side": JournalLine.Side.DEBIT,
+                    "amount": discount_net,
+                    "memo": "Promotion discount (net of VAT)",
+                }
+            )
+
+    vat_output = vat_output - discount_vat
     if vat_output > 0:
         revenue_lines.append(
             {
@@ -1100,13 +1352,13 @@ def post_sale_journal(*, sale: Any, user: User | None) -> JournalEntry | None:
         lines=revenue_lines,
         reference_type="sale",
         reference_id=str(sale.pk),
+        source_module=JournalEntry.Source.SALES,
         user=user,
     )
 
     # COGS leg: draw the cost straight off the FEFO allocations so the GL
     # agrees with the on-hand value, batch by batch.
     cogs_total = Decimal("0")
-    cogs_lines: list[JournalLineInput] = []
     for item in sale.items.prefetch_related("allocations__batch").all():
         for alloc in item.allocations.all():
             unit_cost = alloc.batch.wholesale_cost or Decimal("0")
@@ -1139,6 +1391,7 @@ def post_sale_journal(*, sale: Any, user: User | None) -> JournalEntry | None:
             # like pure margin.
             reference_type="sale_cogs",
             reference_id=str(sale.pk),
+            source_module=JournalEntry.Source.SALES,
             user=user,
         )
 
@@ -1475,7 +1728,11 @@ def mirror_ebm_to_ledger(*, tax_record: Any, user: User | None) -> JournalEntry:
                 "account": accounts["2300"],
                 "side": JournalLine.Side.CREDIT,
                 "amount": vat_total,
-                "memo": f"EBM {tax_record.receipt_number} (A:{tax_record.tax_class_a} B:{tax_record.tax_class_b} C:{tax_record.tax_class_c})",
+                "memo": (
+                    f"EBM {tax_record.receipt_number} "
+                    f"(A:{tax_record.tax_class_a} B:{tax_record.tax_class_b} "
+                    f"C:{tax_record.tax_class_c})"
+                ),
             },
         ],
         reference_type="tax_record",
@@ -2114,6 +2371,89 @@ def record_customer_receipt(
     return receipt
 
 
+@transaction.atomic
+def cancel_customer_invoice(
+    *,
+    invoice: CustomerInvoice,
+    user: User | None = None,
+    reason: str = "",
+) -> CustomerInvoice:
+    """Void a customer invoice and post the reversal entry.
+
+        Dr 4100 Revenue                       net (total - vat)
+        Dr 2300 VAT Output                    vat          (omitted when zero)
+        Cr 1400 Accounts Receivable           total
+
+    The invoice's receipts (if any) have already booked their own AR receipts
+    and bank-side debits, so cancelling an invoice that has been paid would
+    leave those on the books with nothing to settle. Refuse instead and tell
+    the caller to issue refunds first.
+    """
+    if invoice.status == CustomerInvoice.Status.CANCELLED:
+        raise ValueError(f"Invoice {invoice.invoice_number} is already cancelled.")
+    if invoice.amount_paid > 0:
+        raise ValueError(
+            f"Invoice {invoice.invoice_number} has receipts posted "
+            f"({invoice.amount_paid}). Refund them first, then cancel."
+        )
+
+    invoice.refresh_from_db()
+    organization = invoice.organization
+    total_amount = Decimal(invoice.total_amount)
+    vat_amount = Decimal(invoice.vat_amount or 0)
+    net = (total_amount - vat_amount).quantize(Decimal("0.01"))
+
+    accounts = ensure_default_accounts(organization)
+    lines: list[JournalLineInput] = [
+        {
+            "account": accounts["4100"],
+            "side": "DEBIT",
+            "amount": net,
+            "memo": f"Cancel {invoice.invoice_number} (reversal of revenue)",
+        },
+        {
+            "account": accounts["1400"],
+            "side": "CREDIT",
+            "amount": total_amount,
+            "memo": f"Cancel {invoice.invoice_number} (write off AR)",
+        },
+    ]
+    if vat_amount > 0:
+        lines.append(
+            {
+                "account": accounts["2300"],
+                "side": "DEBIT",
+                "amount": vat_amount,
+                "memo": f"Cancel {invoice.invoice_number} (reversal of VAT output)",
+            }
+        )
+
+    invoice.status = CustomerInvoice.Status.CANCELLED
+    invoice.notes = (
+        f"{invoice.notes} · Cancelled: {reason}" if invoice.notes else f"Cancelled: {reason}"
+    )[:255]
+    invoice.save(update_fields=["status", "notes", "updated_at"])
+
+    post_journal(
+        organization=organization,
+        entry_date=timezone.now().date(),
+        description=f"Cancel customer invoice {invoice.invoice_number}",
+        lines=lines,
+        reference_type="customer_invoice_cancel",
+        reference_id=str(invoice.pk),
+        user=user,
+    )
+    record_audit(
+        action="CANCEL",
+        user=user,
+        organization=organization,
+        entity_type="customer_invoice",
+        entity_id=str(invoice.pk),
+        changes={"reason": reason, "total": str(total_amount)},
+    )
+    return invoice
+
+
 # Days past due -> ladder step. Checked high-to-low so the worst step wins.
 _DUNNING_LADDER = [
     (60, DunningNotice.Level.LEGAL),
@@ -2233,6 +2573,94 @@ def assert_may_order_on_credit(
                 f"{buyer.name} credit limit breached: exposure would be {projected} "
                 f"against a limit of {profile.credit_limit}."
             )
+
+
+# ---------------------------------------------------------------------------
+# Fixed assets: register an acquisition, then a disposal when the asset is
+# written off / sold.
+# ---------------------------------------------------------------------------
+
+
+@transaction.atomic
+def dispose_fixed_asset(
+    *,
+    asset: FixedAsset,
+    disposal_date: Any,
+    disposal_amount: Decimal,
+    disposal_reason: str = "",
+    user: User | None = None,
+) -> FixedAsset:
+    """Mark an asset disposed and post the disposal to the GL.
+
+        Dr 1100 Cash & Bank               proceeds
+        Cr 4100 Other income (gain)      proceeds
+
+    The asset's cost was booked on acquisition. The depreciation account was
+    credited period-by-period, so the residual loss sits implicitly on the
+    depreciation side and is reflected in the balance sheet without a separate
+    loss line here.
+    """
+    if not asset.is_active:
+        raise ValueError(f"Asset {asset.asset_number} is already disposed.")
+
+    disposal_amount = Decimal(disposal_amount)
+    if disposal_amount < 0:
+        raise ValueError("Disposal amount cannot be negative.")
+    if disposal_amount > Decimal(asset.acquisition_cost):
+        raise ValueError(
+            f"Disposal amount {disposal_amount} exceeds the asset's "
+            f"acquisition cost {asset.acquisition_cost}."
+        )
+
+    asset.is_active = False
+    asset.disposal_date = disposal_date
+    asset.disposal_amount = disposal_amount
+    asset.disposal_reason = disposal_reason[:255]
+    asset.save(
+        update_fields=[
+            "is_active",
+            "disposal_date",
+            "disposal_amount",
+            "disposal_reason",
+        ]
+    )
+
+    accounts = ensure_default_accounts(asset.organization)
+    lines: list[JournalLineInput] = [
+        {
+            "account": accounts["1100"],
+            "side": "DEBIT",
+            "amount": disposal_amount,
+            "memo": f"Disposal proceeds for {asset.asset_number}",
+        },
+        {
+            "account": accounts["4100"],
+            "side": "CREDIT",
+            "amount": disposal_amount,
+            "memo": f"Gain on disposal of {asset.asset_number}",
+        },
+    ]
+    post_journal(
+        organization=asset.organization,
+        entry_date=disposal_date,
+        description=f"Dispose fixed asset {asset.asset_number}",
+        lines=lines,
+        reference_type="fixed_asset_dispose",
+        reference_id=str(asset.pk),
+        user=user,
+    )
+    record_audit(
+        action="DISPOSE",
+        user=user,
+        organization=asset.organization,
+        entity_type="fixed_asset",
+        entity_id=str(asset.pk),
+        changes={
+            "disposal_amount": str(disposal_amount),
+            "disposal_reason": disposal_reason,
+        },
+    )
+    return asset
 
 
 # ---------------------------------------------------------------------------

@@ -8,11 +8,13 @@ from apps.finance.views import (
     BankAccountViewSet,
     BudgetViewSet,
     CashFlowForecastView,
+    CostCentreViewSet,
     CreditProfileViewSet,
     CustomerCreditViewSet,
     CustomerInvoiceViewSet,
     CustomerReceiptViewSet,
     DunningNoticeViewSet,
+    FinanceOperationsView,
     FinanceReportsView,
     FixedAssetViewSet,
     JournalEntryViewSet,
@@ -21,7 +23,11 @@ from apps.finance.views import (
     TaxCodeViewSet,
     TaxPaymentViewSet,
     TaxRecordViewSet,
+    TenantSettingsViewSet,
 )
+from apps.finance.views_accrual import RecurringScheduleViewSet
+from apps.finance.views_bank import BankStatementViewSet
+from apps.finance.views_documents import FinanceDocumentsView
 
 router = DefaultRouter()
 router.register("accounts", AccountViewSet, basename="finance-account")
@@ -34,6 +40,9 @@ router.register("customer-receipts", CustomerReceiptViewSet, basename="customer-
 router.register("customer-credits", CustomerCreditViewSet, basename="customer-credit")
 router.register("dunning-notices", DunningNoticeViewSet, basename="dunning-notice")
 router.register("bank-accounts", BankAccountViewSet, basename="bank-account")
+router.register("bank-statements", BankStatementViewSet, basename="bank-statement")
+router.register("schedules", RecurringScheduleViewSet, basename="recurring-schedule")
+router.register("documents", FinanceDocumentsView, basename="finance-documents")
 router.register("cash-flow-forecast", CashFlowForecastView, basename="cash-flow-forecast")
 router.register("reports", FinanceReportsView, basename="finance-reports")
 router.register("periods", AccountingPeriodViewSet, basename="accounting-period")
@@ -42,5 +51,8 @@ router.register("tax-records", TaxRecordViewSet, basename="tax-record")
 router.register("tax-codes", TaxCodeViewSet, basename="tax-code")
 router.register("tax-payments", TaxPaymentViewSet, basename="tax-payment")
 router.register("budgets", BudgetViewSet, basename="budget")
+router.register("cost-centres", CostCentreViewSet, basename="cost-centre")
+router.register("operations", FinanceOperationsView, basename="finance-operations")
+router.register("tenant-settings", TenantSettingsViewSet, basename="tenant-settings")
 
 urlpatterns = router.urls

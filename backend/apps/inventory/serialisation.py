@@ -9,7 +9,7 @@ EPCIS export are the same data rather than two things that can drift apart.
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import Any, cast
 
 from django.db import transaction
 from django.utils import timezone
@@ -67,7 +67,7 @@ def record_event(
         event_type=event_type,
         action=action,
         biz_step=biz_step,
-        disposition=disposition or _STEP_DISPOSITION.get(biz_step, ""),
+        disposition=disposition or _STEP_DISPOSITION.get(cast(Any, biz_step), ""),
         epc_list=epcs or [],
         parent_epc=parent_epc,
         read_point=read_point or organization.name,
@@ -120,9 +120,10 @@ def commission_from_scan(
     if product is None and gtin:
         from apps.catalog.models import Product
 
-        product = Product.objects.filter(gtin=gtin.lstrip("0")).first() or Product.objects.filter(
-            gtin=gtin
-        ).first()
+        product = (
+            Product.objects.filter(gtin=gtin.lstrip("0")).first()
+            or Product.objects.filter(gtin=gtin).first()
+        )
 
     # ``parse_gs1`` hands dates back as ISO strings; the model wants a real date so
     # everything downstream (``trace``, expiry maths) gets a date, not a string.
@@ -175,7 +176,7 @@ def aggregate(
     for child in children:
         if child.pk == parent.pk:
             raise ValueError("A unit cannot contain itself.")
-        if order[child.level] >= order[parent.level]:
+        if order[cast(Any, child.level)] >= order[cast(Any, parent.level)]:
             raise ValueError(
                 f"Cannot pack a {child.level} into a {parent.level} — aggregation only "
                 "goes each → case → pallet."
@@ -185,9 +186,7 @@ def aggregate(
 
     ids = [c.pk for c in children]
     SerialUnit.objects.filter(pk__in=ids).update(parent=parent, updated_at=timezone.now())
-    parent.quantity = sum(
-        (c.quantity for c in SerialUnit.objects.filter(parent=parent)), 0
-    )
+    parent.quantity = sum((c.quantity for c in SerialUnit.objects.filter(parent=parent)), 0)
     parent.save(update_fields=["quantity", "updated_at"])
 
     record_event(
@@ -263,7 +262,7 @@ def observe(
                 targets[child.pk] = child
 
     ids = list(targets)
-    new_status = _STEP_STATUS.get(biz_step)
+    new_status = _STEP_STATUS.get(cast(Any, biz_step))
     if new_status:
         SerialUnit.objects.filter(pk__in=ids).update(
             status=new_status, last_scanned_at=timezone.now(), updated_at=timezone.now()
@@ -305,9 +304,7 @@ def trace(unit: SerialUnit) -> dict[str, Any]:
         recent = EpcisEvent.objects.filter(organization=unit.organization).order_by(
             "-event_time", "-id"
         )[:2000]
-        events = [
-            e for e in recent if unit.epc in (e.epc_list or []) or e.parent_epc == unit.epc
-        ]
+        events = [e for e in recent if unit.epc in (e.epc_list or []) or e.parent_epc == unit.epc]
         # Tie-break on the insertion order: two scans can land in the same clock
         # tick, and a custody trail that reports them out of order is worse than
         # useless — it is evidence of something that did not happen.
@@ -325,7 +322,7 @@ def trace(unit: SerialUnit) -> dict[str, Any]:
         "expiry_date": unit.expiry_date.isoformat() if unit.expiry_date else None,
         "product_name": (
             f"{unit.product.generic_name} {unit.product.strength}".strip()
-            if unit.product_id
+            if unit.product is not None
             else None
         ),
         "packed_into": ancestry,

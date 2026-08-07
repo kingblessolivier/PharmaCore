@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
@@ -43,7 +44,7 @@ from apps.iam.models import Organization
 class Command(BaseCommand):
     help = "Import opening balances (trial balance, AR/AP aging, inventory, leave) from JSON."
 
-    def add_arguments(self, parser) -> None:
+    def add_arguments(self, parser: Any) -> None:
         parser.add_argument(
             "file",
             type=Path,
@@ -61,7 +62,7 @@ class Command(BaseCommand):
             help="Promote drafts to applied (writes GL journal, creates batches).",
         )
 
-    def handle(self, *args, **options) -> None:
+    def handle(self, *args: Any, **options: Any) -> None:
         path: Path = options["file"]
         if not path.exists():
             raise CommandError(f"File not found: {path}")

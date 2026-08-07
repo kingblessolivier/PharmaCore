@@ -5,8 +5,18 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Badge, Button, Modal, PageHeader, SelectField, TextField } from "../components/ui";
 import { DataGrid } from "../components/DataGrid";
 import { api, ApiError } from "../lib/api";
+import { storefront } from "../lib/distribution";
 import { useAuth } from "../lib/auth";
-import type { Organization, Paginated, PharmacyProduct, StockOrder } from "../lib/types";
+import type { Organization, Paginated, StockOrder } from "../lib/types";
+
+interface Offering {
+  product: number;
+  product_name: string;
+  wholesale_price: string;
+  /** What the depot will actually release today — not its warehouse total. */
+  on_hand: number;
+  min_order_qty: number;
+}
 
 export function PurchaseOrdersPage() {
   const navigate = useNavigate();
@@ -103,19 +113,24 @@ export function PurchaseOrdersPage() {
     queryFn: () => api<Paginated<Organization>>("/api/organizations/"),
   });
 
-  // What this depot actually offers (with its wholesale price). The backend rejects
-  // anything the depot hasn't listed, so the picker must mirror that.
+  // What this depot actually offers, from the storefront — the same authority the
+  // server prices against. Reading inventory directly (as this once did) shows a
+  // price and a quantity the order will not honour: the storefront applies the
+  // published quantity, the buffer held back, the minimum order and any awarded
+  // tender price on top of raw stock.
   const offeringsQuery = useQuery({
-    queryKey: ["depot-offerings", depotId],
+    queryKey: ["depot-storefront", depotId],
     enabled: depotId > 0,
-    queryFn: () =>
-      api<Paginated<PharmacyProduct>>(
-        `/api/inventory/pharmacy-products/?organization=${depotId}&page_size=500`,
-      ),
+    queryFn: () => storefront(depotId),
   });
-  const offerings = (offeringsQuery.data?.results ?? []).filter(
-    (o) => o.wholesale_price !== null && o.wholesale_price !== undefined,
-  );
+  const offerings: Offering[] = (offeringsQuery.data?.rows ?? []).map((r) => ({
+    product: r.product,
+    product_name: r.product_name,
+    wholesale_price: r.price,
+    /** What the depot will actually release today — not its warehouse total. */
+    on_hand: r.available,
+    min_order_qty: r.min_order_qty,
+  }));
 
   const createOrderMutation = useMutation({
     mutationFn: () =>
@@ -128,7 +143,6 @@ export function PurchaseOrdersPage() {
           items: lines.map((l) => ({
             product: l.product,
             quantity_ordered: l.quantity,
-            price_per_unit: l.price_per_unit,
           })),
         }),
       }),
@@ -383,13 +397,13 @@ export function PurchaseOrdersPage() {
                       : offeringsQuery.isLoading
                         ? "Loading depot catalogue…"
                         : offerings.length === 0
-                          ? "— This depot lists no priced medicines —"
+                          ? "— This depot is offering nothing you can order —"
                           : "— Select Medicine —"}
                   </option>
                   {offerings.map((o) => (
-                    <option key={o.id} value={o.product}>
+                    <option key={o.product} value={o.product}>
                       {o.product_name} — RWF {Number(o.wholesale_price).toLocaleString()} (
-                      {o.on_hand} in stock)
+                      {o.on_hand} available)
                     </option>
                   ))}
                 </SelectField>
@@ -431,7 +445,8 @@ export function PurchaseOrdersPage() {
                         <div className="font-medium text-ink-900">{l.product_label}</div>
                         {l.on_hand !== undefined && l.quantity > l.on_hand && (
                           <div className="text-xs text-amber-700">
-                            Only {l.on_hand.toLocaleString()} in depot stock
+                            Only {l.on_hand.toLocaleString()} available — the rest is recorded
+                            as a sourcing request
                           </div>
                         )}
                       </td>

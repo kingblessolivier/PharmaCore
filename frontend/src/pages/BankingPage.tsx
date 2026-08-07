@@ -1,12 +1,28 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Landmark, Plus, TrendingDown, TrendingUp } from "lucide-react";
-import { useState, type FormEvent } from "react";
-import { Button, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
-import { api, ApiError } from "../lib/api";
-import { useAuth } from "../lib/auth";
-import type { BankAccount, BankAccountKind, CashBookLine, CashFlowForecast, Paginated } from "../lib/types";
-
-const money = (n: string | number) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+import { CheckCircle2, Landmark, Plus, TrendingUp } from "lucide-react";
+import { useMemo, useState } from "react";
+import { DataGrid } from "../components/DataGrid";
+import {
+  Drawer,
+  ErrorNote,
+  Facts,
+  Field,
+  Grid,
+  Input,
+  Section,
+  Select,
+} from "../components/RecordKit";
+import { Badge, Button, PageHeader } from "../components/ui";
+import { api } from "../lib/api";
+import { money, shortDate } from "../lib/format";
+import { useDefaultOrg } from "../lib/recordData";
+import type {
+  BankAccount,
+  BankAccountKind,
+  CashBookLine,
+  CashFlowForecast,
+  Paginated,
+} from "../lib/types";
 
 const KIND_LABEL: Record<BankAccountKind, string> = {
   BANK: "Bank",
@@ -22,265 +38,316 @@ const BUCKET_LABEL: Record<string, string> = {
   over90: "90+ days",
 };
 
-function NewBankAccountModal({ onClose, orgId }: { onClose: () => void; orgId: number }) {
+/* -------------------------------------------------------------------------- */
+
+function NewAccountDrawer({ orgId, onClose }: { orgId: number | null; onClose: () => void }) {
   const qc = useQueryClient();
-  const [name, setName] = useState("");
-  const [kind, setKind] = useState<BankAccountKind>("BANK");
-  const [bankName, setBankName] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [openingBalance, setOpeningBalance] = useState("0");
-  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    name: "",
+    kind: "BANK" as BankAccountKind,
+    bank_name: "",
+    account_number: "",
+    opening_balance: "0",
+  });
+  const set = (patch: Partial<typeof form>) => setForm({ ...form, ...patch });
 
   const create = useMutation({
     mutationFn: () =>
       api<BankAccount>("/api/finance/bank-accounts/", {
         method: "POST",
-        body: JSON.stringify({
-          organization: orgId,
-          name,
-          kind,
-          bank_name: bankName,
-          account_number: accountNumber,
-          opening_balance: openingBalance,
-        }),
+        body: JSON.stringify({ ...form, organization: orgId }),
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["bank-accounts"] });
       onClose();
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : "Could not open this account."),
   });
 
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    create.mutate();
-  }
-
   return (
-    <Modal title="Open a bank/MoMo/cash account" onClose={onClose}>
-      <form onSubmit={submit} className="flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-3">
-          <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
-          <SelectField label="Kind" value={kind} onChange={(e) => setKind(e.target.value as BankAccountKind)}>
-            {Object.entries(KIND_LABEL).map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </SelectField>
-        </div>
-        {kind !== "CASH" && (
-          <div className="grid grid-cols-2 gap-3">
-            <TextField label="Bank / provider" value={bankName} onChange={(e) => setBankName(e.target.value)} />
-            <TextField label="Account number" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} />
-          </div>
-        )}
-        <TextField
-          label="Opening balance (RWF)"
-          type="number"
-          value={openingBalance}
-          onChange={(e) => setOpeningBalance(e.target.value)}
-        />
-        {error && <p className="text-sm text-danger">{error}</p>}
+    <Drawer
+      title="New account"
+      subtitle="Each account gets its own ledger sub-account, so its cash book and reconciliation stand alone."
+      width="max-w-xl"
+      onClose={onClose}
+      footer={
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={create.isPending}>
-            {create.isPending ? "Opening…" : "Open account"}
+          <Button
+            onClick={() => create.mutate()}
+            disabled={create.isPending || !form.name.trim()}
+          >
+            {create.isPending ? "Creating…" : "Create account"}
           </Button>
         </div>
-      </form>
-    </Modal>
+      }
+    >
+      <ErrorNote error={create.error} />
+      <Section title="Account">
+        <Grid cols={2}>
+          <Field label="Name">
+            <Input
+              value={form.name}
+              onChange={(e) => set({ name: e.target.value })}
+              placeholder="BK Current Account"
+            />
+          </Field>
+          <Field label="Kind">
+            <Select
+              value={form.kind}
+              onChange={(e) => set({ kind: e.target.value as BankAccountKind })}
+            >
+              {(Object.keys(KIND_LABEL) as BankAccountKind[]).map((k) => (
+                <option key={k} value={k}>
+                  {KIND_LABEL[k]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Bank / provider">
+            <Input value={form.bank_name} onChange={(e) => set({ bank_name: e.target.value })} />
+          </Field>
+          <Field label="Account number">
+            <Input
+              value={form.account_number}
+              onChange={(e) => set({ account_number: e.target.value })}
+            />
+          </Field>
+        </Grid>
+        <Field
+          label="Opening balance"
+          hint="Posted as an opening journal — it is not just a note on the record."
+        >
+          <Input
+            value={form.opening_balance}
+            onChange={(e) => set({ opening_balance: e.target.value })}
+            className="text-right tabular-nums"
+          />
+        </Field>
+      </Section>
+    </Drawer>
   );
 }
 
-function CashBook({ account }: { account: BankAccount }) {
-  const qc = useQueryClient();
-  const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [statementRef, setStatementRef] = useState("");
-  const [error, setError] = useState<string | null>(null);
+/* -------------------------------------------------------------------------- */
 
-  const linesQ = useQuery({
+function CashBookDrawer({ account, onClose }: { account: BankAccount; onClose: () => void }) {
+  const { data = [], isLoading } = useQuery({
     queryKey: ["cash-book", account.id],
     queryFn: () => api<CashBookLine[]>(`/api/finance/bank-accounts/${account.id}/cash-book/`),
   });
 
-  const reconcile = useMutation({
-    mutationFn: () =>
-      api<{ reconciled: number }>(`/api/finance/bank-accounts/${account.id}/reconcile/`, {
-        method: "POST",
-        body: JSON.stringify({ line_ids: [...selected], statement_reference: statementRef }),
-      }),
-    onSuccess: () => {
-      setSelected(new Set());
-      setStatementRef("");
-      void qc.invalidateQueries({ queryKey: ["cash-book", account.id] });
-    },
-    onError: (e) => setError(e instanceof ApiError ? e.message : "Could not reconcile."),
-  });
-
-  function toggle(id: number) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
+  const balance = data.length > 0 ? data[data.length - 1].running_balance : 0;
+  const unreconciled = data.filter((l) => !l.is_reconciled).length;
 
   return (
-    <div className="rounded-lg border border-line bg-surface-0">
-      <div className="flex items-center justify-between border-b border-line px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Landmark className="h-4 w-4 text-ink-500" />
-          <span className="text-sm font-semibold text-ink-900">{account.name}</span>
-          <span className="text-xs text-ink-500">{KIND_LABEL[account.kind]}</span>
+    <Drawer
+      title={`${account.name} — cash book`}
+      subtitle={`${KIND_LABEL[account.kind]}${account.account_number ? ` · ${account.account_number}` : ""}`}
+      width="max-w-4xl"
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end">
+          <Button variant="ghost" onClick={onClose}>
+            Close
+          </Button>
         </div>
-        {selected.size > 0 && (
-          <div className="flex items-center gap-2">
-            <input
-              placeholder="Statement reference"
-              value={statementRef}
-              onChange={(e) => setStatementRef(e.target.value)}
-              className="rounded-md border border-line px-2 py-1 text-xs"
-            />
-            <Button onClick={() => reconcile.mutate()} disabled={reconcile.isPending || !statementRef}>
-              <CheckCircle2 className="h-3.5 w-3.5" /> Reconcile {selected.size}
-            </Button>
-          </div>
-        )}
-      </div>
-      {error && <p className="px-4 pt-2 text-xs text-danger">{error}</p>}
-      {linesQ.isLoading && (
-        <div className="flex justify-center py-6">
-          <Spinner />
-        </div>
-      )}
-      {linesQ.data && (
-        <table className="w-full text-sm">
-          <thead className="text-left text-xs uppercase tracking-wide text-ink-500">
-            <tr>
-              <th className="px-4 py-2"></th>
-              <th className="px-4 py-2">Date</th>
-              <th className="px-4 py-2">Description</th>
-              <th className="px-4 py-2 text-right">Amount</th>
-              <th className="px-4 py-2 text-right">Balance</th>
-              <th className="px-4 py-2">Reconciled</th>
-            </tr>
-          </thead>
-          <tbody>
-            {linesQ.data.map((l) => (
-              <tr key={l.line_id} className="border-t border-line">
-                <td className="px-4 py-2">
-                  {!l.is_reconciled && (
-                    <input type="checkbox" checked={selected.has(l.line_id)} onChange={() => toggle(l.line_id)} />
-                  )}
-                </td>
-                <td className="px-4 py-2 text-ink-700">{l.entry_date}</td>
-                <td className="px-4 py-2">{l.description}</td>
-                <td className={`px-4 py-2 text-right font-mono ${l.side === "DEBIT" ? "text-green-700" : "text-red-700"}`}>
-                  {l.side === "DEBIT" ? "+" : "−"}
-                  {money(l.amount)}
-                </td>
-                <td className="px-4 py-2 text-right font-mono font-semibold">{money(l.running_balance)}</td>
-                <td className="px-4 py-2 text-xs">
-                  {l.is_reconciled ? (
-                    <span className="text-green-700">{l.statement_reference}</span>
-                  ) : (
-                    <span className="text-ink-400">pending</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {linesQ.data.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-ink-500">
-                  No transactions yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      )}
-    </div>
+      }
+    >
+      <Section title="Position">
+        <Facts
+          rows={[
+            ["Balance per books", money(balance)],
+            ["Movements", String(data.length)],
+            [
+              "Not yet reconciled",
+              unreconciled === 0 ? "None" : `${unreconciled} line${unreconciled === 1 ? "" : "s"}`,
+            ],
+          ]}
+        />
+      </Section>
+      <Section title="Movements">
+        <DataGrid
+          rows={data}
+          loading={isLoading}
+          getRowId={(l) => l.line_id}
+          storageKey="finance.cash-book"
+          exportName={`cash-book-${account.id}`}
+          searchPlaceholder="Search movements…"
+          emptyMessage="No movements on this account yet."
+          initialDensity="compact"
+          columns={[
+            {
+              key: "entry_date",
+              header: "Date",
+              value: (l) => l.entry_date,
+              render: (l) => shortDate(l.entry_date),
+              width: "7rem",
+            },
+            { key: "entry_number", header: "Entry", value: (l) => l.entry_number },
+            { key: "description", header: "Description", value: (l) => l.description },
+            {
+              key: "amount",
+              header: "In",
+              numeric: true,
+              align: "right",
+              value: (l) => (l.side === "DEBIT" ? l.amount : 0),
+              render: (l) => (l.side === "DEBIT" ? money(l.amount) : ""),
+            },
+            {
+              key: "out",
+              header: "Out",
+              numeric: true,
+              align: "right",
+              value: (l) => (l.side === "CREDIT" ? l.amount : 0),
+              render: (l) => (l.side === "CREDIT" ? money(l.amount) : ""),
+            },
+            {
+              key: "running_balance",
+              header: "Balance",
+              numeric: true,
+              align: "right",
+              value: (l) => l.running_balance,
+              render: (l) => money(l.running_balance),
+            },
+            {
+              key: "is_reconciled",
+              header: "Reconciled",
+              value: (l) => (l.is_reconciled ? "Yes" : "No"),
+              render: (l) =>
+                l.is_reconciled ? (
+                  <span className="flex items-center gap-1 text-xs text-success-700">
+                    <CheckCircle2 className="h-3 w-3" />
+                    {l.statement_reference || "matched"}
+                  </span>
+                ) : (
+                  <span className="text-xs text-ink-500">—</span>
+                ),
+            },
+          ]}
+        />
+      </Section>
+    </Drawer>
   );
 }
 
-export function BankingPage() {
-  const { user } = useAuth();
-  const [adding, setAdding] = useState(false);
-  const orgId = user?.organization ?? 0;
+/* -------------------------------------------------------------------------- */
 
-  const accountsQ = useQuery({
+export function BankingPage() {
+  const { orgId } = useDefaultOrg();
+  const [creating, setCreating] = useState(false);
+  const [open, setOpen] = useState<BankAccount | null>(null);
+
+  const { data, isLoading } = useQuery({
     queryKey: ["bank-accounts", orgId],
-    queryFn: () => api<Paginated<BankAccount>>(`/api/finance/bank-accounts/?organization=${orgId}`),
-    enabled: orgId > 0,
+    enabled: orgId !== null,
+    queryFn: () =>
+      api<Paginated<BankAccount>>(`/api/finance/bank-accounts/?organization=${orgId}`),
   });
-  const forecastQ = useQuery({
+  const accounts = useMemo(() => data?.results ?? [], [data]);
+
+  const { data: forecast } = useQuery({
     queryKey: ["cash-flow-forecast", orgId],
-    queryFn: () => api<CashFlowForecast>(`/api/finance/cash-flow-forecast/?organization=${orgId}`),
-    enabled: orgId > 0,
+    enabled: orgId !== null,
+    queryFn: () =>
+      api<CashFlowForecast>(`/api/finance/cash-flow-forecast/?organization=${orgId}`),
   });
 
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
-        title="Banking & cash"
+        title="Accounts & cash book"
         action={
-          orgId > 0 && (
-            <Button onClick={() => setAdding(true)}>
-              <Plus className="h-4 w-4" /> Open account
-            </Button>
-          )
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4" /> New account
+          </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
-        Each account keeps its own cash-book and reconciliation state. The forecast projects cash
-        on hand forward using unpaid receivables and supplier bills already due.
-      </p>
 
-      {forecastQ.data && (
-        <div className="mb-6 rounded-lg border border-line bg-surface-0 p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm font-semibold text-ink-900">Cash-flow forecast</span>
-            <span className="font-mono text-sm font-semibold">RWF {money(forecastQ.data.cash_on_hand)} on hand</span>
+      {forecast && (
+        <div className="rounded-lg border border-line bg-surface-0 px-4 py-3">
+          <div className="mb-2 flex items-center gap-2 text-sm">
+            <TrendingUp className="h-4 w-4 text-ink-400" />
+            <span className="text-ink-600">Cash on hand</span>
+            <strong className="tabular-nums text-ink-900">
+              {money(forecast.cash_on_hand)}
+            </strong>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {forecastQ.data.projection.map((b) => (
-              <div key={b.bucket} className="rounded-md border border-line p-3">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-ink-500">
-                  {BUCKET_LABEL[b.bucket]}
-                </div>
-                <div className="mt-1 flex items-center gap-1 text-xs text-green-700">
-                  <TrendingUp className="h-3 w-3" /> {money(b.inflows)}
-                </div>
-                <div className="flex items-center gap-1 text-xs text-red-700">
-                  <TrendingDown className="h-3 w-3" /> {money(b.outflows)}
-                </div>
-                <div className="mt-1 text-sm font-semibold text-ink-900">RWF {money(b.projected_balance)}</div>
-              </div>
+          <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
+            {forecast.projection.map((bucket) => (
+              <span key={bucket.bucket}>
+                <span className="text-ink-500">
+                  {BUCKET_LABEL[bucket.bucket] ?? bucket.bucket}{" "}
+                </span>
+                <span
+                  className={`tabular-nums ${
+                    bucket.projected_balance < 0 ? "text-danger-700" : "text-ink-900"
+                  }`}
+                  title={`In ${money(bucket.inflows)} · out ${money(bucket.outflows)}`}
+                >
+                  {money(bucket.projected_balance)}
+                </span>
+              </span>
             ))}
           </div>
         </div>
       )}
 
-      {accountsQ.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      )}
+      <DataGrid
+        rows={accounts}
+        loading={isLoading}
+        getRowId={(a) => a.id}
+        storageKey="finance.bank-accounts"
+        exportName="bank-accounts"
+        searchPlaceholder="Search accounts…"
+        emptyMessage="No bank, mobile-money or cash accounts yet."
+        onRowClick={(a) => setOpen(a)}
+        columns={[
+          {
+            key: "name",
+            header: "Account",
+            value: (a) => a.name,
+            render: (a) => (
+              <span className="flex items-center gap-2">
+                <Landmark className="h-4 w-4 text-ink-400" />
+                {a.name}
+              </span>
+            ),
+          },
+          {
+            key: "kind",
+            header: "Kind",
+            value: (a) => KIND_LABEL[a.kind],
+            render: (a) => <Badge tone="info">{KIND_LABEL[a.kind]}</Badge>,
+          },
+          { key: "bank_name", header: "Provider", value: (a) => a.bank_name },
+          { key: "account_number", header: "Number", value: (a) => a.account_number },
+          { key: "currency", header: "Currency", value: (a) => a.currency, width: "6rem" },
+          {
+            key: "opening_balance",
+            header: "Opening",
+            numeric: true,
+            align: "right",
+            value: (a) => Number(a.opening_balance),
+            render: (a) => money(a.opening_balance),
+          },
+          {
+            key: "is_active",
+            header: "Status",
+            value: (a) => (a.is_active ? "Active" : "Closed"),
+            render: (a) =>
+              a.is_active ? (
+                <Badge tone="success">Active</Badge>
+              ) : (
+                <Badge tone="default">Closed</Badge>
+              ),
+          },
+        ]}
+      />
 
-      <div className="flex flex-col gap-4">
-        {accountsQ.data?.results.map((a) => <CashBook key={a.id} account={a} />)}
-        {accountsQ.data && accountsQ.data.results.length === 0 && (
-          <div className="rounded-lg border border-dashed border-line py-10 text-center text-sm text-ink-500">
-            No accounts opened yet.
-          </div>
-        )}
-      </div>
-
-      {adding && <NewBankAccountModal onClose={() => setAdding(false)} orgId={orgId} />}
+      {creating && <NewAccountDrawer orgId={orgId} onClose={() => setCreating(false)} />}
+      {open && <CashBookDrawer account={open} onClose={() => setOpen(null)} />}
     </div>
   );
 }

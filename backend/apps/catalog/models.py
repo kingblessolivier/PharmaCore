@@ -134,7 +134,9 @@ class Product(models.Model):
     max_temp_c = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
 
     # WHO International Clinical Standards & Lifecycle
-    ddd = models.CharField(max_length=50, blank=True, default="")  # Defined Daily Dose (e.g. "500mg/day")
+    ddd = models.CharField(
+        max_length=50, blank=True, default=""
+    )  # Defined Daily Dose (e.g. "500mg/day")
     is_essential = models.BooleanField(default=False)  # Essential Medicines List (WHO / EML)
     rxnorm_id = models.CharField(max_length=50, blank=True, default="")  # RxNorm identifier
     lifecycle_status = models.CharField(
@@ -211,9 +213,7 @@ class ProductInteraction(models.Model):
     ingredient_b = models.ForeignKey(
         ActiveIngredient, on_delete=models.CASCADE, related_name="interactions_as_b"
     )
-    severity = models.CharField(
-        max_length=20, choices=Severity.choices, default=Severity.MODERATE
-    )
+    severity = models.CharField(max_length=20, choices=Severity.choices, default=Severity.MODERATE)
     effect = models.TextField(blank=True, default="")
     management = models.TextField(blank=True, default="")
 
@@ -241,9 +241,7 @@ class ProductContraindication(models.Model):
     condition = models.CharField(max_length=255)
     icd10_code = models.CharField(max_length=20, blank=True, default="")
     snomed_code = models.CharField(max_length=30, blank=True, default="")
-    severity = models.CharField(
-        max_length=20, choices=Severity.choices, default=Severity.WARNING
-    )
+    severity = models.CharField(max_length=20, choices=Severity.choices, default=Severity.WARNING)
     message = models.TextField(blank=True, default="")
 
     class Meta:
@@ -263,9 +261,7 @@ class PriceList(models.Model):
         CONTRACT = "CONTRACT", "Contract"
 
     name = models.CharField(max_length=255)
-    list_type = models.CharField(
-        max_length=20, choices=ListType.choices, default=ListType.RETAIL
-    )
+    list_type = models.CharField(max_length=20, choices=ListType.choices, default=ListType.RETAIL)
     effective_from = models.DateTimeField(null=True, blank=True)
     effective_to = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
@@ -296,23 +292,21 @@ class ProductPrice(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.price_list.name} · {self.product} · {self.unit_price} (min {self.min_quantity})"
+        return (
+            f"{self.price_list.name} · {self.product} · {self.unit_price} (min {self.min_quantity})"
+        )
 
 
 class FormularyItem(models.Model):
     """Insurer coverage definition for a product (RSSB, CBHI, MMI, etc.)."""
 
     scheme_name = models.CharField(max_length=100)  # e.g. "RSSB / RAMA", "CBHI / Mutuelle"
-    product = models.ForeignKey(
-        Product, on_delete=models.CASCADE, related_name="formulary_items"
-    )
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="formulary_items")
     is_covered = models.BooleanField(default=True)
     max_reimbursable_price = models.DecimalField(
         max_digits=14, decimal_places=2, null=True, blank=True
     )
-    copay_percentage = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True
-    )
+    copay_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     requires_prior_auth = models.BooleanField(default=False)
     notes = models.TextField(blank=True, default="")
 
@@ -326,14 +320,10 @@ class FormularyItem(models.Model):
 class ProductUomConversion(models.Model):
     """Packaging/Dispensing Unit of Measure conversion (e.g. Pack ↔ Strip ↔ Tablet)."""
 
-    product = models.ForeignKey(
-        Product, on_delete=models.CASCADE, related_name="uom_conversions"
-    )
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="uom_conversions")
     unit_name = models.CharField(max_length=50)  # e.g. "Strip", "Tablet"
     conversion_factor = models.PositiveIntegerField(default=1)  # e.g. 10 units
-    price_per_unit = models.DecimalField(
-        max_digits=14, decimal_places=2, null=True, blank=True
-    )
+    price_per_unit = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     is_default_dispensing = models.BooleanField(default=False)
 
     class Meta:
@@ -368,4 +358,3 @@ class ProductSubstitute(models.Model):
 
     def __str__(self) -> str:
         return f"{self.product} ➔ {self.substitute_product} ({self.substitute_type})"
-

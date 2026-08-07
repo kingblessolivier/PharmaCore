@@ -9,11 +9,12 @@ from __future__ import annotations
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.request import Request
 from rest_framework.response import Response
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def health(request):  # pragma: no cover - trivial
+def health(request: Request) -> Response:  # pragma: no cover - trivial
     """Trivial endpoint — proves the app is mounted. Returns 200."""
     return Response({"status": "ok", "app": "events"})

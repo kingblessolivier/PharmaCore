@@ -22,8 +22,8 @@ import {
   Select,
   StatusBadge,
   Textarea,
-} from "../components/ProcurementKit";
-import { useDefaultOrg, useProducts, useSuppliers } from "../lib/procurementData";
+} from "../components/RecordKit";
+import { useDefaultOrg, useProducts, useSuppliers } from "../lib/recordData";
 import { Badge, Button, ConfirmModal, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
 import {

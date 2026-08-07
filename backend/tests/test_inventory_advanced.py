@@ -10,10 +10,6 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
-from django.utils import timezone
-from rest_framework import status
-from rest_framework.test import APIClient
-
 from apps.catalog.models import Product, Supplier
 from apps.iam.models import Organization, Role, User
 from apps.inventory import analytics, coldchain, gs1, serialisation, warehouse_services
@@ -36,6 +32,9 @@ from apps.inventory.models import (
     TemperatureSensor,
     Warehouse,
 )
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APIClient
 
 
 def _auth(user: User) -> APIClient:
@@ -186,17 +185,24 @@ def test_a_non_serialised_code_cannot_be_commissioned(wh):
 @pytest.mark.django_db
 def test_aggregation_walks_up_the_hierarchy_and_refuses_to_walk_down(wh):
     pallet = SerialUnit.objects.create(
-        organization=wh["org"], level=SerialUnit.Level.PALLET, sscc="106141411234567891",
+        organization=wh["org"],
+        level=SerialUnit.Level.PALLET,
+        sscc="106141411234567891",
         epc="urn:epc:id:sscc:0614141.10123456789",
     )
     case = SerialUnit.objects.create(
-        organization=wh["org"], level=SerialUnit.Level.CASE, sscc="206141411234567892",
+        organization=wh["org"],
+        level=SerialUnit.Level.CASE,
+        sscc="206141411234567892",
         epc="urn:epc:id:sscc:0614141.20123456789",
     )
     packs = [
         SerialUnit.objects.create(
-            organization=wh["org"], product=wh["amox"], gtin="05012345678900",
-            serial=f"S{i}", epc=f"urn:epc:id:sgtin:501234.5678900.S{i}",
+            organization=wh["org"],
+            product=wh["amox"],
+            gtin="05012345678900",
+            serial=f"S{i}",
+            epc=f"urn:epc:id:sgtin:501234.5678900.S{i}",
         )
         for i in range(3)
     ]
@@ -218,21 +224,28 @@ def test_aggregation_walks_up_the_hierarchy_and_refuses_to_walk_down(wh):
 @pytest.mark.django_db
 def test_observing_a_pallet_cascades_to_every_pack_on_it(wh):
     pallet = SerialUnit.objects.create(
-        organization=wh["org"], level=SerialUnit.Level.PALLET, sscc="106141411234567891",
+        organization=wh["org"],
+        level=SerialUnit.Level.PALLET,
+        sscc="106141411234567891",
         epc="urn:epc:id:sscc:0614141.10123456789",
     )
     case = SerialUnit.objects.create(
-        organization=wh["org"], level=SerialUnit.Level.CASE, sscc="206141411234567892",
-        epc="urn:epc:id:sscc:0614141.20123456789", parent=pallet,
+        organization=wh["org"],
+        level=SerialUnit.Level.CASE,
+        sscc="206141411234567892",
+        epc="urn:epc:id:sscc:0614141.20123456789",
+        parent=pallet,
     )
     pack = SerialUnit.objects.create(
-        organization=wh["org"], product=wh["amox"], gtin="05012345678900", serial="S1",
-        epc="urn:epc:id:sgtin:501234.5678900.S1", parent=case,
+        organization=wh["org"],
+        product=wh["amox"],
+        gtin="05012345678900",
+        serial="S1",
+        epc="urn:epc:id:sgtin:501234.5678900.S1",
+        parent=case,
     )
 
-    serialisation.observe(
-        units=[pallet], biz_step=EpcisEvent.BizStep.SHIPPING, user=wh["user"]
-    )
+    serialisation.observe(units=[pallet], biz_step=EpcisEvent.BizStep.SHIPPING, user=wh["user"])
     pack.refresh_from_db()
     case.refresh_from_db()
     assert pack.status == SerialUnit.Status.IN_TRANSIT
@@ -250,9 +263,7 @@ def test_trace_returns_the_whole_chain_of_custody(wh):
         scan="(01)05012345678900(17)271231(10)BATCH-A(21)SER0001",
         user=wh["user"],
     )
-    serialisation.observe(
-        units=[unit], biz_step=EpcisEvent.BizStep.RECEIVING, user=wh["user"]
-    )
+    serialisation.observe(units=[unit], biz_step=EpcisEvent.BizStep.RECEIVING, user=wh["user"])
     trace = serialisation.trace(SerialUnit.objects.get(pk=unit.pk))
     assert trace["serial"] == "SER0001"
     assert trace["batch_number"] == "BATCH-A"
@@ -297,7 +308,10 @@ def test_epcis_export_is_a_valid_2_0_document(wh):
 @pytest.mark.django_db
 def test_calibration_pass_rolls_the_due_date_forward_and_fail_withdraws_the_probe(wh):
     sensor = TemperatureSensor.objects.create(
-        organization=wh["org"], zone=wh["cold"], device_id="LOG-1", name="Cold Room Probe",
+        organization=wh["org"],
+        zone=wh["cold"],
+        device_id="LOG-1",
+        name="Cold Room Probe",
         calibration_interval_months=12,
     )
     coldchain.record_calibration(
@@ -523,12 +537,18 @@ def test_a_cold_chain_product_is_never_defaulted_onto_an_ambient_shelf(wh):
 @pytest.mark.django_db
 def test_the_first_matching_rule_by_priority_wins(wh):
     PutawayRule.objects.create(
-        organization=wh["org"], name="Everything to ambient", priority=200,
-        strategy=PutawayRule.Strategy.FIXED_BIN, target_bin=wh["bin_a"],
+        organization=wh["org"],
+        name="Everything to ambient",
+        priority=200,
+        strategy=PutawayRule.Strategy.FIXED_BIN,
+        target_bin=wh["bin_a"],
     )
     PutawayRule.objects.create(
-        organization=wh["org"], name="Cold chain first", priority=10,
-        strategy=PutawayRule.Strategy.FIXED_BIN, target_bin=wh["bin_c"],
+        organization=wh["org"],
+        name="Cold chain first",
+        priority=10,
+        strategy=PutawayRule.Strategy.FIXED_BIN,
+        target_bin=wh["bin_c"],
         match_cold_chain_only=True,
     )
     result = warehouse_services.suggest_putaway(
@@ -568,8 +588,9 @@ def test_pick_tasks_are_built_fefo_across_batches(wh):
 
     tasks = warehouse_services.build_pick_tasks(
         wave=wave,
-        demands=[{"product": wh["amox"], "quantity": 60, "reference_type": "order",
-                  "reference_id": "42"}],
+        demands=[
+            {"product": wh["amox"], "quantity": 60, "reference_type": "order", "reference_id": "42"}
+        ],
         user=wh["user"],
     )
     assert [t.batch_number for t in tasks] == ["SOON", "LATE"], "Soonest expiry goes first"
@@ -591,8 +612,9 @@ def test_an_uncoverable_demand_still_shows_the_shortfall(wh):
 
 @pytest.mark.django_db
 def test_release_reserves_stock_and_confirming_a_short_pick_hands_it_back(wh):
-    batch = _batch(wh, wh["amox"], number="RES-1", days_to_expiry=90, qty=50,
-                   bin_location=wh["bin_a"])
+    batch = _batch(
+        wh, wh["amox"], number="RES-1", days_to_expiry=90, qty=50, bin_location=wh["bin_a"]
+    )
     wave = PickWave.objects.create(organization=wh["org"], wave_no="W-003")
     warehouse_services.build_pick_tasks(
         wave=wave, demands=[{"product": wh["amox"], "quantity": 30}], user=wh["user"]
@@ -619,8 +641,9 @@ def test_release_reserves_stock_and_confirming_a_short_pick_hands_it_back(wh):
 
 @pytest.mark.django_db
 def test_cancelling_a_wave_releases_every_unpicked_reservation(wh):
-    batch = _batch(wh, wh["amox"], number="RES-2", days_to_expiry=90, qty=50,
-                   bin_location=wh["bin_a"])
+    batch = _batch(
+        wh, wh["amox"], number="RES-2", days_to_expiry=90, qty=50, bin_location=wh["bin_a"]
+    )
     wave = PickWave.objects.create(organization=wh["org"], wave_no="W-004")
     warehouse_services.build_pick_tasks(
         wave=wave, demands=[{"product": wh["amox"], "quantity": 20}], user=wh["user"]
@@ -668,16 +691,22 @@ def agreement(wh):
 @pytest.mark.django_db
 def test_owned_stock_never_creates_a_consignment_liability(wh, agreement):
     owned = _batch(wh, wh["amox"], number="OWNED-1", qty=100)
-    assert warehouse_services.record_consignment_consumption(
-        batch=owned, quantity=10, trigger="SALE"
-    ) is None
+    assert (
+        warehouse_services.record_consignment_consumption(batch=owned, quantity=10, trigger="SALE")
+        is None
+    )
 
 
 @pytest.mark.django_db
 def test_consuming_consigned_stock_creates_the_liability_at_lot_cost(wh, agreement):
     batch = _batch(
-        wh, wh["amox"], number="VMI-BATCH", qty=100, cost="1500.00",
-        is_consignment=True, consignment_agreement=agreement,
+        wh,
+        wh["amox"],
+        number="VMI-BATCH",
+        qty=100,
+        cost="1500.00",
+        is_consignment=True,
+        consignment_agreement=agreement,
     )
     consumption = warehouse_services.record_consignment_consumption(
         batch=batch, quantity=8, trigger="SALE"
@@ -693,13 +722,16 @@ def test_consuming_consigned_stock_creates_the_liability_at_lot_cost(wh, agreeme
 @pytest.mark.django_db
 def test_settlement_rolls_consumptions_up_and_raises_the_supplier_bill(wh, agreement):
     batch = _batch(
-        wh, wh["amox"], number="VMI-BATCH-2", qty=100, cost="1000.00",
-        is_consignment=True, consignment_agreement=agreement,
+        wh,
+        wh["amox"],
+        number="VMI-BATCH-2",
+        qty=100,
+        cost="1000.00",
+        is_consignment=True,
+        consignment_agreement=agreement,
     )
     for _ in range(3):
-        warehouse_services.record_consignment_consumption(
-            batch=batch, quantity=5, trigger="SALE"
-        )
+        warehouse_services.record_consignment_consumption(batch=batch, quantity=5, trigger="SALE")
 
     settlement = warehouse_services.settle_consignment(
         agreement=agreement,
@@ -739,8 +771,12 @@ def test_warehouse_crud_and_occupancy_endpoint(wh):
     client = _auth(wh["user"])
     created = client.post(
         "/api/inventory/warehouses/",
-        {"organization": wh["org"].id, "code": "WH2", "name": "Satellite",
-         "warehouse_type": "SATELLITE"},
+        {
+            "organization": wh["org"].id,
+            "code": "WH2",
+            "name": "Satellite",
+            "warehouse_type": "SATELLITE",
+        },
         format="json",
     )
     assert created.status_code == status.HTTP_201_CREATED
@@ -771,8 +807,10 @@ def test_scan_endpoint_commissions_then_trace_and_export_read_back(wh):
     client = _auth(wh["user"])
     scanned = client.post(
         "/api/inventory/serial-units/scan/",
-        {"organization": wh["org"].id,
-         "scan": "(01)05012345678900(17)271231(10)BATCH-A(21)SER0001"},
+        {
+            "organization": wh["org"].id,
+            "scan": "(01)05012345678900(17)271231(10)BATCH-A(21)SER0001",
+        },
         format="json",
     )
     assert scanned.status_code == status.HTTP_201_CREATED
@@ -781,8 +819,10 @@ def test_scan_endpoint_commissions_then_trace_and_export_read_back(wh):
 
     rescanned = client.post(
         "/api/inventory/serial-units/scan/",
-        {"organization": wh["org"].id,
-         "scan": "(01)05012345678900(17)271231(10)BATCH-A(21)SER0001"},
+        {
+            "organization": wh["org"].id,
+            "scan": "(01)05012345678900(17)271231(10)BATCH-A(21)SER0001",
+        },
         format="json",
     )
     assert rescanned.status_code == status.HTTP_200_OK
@@ -835,13 +875,18 @@ def test_replenishment_endpoints_recompute_and_report(wh):
 @pytest.mark.django_db
 def test_pick_wave_endpoints_drive_a_wave_end_to_end(wh):
     client = _auth(wh["user"])
-    batch = _batch(wh, wh["amox"], number="API-PICK", days_to_expiry=60, qty=30,
-                   bin_location=wh["bin_a"])
+    batch = _batch(
+        wh, wh["amox"], number="API-PICK", days_to_expiry=60, qty=30, bin_location=wh["bin_a"]
+    )
 
     wave = client.post(
         "/api/inventory/pick-waves/",
-        {"organization": wh["org"].id, "warehouse": wh["warehouse"].id,
-         "wave_no": "W-API-1", "strategy": "BATCH"},
+        {
+            "organization": wh["org"].id,
+            "warehouse": wh["warehouse"].id,
+            "wave_no": "W-API-1",
+            "strategy": "BATCH",
+        },
         format="json",
     )
     assert wave.status_code == status.HTTP_201_CREATED
@@ -878,17 +923,29 @@ def test_consignment_endpoints_expose_position_and_settlement(wh):
     client = _auth(wh["user"])
     created = client.post(
         "/api/inventory/consignments/",
-        {"organization": wh["org"].id, "agreement_no": "VMI-API-1",
-         "direction": "SUPPLIER_OWNED", "owner_supplier": wh["supplier"].id,
-         "status": "ACTIVE", "start_date": str(date.today() - timedelta(days=10))},
+        {
+            "organization": wh["org"].id,
+            "agreement_no": "VMI-API-1",
+            "direction": "SUPPLIER_OWNED",
+            "owner_supplier": wh["supplier"].id,
+            "status": "ACTIVE",
+            "start_date": str(date.today() - timedelta(days=10)),
+        },
         format="json",
     )
     assert created.status_code == status.HTTP_201_CREATED
     agreement_id = created.json()["id"]
 
     agreement = ConsignmentAgreement.objects.get(pk=agreement_id)
-    batch = _batch(wh, wh["amox"], number="VMI-API-BATCH", qty=50, cost="800.00",
-                   is_consignment=True, consignment_agreement=agreement)
+    batch = _batch(
+        wh,
+        wh["amox"],
+        number="VMI-API-BATCH",
+        qty=50,
+        cost="800.00",
+        is_consignment=True,
+        consignment_agreement=agreement,
+    )
     warehouse_services.record_consignment_consumption(batch=batch, quantity=6, trigger="SALE")
 
     position = client.get(f"/api/inventory/consignments/{agreement_id}/position/")
@@ -896,8 +953,10 @@ def test_consignment_endpoints_expose_position_and_settlement(wh):
 
     settled = client.post(
         f"/api/inventory/consignments/{agreement_id}/settle/",
-        {"period_start": str(date.today() - timedelta(days=1)),
-         "period_end": str(date.today() + timedelta(days=1))},
+        {
+            "period_start": str(date.today() - timedelta(days=1)),
+            "period_end": str(date.today() + timedelta(days=1)),
+        },
         format="json",
     )
     assert settled.status_code == status.HTTP_201_CREATED
@@ -909,8 +968,12 @@ def test_supplier_owned_agreement_must_name_its_owner(wh):
     client = _auth(wh["user"])
     response = client.post(
         "/api/inventory/consignments/",
-        {"organization": wh["org"].id, "agreement_no": "VMI-BAD",
-         "direction": "SUPPLIER_OWNED", "start_date": str(date.today())},
+        {
+            "organization": wh["org"].id,
+            "agreement_no": "VMI-BAD",
+            "direction": "SUPPLIER_OWNED",
+            "start_date": str(date.today()),
+        },
         format="json",
     )
     assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -948,8 +1011,12 @@ def test_cold_chain_endpoints_record_calibration_and_run_an_investigation(wh):
 
     opened = client.post(
         "/api/inventory/excursions/open_from_window/",
-        {"organization": wh["org"].id, "sensor": sensor.id,
-         "started_at": start.isoformat(), "ended_at": timezone.now().isoformat()},
+        {
+            "organization": wh["org"].id,
+            "sensor": sensor.id,
+            "started_at": start.isoformat(),
+            "ended_at": timezone.now().isoformat(),
+        },
         format="json",
     )
     assert opened.status_code == status.HTTP_201_CREATED

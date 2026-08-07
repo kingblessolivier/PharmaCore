@@ -1,7 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   Boxes,
+  Building2,
+  ClipboardList,
   FileCheck2,
+  Handshake,
+  MoveRight,
+  RefreshCw,
+  ScanLine,
   ShieldAlert,
   Thermometer,
   Trash2,
@@ -63,24 +69,84 @@ export function InventoryHome() {
     select: (r) => r.count,
   });
 
+  const warehousesQuery = useQuery({
+    queryKey: ["count", "warehouses"],
+    queryFn: () => api<Paginated<unknown>>("/api/inventory/warehouses/?page_size=1"),
+    select: (r) => r.count,
+  });
+
+  const wavesQuery = useQuery({
+    queryKey: ["count", "pick-waves"],
+    queryFn: () => api<Paginated<unknown>>("/api/inventory/pick-waves/?page_size=1"),
+    select: (r) => r.count,
+  });
+
+  const rulesQuery = useQuery({
+    queryKey: ["count", "reorder-rules"],
+    queryFn: () => api<Paginated<unknown>>("/api/inventory/reorder-rules/?page_size=1"),
+    select: (r) => r.count,
+  });
+
+  const serialsQuery = useQuery({
+    queryKey: ["count", "serial-units"],
+    queryFn: () => api<Paginated<unknown>>("/api/inventory/serial-units/?page_size=1"),
+    select: (r) => r.count,
+  });
+
+  const consignmentsQuery = useQuery({
+    queryKey: ["count", "consignments"],
+    queryFn: () => api<Paginated<unknown>>("/api/inventory/consignments/?page_size=1"),
+    select: (r) => r.count,
+  });
+
+  const putawayQuery = useQuery({
+    queryKey: ["count", "putaway-rules"],
+    queryFn: () => api<Paginated<unknown>>("/api/inventory/putaway-rules/?page_size=1"),
+    select: (r) => r.count,
+  });
+
+  const excursionsQuery = useQuery({
+    queryKey: ["count", "excursions"],
+    queryFn: () => api<Paginated<unknown>>("/api/inventory/excursions/?page_size=1"),
+    select: (r) => r.count,
+  });
+
   return (
     <div className="flex flex-col gap-6 max-w-6xl">
       <AppHeader
         icon={Warehouse}
         hue="#0284C7"
         title="Inventory & Warehouse Operations"
-        subtitle="Good Distribution Practice (GDP) warehouse zones, cold-chain temperature logs, inbound QC quarantine, batch recalls, physical stock counts, and witnessed disposal."
+        subtitle="Good Distribution Practice (GDP) facilities and zones, put-away and wave picking, demand-driven replenishment, GS1 serialisation and EPCIS track-and-trace, consignment ownership, cold-chain calibration and excursion investigations, QC quarantine, recalls, counts and witnessed disposal."
       />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+        <Link to="/inventory/warehouses">
+          <StatTile label="Warehouses" value={warehousesQuery.data ?? 0} hint="facilities" />
+        </Link>
         <Link to="/inventory/zones">
           <StatTile label="Storage Zones" value={zonesQuery.data ?? 0} hint="climate rooms" />
         </Link>
         <Link to="/inventory/zones">
           <StatTile label="Bin Locations" value={binsQuery.data ?? 0} hint="aisle/shelf/bin" />
         </Link>
+        <Link to="/inventory/picking">
+          <StatTile label="Pick Waves" value={wavesQuery.data ?? 0} hint="released to floor" />
+        </Link>
+        <Link to="/inventory/replenishment">
+          <StatTile label="Reorder Rules" value={rulesQuery.data ?? 0} hint="demand-driven" />
+        </Link>
+        <Link to="/inventory/serialisation">
+          <StatTile label="Serialised Units" value={serialsQuery.data ?? 0} hint="GS1 track & trace" />
+        </Link>
+        <Link to="/inventory/consignment">
+          <StatTile label="Consignment" value={consignmentsQuery.data ?? 0} hint="VMI agreements" />
+        </Link>
+        <Link to="/inventory/coldchain">
+          <StatTile label="Excursions" value={excursionsQuery.data ?? 0} hint="under investigation" />
+        </Link>
         <Link to="/inventory/temperature">
-          <StatTile label="Temp Sensors" value={sensorsQuery.data ?? 0} hint="calibrated logs" />
+          <StatTile label="Temp Sensors" value={sensorsQuery.data ?? 0} hint="calibrated probes" />
         </Link>
         <Link to="/inventory/qc">
           <StatTile label="QC Inspection" value={qcQuery.data ?? 0} hint="inbound hold" />
@@ -94,10 +160,11 @@ export function InventoryHome() {
       </div>
 
       <QuickActions>
-        <QuickAction to="/inventory/zones" icon={Warehouse} label="Manage Zones & Bins" primary />
+        <QuickAction to="/inventory/serialisation" icon={ScanLine} label="Scan & Commission" primary />
+        <QuickAction to="/inventory/picking" icon={ClipboardList} label="Release a Pick Wave" />
+        <QuickAction to="/inventory/replenishment" icon={RefreshCw} label="What to Reorder" />
         <QuickAction to="/inventory/qc" icon={FileCheck2} label="Inbound QC Review" />
         <QuickAction to="/inventory/recalls" icon={ShieldAlert} label="Batch Recall Freeze" />
-        <QuickAction to="/inventory/counts" icon={Boxes} label="Start Stock Count" />
       </QuickActions>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -176,11 +243,60 @@ export function InventoryHome() {
         </h2>
         <SectionGrid>
           <SectionCard
+            icon={Building2}
+            title="Warehouses & Facilities"
+            description="Every facility stock is stored in — main store, cross-dock, bonded warehouse, quarantine hold — with live zone occupancy."
+            to="/inventory/warehouses"
+            meta={warehousesQuery.data ?? 0}
+          />
+          <SectionCard
             icon={Warehouse}
             title="Storage Zones & Bin Locations"
             description="Climate zones (Ambient, Cold Room 2–8°C, Freezer, Safe) and bin location mapping."
             to="/inventory/zones"
             meta={zonesQuery.data ?? 0}
+          />
+          <SectionCard
+            icon={MoveRight}
+            title="Put-away Rules"
+            description="Where a received lot goes, by policy rather than by whoever holds the trolley. Cold-chain stock is never defaulted onto an ambient shelf."
+            to="/inventory/putaway"
+            meta={putawayQuery.data ?? 0}
+          />
+          <SectionCard
+            icon={ClipboardList}
+            title="Wave Picking"
+            description="FEFO pick tasks built from demand, walk-ordered by bin, reserved on release and short-picked honestly."
+            to="/inventory/picking"
+            meta={wavesQuery.data ?? 0}
+          />
+          <SectionCard
+            icon={RefreshCw}
+            title="Replenishment & Stock Intelligence"
+            description="Reorder points from observed demand, ABC/XYZ classes, suggested orders, slow & dead stock, near-expiry actions."
+            to="/inventory/replenishment"
+            meta={rulesQuery.data ?? 0}
+          />
+          <SectionCard
+            icon={ScanLine}
+            title="Serialisation & Track-and-Trace"
+            description="GS1 DataMatrix scanning, each→case→pallet aggregation, chain-of-custody trace and EPCIS 2.0 export."
+            to="/inventory/serialisation"
+            meta={serialsQuery.data ?? 0}
+          />
+          <SectionCard
+            icon={Handshake}
+            title="Consignment & VMI"
+            description="Stock that is not where its owner is — supplier-owned held by us, our stock held at a customer, settled on consumption."
+            to="/inventory/consignment"
+            meta={consignmentsQuery.data ?? 0}
+          />
+          <SectionCard
+            icon={Thermometer}
+            title="Cold-Chain Compliance"
+            description="Calibrated-sensor register, certificate trail, and excursion investigations closed with a QA-signed disposition."
+            to="/inventory/coldchain"
+            meta={excursionsQuery.data ?? 0}
           />
           <SectionCard
             icon={Thermometer}

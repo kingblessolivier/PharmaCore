@@ -1,0 +1,284 @@
+"""Counter endpoints the till needs: scan, discount, and billing a clinical service.
+
+Kept separate from the CRUD viewsets because these are *actions at the counter*
+rather than record management, and they are the ones that have to be fast — a
+scan resolves on every keystroke burst from the scanner.
+"""
+
+from __future__ import annotations
+
+from typing import Any, cast
+
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.request import Request
+from rest_framework.response import Response
+
+from apps.core.lookups import lookup_pk
+from apps.iam.models import Organization, User
+from apps.iam.scoping import organizations_visible_to
+from apps.retail.counter import (
+    active_promotions,
+    apply_promotion,
+    bill_clinical_service,
+    clear_promotion,
+    resolve_barcode,
+)
+from apps.retail.models import ClinicalServiceRecord, Sale
+
+
+def _org(request: Request) -> Organization:
+    user = cast(User, request.user)
+    raw = request.query_params.get("organization") or request.data.get("organization")
+    if raw and str(raw).isdigit():
+        organization = Organization.objects.filter(pk=int(raw)).first()
+    else:
+        organization = user.organization
+    if organization is None:
+        raise ValidationError("An 'organization' is required.")
+    if not (
+        user.is_superuser
+        or user.has_role("SYS_ADMIN")
+        or organization in organizations_visible_to(user)
+    ):
+        raise PermissionDenied("You may not trade on behalf of that pharmacy.")
+    return organization
+
+
+def _sale(request: Request, organization: Organization) -> Sale:
+    sale = Sale.objects.filter(
+        pk=lookup_pk(request.data.get("sale")), organization=organization
+    ).first()
+    if sale is None:
+        raise ValidationError("A valid open 'sale' is required.")
+    return sale
+
+
+class CounterViewSet(viewsets.ViewSet):
+    """Actions performed at the till."""
+
+    @action(detail=False, methods=["get"])
+    def scan(self, request: Request) -> Response:
+        """Resolve a scanned barcode to a product and the quantity it represents.
+
+        A scanner is a keyboard that types fast and presses Enter, so this has to
+        answer in one round trip with everything the till needs to add a line.
+        """
+        organization = _org(request)
+        code = request.query_params.get("code", "")
+        result = resolve_barcode(organization=organization, code=code)
+        if result is None:
+            return Response(
+                {"found": False, "code": code, "detail": f"No product matches {code!r}."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        from django.db.models import Sum
+
+        # PharmacyProduct is the per-pharmacy listing and lives in inventory, not
+        # catalog — catalog holds the product, inventory holds what this shop
+        # stocks and charges for it.
+        from apps.inventory.models import InventoryBatch, PharmacyProduct
+
+        listing = PharmacyProduct.objects.filter(
+            organization=organization, product=result.product
+        ).first()
+        on_hand = (
+            InventoryBatch.objects.filter(
+                organization=organization, product=result.product
+            ).aggregate(total=Sum("quantity_available"))["total"]
+            or 0
+        )
+        return Response(
+            {
+                "found": True,
+                "code": result.barcode,
+                "product": result.product.pk,
+                "label": f"{result.product.generic_name} {result.product.strength}".strip(),
+                # Scanning a carton must add the carton, not one tablet.
+                "units": result.units,
+                "packaging_level": result.packaging_level,
+                # Read the real field. A `getattr` fallback here would hand the
+                # till an empty price on every scan and never say why.
+                "unit_price": str(listing.retail_price) if listing and listing.retail_price else "",
+                "on_hand": int(on_hand),
+                "requires_prescription": result.product.requires_prescription,
+                "is_controlled": result.product.is_controlled_substance,
+            }
+        )
+
+    @action(detail=False, methods=["get"], url_path="promotions")
+    def promotions(self, request: Request) -> Response:
+        """Coupons in force today, so the till can offer them rather than guess."""
+        return Response(
+            [
+                {
+                    "code": p.code,
+                    "name": p.name,
+                    "promo_type": p.promo_type,
+                    "discount_value": str(p.discount_value),
+                    "min_spend": str(p.min_spend),
+                    "valid_until": p.valid_until,
+                    "remaining": (
+                        max(p.max_redemptions - p.times_redeemed, 0) if p.max_redemptions else None
+                    ),
+                }
+                for p in active_promotions()
+            ]
+        )
+
+    @action(detail=False, methods=["post"], url_path="apply-promotion")
+    def apply_promotion_action(self, request: Request) -> Response:
+        """Apply a coupon to an open basket, or say plainly why it does not apply."""
+        organization = _org(request)
+        sale = _sale(request, organization)
+        try:
+            outcome = apply_promotion(sale=sale, code=str(request.data.get("code", "")))
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        sale.refresh_from_db()
+        return Response(
+            {
+                "applied": outcome.applied,
+                "reason": outcome.reason,
+                "discount": str(outcome.discount),
+                "gross_total": str(sale.gross_total),
+                "total": str(sale.total),
+            }
+        )
+
+    @action(detail=False, methods=["post"], url_path="clear-promotion")
+    def clear_promotion_action(self, request: Request) -> Response:
+        organization = _org(request)
+        sale = clear_promotion(sale=_sale(request, organization))
+        return Response({"total": str(sale.total), "gross_total": str(sale.gross_total)})
+
+    @action(detail=False, methods=["post"], url_path="bill-clinical-service")
+    def bill_clinical(self, request: Request) -> Response:
+        """Take payment for a clinical service and post it to the ledger.
+
+        The fee used to be recorded on the encounter and never banked.
+        """
+        organization = _org(request)
+        record = ClinicalServiceRecord.objects.filter(
+            pk=lookup_pk(request.data.get("record")), organization=organization
+        ).first()
+        if record is None:
+            raise ValidationError("A valid clinical 'record' is required.")
+        billed = bill_clinical_service(record=record, user=cast(User, request.user))
+        return Response(
+            {"id": billed.pk, "is_paid": billed.is_paid, "fee": str(billed.fee_charged)}
+        )
+
+
+def counter_urls() -> Any:
+    return CounterViewSet
+
+
+class OfflineSyncViewSet(viewsets.ViewSet):
+    """Replaying sales rung up while the connection was down.
+
+    `docs/19-platform-architecture-decisions.md` §2 calls for an offline-first
+    counter and nothing implemented it, so a dropped connection stopped the
+    pharmacy trading. The till now completes the sale locally and queues it; this
+    is where the queue drains.
+
+    The whole sale arrives in one request — lines, tenders, dispensing details —
+    because offline the basket was never on the server to begin with.
+    """
+
+    @action(detail=False, methods=["post"], url_path="sync")
+    def sync(self, request: Request) -> Response:
+        """Replay one queued sale. Safe to call repeatedly with the same key."""
+        from decimal import Decimal
+
+        from apps.retail.models import SaleItem
+        from apps.retail.services import complete_sale
+
+        organization = _org(request)
+        data = request.data
+        reference = str(data.get("client_reference", "")).strip()
+        if not reference:
+            raise ValidationError(
+                "A 'client_reference' is required — without it a replay cannot be "
+                "told apart from a second sale."
+            )
+
+        # Idempotency, but only for a sale that actually went through.
+        #
+        # Short-circuiting on *any* existing row is a trap: a replay that failed
+        # (no pharmacist on shift, stock gone) leaves the row holding the key, so
+        # every later retry reports success for a sale that never completed. The
+        # till then drops it from its queue and the sale is silently lost — worse
+        # than the double-sell this guard exists to prevent.
+        existing = Sale.objects.filter(
+            organization=organization, client_reference=reference
+        ).first()
+        if existing is not None and existing.status == Sale.Status.COMPLETED:
+            return Response(
+                {"sale": existing.pk, "sale_number": existing.sale_number, "replayed": True}
+            )
+
+        lines = data.get("items") or []
+        if not lines:
+            raise ValidationError("A queued sale must carry its lines.")
+
+        if existing is not None:
+            # A previous attempt got as far as creating the basket. Reuse it
+            # rather than creating a second one under the same key.
+            sale = existing
+            sale.items.all().delete()
+        else:
+            sale = Sale.objects.create(
+                organization=organization,
+                client_reference=reference,
+                status=Sale.Status.OPEN,
+                cashier=cast(User, request.user),
+            )
+            # `sale_number` is unique with a blank default, so a second
+            # unnumbered sale collides on the constraint. The counter assigns it
+            # right after create for the same reason SaleViewSet does — the
+            # number needs the primary key to exist first.
+            sale.sale_number = f"SALE-{sale.pk:06d}"
+            sale.save(update_fields=["sale_number"])
+        for line in lines:
+            SaleItem.objects.create(
+                sale=sale,
+                product_id=line["product"],
+                quantity=int(line["quantity"]),
+                unit_price=Decimal(str(line["unit_price"])),
+                tax_rate=Decimal(str(line.get("tax_rate", "0"))),
+            )
+
+        try:
+            complete_sale(
+                sale=sale,
+                payments=data.get("payments") or [],
+                user=cast(User, request.user),
+                dispensing=data.get("dispensing"),
+            )
+        except Exception as exc:
+            # The basket is kept, still OPEN, so the queue entry can be reviewed
+            # and retried once the reason is fixed — a sale that cannot be
+            # replayed is money that left the shelf and needs a human. The lookup
+            # above deliberately does not treat this row as a completed replay.
+            sale.status = Sale.Status.OPEN
+            sale.save(update_fields=["status", "updated_at"])
+            raise ValidationError(
+                {
+                    "detail": str(exc),
+                    "sale": str(sale.pk),
+                    "client_reference": reference,
+                    # A real boolean, not "true": the till branches on this to decide
+                    # whether to keep the sale queued. DRF's stub types error details
+                    # as string-ish, which is narrower than what it actually accepts.
+                    "retryable": True,  # type: ignore[dict-item]
+                }
+            ) from exc
+
+        sale.refresh_from_db()
+        return Response(
+            {"sale": sale.pk, "sale_number": sale.sale_number, "replayed": False},
+            status=status.HTTP_201_CREATED,
+        )

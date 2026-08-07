@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from rest_framework import serializers
 
@@ -9,7 +9,11 @@ from apps.finance.models import (
     Account,
     AccountingPeriod,
     BankAccount,
+    BankStatement,
+    BankStatementLine,
     Budget,
+    BudgetLine,
+    CostCentre,
     CreditProfile,
     CustomerCredit,
     CustomerInvoice,
@@ -20,11 +24,13 @@ from apps.finance.models import (
     JournalLine,
     PaymentRun,
     PaymentRunLine,
+    PeriodTask,
     SupplierBill,
     SupplierBillPayment,
     TaxCode,
     TaxPayment,
     TaxRecord,
+    TenantSettings,
 )
 
 
@@ -43,6 +49,9 @@ class AccountSerializer(serializers.ModelSerializer):
             "code",
             "name",
             "account_type",
+            # The statements read this; without it on the API there is no way to
+            # correct a misclassified account from the chart of accounts screen.
+            "classification",
             "normal_balance",
             "parent",
             "is_system",
@@ -78,10 +87,27 @@ class AccountSerializer(serializers.ModelSerializer):
 class JournalLineSerializer(serializers.ModelSerializer):
     account_code = serializers.CharField(source="account.code", read_only=True)
     account_name = serializers.CharField(source="account.name", read_only=True)
+    cost_centre_code = serializers.CharField(source="cost_centre.code", read_only=True)
+    cost_centre_name = serializers.CharField(source="cost_centre.name", read_only=True)
 
     class Meta:
         model = JournalLine
-        fields = ["id", "account", "account_code", "account_name", "side", "amount", "memo"]
+        fields = [
+            "id",
+            "account",
+            "account_code",
+            "account_name",
+            # The analysis dimension. Optional on control-account legs, which
+            # belong to the entity rather than to any one branch.
+            "cost_centre",
+            "cost_centre_code",
+            "cost_centre_name",
+            "side",
+            "amount",
+            "memo",
+            "is_reconciled",
+        ]
+        read_only_fields = ["id", "is_reconciled"]
 
 
 class JournalEntrySerializer(serializers.ModelSerializer):
@@ -99,6 +125,9 @@ class JournalEntrySerializer(serializers.ModelSerializer):
             "entry_number",
             "entry_date",
             "description",
+            # Which part of the business produced this posting — the one field
+            # that separates a system posting from something typed at midnight.
+            "source_module",
             "reference_type",
             "reference_id",
             "status",
@@ -334,9 +363,20 @@ class FixedAssetSerializer(serializers.ModelSerializer):
             "net_book_value",
             "annual_depreciation",
             "is_active",
+            "disposal_date",
+            "disposal_amount",
+            "disposal_reason",
             "created_at",
         ]
-        read_only_fields = ["id", "net_book_value", "annual_depreciation", "created_at"]
+        read_only_fields = [
+            "id",
+            "net_book_value",
+            "annual_depreciation",
+            "disposal_date",
+            "disposal_amount",
+            "disposal_reason",
+            "created_at",
+        ]
 
 
 class TaxRecordSerializer(serializers.ModelSerializer):
@@ -362,29 +402,197 @@ class TaxRecordSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "fiscalized_at"]
 
 
-class BudgetSerializer(serializers.ModelSerializer):
+class TenantSettingsSerializer(serializers.ModelSerializer):
+    """Per-organization configuration. There is exactly one row per organization,
+    lazily created on first read."""
+
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+
+    class Meta:
+        model = TenantSettings
+        fields = [
+            "id",
+            "organization",
+            "organization_name",
+            "base_currency",
+            "fx_provider",
+            "costing_method",
+            "pay_period",
+            "statutory_remittance_day",
+            "pit_filing_deadline_month",
+            "pit_filing_deadline_day",
+            "default_country",
+            "timezone",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "organization", "created_at", "updated_at"]
+
+
+class CostCentreSerializer(serializers.ModelSerializer):
+    """The ledger's analysis dimension."""
+
+    parent_name = serializers.CharField(source="parent.name", read_only=True)
     department_name = serializers.CharField(source="department.name", read_only=True)
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
+    manager_name = serializers.CharField(source="manager.get_full_name", read_only=True)
+    path = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = CostCentre
+        fields = [
+            "id",
+            "organization",
+            "code",
+            "name",
+            "kind",
+            "parent",
+            "parent_name",
+            "path",
+            "department",
+            "department_name",
+            "branch",
+            "branch_name",
+            "manager",
+            "manager_name",
+            "is_active",
+            "created_at",
+        ]
+        read_only_fields = ["id", "path", "created_at"]
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """A centre may not be its own ancestor — a cycle would hang every roll-up."""
+        parent = attrs.get("parent", getattr(self.instance, "parent", None))
+        if parent is not None and self.instance is not None:
+            instance = cast(Any, self.instance)
+            node, seen = parent, set()
+            while node is not None and node.pk not in seen:
+                if node.pk == instance.pk:
+                    raise serializers.ValidationError(
+                        {"parent": "A cost centre cannot roll up into itself."}
+                    )
+                seen.add(node.pk)
+                node = node.parent
+        return attrs
+
+
+class BudgetLineSerializer(serializers.ModelSerializer):
     account_code = serializers.CharField(source="account.code", read_only=True)
     account_name = serializers.CharField(source="account.name", read_only=True)
-    variance = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    cost_centre_name = serializers.CharField(source="cost_centre.name", read_only=True)
+
+    class Meta:
+        model = BudgetLine
+        fields = [
+            "id",
+            "account",
+            "account_code",
+            "account_name",
+            "cost_centre",
+            "cost_centre_name",
+            "period_month",
+            "amount",
+            "note",
+        ]
+        read_only_fields = ["id"]
+
+    def validate_period_month(self, value: int | None) -> int | None:
+        if value is not None and not 1 <= value <= 12:
+            raise serializers.ValidationError(
+                "Month must be between 1 and 12, or blank for an annual figure."
+            )
+        return value
+
+
+class BudgetSerializer(serializers.ModelSerializer):
+    """A budget header with its lines.
+
+    There is no `actual` field anywhere in here. Actuals come from the ledger via
+    the `variance` action — see apps/finance/budgeting.py.
+    """
+
+    lines = BudgetLineSerializer(many=True, required=False)
+    approved_by_name = serializers.CharField(source="approved_by.get_full_name", read_only=True)
+    line_count = serializers.IntegerField(source="lines.count", read_only=True)
+    total_budgeted = serializers.SerializerMethodField()
 
     class Meta:
         model = Budget
         fields = [
             "id",
             "organization",
-            "department",
-            "department_name",
+            "name",
             "financial_year",
-            "account",
-            "account_code",
-            "account_name",
-            "budgeted_amount",
-            "actual_amount",
-            "variance",
+            "year_starts_month",
+            "status",
+            "notes",
+            "approved_by",
+            "approved_by_name",
+            "approved_at",
+            "line_count",
+            "total_budgeted",
+            "lines",
             "created_at",
+            "updated_at",
         ]
-        read_only_fields = ["id", "variance", "created_at"]
+        read_only_fields = [
+            "id",
+            "approved_by",
+            "approved_at",
+            "line_count",
+            "total_budgeted",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_total_budgeted(self, obj: Budget) -> str:
+        return str(sum((line.amount for line in obj.lines.all()), Decimal("0.00")))
+
+    def create(self, validated_data: dict[str, Any]) -> Budget:
+        lines = validated_data.pop("lines", [])
+        budget = Budget.objects.create(**validated_data)
+        for line in lines:
+            BudgetLine.objects.create(budget=budget, **line)
+        return budget
+
+    def update(self, instance: Budget, validated_data: dict[str, Any]) -> Budget:
+        lines = validated_data.pop("lines", None)
+        if lines is not None and not instance.is_editable:
+            raise serializers.ValidationError(
+                {"lines": f"A {instance.get_status_display().lower()} budget cannot be re-planned."}
+            )
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if lines is not None:
+            instance.lines.all().delete()
+            for line in lines:
+                BudgetLine.objects.create(budget=instance, **line)
+        return instance
+
+
+class PeriodTaskSerializer(serializers.ModelSerializer):
+    completed_by_name = serializers.CharField(source="completed_by.get_full_name", read_only=True)
+    is_settled = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = PeriodTask
+        fields = [
+            "id",
+            "period",
+            "code",
+            "title",
+            "description",
+            "sequence",
+            "is_blocking",
+            "status",
+            "is_settled",
+            "completed_by",
+            "completed_by_name",
+            "completed_at",
+            "notes",
+        ]
+        read_only_fields = ["id", "is_settled", "completed_by", "completed_at"]
 
 
 class CustomerReceiptSerializer(serializers.ModelSerializer):
@@ -571,3 +779,73 @@ class PaymentRunSerializer(serializers.ModelSerializer):
 
     def get_has_disbursement_file(self, obj: PaymentRun) -> bool:
         return bool(obj.disbursement_file)
+
+
+class BankStatementLineSerializer(serializers.ModelSerializer):
+    """One line the bank reported. `amount` is signed from our point of view."""
+
+    is_settled = serializers.BooleanField(read_only=True)
+    matched_total = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    matched_line_ids = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BankStatementLine
+        fields = [
+            "id",
+            "statement",
+            "line_date",
+            "description",
+            "reference",
+            "amount",
+            "balance",
+            "external_id",
+            "status",
+            "is_settled",
+            "matched_total",
+            "matched_line_ids",
+            "note",
+        ]
+        read_only_fields = ["id", "statement", "status", "is_settled", "matched_total"]
+
+    def get_matched_line_ids(self, obj: BankStatementLine) -> list[int]:
+        return [m.journal_line_id for m in obj.matches.all()]
+
+
+class BankStatementSerializer(serializers.ModelSerializer):
+    bank_account_name = serializers.CharField(source="bank_account.name", read_only=True)
+    imported_by_name = serializers.CharField(source="imported_by.get_full_name", read_only=True)
+    line_count = serializers.IntegerField(source="lines.count", read_only=True)
+    movement = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = BankStatement
+        fields = [
+            "id",
+            "bank_account",
+            "bank_account_name",
+            "reference",
+            "start_date",
+            "end_date",
+            "opening_balance",
+            "closing_balance",
+            "movement",
+            "status",
+            "source_filename",
+            "notes",
+            "line_count",
+            "imported_by",
+            "imported_by_name",
+            "imported_at",
+            "reconciled_by",
+            "reconciled_at",
+        ]
+        read_only_fields = [
+            "id",
+            "movement",
+            "status",
+            "line_count",
+            "imported_by",
+            "imported_at",
+            "reconciled_by",
+            "reconciled_at",
+        ]

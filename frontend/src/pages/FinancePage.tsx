@@ -1,132 +1,184 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDownCircle, ArrowUpCircle } from "lucide-react";
-import { PageHeader, Spinner } from "../components/ui";
+import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { useState } from "react";
+import { BarChart, ChartFrame, VizRoot } from "../components/Charts";
+import { DataGrid } from "../components/DataGrid";
+import { Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
-import type { AgingReport, AgingSide } from "../lib/types";
+import { money } from "../lib/format";
+import type { AgingPartner, AgingReport, AgingSide } from "../lib/types";
 
-const money = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
-const COLS: { key: keyof AgingSide["buckets"]; label: string }[] = [
-  { key: "current", label: "Current" },
-  { key: "d30", label: "1–30" },
-  { key: "d60", label: "31–60" },
-  { key: "d90", label: "61–90" },
-  { key: "over90", label: "90+" },
+type Which = "receivables" | "payables";
+
+const BUCKETS: [keyof Omit<AgingPartner, "partner" | "total">, string][] = [
+  ["current", "Current"],
+  ["d30", "1–30 days"],
+  ["d60", "31–60"],
+  ["d90", "61–90"],
+  ["over90", "90+"],
 ];
 
-function AgingTable({
-  side,
-  title,
-  icon: Icon,
-  tone,
-  emptyLabel,
-}: {
-  side: AgingSide;
-  title: string;
-  icon: typeof ArrowDownCircle;
-  tone: string;
-  emptyLabel: string;
-}) {
+/** Everything past `current`. This is the number that matters: an aging report's
+ * job is to separate what is merely outstanding from what is actually late. */
+function overdueTotal(row: AgingPartner): number {
+  return row.d30 + row.d60 + row.d90 + row.over90;
+}
+
+function BucketBar({ side }: { side: AgingSide }) {
+  const total = side.total || 1;
+  const segments: [string, number, string][] = [
+    ["Current", side.buckets.current, "bg-success-500"],
+    ["1–30", side.buckets.d30, "bg-brand-500"],
+    ["31–60", side.buckets.d60, "bg-warning-400"],
+    ["61–90", side.buckets.d90, "bg-warning-600"],
+    ["90+", side.buckets.over90, "bg-danger-500"],
+  ];
   return (
-    <div className="overflow-hidden rounded-lg border border-line bg-surface-0">
-      <div className="flex items-center justify-between border-b border-line px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Icon className={`h-4 w-4 ${tone}`} />
-          <h2 className="text-sm font-semibold text-ink-900">{title}</h2>
-        </div>
-        <span className="font-mono text-sm font-semibold">{money(side.total)} RWF</span>
+    <div>
+      {/* 2px surface gaps rather than strokes, so adjacent segments stay legible
+          without a border darkening every boundary. */}
+      <div className="flex h-2 gap-[2px] overflow-hidden rounded-full">
+        {segments.map(([label, value, colour]) =>
+          value > 0 ? (
+            <div
+              key={label}
+              className={colour}
+              style={{ width: `${(value / total) * 100}%` }}
+              title={`${label}: ${money(value)}`}
+            />
+          ) : null,
+        )}
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
-            <tr>
-              <th className="px-4 py-2">Partner</th>
-              {COLS.map((c) => (
-                <th key={c.key} className="px-3 py-2 text-right">
-                  {c.label}
-                </th>
-              ))}
-              <th className="px-4 py-2 text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {side.by_partner.map((r) => (
-              <tr key={r.partner} className="border-b border-line last:border-0 hover:bg-surface-100">
-                <td className="px-4 py-2 font-medium">{r.partner}</td>
-                {COLS.map((c) => (
-                  <td
-                    key={c.key}
-                    className={`px-3 py-2 text-right font-mono ${
-                      c.key === "over90" && r[c.key] > 0 ? "text-red-600" : "text-ink-700"
-                    }`}
-                  >
-                    {r[c.key] ? money(r[c.key]) : "—"}
-                  </td>
-                ))}
-                <td className="px-4 py-2 text-right font-mono font-semibold">{money(r.total)}</td>
-              </tr>
-            ))}
-            {side.by_partner.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-ink-500">
-                  {emptyLabel}
-                </td>
-              </tr>
-            )}
-          </tbody>
-          {side.by_partner.length > 0 && (
-            <tfoot className="border-t border-line bg-surface-100 text-xs font-semibold">
-              <tr>
-                <td className="px-4 py-2">All partners</td>
-                {COLS.map((c) => (
-                  <td key={c.key} className="px-3 py-2 text-right font-mono">
-                    {side.buckets[c.key] ? money(side.buckets[c.key]) : "—"}
-                  </td>
-                ))}
-                <td className="px-4 py-2 text-right font-mono">{money(side.total)}</td>
-              </tr>
-            </tfoot>
-          )}
-        </table>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-600">
+        {segments.map(([label, value, colour]) => (
+          <span key={label} className="flex items-center gap-1.5">
+            <span className={`h-2 w-2 rounded-full ${colour}`} aria-hidden />
+            {label} <span className="tabular-nums text-ink-900">{money(value)}</span>
+          </span>
+        ))}
       </div>
     </div>
   );
 }
 
 export function FinancePage() {
+  const [which, setWhich] = useState<Which>("receivables");
+
   const { data, isLoading } = useQuery({
     queryKey: ["aging"],
     queryFn: () => api<AgingReport>("/api/distribution/aging/"),
   });
 
+  const side = data?.[which];
+  const rows = side?.by_partner ?? [];
+
   return (
-    <div>
-      <PageHeader title="Receivables & payables" />
-      <p className="mb-5 text-sm text-ink-500">
-        Outstanding balances by trading partner, aged by how overdue each order is (days).
+    <div className="space-y-4">
+      <PageHeader
+        title="Aging"
+        action={
+          <div className="flex gap-1 rounded-lg border border-line bg-surface-0 p-0.5">
+            {(["receivables", "payables"] as const).map((option) => (
+              <Button
+                key={option}
+                variant={which === option ? "primary" : "ghost"}
+                onClick={() => setWhich(option)}
+              >
+                {option === "receivables" ? (
+                  <ArrowDownLeft className="h-4 w-4" />
+                ) : (
+                  <ArrowUpRight className="h-4 w-4" />
+                )}
+                {option === "receivables" ? "Owed to us" : "We owe"}
+              </Button>
+            ))}
+          </div>
+        }
+      />
+      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
+        How old the debt is, not just how much. Money in the 90+ bucket is materially less
+        likely to arrive than money in the current one, and it is the same number on a balance
+        sheet.
       </p>
-      {isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
+
+      {side && (
+        <div className="rounded-lg border border-line bg-surface-0 px-4 py-3">
+          <div className="mb-2 flex items-baseline justify-between">
+            <span className="text-sm font-semibold text-ink-900">
+              {which === "receivables" ? "Receivables" : "Payables"}
+            </span>
+            <span className="tabular-nums text-lg font-semibold text-ink-900">
+              {money(side.total)}
+            </span>
+          </div>
+          <BucketBar side={side} />
         </div>
       )}
-      {data && (
-        <div className="flex flex-col gap-6">
-          <AgingTable
-            side={data.receivables}
-            title="Receivables — owed to you (as supplier)"
-            icon={ArrowDownCircle}
-            tone="text-green-600"
-            emptyLabel="No one owes you right now."
-          />
-          <AgingTable
-            side={data.payables}
-            title="Payables — you owe (as buyer)"
-            icon={ArrowUpCircle}
-            tone="text-amber-600"
-            emptyLabel="You owe nothing right now."
-          />
-        </div>
+
+      {rows.length > 0 && (
+        <VizRoot>
+          <ChartFrame
+            title={which === "receivables" ? "Who owes the most" : "Who we owe the most"}
+            subtitle="Ranked by overdue, not by total — a large current balance is not a problem."
+          >
+            <BarChart
+              data={[...rows]
+                .sort((a, b) => overdueTotal(b) - overdueTotal(a))
+                .slice(0, 8)
+                .map((r) => ({
+                  label: r.partner.slice(0, 28),
+                  value: overdueTotal(r),
+                  note: `${money(r.total)} outstanding · ${money(r.over90)} past 90 days`,
+                  tone: r.over90 > 0 ? ("critical" as const) : ("warning" as const),
+                }))}
+              valueFormat={money}
+            />
+          </ChartFrame>
+        </VizRoot>
       )}
+
+      <DataGrid
+        rows={rows}
+        loading={isLoading}
+        getRowId={(r) => r.partner}
+        storageKey={`finance.aging.${which}`}
+        exportName={`aging-${which}`}
+        searchPlaceholder="Search partners…"
+        emptyMessage={
+          which === "receivables" ? "Nobody owes anything." : "Nothing outstanding to suppliers."
+        }
+        columns={[
+          { key: "partner", header: "Partner", value: (r) => r.partner },
+          ...BUCKETS.map(([key, header]) => ({
+            key,
+            header,
+            numeric: true,
+            align: "right" as const,
+            value: (r: AgingPartner) => r[key],
+            render: (r: AgingPartner) => money(r[key]),
+          })),
+          {
+            key: "overdue",
+            header: "Overdue",
+            numeric: true,
+            align: "right",
+            value: (r) => overdueTotal(r),
+            render: (r) => (
+              <span className={overdueTotal(r) > 0 ? "text-danger-700" : "text-ink-500"}>
+                {money(overdueTotal(r))}
+              </span>
+            ),
+          },
+          {
+            key: "total",
+            header: "Total",
+            numeric: true,
+            align: "right",
+            value: (r) => r.total,
+            render: (r) => <span className="font-semibold">{money(r.total)}</span>,
+          },
+        ]}
+      />
     </div>
   );
 }

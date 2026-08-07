@@ -10,7 +10,6 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
-
 from apps.finance.models import Account, JournalEntry
 from apps.finance.services import post_journal
 

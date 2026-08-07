@@ -116,6 +116,7 @@ class Organization(models.Model):
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     is_active = models.BooleanField(default=True)
+
     # Onboarding lifecycle: a new pharmacy is DRAFT while its licences/documents are
     # captured, PENDING_REVIEW once submitted, ACTIVE once verified (the activation
     # gate), or SUSPENDED. Existing orgs default to ACTIVE.
@@ -230,7 +231,10 @@ class User(AbstractUser):
     # Payroll-file / staff number — an alternate login identifier for staff who
     # have no email. Unique when set; the person's key across HR/attendance/audit.
     pf_number = models.CharField(
-        max_length=30, blank=True, default="", db_index=True,
+        max_length=30,
+        blank=True,
+        default="",
+        db_index=True,
         help_text="Payroll-file / staff number; usable to sign in.",
     )
     organization = models.ForeignKey(
@@ -246,17 +250,30 @@ class User(AbstractUser):
     token_version = models.PositiveIntegerField(default=0)
     # RRA TIN — Rwanda tax-identification, used on PAYE withholding certificates.
     tin = models.CharField(
-        max_length=30, blank=True, default="",
-        help_text="Rwanda Revenue Authority Tax Identification Number — printed on annual PIT summaries.",
+        max_length=30,
+        blank=True,
+        default="",
+        help_text=(
+            "Rwanda Revenue Authority Tax Identification Number — "
+            "printed on annual PIT summaries."
+        ),
     )
     # A secondary mailbox for payslip/PDF delivery (separate from login email).
     payroll_email = models.EmailField(
-        blank=True, default="",
-        help_text="Optional secondary email where payslips/PDFs are delivered, in addition to the login email.",
+        blank=True,
+        default="",
+        help_text=(
+            "Optional secondary email where payslips/PDFs are delivered, "
+            "in addition to the login email."
+        ),
     )
     # Senior oversight — used by the approvals engine to escalate long-tail queues.
     reports_to = models.ForeignKey(
-        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="direct_reports",
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="direct_reports",
         help_text="The user's supervisor — used for senior oversight and approval escalation.",
     )
 
@@ -286,9 +303,7 @@ class User(AbstractUser):
         if self.is_superuser or self.has_role("SYS_ADMIN"):
             return set(Permission.objects.values_list("code", flat=True))
         return set(
-            self.roles.filter(permissions__isnull=False).values_list(
-                "permissions__code", flat=True
-            )
+            self.roles.filter(permissions__isnull=False).values_list("permissions__code", flat=True)
         )
 
 
@@ -364,9 +379,7 @@ class ImpersonationSession(models.Model):
     admin = models.ForeignKey(
         "iam.User", on_delete=models.CASCADE, related_name="impersonations_started"
     )
-    target = models.ForeignKey(
-        "iam.User", on_delete=models.CASCADE, related_name="impersonated_as"
-    )
+    target = models.ForeignKey("iam.User", on_delete=models.CASCADE, related_name="impersonated_as")
     started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(null=True, blank=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)

@@ -27,9 +27,7 @@ def staff(retail: Organization) -> User:
 
 
 def _login(username: str, password: str) -> dict:
-    return APIClient().post(
-        "/api/auth/login", {"username": username, "password": password}
-    ).json()
+    return APIClient().post("/api/auth/login", {"username": username, "password": password}).json()
 
 
 @pytest.mark.django_db

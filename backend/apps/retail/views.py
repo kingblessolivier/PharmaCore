@@ -22,10 +22,24 @@ from rest_framework.response import Response
 from apps.iam.audit import record_audit
 from apps.iam.models import Organization, User
 from apps.iam.scoping import organizations_visible_to
-from apps.retail.models import Dispensing, DrawerSession, Sale
+from apps.retail.models import (
+    ClinicalService,
+    ClinicalServiceRecord,
+    ControlledSubstanceRegister,
+    Dispensing,
+    DrawerSession,
+    POSPromotion,
+    Prescription,
+    Sale,
+)
 from apps.retail.serializers import (
+    ClinicalServiceRecordSerializer,
+    ClinicalServiceSerializer,
+    ControlledSubstanceRegisterSerializer,
     DispensingSerializer,
     DrawerSessionSerializer,
+    POSPromotionSerializer,
+    PrescriptionSerializer,
     SaleSerializer,
 )
 from apps.retail.services import (
@@ -339,3 +353,53 @@ class DrawerSessionViewSet(viewsets.ModelViewSet):
         data = dict(DrawerSessionSerializer(session).data)
         data["report"] = drawer_report(session)
         return Response(data)
+
+
+class PrescriptionViewSet(viewsets.ModelViewSet):
+    serializer_class = PrescriptionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self) -> QuerySet[Prescription]:
+        user = cast(User, self.request.user)
+        qs = Prescription.objects.select_related("organization")
+        if not _is_admin(user):
+            qs = qs.filter(organization__in=organizations_visible_to(user))
+        return qs
+
+
+class ControlledSubstanceRegisterViewSet(viewsets.ModelViewSet):
+    serializer_class = ControlledSubstanceRegisterSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self) -> QuerySet[ControlledSubstanceRegister]:
+        user = cast(User, self.request.user)
+        qs = ControlledSubstanceRegister.objects.select_related(
+            "organization", "product", "logged_by"
+        )
+        if not _is_admin(user):
+            qs = qs.filter(organization__in=organizations_visible_to(user))
+        return qs
+
+
+class POSPromotionViewSet(viewsets.ModelViewSet):
+    queryset = POSPromotion.objects.all()
+    serializer_class = POSPromotionSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class ClinicalServiceViewSet(viewsets.ModelViewSet):
+    queryset = ClinicalService.objects.all()
+    serializer_class = ClinicalServiceSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class ClinicalServiceRecordViewSet(viewsets.ModelViewSet):
+    serializer_class = ClinicalServiceRecordSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self) -> QuerySet[ClinicalServiceRecord]:
+        user = cast(User, self.request.user)
+        qs = ClinicalServiceRecord.objects.select_related("organization", "service", "performed_by")
+        if not _is_admin(user):
+            qs = qs.filter(organization__in=organizations_visible_to(user))
+        return qs

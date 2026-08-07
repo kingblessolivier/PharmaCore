@@ -302,4 +302,3 @@ class ProductSubstituteViewSet(_AuditedAdminViewSet):
         qs = super().get_queryset()
         product = self.request.query_params.get("product")
         return qs.filter(product_id=product) if product else qs
-

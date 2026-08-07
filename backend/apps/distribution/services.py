@@ -14,6 +14,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.db import transaction
+from django.utils import timezone
 
 from apps.distribution.models import (
     GoodsReceivedNote,
@@ -153,6 +154,10 @@ def _reserve_item(item: OrderItem, depot_id: int, user: User | None) -> ItemAllo
             organization_id=depot_id,
             product=item.product,
             status=InventoryBatch.Status.ACTIVE,
+            # Never ship expired stock. FEFO orders by expiry, so without this the
+            # soonest-expiring batch is picked *first* — meaning expired goods are
+            # not merely reachable, they are preferred.
+            expiry_date__gte=timezone.now().date(),
         )
         .order_by("expiry_date", "batch_number")  # FEFO
     )
@@ -257,11 +262,28 @@ def dispatch_order(
     for item in order.items.all():
         item.quantity_shipped = shipped.get(item.pk, 0)
         item.save(update_fields=["quantity_shipped"])
+        # A tender is drawn down by what actually ships, not what was ordered —
+        # otherwise a cancelled or short line silently consumes committed volume.
+        _draw_down_tender(order=order, item=item, quantity=item.quantity_shipped)
 
     order.status = StockOrder.Status.IN_TRANSIT
     order.save(update_fields=["status", "updated_at"])
     _generate_delivery_note(order, shipment, user)
     return shipment
+
+
+def _draw_down_tender(*, order: StockOrder, item: OrderItem, quantity: int) -> None:
+    """Consume committed volume on the tender contract this line was priced under."""
+    if quantity <= 0:
+        return
+    from apps.distribution.marketplace import active_contract
+
+    contract = active_contract(depot=order.depot_id, product=item.product_id, buyer=order.retail_id)
+    if contract is None:
+        return
+    remaining = contract.total_committed_qty - contract.drawn_qty
+    contract.drawn_qty += min(quantity, max(0, remaining))
+    contract.save(update_fields=["drawn_qty"])
 
 
 @transaction.atomic
@@ -364,6 +386,10 @@ def finalize_grn(
                 reference_type="grn",
                 reference_id=str(grn.pk),
                 source_org=grn.order.depot,  # recall traceability: which depot it came from
+                # What the depot itself paid. The transfer price above carries the
+                # depot's margin, which is not group profit until the goods leave
+                # the group — consolidation eliminates the difference.
+                origin_unit_cost=_depot_cost(grn.order.depot, line.product, line.batch_number),
             )
         received_per_item[line.order_item_id] += line.quantity_received
         any_discrepancy = any_discrepancy or line.has_discrepancy
@@ -388,3 +414,26 @@ def finalize_grn(
     order.in_transit.all().delete()
     _generate_grn_and_invoice(grn, user)
     return grn
+
+
+def _depot_cost(depot: Any, product: Any, batch_number: str) -> Decimal | None:
+    """What the sending depot paid for this lot, if it still knows.
+
+    Returns None rather than guessing when the depot's own batch has gone or was
+    never costed: consolidation reports unmeasured transfers separately instead of
+    assuming they carried no margin.
+    """
+    from apps.inventory.models import InventoryBatch
+
+    source = (
+        InventoryBatch.objects.filter(
+            organization=depot, product=product, batch_number=batch_number
+        )
+        .order_by("id")
+        .first()
+    )
+    if source is None:
+        return None
+    # A lot the depot itself received from elsewhere in the group keeps the
+    # original cost, so margin cannot be laundered by transferring twice.
+    return source.origin_unit_cost or source.wholesale_cost

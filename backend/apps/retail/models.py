@@ -40,6 +40,11 @@ class Sale(models.Model):
         VOIDED = "VOIDED", "Voided"
 
     sale_number = models.CharField(max_length=30, unique=True, blank=True, default="")
+    # Set by the till, not the server. A sale rung up while the connection was
+    # down is replayed when it comes back, and without a key the server cannot
+    # tell a replay from a second customer buying the same thing — so the stock
+    # would be deducted twice and the customer charged twice.
+    client_reference = models.CharField(max_length=64, blank=True, default="")
     organization = models.ForeignKey(
         "iam.Organization", on_delete=models.PROTECT, related_name="sales"
     )
@@ -57,6 +62,17 @@ class Sale(models.Model):
     )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
     # Snapshotted at completion so the receipt stays reproducible.
+    # A promotion evaluated at the till has to land somewhere. Without these the
+    # discount could be calculated and never applied, so every basket charged
+    # full price however many coupons were configured.
+    promotion = models.ForeignKey(
+        "retail.POSPromotion",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sales",
+    )
+    discount_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     amount_tendered = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     change_due = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     void_reason = models.CharField(max_length=255, blank=True, default="")
@@ -67,15 +83,34 @@ class Sale(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "client_reference"],
+                condition=models.Q(client_reference__gt=""),
+                name="uniq_sale_client_reference_per_org",
+            )
+        ]
         indexes = [models.Index(fields=["organization", "status"])]
 
     def __str__(self) -> str:
         return self.sale_number or f"SALE#{self.pk}"
 
     @property
-    def total(self) -> Decimal:
-        """VAT-inclusive grand total the customer pays."""
+    def gross_total(self) -> Decimal:
+        """What the basket comes to before any discount."""
         return _money(sum((i.line_total for i in self.items.all()), Decimal("0")))
+
+    @property
+    def total(self) -> Decimal:
+        """VAT-inclusive grand total the customer actually pays.
+
+        Net of any promotion. Before `discount_amount` existed this was the gross
+        figure and a discount could never reduce what was charged.
+        """
+        # The field default is an int, so an unsaved Sale would hand `_money` a
+        # value it cannot quantize.
+        discount = Decimal(str(self.discount_amount or 0))
+        return _money(max(self.gross_total - discount, Decimal("0")))
 
     @property
     def tax_total(self) -> Decimal:
@@ -189,6 +224,16 @@ class Dispensing(models.Model):
     prescriber_name = models.CharField(max_length=150)
     prescriber_license = models.CharField(max_length=100, blank=True, default="")
     prescription_reference = models.CharField(max_length=100, blank=True, default="")
+    # The prescription this dispensing filled. Free text alone meant nothing ever
+    # decremented a refill or moved a prescription out of ACTIVE, so one script
+    # could be dispensed against indefinitely.
+    prescription = models.ForeignKey(
+        "retail.Prescription",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="dispensings",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
@@ -259,3 +304,202 @@ class DrawerSession(models.Model):
 
     def __str__(self) -> str:
         return f"Drawer #{self.pk} · {self.get_status_display()}"
+
+
+class Prescription(models.Model):
+    """Prescription lifecycle & refill management. ROADMAP '6. Retail (POS)'."""
+
+    class Status(models.TextChoices):
+        ACTIVE = "ACTIVE", "Active"
+        FULFILLED = "FULFILLED", "Fulfilled"
+        EXPIRED = "EXPIRED", "Expired"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    prescription_number = models.CharField(max_length=50, unique=True)
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="prescriptions"
+    )
+    patient_name = models.CharField(max_length=150)
+    patient_id_number = models.CharField(max_length=50, blank=True, default="")
+    patient_phone = models.CharField(max_length=20, blank=True, default="")
+    prescriber_name = models.CharField(max_length=150)
+    prescriber_license = models.CharField(max_length=100, blank=True, default="")
+    issue_date = models.DateField()
+    expiry_date = models.DateField()
+    refills_allowed = models.PositiveIntegerField(default=1)
+    refills_used = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Rx #{self.prescription_number} · {self.patient_name}"
+
+    @property
+    def remaining_refills(self) -> int:
+        return max(0, self.refills_allowed - self.refills_used)
+
+
+class PrescriptionItem(models.Model):
+    """What was actually prescribed.
+
+    Without this a prescription records the patient, the prescriber and a refill
+    count — but not the medicine. Nothing can then check that what was dispensed
+    matches what was written, a script cannot be part-filled, and the screen
+    cannot show a pharmacist what they are supposed to be handing over.
+    """
+
+    prescription = models.ForeignKey(
+        "retail.Prescription", on_delete=models.CASCADE, related_name="items"
+    )
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    quantity_prescribed = models.PositiveIntegerField()
+    quantity_dispensed = models.PositiveIntegerField(default=0)
+    # "1 tablet three times daily after food" — printed on the label, so it is
+    # part of the record rather than a note somebody keeps separately.
+    dosage_instructions = models.CharField(max_length=255, blank=True, default="")
+    substitution_allowed = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["prescription", "product"], name="uniq_prescription_item_product"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.product} x{self.quantity_prescribed}"
+
+    @property
+    def outstanding(self) -> int:
+        """Units still owed on this line — what a part-fill has left to give."""
+        return max(self.quantity_prescribed - self.quantity_dispensed, 0)
+
+    @property
+    def is_fully_dispensed(self) -> bool:
+        return self.quantity_dispensed >= self.quantity_prescribed
+
+
+class ControlledSubstanceRegister(models.Model):
+    """Statutory controlled drug logbook & audit trail. ROADMAP '6. Retail (POS)'."""
+
+    class MovementType(models.TextChoices):
+        RECEIPT = "RECEIPT", "Receipt from Supplier/Depot"
+        DISPENSING = "DISPENSING", "Dispensing to Patient"
+        DISPOSAL = "DISPOSAL", "Witnessed Disposal"
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="controlled_drug_logs"
+    )
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT)
+    batch_number = models.CharField(max_length=100)
+    movement_type = models.CharField(max_length=20, choices=MovementType.choices)
+    quantity = models.IntegerField()
+    running_balance = models.PositiveIntegerField()
+    patient_name = models.CharField(max_length=150, blank=True, default="")
+    prescriber_name = models.CharField(max_length=150, blank=True, default="")
+    witness_name = models.CharField(max_length=150, blank=True, default="")
+    rx_reference = models.CharField(max_length=100, blank=True, default="")
+    logged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    logged_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-logged_at"]
+
+    def __str__(self) -> str:
+        return f"CD-LOG #{self.id} · {self.product.generic_name} ({self.movement_type})"
+
+
+class POSPromotion(models.Model):
+    """Retail promotional campaigns & coupon engine. ROADMAP '6. Retail (POS)'."""
+
+    class PromoType(models.TextChoices):
+        PERCENT_DISCOUNT = "PERCENT", "Percentage Discount (%)"
+        FLAT_DISCOUNT = "FLAT", "Flat Amount Off (RWF)"
+        BOGO = "BOGO", "Buy One Get One"
+
+    code = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=150)
+    promo_type = models.CharField(
+        max_length=20, choices=PromoType.choices, default=PromoType.PERCENT_DISCOUNT
+    )
+    discount_value = models.DecimalField(max_digits=14, decimal_places=2)
+    min_spend = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valid_from = models.DateField()
+    valid_until = models.DateField()
+    # Zero means unlimited. Without a cap a coupon posted online can be redeemed
+    # by the whole city, which is how a promotion becomes an incident.
+    max_redemptions = models.PositiveIntegerField(default=0)
+    times_redeemed = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Promo {self.code} · {self.name}"
+
+
+class ClinicalService(models.Model):
+    """Billable pharmacy clinical services catalog. ROADMAP '6. Retail (POS)'."""
+
+    class Category(models.TextChoices):
+        VACCINATION = "VACCINATION", "Vaccination / Immunization"
+        SCREENING = "SCREENING", "Point-of-Care Testing (BP, Glucose, Malaria)"
+        CONSULTATION = "CONSULTATION", "Pharmacist Consultation"
+        PROCEDURE = "PROCEDURE", "Minor Clinical Procedure"
+
+    service_code = models.CharField(max_length=30, unique=True)
+    name = models.CharField(max_length=150)
+    category = models.CharField(max_length=30, choices=Category.choices, default=Category.SCREENING)
+    fee_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return f"{self.service_code} · {self.name} (RWF {self.fee_amount})"
+
+
+class ClinicalServiceRecord(models.Model):
+    """Patient clinical service encounter log. ROADMAP '6. Retail (POS)'."""
+
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.CASCADE, related_name="clinical_encounters"
+    )
+    service = models.ForeignKey(
+        ClinicalService, on_delete=models.PROTECT, related_name="encounters"
+    )
+    patient_name = models.CharField(max_length=150)
+    patient_phone = models.CharField(max_length=20, blank=True, default="")
+    performed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    clinical_notes = models.TextField(blank=True, default="")
+    fee_charged = models.DecimalField(max_digits=14, decimal_places=2)
+    # Billed and never banked: the fee was recorded here and never reached the
+    # till or the ledger, so `4300 Services Revenue` sat unused while the
+    # pharmacy earned money on vaccinations and screenings.
+    sale = models.ForeignKey(
+        "retail.Sale",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="clinical_services",
+    )
+    is_paid = models.BooleanField(default=False)
+    performed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-performed_at"]
+
+    def __str__(self) -> str:
+        return f"Service #{self.id} · {self.service.name} for {self.patient_name}"

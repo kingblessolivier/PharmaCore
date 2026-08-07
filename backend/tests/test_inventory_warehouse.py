@@ -1,13 +1,10 @@
-import pytest
 from datetime import date
-from rest_framework import status
-from rest_framework.test import APIClient
 
+import pytest
 from apps.catalog.models import Product
 from apps.iam.models import Organization, Role, User
 from apps.inventory.models import (
     BatchRecall,
-    BinLocation,
     InventoryBatch,
     QualityCheck,
     StockCount,
@@ -15,9 +12,9 @@ from apps.inventory.models import (
     StockDisposal,
     StockMovement,
     StorageZone,
-    TemperatureLog,
-    TemperatureSensor,
 )
+from rest_framework import status
+from rest_framework.test import APIClient
 
 
 def _auth(user: User) -> APIClient:
@@ -29,7 +26,9 @@ def _auth(user: User) -> APIClient:
 @pytest.fixture
 def test_data(db):
     org = Organization.objects.create(name="Depot Central HQ", type="DEPOT")
-    user = User.objects.create_user(username="wh_manager", email="wh@medlink.rw", password="Password123!")
+    user = User.objects.create_user(
+        username="wh_manager", email="wh@medlink.rw", password="Password123!"
+    )
     user.organization = org
     sys_admin = Role.objects.get(code="SYS_ADMIN")
     user.roles.add(sys_admin)

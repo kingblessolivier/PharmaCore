@@ -10,6 +10,13 @@
 > This is a **design document**, not migrations. Types are PostgreSQL. Nothing
 > here is code yet.
 
+
+> **Current reference:** this is the *design* model as first drawn. What the system
+> actually persists today — every entity, field, relation and constraint — is
+> generated from the code into
+> [docs/reference/data-model.md](reference/data-model.md) and checked in CI, so it
+> cannot drift. Read this document for intent; read that one for truth.
+
 ---
 
 ## 0. Conventions (apply to every table)

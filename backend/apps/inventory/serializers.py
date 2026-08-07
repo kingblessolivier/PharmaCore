@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 
 from rest_framework import serializers
 
@@ -343,7 +344,9 @@ class StockCountItemSerializer(serializers.ModelSerializer):
 
 class StockCountSerializer(serializers.ModelSerializer):
     counter_username = serializers.CharField(source="counter_user.username", read_only=True)
-    approver_username = serializers.CharField(source="approver_user.username", read_only=True, default=None)
+    approver_username = serializers.CharField(
+        source="approver_user.username", read_only=True, default=None
+    )
     items = StockCountItemSerializer(many=True, read_only=True)
 
     class Meta:
@@ -366,7 +369,9 @@ class StockCountSerializer(serializers.ModelSerializer):
 
 
 class StockDisposalSerializer(serializers.ModelSerializer):
-    primary_witness_username = serializers.CharField(source="primary_witness.username", read_only=True)
+    primary_witness_username = serializers.CharField(
+        source="primary_witness.username", read_only=True
+    )
 
     class Meta:
         model = StockDisposal
@@ -664,9 +669,10 @@ class SerialUnitSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "epc", "commissioned_at", "last_scanned_at"]
 
     def get_product_name(self, obj: SerialUnit) -> str | None:
-        if obj.product_id is None:
+        product = obj.product
+        if product is None:
             return None
-        return f"{obj.product.generic_name} {obj.product.strength}".strip()
+        return f"{product.generic_name} {product.strength}".strip()
 
     def get_children_count(self, obj: SerialUnit) -> int:
         return obj.children.count()
@@ -808,8 +814,8 @@ class ConsignmentAgreementSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"holder_name": "Name the site holding our stock (organization or free text)."}
             )
-        start = attrs.get("start_date", getattr(self.instance, "start_date", None))
-        end = attrs.get("end_date", getattr(self.instance, "end_date", None))
+        start: Any = attrs.get("start_date", getattr(self.instance, "start_date", None))
+        end: Any = attrs.get("end_date", getattr(self.instance, "end_date", None))
         if start and end and end < start:
             raise serializers.ValidationError({"end_date": "End date precedes the start date."})
         return attrs
@@ -848,9 +854,7 @@ class ConsignmentConsumptionSerializer(serializers.ModelSerializer):
 
 class ConsignmentSettlementSerializer(serializers.ModelSerializer):
     agreement_no = serializers.CharField(source="agreement.agreement_no", read_only=True)
-    counterparty_name = serializers.CharField(
-        source="agreement.counterparty_name", read_only=True
-    )
+    counterparty_name = serializers.CharField(source="agreement.counterparty_name", read_only=True)
     supplier_bill_no = serializers.CharField(
         source="supplier_bill.bill_number", read_only=True, default=None
     )
@@ -885,11 +889,9 @@ class SettleConsignmentSerializer(serializers.Serializer):
     period_end = serializers.DateField()
     raise_bill = serializers.BooleanField(required=False, default=True)
 
-    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         if attrs["period_end"] < attrs["period_start"]:
-            raise serializers.ValidationError(
-                {"period_end": "The period ends before it starts."}
-            )
+            raise serializers.ValidationError({"period_end": "The period ends before it starts."})
         return attrs
 
 
@@ -932,9 +934,10 @@ class PutawayRuleSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at"]
 
     def get_match_product_name(self, obj: PutawayRule) -> str | None:
-        if obj.match_product_id is None:
+        product = obj.match_product
+        if product is None:
             return None
-        return f"{obj.match_product.generic_name} {obj.match_product.strength}".strip()
+        return f"{product.generic_name} {product.strength}".strip()
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         strategy = attrs.get("strategy") or getattr(self.instance, "strategy", None)
@@ -950,9 +953,7 @@ class PickTaskSerializer(serializers.ModelSerializer):
     product_name = serializers.SerializerMethodField()
     zone_name = serializers.CharField(source="zone.name", read_only=True, default=None)
     bin_code = serializers.CharField(source="bin_location.bin_code", read_only=True, default=None)
-    picker_username = serializers.CharField(
-        source="picker.username", read_only=True, default=None
-    )
+    picker_username = serializers.CharField(source="picker.username", read_only=True, default=None)
 
     class Meta:
         model = PickTask
@@ -1076,7 +1077,8 @@ class RecordCalibrationSerializer(serializers.Serializer):
         max_digits=4, decimal_places=2, required=False, allow_null=True
     )
     result = serializers.ChoiceField(
-        choices=SensorCalibration.Result.choices, required=False,
+        choices=SensorCalibration.Result.choices,
+        required=False,
         default=SensorCalibration.Result.PASS,
     )
     reference_standard = serializers.CharField(max_length=150, required=False, allow_blank=True)
@@ -1109,7 +1111,8 @@ class OpenInvestigationSerializer(serializers.Serializer):
 class CloseInvestigationSerializer(serializers.Serializer):
     disposition = serializers.ChoiceField(
         choices=[
-            c for c in ExcursionInvestigation.Disposition.choices
+            c
+            for c in ExcursionInvestigation.Disposition.choices
             if c[0] != ExcursionInvestigation.Disposition.PENDING
         ]
     )

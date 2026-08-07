@@ -220,7 +220,9 @@ class ShiftRosterSerializer(serializers.ModelSerializer):
 
 class LeaveRequestSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source="employee.full_name", read_only=True)
-    approved_by_name = serializers.CharField(source="approved_by.username", read_only=True, default=None)
+    approved_by_name = serializers.CharField(
+        source="approved_by.username", read_only=True, default=None
+    )
 
     class Meta:
         model = LeaveRequest
