@@ -2,8 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Layers, Plus, Trash2, Warehouse } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Button, Modal, PageHeader, SelectField, TextField } from "../components/ui";
+import { Badge, Button, PageHeader, SelectField, TextField } from "../components/ui";
 import { DataGrid } from "../components/DataGrid";
+import { Drawer } from "../components/RecordKit";
 import { api } from "../lib/api";
 import type { BinLocation, Paginated, StorageZone } from "../lib/types";
 
@@ -214,7 +215,7 @@ export function StorageZonesPage() {
       </div>
 
       {creatingZone && (
-        <Modal title="Create Climate Storage Zone" onClose={() => setCreatingZone(false)}>
+        <Drawer title="Create Climate Storage Zone" onClose={() => setCreatingZone(false)}>
           <form onSubmit={submitZone} className="flex flex-col gap-4">
             <TextField
               label="Zone Name"
@@ -256,11 +257,11 @@ export function StorageZonesPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
 
       {creatingBin && (
-        <Modal title="Add Bin Location" onClose={() => setCreatingBin(false)}>
+        <Drawer title="Add Bin Location" onClose={() => setCreatingBin(false)}>
           <form onSubmit={submitBin} className="flex flex-col gap-4">
             <SelectField
               label="Storage Zone"
@@ -304,7 +305,7 @@ export function StorageZonesPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
     </div>
   );

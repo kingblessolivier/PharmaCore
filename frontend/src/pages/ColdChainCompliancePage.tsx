@@ -13,13 +13,13 @@ import {
   Badge,
   Button,
   Card,
-  Modal,
   PageHeader,
   SelectField,
   TextArea,
   TextField,
 } from "../components/ui";
 import { DataGrid } from "../components/DataGrid";
+import { Drawer } from "../components/RecordKit";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type {
@@ -457,7 +457,7 @@ export function ColdChainCompliancePage() {
       )}
 
       {calibrating && (
-        <Modal
+        <Drawer
           title={`Record Calibration — ${calibrating.name}`}
           onClose={() => setCalibrating(null)}
         >
@@ -540,11 +540,11 @@ export function ColdChainCompliancePage() {
               </Button>
             </div>
           </div>
-        </Modal>
+        </Drawer>
       )}
 
       {opening && (
-        <Modal title="Open Excursion Investigation" onClose={() => setOpening(false)}>
+        <Drawer title="Open Excursion Investigation" onClose={() => setOpening(false)}>
           <div className="flex flex-col gap-4">
             <p className="text-sm text-ink-600">
               The readings in the window give min/max, MKT and the reading count; every active lot
@@ -603,11 +603,11 @@ export function ColdChainCompliancePage() {
               </Button>
             </div>
           </div>
-        </Modal>
+        </Drawer>
       )}
 
       {closing && (
-        <Modal title={`Close ${closing.reference_no}`} onClose={() => setClosing(null)}>
+        <Drawer title={`Close ${closing.reference_no}`} onClose={() => setClosing(null)}>
           <div className="flex flex-col gap-4">
             <Card className="p-3 text-xs">
               <div className="grid grid-cols-3 gap-2">
@@ -680,7 +680,7 @@ export function ColdChainCompliancePage() {
               </Button>
             </div>
           </div>
-        </Modal>
+        </Drawer>
       )}
     </div>
   );

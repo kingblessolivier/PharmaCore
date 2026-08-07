@@ -15,12 +15,12 @@ import {
   Button,
   Card,
   ConfirmModal,
-  Modal,
   PageHeader,
   SelectField,
   TextField,
 } from "../components/ui";
 import { DataGrid } from "../components/DataGrid";
+import { Drawer } from "../components/RecordKit";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type {
@@ -399,7 +399,7 @@ export function PutawayRulesPage() {
       />
 
       {placing && (
-        <Modal
+        <Drawer
           title={`Put away ${placing.product_name}`}
           onClose={() => {
             setPlacing(null);
@@ -485,11 +485,11 @@ export function PutawayRulesPage() {
               </Button>
             </div>
           </div>
-        </Modal>
+        </Drawer>
       )}
 
       {(creating || editing) && (
-        <Modal title={editing ? `Edit ${editing.name}` : "Add Put-away Rule"} onClose={close}>
+        <Drawer title={editing ? `Edit ${editing.name}` : "Add Put-away Rule"} onClose={close}>
           <form onSubmit={submit} className="flex flex-col gap-4">
             {error && (
               <div className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>
@@ -645,11 +645,11 @@ export function PutawayRulesPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
 
       {simulating && (
-        <Modal
+        <Drawer
           title="Simulate Put-away"
           onClose={() => {
             setSimulating(false);
@@ -716,7 +716,7 @@ export function PutawayRulesPage() {
               </Card>
             )}
           </div>
-        </Modal>
+        </Drawer>
       )}
 
       {deleting && (

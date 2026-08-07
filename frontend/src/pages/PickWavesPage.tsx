@@ -16,12 +16,12 @@ import {
   Button,
   Card,
   ConfirmModal,
-  Modal,
   PageHeader,
   SelectField,
   TextField,
 } from "../components/ui";
 import { DataGrid } from "../components/DataGrid";
+import { Drawer } from "../components/RecordKit";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { Paginated, PickTask, PickWave, Product, StorageZone, Warehouse } from "../lib/types";
@@ -346,7 +346,7 @@ export function PickWavesPage() {
       />
 
       {creating && (
-        <Modal title="New Pick Wave" onClose={() => setCreating(false)}>
+        <Drawer title="New Pick Wave" onClose={() => setCreating(false)}>
           <form onSubmit={submitWave} className="flex flex-col gap-4">
             <TextField
               label="Wave Number"
@@ -410,11 +410,11 @@ export function PickWavesPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
 
       {building && (
-        <Modal title={`Build Tasks — ${building.wave_no}`} onClose={() => setBuilding(null)}>
+        <Drawer title={`Build Tasks — ${building.wave_no}`} onClose={() => setBuilding(null)}>
           <div className="flex flex-col gap-4">
             <p className="text-sm text-ink-600">
               Each demand line is split across as many batches as it takes, soonest expiry first.
@@ -470,11 +470,11 @@ export function PickWavesPage() {
               </Button>
             </div>
           </div>
-        </Modal>
+        </Drawer>
       )}
 
       {openWave && (
-        <Modal title={`${openWave.wave_no} — Pick List`} onClose={() => setOpenWave(null)}>
+        <Drawer title={`${openWave.wave_no} — Pick List`} onClose={() => setOpenWave(null)}>
           <Card className="mb-4 p-4 text-xs">
             <div className="flex items-center justify-between">
               <Badge tone={STATUS_TONE[openWave.status] ?? "neutral"}>{openWave.status}</Badge>
@@ -537,11 +537,11 @@ export function PickWavesPage() {
               </p>
             )}
           </div>
-        </Modal>
+        </Drawer>
       )}
 
       {confirming && (
-        <Modal title={`Confirm Pick — ${confirming.product_name}`} onClose={() => setConfirming(null)}>
+        <Drawer title={`Confirm Pick — ${confirming.product_name}`} onClose={() => setConfirming(null)}>
           <div className="flex flex-col gap-4">
             <p className="text-sm text-ink-600">
               Requested {confirming.quantity_requested} from bin {confirming.bin_code ?? "—"}.
@@ -575,7 +575,7 @@ export function PickWavesPage() {
               </Button>
             </div>
           </div>
-        </Modal>
+        </Drawer>
       )}
 
       {deleting && (
