@@ -5,7 +5,7 @@
 # Data model reference
 
 
-**172 entities across 13 apps.**
+**181 entities across 13 apps.**
 
 Every persisted entity in the system, generated from the Django model registry.
 For how a domain hangs together and which invariants matter, read
@@ -4134,7 +4134,7 @@ Table `retail_payment`.
 | --- | --- | --- |
 | `id` | BigAuto | unique |
 | `sale` | FK → retail.Sale | on delete: cascade |
-| `method` | Char(20) | one of: CASH, MOBILE_MONEY, CARD |
+| `method` | Char(20) | one of: CASH, MOBILE_MONEY, CARD, INSURANCE |
 | `amount` | Decimal(14,2) |  |
 | `created_at` | DateTime |  |
 
@@ -4306,6 +4306,139 @@ Table `workspace_comment`.
 | `updated_at` | DateTime |  |
 
 
+### `MailLabel`
+
+A user's own folder. Labels are personal, like Gmail's.
+
+Table `workspace_maillabel`.
+
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | BigAuto | unique |
+| `user` | FK → iam.User | on delete: cascade |
+| `name` | Char(60) |  |
+| `colour` | Char(20) |  |
+
+**Invariants**
+
+- `uniq_label_per_user` — unique on (user, name)
+
+
+### `MailMessage`
+
+One email in a thread.
+
+Table `workspace_mailmessage`.
+
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | BigAuto | unique |
+| `thread` | FK → workspace.MailThread | on delete: cascade |
+| `sender` | FK → iam.User | optional · on delete: set_null |
+| `body` | Text |  |
+| `is_draft` | Boolean |  |
+| `sent_at` | DateTime | optional |
+| `created_at` | DateTime |  |
+
+
+### `MailRecipient`
+
+One person's copy of one message, and what they have done with it. Read, starred, archived and trashed all live here rather than on the message, because they are true of a person and not of the mail. One recipient reading an email must not mark it read for the other five.
+
+Table `workspace_mailrecipient`.
+
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | BigAuto | unique |
+| `message` | FK → workspace.MailMessage | on delete: cascade |
+| `user` | FK → iam.User | on delete: cascade |
+| `kind` | Char(4) | one of: TO, CC, BCC |
+| `read_at` | DateTime | optional |
+| `is_starred` | Boolean |  |
+| `is_archived` | Boolean |  |
+| `is_trashed` | Boolean |  |
+
+**Invariants**
+
+- `uniq_mail_recipient` — unique on (message, user)
+
+
+### `MailThread`
+
+A conversation. Replies group under it, as an inbox expects.
+
+Table `workspace_mailthread`.
+
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | BigAuto | unique |
+| `organization` | FK → iam.Organization | optional · on delete: cascade |
+| `subject` | Char(255) |  |
+| `created_at` | DateTime |  |
+| `last_message_at` | DateTime |  |
+
+
+### `MailThreadLabel`
+
+A label applied to a thread, by the person who owns the label.
+
+Table `workspace_mailthreadlabel`.
+
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | BigAuto | unique |
+| `label` | FK → workspace.MailLabel | on delete: cascade |
+| `thread` | FK → workspace.MailThread | on delete: cascade |
+
+**Invariants**
+
+- `uniq_thread_label` — unique on (label, thread)
+
+
+### `Message`
+
+A chat message, optionally a reply inside a thread.
+
+Table `workspace_message`.
+
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | BigAuto | unique |
+| `space` | FK → workspace.Space | on delete: cascade |
+| `author` | FK → iam.User | optional · on delete: set_null |
+| `parent` | FK → workspace.Message | optional · on delete: cascade |
+| `body` | Text |  |
+| `edited_at` | DateTime | optional |
+| `deleted_at` | DateTime | optional |
+| `created_at` | DateTime |  |
+
+
+### `MessageReaction`
+
+One emoji from one person on one message.
+
+Table `workspace_messagereaction`.
+
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | BigAuto | unique |
+| `message` | FK → workspace.Message | on delete: cascade |
+| `user` | FK → iam.User | on delete: cascade |
+| `emoji` | Char(16) |  |
+| `created_at` | DateTime |  |
+
+**Invariants**
+
+- `uniq_reaction_per_user` — unique on (message, user, emoji)
+
+
 ### `Notification`
 
 Table `workspace_notification`.
@@ -4322,4 +4455,46 @@ Table `workspace_notification`.
 | `link_entity_id` | Char(64) |  |
 | `is_read` | Boolean |  |
 | `created_at` | DateTime |  |
+
+
+### `Space`
+
+A room: a branch channel, a department, or a direct message between two.
+
+Table `workspace_space`.
+
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | BigAuto | unique |
+| `organization` | FK → iam.Organization | optional · on delete: cascade |
+| `kind` | Char(10) | one of: SPACE, DIRECT |
+| `name` | Char(120) |  |
+| `topic` | Char(255) |  |
+| `is_private` | Boolean |  |
+| `created_by` | FK → iam.User | optional · on delete: set_null |
+| `created_at` | DateTime |  |
+| `last_activity_at` | DateTime |  |
+
+
+### `SpaceMember`
+
+Who is in a space, and how far they have read. ``last_read_at`` is per member because unread is a property of the person.
+
+Table `workspace_spacemember`.
+
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | BigAuto | unique |
+| `space` | FK → workspace.Space | on delete: cascade |
+| `user` | FK → iam.User | on delete: cascade |
+| `role` | Char(10) | one of: MEMBER, MANAGER |
+| `last_read_at` | DateTime | optional |
+| `is_muted` | Boolean |  |
+| `joined_at` | DateTime |  |
+
+**Invariants**
+
+- `uniq_space_member` — unique on (space, user)
 

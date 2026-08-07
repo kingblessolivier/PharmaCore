@@ -63,3 +63,18 @@ class Notification(models.Model):
 
     def __str__(self) -> str:
         return f"{self.type} -> {self.recipient_id}: {self.title}"
+
+
+# Connect — chat and email. Kept in their own module for size; imported here so
+# Django discovers them and migrations behave as if they were declared inline.
+from apps.workspace.models_connect import (  # noqa: E402,F401
+    MailLabel,
+    MailMessage,
+    MailRecipient,
+    MailThread,
+    MailThreadLabel,
+    Message,
+    MessageReaction,
+    Space,
+    SpaceMember,
+)

@@ -59,6 +59,13 @@ import { ClinicalServicesPage } from "./pages/ClinicalServicesPage";
 import { AdminHome } from "./pages/apps/AdminHome";
 import { RetailHome } from "./pages/apps/RetailHome";
 import { CatalogHome } from "./pages/apps/CatalogHome";
+import { InsuranceHome } from "./pages/apps/InsuranceHome";
+import { InsuranceClaimsPage } from "./pages/InsuranceClaimsPage";
+import { InsuranceSchemesPage } from "./pages/InsuranceSchemesPage";
+import { InsuranceMembersPage } from "./pages/InsuranceMembersPage";
+import { InsuranceRemittancesPage } from "./pages/InsuranceRemittancesPage";
+import { ChatPage } from "./pages/ChatPage";
+import { MailPage } from "./pages/MailPage";
 import { DistributionHome } from "./pages/apps/DistributionHome";
 import { FinanceHome } from "./pages/apps/FinanceHome";
 import { CostCentresPage } from "./pages/CostCentresPage";
@@ -190,6 +197,18 @@ function App() {
               <Route path="/inventory/recalls" element={forPharmacy(<BatchRecallsPage />)} />
               <Route path="/inventory/counts" element={forPharmacy(<StockCountsPage />)} />
               <Route path="/inventory/disposal" element={forPharmacy(<StockDisposalPage />)} />
+              {/* Insurance */}
+              <Route path="/insurance" element={forPharmacy(<InsuranceHome />)} />
+              <Route path="/insurance/claims" element={forPharmacy(<InsuranceClaimsPage />)} />
+              <Route path="/insurance/schemes" element={forPharmacy(<InsuranceSchemesPage />)} />
+              <Route path="/insurance/members" element={forPharmacy(<InsuranceMembersPage />)} />
+              <Route
+                path="/insurance/remittances"
+                element={forPharmacy(<InsuranceRemittancesPage />)}
+              />
+              {/* Connect — chat and mail, open to everyone signed in. */}
+              <Route path="/connect/chat" element={<ChatPage />} />
+              <Route path="/connect/mail" element={<MailPage />} />
               <Route path="/distribution" element={forPharmacy(<DistributionHome />)} />
               <Route path="/distribution/orders" element={forPharmacy(<PurchaseOrdersPage />)} />
               <Route path="/distribution/grn" element={forPharmacy(<GrnPage />)} />
