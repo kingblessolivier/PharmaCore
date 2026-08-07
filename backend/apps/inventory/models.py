@@ -1250,3 +1250,37 @@ class StockMovement(models.Model):
 
     def delete(self, *args: Any, **kwargs: Any) -> Any:
         raise ValueError("StockMovement is append-only and cannot be deleted.")
+
+
+class DisposalLine(models.Model):
+    """What a disposal actually destroyed.
+
+    The header carried witnesses, a method and a certificate number but never the
+    goods — so "confirm destruction" could only ever flip a status, leaving the
+    stock on the books as sellable and the loss out of the P&L. A destruction
+    certificate with no units behind it is a document that asserts something
+    nobody recorded.
+    """
+
+    disposal = models.ForeignKey(StockDisposal, on_delete=models.CASCADE, related_name="lines")
+    batch = models.ForeignKey(
+        InventoryBatch, on_delete=models.PROTECT, related_name="disposal_lines"
+    )
+    quantity = models.PositiveIntegerField()
+    # Stamped when the units actually leave stock, so a second confirmation
+    # cannot destroy the same goods twice.
+    destroyed_quantity = models.PositiveIntegerField(default=0)
+    note = models.CharField(max_length=255, blank=True, default="")
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(fields=["disposal", "batch"], name="uniq_disposal_batch_line")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.quantity}× {self.batch.batch_number} on {self.disposal.disposal_no}"
+
+    @property
+    def is_destroyed(self) -> bool:
+        return self.destroyed_quantity > 0

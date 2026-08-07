@@ -13,6 +13,7 @@ from apps.inventory.views import (
     ExcursionInvestigationViewSet,
     IntakeView,
     InventoryBatchViewSet,
+    InventoryOverviewView,
     PharmacyProductViewSet,
     PickTaskViewSet,
     PickWaveViewSet,
@@ -60,6 +61,7 @@ router.register("pick-waves", PickWaveViewSet, basename="pick-wave")
 router.register("pick-tasks", PickTaskViewSet, basename="pick-task")
 
 urlpatterns = [
+    path("overview/", InventoryOverviewView.as_view(), name="inventory-overview"),
     path("intake", IntakeView.as_view(), name="intake"),
     *router.urls,
 ]

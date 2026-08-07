@@ -5,7 +5,7 @@
 # Data model reference
 
 
-**171 entities across 13 apps.**
+**172 entities across 13 apps.**
 
 Every persisted entity in the system, generated from the Django model registry.
 For how a domain hangs together and which invariants matter, read
@@ -2861,6 +2861,27 @@ Table `inventory_consignmentsettlement`.
 | `created_by` | FK → iam.User | optional · on delete: set_null |
 | `created_at` | DateTime |  |
 | `settled_at` | DateTime | optional |
+
+
+### `DisposalLine`
+
+What a disposal actually destroyed. The header carried witnesses, a method and a certificate number but never the goods — so "confirm destruction" could only ever flip a status, leaving the stock on the books as sellable and the loss out of the P&L. A destruction certificate with no units behind it is a document that asserts something nobody recorded.
+
+Table `inventory_disposalline`.
+
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | BigAuto | unique |
+| `disposal` | FK → inventory.StockDisposal | on delete: cascade |
+| `batch` | FK → inventory.InventoryBatch | on delete: protect |
+| `quantity` | PositiveInteger |  |
+| `destroyed_quantity` | PositiveInteger |  |
+| `note` | Char(255) |  |
+
+**Invariants**
+
+- `uniq_disposal_batch_line` — unique on (disposal, batch)
 
 
 ### `EpcisEvent`

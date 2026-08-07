@@ -9,8 +9,8 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any, cast
 
-from django.db import transaction
 from django.db.models import Q, QuerySet
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -26,7 +26,17 @@ from apps.iam.audit import record_audit
 from apps.iam.models import Organization, User
 from apps.iam.permissions import CanManageOrg
 from apps.iam.scoping import organizations_visible_to
-from apps.inventory import analytics, coldchain, gs1, serialisation, warehouse_services
+from apps.inventory import (
+    analytics,
+    coldchain,
+    counting,
+    disposal,
+    gs1,
+    quality,
+    recalls,
+    serialisation,
+    warehouse_services,
+)
 from apps.inventory.models import (
     BatchRecall,
     BinLocation,
@@ -92,6 +102,46 @@ from apps.inventory.serializers import (
 from apps.inventory.services import adjust_stock, log_wastage, receive_intake
 
 _WRITE = {"create", "update", "partial_update", "destroy"}
+
+
+def _require_org_param(request: Request) -> int:
+    """The organization a collection-level query is about."""
+    raw = request.query_params.get("organization")
+    if not raw:
+        user = cast(User, request.user)
+        if user.organization_id:
+            return int(user.organization_id)
+        raise ValidationError({"organization": "This query needs an organization."})
+    return lookup_pk(raw)
+
+
+def _trace_payload(trace: recalls.Trace) -> dict[str, Any]:
+    """Flatten a recall trace for the wire.
+
+    ``reached_patients`` is surfaced first because it is the field that decides
+    whether this is a stock problem or a public-safety one.
+    """
+    return {
+        "product": trace.product_id,
+        "product_name": trace.product_name,
+        "batch_number": trace.batch_number,
+        "reached_patients": trace.reached_patients,
+        "units_still_held": trace.units_still_held,
+        "units_in_transit": trace.units_in_transit,
+        "units_dispensed": trace.units_dispensed,
+        "holders": [
+            {
+                "organization": h.organization_id,
+                "organization_name": h.organization_name,
+                "on_hand_units": h.on_hand_units,
+                "in_transit_units": h.in_transit_units,
+                "received_units": h.received_units,
+                "dispensed_units": h.dispensed_units,
+            }
+            for h in trace.holders
+        ],
+        "patients": trace.patients,
+    }
 
 
 class _AuditedAdminViewSet(viewsets.ModelViewSet):
@@ -260,23 +310,40 @@ class QualityCheckViewSet(_AuditedAdminViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanManageOrg])
     def pass_qc(self, request: Request, pk: str | None = None) -> Response:
-        qc = self.get_object()
-        qc.status = QualityCheck.Status.PASSED
-        qc.save()
-        batch = qc.batch
-        batch.status = InventoryBatch.Status.ACTIVE
-        batch.save()
-        return Response(QualityCheckSerializer(qc).data)
+        """Release quarantined stock into saleable inventory."""
+        try:
+            outcome = quality.release(
+                check=self.get_object(),
+                user=cast(User, request.user),
+                notes=request.data.get("notes", ""),
+            )
+        except quality.QualityError as exc:
+            raise ValidationError(str(exc)) from exc
+        return Response(
+            {
+                **QualityCheckSerializer(outcome.check).data,
+                "released_units": outcome.released_units,
+            }
+        )
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanManageOrg])
     def fail_qc(self, request: Request, pk: str | None = None) -> Response:
-        qc = self.get_object()
-        qc.status = QualityCheck.Status.FAILED
-        qc.save()
-        batch = qc.batch
-        batch.status = InventoryBatch.Status.QUARANTINE
-        batch.save()
-        return Response(QualityCheckSerializer(qc).data)
+        """Reject the batch and hold it in quarantine."""
+        try:
+            outcome = quality.reject(
+                check=self.get_object(),
+                reason=request.data.get("reason", ""),
+                user=cast(User, request.user),
+            )
+        except quality.QualityError as exc:
+            raise ValidationError(str(exc)) from exc
+        return Response(QualityCheckSerializer(outcome.check).data)
+
+    @action(detail=False, methods=["get"])
+    def queue(self, request: Request) -> Response:
+        """Everything waiting on a QC decision, oldest first."""
+        org = _require_org_param(request)
+        return Response({"organization": org, "rows": quality.quarantine_queue(organization=org)})
 
 
 class BatchRecallViewSet(_AuditedAdminViewSet):
@@ -285,22 +352,28 @@ class BatchRecallViewSet(_AuditedAdminViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanManageOrg])
     def execute_freeze(self, request: Request, pk: str | None = None) -> Response:
+        """Quarantine this product's recalled batch, and report where the rest went."""
+        try:
+            trace = recalls.freeze(recall=self.get_object(), user=cast(User, request.user))
+        except recalls.RecallError as exc:
+            raise ValidationError(str(exc)) from exc
+        return Response({"status": "frozen", **_trace_payload(trace)})
+
+    @action(detail=True, methods=["get"])
+    def trace(self, request: Request, pk: str | None = None) -> Response:
+        """Where every unit of this batch went - held, in transit, and dispensed."""
         recall = self.get_object()
-        # Freeze batch across all organizations
-        affected = InventoryBatch.objects.filter(batch_number=recall.batch_number)
-        updated_count = affected.update(status=InventoryBatch.Status.RECALLED)
-        recall.status = BatchRecall.Status.IN_PROGRESS
-        recall.save()
-        record_audit(
-            action="EMERGENCY_RECALL_FREEZE",
-            user=cast(User, request.user),
-            organization=None,
-            entity_type="batch_recall",
-            entity_id=str(recall.pk),
-            changes={"batch_number": recall.batch_number, "frozen_batches": updated_count},
-            request=request,
-        )
-        return Response({"status": "frozen", "affected_batches": updated_count})
+        trace = recalls.trace_batch(product=recall.product_id, batch_number=recall.batch_number)
+        return Response(_trace_payload(trace))
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanManageOrg])
+    def close_recall(self, request: Request, pk: str | None = None) -> Response:
+        """Close the recall once no recalled stock is still held."""
+        try:
+            recall = recalls.close(recall=self.get_object(), user=cast(User, request.user))
+        except recalls.RecallError as exc:
+            raise ValidationError(str(exc)) from exc
+        return Response(BatchRecallSerializer(recall).data)
 
 
 class StockCountViewSet(_AuditedAdminViewSet):
@@ -316,33 +389,25 @@ class StockCountViewSet(_AuditedAdminViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanManageOrg])
     def approve_count(self, request: Request, pk: str | None = None) -> Response:
-        from apps.finance.services import post_inventory_adjustment
+        """Post this count's variances to stock and the ledger - exactly once."""
+        try:
+            outcome = counting.approve(count=self.get_object(), user=cast(User, request.user))
+        except counting.CountError as exc:
+            raise ValidationError(str(exc)) from exc
+        return Response(
+            {
+                **StockCountSerializer(outcome.count).data,
+                "lines_adjusted": outcome.lines_adjusted,
+                "units_gained": outcome.units_gained,
+                "units_lost": outcome.units_lost,
+                "net_value": str(outcome.net_value),
+            }
+        )
 
-        sc = self.get_object()
-        with transaction.atomic():
-            for item in sc.items.all():
-                if item.variance_qty != 0:
-                    delta = item.variance_qty
-                    adjust_stock(
-                        batch=item.batch,
-                        counted_quantity=item.counted_qty,
-                        reason=f"Stock Count Variance Reconciliation ({sc.reference_no})",
-                        user=cast(User, request.user),
-                    )
-                    post_inventory_adjustment(
-                        batch=item.batch,
-                        delta=delta,
-                        unit_cost=item.batch.wholesale_cost,
-                        reason=f"Stock count {sc.reference_no}",
-                        reference_type="stock_count",
-                        reference_id=str(sc.pk),
-                        user=cast(User, request.user),
-                    )
-            sc.status = StockCount.Status.APPROVED
-            sc.approver_user = cast(User, request.user)
-            sc.completed_at = timezone.now()
-            sc.save()
-        return Response(StockCountSerializer(sc).data)
+    @action(detail=True, methods=["get"])
+    def variance(self, request: Request, pk: str | None = None) -> Response:
+        """What this count found, before anyone commits it."""
+        return Response(counting.variance_report(count=self.get_object()))
 
 
 class StockDisposalViewSet(_AuditedAdminViewSet):
@@ -358,11 +423,43 @@ class StockDisposalViewSet(_AuditedAdminViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanManageOrg])
     def confirm_destruction(self, request: Request, pk: str | None = None) -> Response:
-        sd = self.get_object()
-        sd.status = StockDisposal.Status.DESTROYED
-        sd.destroyed_at = timezone.now()
-        sd.save()
-        return Response(StockDisposalSerializer(sd).data)
+        """Actually destroy the listed stock: remove it, record it, write it off."""
+        try:
+            outcome = disposal.confirm_destruction(
+                disposal=self.get_object(), user=cast(User, request.user)
+            )
+        except disposal.DisposalError as exc:
+            raise ValidationError(str(exc)) from exc
+        return Response(
+            {
+                **StockDisposalSerializer(outcome.disposal).data,
+                "units_destroyed": outcome.units_destroyed,
+                "value_written_off": str(outcome.value_written_off),
+            }
+        )
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanManageOrg])
+    def add_line(self, request: Request, pk: str | None = None) -> Response:
+        """List a batch, and how much of it, for destruction."""
+        batch = get_object_or_404(InventoryBatch, pk=lookup_pk(request.data.get("batch")))
+        try:
+            line = disposal.add_line(
+                disposal=self.get_object(),
+                batch=batch,
+                quantity=int(request.data.get("quantity", 0)),
+                note=request.data.get("note", ""),
+            )
+        except disposal.DisposalError as exc:
+            raise ValidationError(str(exc)) from exc
+        return Response({"line": line.pk, "batch": batch.pk, "quantity": line.quantity}, status=201)
+
+    @action(detail=False, methods=["get"])
+    def candidates(self, request: Request) -> Response:
+        """Stock that cannot be sold and is waiting to be destroyed."""
+        org = _require_org_param(request)
+        return Response(
+            {"organization": org, "rows": disposal.destruction_candidates(organization=org)}
+        )
 
 
 class PharmacyProductViewSet(viewsets.ModelViewSet):
@@ -1207,3 +1304,31 @@ class ConsignmentSettlementViewSet(viewsets.ReadOnlyModelViewSet):
         if self.request.query_params.get("agreement"):
             qs = qs.filter(agreement_id=lookup_pk(self.request.query_params["agreement"]))
         return qs
+
+
+class InventoryOverviewView(APIView):
+    """What needs a decision in inventory, rather than what exists in it.
+
+    All-time counts (zones, bins, sensors) are stable by nature and never change
+    what anyone does. These are the four things that do: stock held waiting on a
+    quality decision, stock frozen by a recall, stock that cannot be sold and is
+    waiting to be destroyed, and counts whose variance has not been posted.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        org = _require_org_param(request)
+        return Response(
+            {
+                "organization": org,
+                "quality": quality.summary(organization=org),
+                "recalls": recalls.summary(organization=org),
+                "disposal": disposal.summary(organization=org),
+                "counts": {
+                    "awaiting_approval": StockCount.objects.filter(
+                        organization_id=org, status=StockCount.Status.SUBMITTED
+                    ).count(),
+                },
+            }
+        )
