@@ -7,12 +7,12 @@ import {
   Button,
   Card,
   ConfirmModal,
-  Modal,
   PageHeader,
   SelectField,
   TextField,
 } from "../components/ui";
 import { DataGrid } from "../components/DataGrid";
+import { Drawer } from "../components/RecordKit";
 import { api } from "../lib/api";
 import type {
   Paginated,
@@ -224,7 +224,7 @@ export function WarehousesPage() {
       />
 
       {(creating || editing) && (
-        <Modal
+        <Drawer
           title={editing ? `Edit ${editing.name}` : "Add Warehouse"}
           onClose={close}
         >
@@ -316,11 +316,11 @@ export function WarehousesPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
 
       {inspecting && (
-        <Modal
+        <Drawer
           title={`${inspecting.name} — Zone Occupancy`}
           onClose={() => setInspecting(null)}
         >
@@ -371,7 +371,7 @@ export function WarehousesPage() {
               </Card>
             ))}
           </div>
-        </Modal>
+        </Drawer>
       )}
 
       {deleting && (

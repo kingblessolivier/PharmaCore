@@ -7,13 +7,13 @@ import {
   Button,
   Card,
   ConfirmModal,
-  Modal,
   PageHeader,
   SelectField,
   TextArea,
   TextField,
 } from "../components/ui";
 import { DataGrid } from "../components/DataGrid";
+import { Drawer } from "../components/RecordKit";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type {
@@ -354,7 +354,7 @@ export function ConsignmentPage() {
       />
 
       {(creating || editing) && (
-        <Modal
+        <Drawer
           title={editing ? `Edit ${editing.agreement_no}` : "New Consignment Agreement"}
           onClose={close}
         >
@@ -511,11 +511,11 @@ export function ConsignmentPage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Drawer>
       )}
 
       {settling && (
-        <Modal title={`Settle ${settling.agreement_no}`} onClose={() => setSettling(null)}>
+        <Drawer title={`Settle ${settling.agreement_no}`} onClose={() => setSettling(null)}>
           <div className="flex flex-col gap-4">
             {error && (
               <div className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>
@@ -561,11 +561,11 @@ export function ConsignmentPage() {
               </Button>
             </div>
           </div>
-        </Modal>
+        </Drawer>
       )}
 
       {inspecting && (
-        <Modal
+        <Drawer
           title={`${inspecting.agreement_no} — Consumption Ledger`}
           onClose={() => setInspecting(null)}
         >
@@ -622,7 +622,7 @@ export function ConsignmentPage() {
               </p>
             )}
           </div>
-        </Modal>
+        </Drawer>
       )}
 
       {deleting && (

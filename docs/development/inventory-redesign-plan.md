@@ -1,6 +1,6 @@
 # Inventory redesign plan
 
-**Status:** I-A to I-E built and verified; I-F partially done · **Date:** 2026-08-07
+**Status:** complete — I-A to I-F built and verified · **Date:** 2026-08-07
 
 ## How this differs from Finance, Retail and Distribution
 
@@ -114,11 +114,24 @@ be refused), **Batch Recalls** (the trace, including patients to contact),
 (candidate stock, disposal lines, destruction evidence), and the **Inventory
 overview** (needs-attention panel over `/api/inventory/overview/`).
 
+### I-F complete
+
+All fourteen inventory screens now carry zero `Modal`s; thirteen are on
+`DataGrid` + `RecordKit` (the fourteenth is the app home, which correctly uses
+the `AppHome` primitives shared by every module home).
+
+The nine remaining screens were converted mechanically — `Modal` → `Drawer`,
+form bodies untouched. These are large (300–734 lines) and functional, so the
+goal was the shared shell and its behaviour (escape-to-close, focus trap, scroll
+handling), not a rewrite that would risk their logic. Modal's default width was
+narrower than Drawer's, so the two-column forms gained room.
+
+**Temperature Logs** was the exception and was rebuilt properly. At 91 lines it
+was a flat chronological dump of readings, which answers "what did the sensor
+say" — not the question anyone opens it with. Cold-chain product fails on
+*cumulative time out of range*, so it now groups by sensor, ranks by consecutive
+breaches, and reports how long each sensor has been out of range.
+
 ## Still open
 
-* **I-F is partial.** Nine inventory screens remain on `Modal` rather than
-  `RecordKit`: Warehouses, Zones & Bins, Put-away Rules, Wave Picking,
-  Replenishment, Track & Trace, Consignment/VMI, Temperature Logs, Cold-Chain
-  Compliance. All are large (300–734 lines), already on `DataGrid`, and
-  functional — this is a consistency gap, not a defect.
 * **Nothing has been rendered in a browser** (no browser tool available).

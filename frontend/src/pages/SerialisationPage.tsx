@@ -14,12 +14,12 @@ import {
   Badge,
   Button,
   Card,
-  Modal,
   PageHeader,
   SelectField,
   TextField,
 } from "../components/ui";
 import { DataGrid } from "../components/DataGrid";
+import { Drawer } from "../components/RecordKit";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type {
@@ -392,7 +392,7 @@ export function SerialisationPage() {
       />
 
       {observing && (
-        <Modal title="Record a Business Step" onClose={() => setObserving(false)}>
+        <Drawer title="Record a Business Step" onClose={() => setObserving(false)}>
           <div className="flex flex-col gap-4">
             <p className="text-sm text-ink-600">
               {selected.length} unit(s) selected. Scanning a pallet cascades the step to every
@@ -427,11 +427,11 @@ export function SerialisationPage() {
               </Button>
             </div>
           </div>
-        </Modal>
+        </Drawer>
       )}
 
       {aggregating && (
-        <Modal title="Pack Units Into a Container" onClose={() => setAggregating(null)}>
+        <Drawer title="Pack Units Into a Container" onClose={() => setAggregating(null)}>
           <div className="flex flex-col gap-4">
             <p className="text-sm text-ink-600">
               {selected.length} unit(s) will be packed. Aggregation only goes up the hierarchy:
@@ -461,11 +461,11 @@ export function SerialisationPage() {
               </Button>
             </div>
           </div>
-        </Modal>
+        </Drawer>
       )}
 
       {tracing && (
-        <Modal title="Chain of Custody" onClose={() => setTracing(null)}>
+        <Drawer title="Chain of Custody" onClose={() => setTracing(null)}>
           {traceQuery.isLoading && <p className="text-sm text-ink-500">Loading…</p>}
           {traceQuery.data && (
             <div className="flex flex-col gap-4 text-sm">
@@ -530,7 +530,7 @@ export function SerialisationPage() {
               </div>
             </div>
           )}
-        </Modal>
+        </Drawer>
       )}
     </div>
   );
