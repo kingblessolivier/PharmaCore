@@ -247,6 +247,9 @@ class Payment(models.Model):
         CASH = "CASH", "Cash"
         MOBILE_MONEY = "MOBILE_MONEY", "Mobile money"
         CARD = "CARD", "Card"
+        # Not money received — money owed. The scheme's share of an insured sale
+        # debits insurer receivables rather than a cash account.
+        INSURANCE = "INSURANCE", "Insurance (claimed)"
 
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="payments")
     method = models.CharField(max_length=20, choices=Method.choices)

@@ -20,6 +20,7 @@ import {
   LayoutDashboard,
   LayoutGrid,
   LogOut,
+  Mail,
   MessageSquare,
   Network,
   Pill,
@@ -91,10 +92,10 @@ const APPS: AppTile[] = [
   { label: "Finance", hue: "#15803D", icon: Wallet, to: "/finance", roles: ["ORG_ADMIN"] },
   { label: "Insights", hue: "#DB2777", icon: BarChart3, to: "/", roles: "all" },
   { label: "Admin", hue: "#475569", icon: ShieldCheck, to: "/admin", roles: ["ORG_ADMIN"] },
-  { label: "Insurance", hue: "#7C3AED", icon: Shield, to: null, roles: "all" },
+  { label: "Insurance", hue: "#7C3AED", icon: Shield, to: "/insurance", roles: ["ORG_ADMIN", "PHARMACIST"] },
   { label: "People", hue: "#EA580C", icon: Users, to: "/people", roles: ["HR_MANAGER"] },
   { label: "Online", hue: "#0EA5E9", icon: Globe, to: null, roles: "all" },
-  { label: "Connect", hue: "#2563EB", icon: MessageSquare, to: null, roles: "all" },
+  { label: "Connect", hue: "#2563EB", icon: MessageSquare, to: "/connect/chat", roles: "all" },
 ];
 
 function AppSwitcher() {
@@ -353,6 +354,27 @@ const NAV: NavGroup[] = [
       { to: "/catalog/ingredients", label: "Active Ingredients", icon: FileText },
       { to: "/catalog/low-stock", label: "Low Stock", icon: ClipboardList },
       { to: "/catalog/expiry", label: "Expiry Forecast", icon: Clock },
+    ],
+  },
+  {
+    label: "Insurance",
+    roles: ["ORG_ADMIN", "PHARMACIST"],
+    match: ["/insurance"],
+    items: [
+      { to: "/insurance", label: "Insurance Overview", icon: Shield, end: true },
+      { to: "/insurance/claims", label: "Claims", icon: FileText },
+      { to: "/insurance/schemes", label: "Schemes & Formulary", icon: Building2 },
+      { to: "/insurance/members", label: "Member Policies", icon: Users },
+      { to: "/insurance/remittances", label: "Remittances", icon: Receipt },
+    ],
+  },
+  {
+    label: "Connect",
+    roles: "all",
+    match: ["/connect"],
+    items: [
+      { to: "/connect/chat", label: "Chat", icon: MessageSquare },
+      { to: "/connect/mail", label: "Mail", icon: Mail },
     ],
   },
   {

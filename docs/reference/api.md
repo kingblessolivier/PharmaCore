@@ -5,7 +5,7 @@
 # API reference
 
 
-**983 routes.**
+**1043 routes.**
 
 Every route the project serves, generated from the URL resolver.
 For conventions — pagination, errors, auth, idempotency — read
@@ -875,6 +875,55 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/hr/overview/` | — | `PeopleOverviewView` | Headline numbers and the compliance warning list for the People home. |
 
 
+## `/api/insurance`
+
+
+| Path | Methods | View | Purpose |
+| --- | --- | --- | --- |
+| `/api/insurance/` | — | `APIRootView` | The default basic root view for DefaultRouter |
+| `/api/insurance/<drf_format_suffix:format>` | — | `APIRootView` | The default basic root view for DefaultRouter |
+| `/api/insurance/^claims/$` | GET | `ClaimViewSet` | Claims are built from sales and moved by the service — never edited directly. |
+| `/api/insurance/^claims/(?P<pk>[^/.]+)/$` | GET | `ClaimViewSet` | Claims are built from sales and moved by the service — never edited directly. |
+| `/api/insurance/^claims/(?P<pk>[^/.]+)/adjudicate/$` | POST | `ClaimViewSet` | Claims are built from sales and moved by the service — never edited directly. |
+| `/api/insurance/^claims/(?P<pk>[^/.]+)/adjudicate\.(?P<format>[a-z0-9]+)/?$` | POST | `ClaimViewSet` | Claims are built from sales and moved by the service — never edited directly. |
+| `/api/insurance/^claims/(?P<pk>[^/.]+)/reverse_claim/$` | POST | `ClaimViewSet` | Claims are built from sales and moved by the service — never edited directly. |
+| `/api/insurance/^claims/(?P<pk>[^/.]+)/reverse_claim\.(?P<format>[a-z0-9]+)/?$` | POST | `ClaimViewSet` | Claims are built from sales and moved by the service — never edited directly. |
+| `/api/insurance/^claims/(?P<pk>[^/.]+)/submit/$` | POST | `ClaimViewSet` | Claims are built from sales and moved by the service — never edited directly. |
+| `/api/insurance/^claims/(?P<pk>[^/.]+)/submit\.(?P<format>[a-z0-9]+)/?$` | POST | `ClaimViewSet` | Claims are built from sales and moved by the service — never edited directly. |
+| `/api/insurance/^claims/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | GET | `ClaimViewSet` | Claims are built from sales and moved by the service — never edited directly. |
+| `/api/insurance/^claims/build/$` | POST | `ClaimViewSet` | Raise a draft claim for a completed insured sale. |
+| `/api/insurance/^claims/build\.(?P<format>[a-z0-9]+)/?$` | POST | `ClaimViewSet` | Raise a draft claim for a completed insured sale. |
+| `/api/insurance/^claims/exposure/$` | GET | `ClaimViewSet` | What each payer owes, aged. |
+| `/api/insurance/^claims/exposure\.(?P<format>[a-z0-9]+)/?$` | GET | `ClaimViewSet` | What each payer owes, aged. |
+| `/api/insurance/^claims/queue/$` | GET | `ClaimViewSet` | Claims needing action, closest to their window deadline first. |
+| `/api/insurance/^claims/queue\.(?P<format>[a-z0-9]+)/?$` | GET | `ClaimViewSet` | Claims needing action, closest to their window deadline first. |
+| `/api/insurance/^claims\.(?P<format>[a-z0-9]+)/?$` | GET | `ClaimViewSet` | Claims are built from sales and moved by the service — never edited directly. |
+| `/api/insurance/^formulary/$` | GET,POST | `SchemeFormularyViewSet` |  |
+| `/api/insurance/^formulary/(?P<pk>[^/.]+)/$` | DELETE,GET,PATCH,PUT | `SchemeFormularyViewSet` |  |
+| `/api/insurance/^formulary/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | DELETE,GET,PATCH,PUT | `SchemeFormularyViewSet` |  |
+| `/api/insurance/^formulary\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `SchemeFormularyViewSet` |  |
+| `/api/insurance/^policies/$` | GET,POST | `MemberPolicyViewSet` |  |
+| `/api/insurance/^policies/(?P<pk>[^/.]+)/$` | DELETE,GET,PATCH,PUT | `MemberPolicyViewSet` |  |
+| `/api/insurance/^policies/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | DELETE,GET,PATCH,PUT | `MemberPolicyViewSet` |  |
+| `/api/insurance/^policies\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `MemberPolicyViewSet` |  |
+| `/api/insurance/^remittances/$` | GET,POST | `RemittanceAdviceViewSet` |  |
+| `/api/insurance/^remittances/(?P<pk>[^/.]+)/$` | DELETE,GET,PATCH,PUT | `RemittanceAdviceViewSet` |  |
+| `/api/insurance/^remittances/(?P<pk>[^/.]+)/add_line/$` | POST | `RemittanceAdviceViewSet` |  |
+| `/api/insurance/^remittances/(?P<pk>[^/.]+)/add_line\.(?P<format>[a-z0-9]+)/?$` | POST | `RemittanceAdviceViewSet` |  |
+| `/api/insurance/^remittances/(?P<pk>[^/.]+)/post_advice/$` | POST | `RemittanceAdviceViewSet` |  |
+| `/api/insurance/^remittances/(?P<pk>[^/.]+)/post_advice\.(?P<format>[a-z0-9]+)/?$` | POST | `RemittanceAdviceViewSet` |  |
+| `/api/insurance/^remittances/(?P<pk>[^/.]+)/suggestions/$` | GET | `RemittanceAdviceViewSet` |  |
+| `/api/insurance/^remittances/(?P<pk>[^/.]+)/suggestions\.(?P<format>[a-z0-9]+)/?$` | GET | `RemittanceAdviceViewSet` |  |
+| `/api/insurance/^remittances/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | DELETE,GET,PATCH,PUT | `RemittanceAdviceViewSet` |  |
+| `/api/insurance/^remittances\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `RemittanceAdviceViewSet` |  |
+| `/api/insurance/^schemes/$` | GET,POST | `InsuranceSchemeViewSet` |  |
+| `/api/insurance/^schemes/(?P<pk>[^/.]+)/$` | DELETE,GET,PATCH,PUT | `InsuranceSchemeViewSet` |  |
+| `/api/insurance/^schemes/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | DELETE,GET,PATCH,PUT | `InsuranceSchemeViewSet` |  |
+| `/api/insurance/^schemes\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `InsuranceSchemeViewSet` |  |
+| `/api/insurance/eligibility/` | — | `EligibilityView` | Is this card good, and what does this basket split into? |
+| `/api/insurance/overview/` | — | `InsuranceOverviewView` | What needs attention across schemes, claims and reconciliation. |
+
+
 ## `/api/inventory`
 
 
@@ -1255,6 +1304,14 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/workspace/^comments/(?P<pk>[^/.]+)/strike\.(?P<format>[a-z0-9]+)/?$` | POST | `CommentViewSet` | Soft-delete (strike through) your own comment. |
 | `/api/workspace/^comments/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | DELETE,GET,PATCH,PUT | `CommentViewSet` | Threaded comments on any record; list requires ?entity_type=&entity_id=. |
 | `/api/workspace/^comments\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `CommentViewSet` | Threaded comments on any record; list requires ?entity_type=&entity_id=. |
+| `/api/workspace/^mail/$` | GET,POST | `MailViewSet` | Internal email. |
+| `/api/workspace/^mail/(?P<pk>[^/.]+)/flag/$` | POST | `MailViewSet` | Read, star, archive or trash — this person's copy only. |
+| `/api/workspace/^mail/(?P<pk>[^/.]+)/flag\.(?P<format>[a-z0-9]+)/?$` | POST | `MailViewSet` | Read, star, archive or trash — this person's copy only. |
+| `/api/workspace/^mail/(?P<pk>[^/.]+)/thread/$` | GET | `MailViewSet` | The whole conversation this message belongs to. |
+| `/api/workspace/^mail/(?P<pk>[^/.]+)/thread\.(?P<format>[a-z0-9]+)/?$` | GET | `MailViewSet` | The whole conversation this message belongs to. |
+| `/api/workspace/^mail/sent/$` | GET | `MailViewSet` | Internal email. |
+| `/api/workspace/^mail/sent\.(?P<format>[a-z0-9]+)/?$` | GET | `MailViewSet` | Internal email. |
+| `/api/workspace/^mail\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `MailViewSet` | Internal email. |
 | `/api/workspace/^notifications/$` | GET | `NotificationViewSet` | The current user's in-app notifications. |
 | `/api/workspace/^notifications/(?P<pk>[^/.]+)/$` | GET | `NotificationViewSet` | The current user's in-app notifications. |
 | `/api/workspace/^notifications/(?P<pk>[^/.]+)/mark-read/$` | POST | `NotificationViewSet` | The current user's in-app notifications. |
@@ -1265,5 +1322,15 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/workspace/^notifications/unread-count/$` | GET | `NotificationViewSet` | The current user's in-app notifications. |
 | `/api/workspace/^notifications/unread-count\.(?P<format>[a-z0-9]+)/?$` | GET | `NotificationViewSet` | The current user's in-app notifications. |
 | `/api/workspace/^notifications\.(?P<format>[a-z0-9]+)/?$` | GET | `NotificationViewSet` | The current user's in-app notifications. |
+| `/api/workspace/^spaces/$` | GET,POST | `SpaceViewSet` | Chat spaces and direct messages. |
+| `/api/workspace/^spaces/(?P<pk>[^/.]+)/messages/$` | GET,POST | `SpaceViewSet` | Chat spaces and direct messages. |
+| `/api/workspace/^spaces/(?P<pk>[^/.]+)/messages\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `SpaceViewSet` | Chat spaces and direct messages. |
+| `/api/workspace/^spaces/(?P<pk>[^/.]+)/read/$` | POST | `SpaceViewSet` | Chat spaces and direct messages. |
+| `/api/workspace/^spaces/(?P<pk>[^/.]+)/read\.(?P<format>[a-z0-9]+)/?$` | POST | `SpaceViewSet` | Chat spaces and direct messages. |
+| `/api/workspace/^spaces/direct/$` | POST | `SpaceViewSet` | Open (or reuse) the one-to-one space with another person. |
+| `/api/workspace/^spaces/direct\.(?P<format>[a-z0-9]+)/?$` | POST | `SpaceViewSet` | Open (or reuse) the one-to-one space with another person. |
+| `/api/workspace/^spaces\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `SpaceViewSet` | Chat spaces and direct messages. |
 | `/api/workspace/mentionable-users` | — | `MentionableUsersView` | Users in an organization who can be @mentioned (id + username). |
+| `/api/workspace/messages/<int:pk>/<str:verb>/` | — | `MessageActionsView` | Edit, delete or react to one message. |
+| `/api/workspace/search/` | — | `ConnectSearchView` | Search chat and mail together, scoped to what this user may see. |
 

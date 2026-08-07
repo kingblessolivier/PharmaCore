@@ -55,6 +55,9 @@ _CONTROL_ACCOUNTS: list[tuple[str, str, str, str]] = [
     # an asset, and the input side of every VAT return.
     ("1350", "VAT Input — Recoverable", Account.Type.ASSET, Account.Balance.DEBIT),
     ("1400", "Accounts Receivable — Trade", Account.Type.ASSET, Account.Balance.DEBIT),
+    # Insurer debt is not trade debt: it is chased through a claims process, ages
+    # against a scheme claim window, and must be separable on the balance sheet.
+    ("1410", "Accounts Receivable — Insurers", Account.Type.ASSET, Account.Balance.DEBIT),
     ("1500", "Inventory on Hand", Account.Type.ASSET, Account.Balance.DEBIT),
     # IAS 2: stock is carried at the lower of cost and net realisable value.
     # Stock that will not sell before it expires is not worth its cost, and the
@@ -150,6 +153,7 @@ _CLASSIFICATIONS: dict[str, str] = {
     "1300": Account.Classification.CURRENT_ASSET,
     "1350": Account.Classification.CURRENT_ASSET,
     "1400": Account.Classification.CURRENT_ASSET,
+    "1410": Account.Classification.CURRENT_ASSET,
     "1500": Account.Classification.CURRENT_ASSET,
     "1600": Account.Classification.CURRENT_ASSET,
     "1150": Account.Classification.CURRENT_ASSET,
@@ -1225,6 +1229,11 @@ _TENDER_ACCOUNTS: dict[str, str] = {
     "CASH": "1100",
     "MOBILE_MONEY": "1300",
     "CARD": "1150",
+    # An insured sale is paid partly by the patient and partly by their scheme.
+    # The scheme's share is money owed, not money received, so it debits
+    # receivables at the till. Recognising it again when the claim is submitted
+    # would count the same revenue twice.
+    "INSURANCE": "1410",
 }
 
 
@@ -1249,6 +1258,7 @@ def _tender_debits(sale: Any, total: Decimal) -> list[tuple[str, Decimal, str]]:
 
     labels = {
         "1100": "Cash taken at the till",
+        "1410": "Owed by the patient's insurance scheme",
         "1300": "Mobile money received",
         "1150": "Card takings awaiting settlement",
     }
