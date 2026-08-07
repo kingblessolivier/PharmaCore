@@ -25,6 +25,7 @@ from apps.distribution.views_marketplace import (
     ReturnActionsView,
     SourceDemandView,
     StorefrontView,
+    TradingPartnersView,
     VanActionsView,
     VanManifestView,
     VanMovementViewSet,
@@ -50,6 +51,7 @@ urlpatterns = [
     path("overview/", DistributionOverviewView.as_view(), name="distribution-overview"),
     # Storefront
     path("storefront/", StorefrontView.as_view(), name="storefront"),
+    path("trading-partners/", TradingPartnersView.as_view(), name="trading-partners"),
     path("storefront/availability/", AvailabilityView.as_view(), name="availability"),
     path("storefront/publish/", PublishListingView.as_view(), name="publish-listing"),
     # Demand-driven sourcing
