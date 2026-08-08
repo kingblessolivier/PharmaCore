@@ -74,6 +74,7 @@ import { PurchaseOrdersPage } from "./pages/PurchaseOrdersPage";
 import { ClaimWorkbenchPage } from "./pages/ClaimWorkbenchPage";
 import { GrnWorkbenchPage } from "./pages/GrnWorkbenchPage";
 import { RequisitionWorkbenchPage } from "./pages/RequisitionWorkbenchPage";
+import { SupplierWorkbenchPage } from "./pages/SupplierWorkbenchPage";
 import { OrderComposePage } from "./pages/OrderComposePage";
 import {
   AccessWorkspace,
@@ -219,6 +220,7 @@ function App() {
               <Route path="/procurement/receipts/:id" element={forProcurement(<GrnWorkbenchPage />)} />
               <Route path="/procurement/invoices" element={forProcurement(<SupplierInvoicesPage />)} />
               <Route path="/procurement/suppliers" element={forProcurement(<SupplierMasterPage />)} />
+              <Route path="/procurement/suppliers/:id" element={forProcurement(<SupplierWorkbenchPage />)} />
               <Route path="/admin" element={adminOnly(<AdminHome />)} />
               <Route path="/companies" element={adminOnly(<CompaniesPage />)} />
               {/* Retired: a strict subset of "Organizations & branches", which sat directly
