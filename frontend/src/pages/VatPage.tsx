@@ -72,7 +72,7 @@ export function VatPage() {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <button
         onClick={() => navigate("/finance")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -93,7 +93,7 @@ export function VatPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
         Per-class Output and Input derived from posted journal entries, plus withholding,
         the running carry-forward, and a CSV draft for the RRA e-Tax filing.
         {/* A CSV draft proves nothing after the fact — the filed copy is the record. */}

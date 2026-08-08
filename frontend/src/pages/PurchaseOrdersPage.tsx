@@ -74,7 +74,7 @@ export function PurchaseOrdersPage() {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <button
         onClick={() => navigate("/distribution")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -90,7 +90,7 @@ export function PurchaseOrdersPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
         B2B stock procurement between wholesale depots and retail branches with automated FEFO approval & receipt stock landing.
       </p>
 

@@ -116,7 +116,7 @@ export function WarehousesPage() {
   const rows = warehousesQuery.data?.results ?? [];
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <button
         onClick={() => navigate("/inventory")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -132,7 +132,7 @@ export function WarehousesPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
         Every facility this organization stores stock in — main store, cross-dock, bonded
         warehouse, quarantine hold. Zones and bins hang off a warehouse, so stock is
         addressable down to facility → zone → bin.

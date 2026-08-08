@@ -192,7 +192,7 @@ export function PickWavesPage() {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <button
         onClick={() => navigate("/inventory")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -208,7 +208,7 @@ export function PickWavesPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
         A wave is a batch of orders released to the floor as one pass. Tasks are built FEFO —
         soonest expiry first — then walk-ordered by aisle, shelf and bin. Releasing reserves the
         stock, so two waves can never promise the same units.

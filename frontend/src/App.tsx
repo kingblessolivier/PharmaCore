@@ -11,7 +11,6 @@ import { DocumentsPage } from "./pages/DocumentsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OrganizationDetailPage } from "./pages/OrganizationDetailPage";
 import { OrdersPage } from "./pages/OrdersPage";
-import { FinancePage } from "./pages/FinancePage";
 import { PosPage } from "./pages/PosPage";
 import { ProductDetailPage } from "./pages/ProductDetailPage";
 import { ProductsPage } from "./pages/ProductsPage";
@@ -21,16 +20,11 @@ import { CompaniesPage } from "./pages/CompaniesPage";
 import { ApprovalsInboxPage } from "./pages/ApprovalsInboxPage";
 import { ChartOfAccountsPage } from "./pages/ChartOfAccountsPage";
 import { JournalPage } from "./pages/JournalPage";
-import { CreditProfilesPage } from "./pages/CreditProfilesPage";
 import { EmployeesPage } from "./pages/EmployeesPage";
 import { EmployeeDetailPage } from "./pages/EmployeeDetailPage";
 import { PayrollPage } from "./pages/PayrollPage";
 import { SupplierBillsPage } from "./pages/SupplierBillsPage";
-import { BankingPage } from "./pages/BankingPage";
 import { FinanceStatementsPage } from "./pages/FinanceStatementsPage";
-import { ReceivablesPage } from "./pages/ReceivablesPage";
-import { DunningPage } from "./pages/DunningPage";
-import { CustomerStatementPage } from "./pages/CustomerStatementPage";
 import { PaymentRunsPage } from "./pages/PaymentRunsPage";
 import { FixedAssetsPage } from "./pages/FixedAssetsPage";
 import { BudgetsPage } from "./pages/BudgetsPage";
@@ -60,7 +54,6 @@ import { DistributionHome } from "./pages/apps/DistributionHome";
 import { FinanceHome } from "./pages/apps/FinanceHome";
 import { CostCentresPage } from "./pages/CostCentresPage";
 import { SchedulesPage } from "./pages/SchedulesPage";
-import { BankReconciliationPage } from "./pages/BankReconciliationPage";
 import { PeopleHome } from "./pages/apps/PeopleHome";
 
 import { LowStockPage } from "./pages/LowStockPage";
@@ -71,11 +64,8 @@ import { FormulariesPage } from "./pages/FormulariesPage";
 import { InventoryHome } from "./pages/apps/InventoryHome";
 import { ConsignmentPage } from "./pages/ConsignmentPage";
 import { PickWavesPage } from "./pages/PickWavesPage";
-import { PutawayRulesPage } from "./pages/PutawayRulesPage";
 import { ReplenishmentPage } from "./pages/ReplenishmentPage";
 import { SerialisationPage } from "./pages/SerialisationPage";
-import { StorageZonesPage } from "./pages/StorageZonesPage";
-import { WarehousesPage } from "./pages/WarehousesPage";
 import { QualityControlPage } from "./pages/QualityControlPage";
 import { BatchRecallsPage } from "./pages/BatchRecallsPage";
 import { StockCountsPage } from "./pages/StockCountsPage";
@@ -84,11 +74,14 @@ import { PurchaseOrdersPage } from "./pages/PurchaseOrdersPage";
 import { OrderComposePage } from "./pages/OrderComposePage";
 import {
   AccessWorkspace,
+  CashBankWorkspace,
   ColdChainWorkspace,
+  ReceivablesWorkspace,
   ReferenceDataWorkspace,
   StatutoryWorkspace,
   TaxWorkspace,
   TimeWorkspace,
+  WarehouseSetupWorkspace,
 } from "./pages/workspaces";
 import { OrderWorkbenchPage } from "./pages/OrderWorkbenchPage";
 import { GrnPage } from "./pages/GrnPage";
@@ -175,9 +168,9 @@ function App() {
               <Route path="/catalog/manufacturers" element={forPharmacy(<ReferenceDataWorkspace />)} />
               <Route path="/catalog/ingredients" element={<Navigate to="/catalog/manufacturers?tab=ingredients" replace />} />
               <Route path="/inventory" element={forPharmacy(<InventoryHome />)} />
-              <Route path="/inventory/warehouses" element={forPharmacy(<WarehousesPage />)} />
-              <Route path="/inventory/zones" element={forPharmacy(<StorageZonesPage />)} />
-              <Route path="/inventory/putaway" element={forPharmacy(<PutawayRulesPage />)} />
+              <Route path="/inventory/warehouses" element={forPharmacy(<WarehouseSetupWorkspace />)} />
+              <Route path="/inventory/zones" element={<Navigate to="/inventory/warehouses?tab=zones" replace />} />
+              <Route path="/inventory/putaway" element={<Navigate to="/inventory/warehouses?tab=putaway" replace />} />
               <Route path="/inventory/picking" element={forPharmacy(<PickWavesPage />)} />
               <Route path="/inventory/replenishment" element={forPharmacy(<ReplenishmentPage />)} />
               <Route path="/inventory/serialisation" element={forPharmacy(<SerialisationPage />)} />
@@ -237,21 +230,18 @@ function App() {
               <Route path="/pos" element={<PosPage />} />
               <Route path="/finance" element={forFinance(<FinanceHome />)} />
               <Route path="/finance/cockpit" element={forFinance(<FinanceCockpitPage />)} />
-              <Route path="/finance/aging" element={forFinance(<FinancePage />)} />
+              <Route path="/finance/aging" element={<Navigate to="/finance/receivables?tab=aging" replace />} />
               <Route path="/finance/accounts" element={forFinance(<ChartOfAccountsPage />)} />
               <Route path="/finance/journal" element={forFinance(<JournalPage />)} />
               <Route path="/finance/cost-centres" element={forFinance(<CostCentresPage />)} />
-              <Route path="/finance/credit" element={forFinance(<CreditProfilesPage />)} />
+              <Route path="/finance/credit" element={<Navigate to="/finance/receivables?tab=credit" replace />} />
               <Route path="/finance/payables" element={forFinance(<SupplierBillsPage />)} />
               <Route path="/finance/payment-runs" element={forFinance(<PaymentRunsPage />)} />
-              <Route path="/finance/receivables" element={forFinance(<ReceivablesPage />)} />
-              <Route path="/finance/dunning" element={forFinance(<DunningPage />)} />
-              <Route path="/finance/statement" element={forFinance(<CustomerStatementPage />)} />
-              <Route path="/finance/banking" element={forFinance(<BankingPage />)} />
-              <Route
-                path="/finance/reconciliation"
-                element={forFinance(<BankReconciliationPage />)}
-              />
+              <Route path="/finance/receivables" element={forFinance(<ReceivablesWorkspace />)} />
+              <Route path="/finance/dunning" element={<Navigate to="/finance/receivables?tab=dunning" replace />} />
+              <Route path="/finance/statement" element={<Navigate to="/finance/receivables?tab=statements" replace />} />
+              <Route path="/finance/banking" element={forFinance(<CashBankWorkspace />)} />
+              <Route path="/finance/reconciliation" element={<Navigate to="/finance/banking?tab=reconciliation" replace />} />
               <Route path="/finance/statements" element={forFinance(<FinanceStatementsPage />)} />
               <Route path="/finance/assets" element={forFinance(<FixedAssetsPage />)} />
               <Route path="/finance/tax-ebm" element={<Navigate to="/finance/tax?tab=ebm" replace />} />

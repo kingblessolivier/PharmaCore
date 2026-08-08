@@ -179,7 +179,7 @@ export function ConsignmentPage() {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <button
         onClick={() => navigate("/inventory")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -195,7 +195,7 @@ export function ConsignmentPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
         Stock that is not where its owner is. <strong>Supplier-owned</strong> sits in our
         warehouse and we owe for it only as it is consumed; <strong>customer-held</strong> sits
         at a customer and stays ours until they use it. Location and ownership are tracked

@@ -186,7 +186,7 @@ export function SerialisationPage() {
   const containers = units.filter((u) => u.level !== "EACH");
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <button
         onClick={() => navigate("/inventory")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -202,7 +202,7 @@ export function SerialisationPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
         Every scan changes state and leaves a record. Commission a pack from its GS1
         DataMatrix, pack it into a case and a pallet, then observe it through receiving,
         dispatch and dispensing — the unit history and the EPCIS export are the same data.

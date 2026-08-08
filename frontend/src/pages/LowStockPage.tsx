@@ -24,7 +24,7 @@ export function LowStockPage() {
   );
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <button
         onClick={() => navigate("/catalog")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -40,7 +40,7 @@ export function LowStockPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
         Medicines across your pharmacies that are below their minimum threshold and require reordering.
       </p>
 

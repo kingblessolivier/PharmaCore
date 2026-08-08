@@ -46,7 +46,7 @@ export function InsuranceHome() {
   const exposure = overview.data?.exposure ?? [];
 
   return (
-    <div className="flex max-w-6xl flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <AppHeader
         icon={Shield}
         hue="#7C3AED"

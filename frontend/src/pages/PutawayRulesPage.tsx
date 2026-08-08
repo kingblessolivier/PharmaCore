@@ -220,7 +220,7 @@ export function PutawayRulesPage() {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <button
         onClick={() => navigate("/inventory")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -241,7 +241,7 @@ export function PutawayRulesPage() {
           </div>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
         Where a received lot goes, decided by policy rather than by whoever is holding the
         trolley. Rules are tried in priority order and the first match wins. When no rule
         matches, the product&rsquo;s own label storage condition still decides — a cold-chain
