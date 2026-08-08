@@ -1,35 +1,57 @@
 /** @type {import('tailwindcss').Config} */
 // Design tokens from docs/design/01-design-tokens.md, surfaced as Tailwind colors.
 // Values reference CSS variables (see src/index.css) so light/dark swap in one place.
+//
+// Every step declared here must also exist in index.css. A Tailwind colour whose
+// variable is missing still generates a rule — `color: var(--nope)` — which
+// silently computes to `inherit`, so the failure looks like a design decision
+// rather than a bug. `scripts/check-tokens.mjs` compares the two and fails the
+// build when they diverge; that is how 696 dead colour utilities went unnoticed.
+
+const ramp = (name, steps) =>
+  Object.fromEntries(steps.map((s) => [s, `var(--${name}-${s})`]));
+
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        brand: {
-          50: "var(--brand-50)",
-          500: "var(--brand-500)",
-          600: "var(--brand-600)",
-          700: "var(--brand-700)",
+        brand: ramp("brand", [50, 100, 200, 300, 400, 500, 600, 700, 800, 900]),
+        ink: ramp("ink", [300, 400, 500, 600, 700, 800, 900]),
+        surface: ramp("surface", [0, 50, 100, 200]),
+        danger: ramp("danger", [50, 200, 300, 500, 600, 700, 800, 900]),
+        warning: ramp("warning", [50, 200, 300, 400, 500, 600, 700, 800, 900]),
+        success: ramp("success", [50, 200, 500, 600, 700, 800, 900]),
+        info: ramp("info", [50, 200, 500, 600, 700]),
+        line: {
+          DEFAULT: "var(--line-200)",
+          200: "var(--line-200)",
+          strong: "var(--line-strong)",
         },
-        ink: {
-          500: "var(--ink-500)",
-          700: "var(--ink-700)",
-          900: "var(--ink-900)",
-        },
-        surface: {
-          0: "var(--surface-0)",
-          100: "var(--surface-100)",
-        },
-        line: "var(--line-200)",
       },
       borderRadius: {
         md: "8px",
         lg: "12px",
       },
+      spacing: {
+        // Row heights an ERP grid is built on — a screen read for eight hours
+        // needs a rhythm, not ad-hoc padding.
+        row: "var(--row-h)",
+        "row-compact": "var(--row-h-compact)",
+        field: "var(--field-h)",
+      },
+      fontSize: {
+        // Dense-form scale. 13px is the workhorse: small enough to fit a real
+        // document on one screen, large enough to read all day.
+        micro: ["11px", { lineHeight: "16px" }],
+        form: ["13px", { lineHeight: "18px" }],
+      },
       fontFamily: {
-        sans: ["Inter", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
-        mono: ["IBM Plex Mono", "SFMono-Regular", "Menlo", "monospace"],
+        // "Inter Variable" is the family name @fontsource-variable/inter
+        // registers. Naming plain "Inter" — as this did — matched nothing and
+        // fell through to system-ui, so the typeface was never actually used.
+        sans: ['"Inter Variable"', "Inter", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        mono: ['"IBM Plex Mono"', "SFMono-Regular", "Menlo", "Consolas", "monospace"],
       },
     },
   },
