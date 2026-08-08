@@ -34,17 +34,16 @@ from decimal import Decimal
 from django.db import models
 from django.utils import timezone
 
+# Callable field defaults live outside the models modules so migrations can
+# reference them without importing a models module. See apps/hr/defaults.py.
+from apps.hr.defaults import current_cpd_year
+
 ZERO = Decimal("0.00")
 
 
 # ---------------------------------------------------------------------------
 # Contract & salary structure
 # ---------------------------------------------------------------------------
-
-
-def current_cpd_year() -> int:
-    """The CPD year to stamp on a new record, resolved when the record is made."""
-    return timezone.localdate().year
 
 
 class EmploymentContract(models.Model):
