@@ -17,6 +17,7 @@ from typing import Any, cast
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -40,6 +41,7 @@ from apps.finance.models import (
     PaymentRun,
     SupplierBillPayment,
 )
+from apps.finance.permissions import FinanceAccess
 from apps.finance.views import _date_param, _require_finance_manage, _resolve_org
 from apps.iam.models import Organization, User
 from apps.iam.scoping import organizations_visible_to
@@ -67,6 +69,8 @@ def _lookup(model: Any, pk: Any, label: str) -> Any:
 
 class FinanceDocumentsView(viewsets.ViewSet):
     """Turn finance records into numbered, hashed, QR-verified PDFs."""
+
+    permission_classes = [IsAuthenticated, FinanceAccess]
 
     @action(detail=False, methods=["post"], url_path="invoice")
     def invoice(self, request: Request) -> Response:

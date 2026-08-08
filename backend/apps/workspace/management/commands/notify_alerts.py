@@ -24,7 +24,7 @@ class Command(BaseCommand):
     help = "Raise operational alerts (overdue payables, expiry, low stock) as notifications."
 
     def handle(self, *args: Any, **options: Any) -> None:
-        today = timezone.now().date()
+        today = timezone.localdate()
         soon = today + timedelta(days=30)
         made = 0
 

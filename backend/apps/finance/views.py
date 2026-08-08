@@ -13,6 +13,7 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
@@ -48,6 +49,7 @@ from apps.finance.operations import (
     run_depreciation,
     settle_card_batch,
 )
+from apps.finance.permissions import FinanceAccess, FinanceManageOnly
 from apps.finance.serializers import (
     AccountingPeriodSerializer,
     AccountSerializer,
@@ -134,6 +136,8 @@ def _with_balances(qs: QuerySet[Account]) -> QuerySet[Account]:
 
 
 class AccountViewSet(viewsets.ModelViewSet):
+
+    permission_classes = [IsAuthenticated, FinanceAccess]
     serializer_class = AccountSerializer
     queryset = Account.objects.select_related("organization", "parent")
     http_method_names = ["get", "post", "patch", "head", "options"]
@@ -169,6 +173,8 @@ class JournalEntryViewSet(viewsets.ModelViewSet):
     """Journal entries: read for anyone with finance.view; posting a manual entry
     requires finance.manage. Entries are immutable once created (no update/delete)."""
 
+    permission_classes = [IsAuthenticated, FinanceAccess]
+
     serializer_class = JournalEntrySerializer
     queryset = JournalEntry.objects.select_related("organization").prefetch_related(
         "lines__account"
@@ -202,6 +208,8 @@ class JournalEntryViewSet(viewsets.ModelViewSet):
 class CreditProfileViewSet(viewsets.ModelViewSet):
     """Customer-credit profiles. Direct edits to limit/terms/hold are blocked —
     use the ``request-override`` action, which routes through the approvals engine."""
+
+    permission_classes = [IsAuthenticated, FinanceAccess]
 
     serializer_class = CreditProfileSerializer
     queryset = CreditProfile.objects.select_related("creditor", "debtor")
@@ -244,6 +252,8 @@ class CreditProfileViewSet(viewsets.ModelViewSet):
 class SupplierBillViewSet(viewsets.ModelViewSet):
     """AP: supplier bills + payments. See SupplierBill's docstring — this is the
     2-way bill↔payment flow; full 3-way match awaits the Procurement PO module."""
+
+    permission_classes = [IsAuthenticated, FinanceAccess]
 
     serializer_class = SupplierBillSerializer
     queryset = SupplierBill.objects.select_related("organization", "supplier").prefetch_related(
@@ -328,6 +338,8 @@ class SupplierBillViewSet(viewsets.ModelViewSet):
 class BankAccountViewSet(viewsets.ModelViewSet):
     """Bank/MoMo/Airtel/cash accounts — each has its own GL sub-account, cash-book,
     and reconciliation state."""
+
+    permission_classes = [IsAuthenticated, FinanceManageOnly]
 
     serializer_class = BankAccountSerializer
     queryset = BankAccount.objects.select_related("organization", "gl_account")
@@ -455,6 +467,8 @@ class FinanceOperationsView(viewsets.ViewSet):
     Each is idempotent on its own reference, so a double-click or a re-run cannot
     charge twice — see apps/finance/operations.py.
     """
+
+    permission_classes = [IsAuthenticated, FinanceAccess]
 
     @action(detail=False, methods=["get"], url_path="money-map")
     def money_map(self, request: Request) -> Response:
@@ -589,8 +603,10 @@ class FinanceReportsView(viewsets.ViewSet):
     All are read-only derivations of posted journal entries — see apps/finance/reports.py.
     """
 
+    permission_classes = [IsAuthenticated, FinanceAccess]
+
     def _period(self, request: Request) -> tuple[date, date]:
-        today = timezone.now().date()
+        today = timezone.localdate()
         default_start, default_end = _month_bounds(today)
         start = _date_param(request, "start", default_start)
         end = _date_param(request, "end", default_end)
@@ -601,7 +617,7 @@ class FinanceReportsView(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="trial-balance")
     def trial_balance(self, request: Request) -> Response:
         org = _resolve_org(request, cast(User, request.user))
-        as_of = _date_param(request, "as_of", timezone.now().date())
+        as_of = _date_param(request, "as_of", timezone.localdate())
         return Response(_money_safe(reports.trial_balance(org, as_of=as_of)))
 
     # ---- Pharmacy cockpit -------------------------------------------------
@@ -624,7 +640,7 @@ class FinanceReportsView(viewsets.ViewSet):
         from apps.finance.pharmacy import inventory_expiry_exposure
 
         org = _resolve_org(request, cast(User, request.user))
-        as_of = _date_param(request, "as_of", timezone.now().date())
+        as_of = _date_param(request, "as_of", timezone.localdate())
         return Response(_money_safe(inventory_expiry_exposure(org, as_of=as_of)))
 
     @action(detail=False, methods=["get"], url_path="working-capital")
@@ -663,7 +679,7 @@ class FinanceReportsView(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="balance-sheet")
     def balance_sheet(self, request: Request) -> Response:
         org = _resolve_org(request, cast(User, request.user))
-        as_of = _date_param(request, "as_of", timezone.now().date())
+        as_of = _date_param(request, "as_of", timezone.localdate())
         return Response(_money_safe(reports.balance_sheet(org, as_of=as_of)))
 
     @action(detail=False, methods=["get"], url_path="cash-flow")
@@ -704,7 +720,7 @@ class FinanceReportsView(viewsets.ViewSet):
     def ar_aging(self, request: Request) -> Response:
         """Open receivables bucketed by how far past due they are, per customer."""
         org = _resolve_org(request, cast(User, request.user))
-        as_of = _date_param(request, "as_of", timezone.now().date())
+        as_of = _date_param(request, "as_of", timezone.localdate())
         return Response(_money_safe(reports.ar_aging(org, as_of=as_of)))
 
     @action(detail=False, methods=["get"], url_path="statement")
@@ -736,6 +752,8 @@ class FinanceReportsView(viewsets.ViewSet):
 
 class AccountingPeriodViewSet(viewsets.ModelViewSet):
     """EOD/EOM/annual closeouts. Closing freezes the window against new postings."""
+
+    permission_classes = [IsAuthenticated, FinanceAccess]
 
     serializer_class = AccountingPeriodSerializer
     queryset = AccountingPeriod.objects.select_related("organization", "closed_by")
@@ -825,6 +843,8 @@ class CashFlowForecastView(viewsets.ViewSet):
     """A real cash-flow projection built from unpaid B2B receivables and
     supplier-bill payables due, bucketed by how soon they're due."""
 
+    permission_classes = [IsAuthenticated, FinanceAccess]
+
     def list(self, request: Request) -> Response:
         user = cast(User, request.user)
         org_param = request.query_params.get("organization")
@@ -853,6 +873,8 @@ class TenantSettingsViewSet(viewsets.ViewSet):
     The lazy creation lives in :func:`apps.finance.services.tenant_settings_for`
     so a brand-new org gets a default row the first time anything reads it.
     """
+
+    permission_classes = [IsAuthenticated, FinanceManageOnly]
 
     def _get_org(self, request: Request, org_id: str | None) -> Organization:
         user = cast(User, request.user)
@@ -905,6 +927,8 @@ class TenantSettingsViewSet(viewsets.ViewSet):
 
 
 class FixedAssetViewSet(viewsets.ModelViewSet):
+
+    permission_classes = [IsAuthenticated, FinanceAccess]
     serializer_class = FixedAssetSerializer
     queryset = FixedAsset.objects.select_related("organization")
 
@@ -947,6 +971,8 @@ class FixedAssetViewSet(viewsets.ModelViewSet):
 
 
 class TaxRecordViewSet(viewsets.ReadOnlyModelViewSet):
+
+    permission_classes = [IsAuthenticated, FinanceAccess]
     serializer_class = TaxRecordSerializer
     queryset = TaxRecord.objects.select_related("organization")
 
@@ -961,6 +987,8 @@ class TaxRecordViewSet(viewsets.ReadOnlyModelViewSet):
 class TaxCodeViewSet(viewsets.ModelViewSet):
     """Rwanda VAT tax codes (A/B/C/D). Versions are rows, not code: a new
     Finance Law = one new row with effective_from set, never a migration."""
+
+    permission_classes = [IsAuthenticated, FinanceAccess]
 
     serializer_class = TaxCodeSerializer
     queryset = TaxCode.objects.select_related("organization")
@@ -987,6 +1015,8 @@ class TaxPaymentViewSet(viewsets.ModelViewSet):
     normal path is ``request_tax_payment`` which routes via the approvals
     inbox (no self-approval)."""
 
+    permission_classes = [IsAuthenticated, FinanceAccess]
+
     serializer_class = TaxPaymentSerializer
     queryset = TaxPayment.objects.select_related("organization")
     http_method_names = ["get", "post", "head", "options"]
@@ -1001,6 +1031,8 @@ class TaxPaymentViewSet(viewsets.ModelViewSet):
 
 class CostCentreViewSet(viewsets.ModelViewSet):
     """The ledger's analysis dimension — branches, departments, functions."""
+
+    permission_classes = [IsAuthenticated, FinanceAccess]
 
     serializer_class = CostCentreSerializer
     queryset = CostCentre.objects.select_related("organization", "parent", "department", "branch")
@@ -1041,6 +1073,8 @@ class BudgetViewSet(viewsets.ModelViewSet):
     Actuals are never written here. `variance` reads them from posted journal
     lines so the comparison cannot be edited by the person being measured.
     """
+
+    permission_classes = [IsAuthenticated, FinanceAccess]
 
     serializer_class = BudgetSerializer
     queryset = Budget.objects.select_related("organization").prefetch_related("lines")
@@ -1119,6 +1153,8 @@ class CustomerInvoiceViewSet(viewsets.ModelViewSet):
     Creation and receipting both go through the service layer so the GL entry,
     the credit-limit guard, and the numbering sequence stay in one place.
     """
+
+    permission_classes = [IsAuthenticated, FinanceAccess]
 
     serializer_class = CustomerInvoiceSerializer
     queryset = CustomerInvoice.objects.select_related("organization", "customer")
@@ -1229,6 +1265,8 @@ class CustomerReceiptViewSet(viewsets.ReadOnlyModelViewSet):
     """Receipt register. Receipts are created via the invoice's
     ``record-receipt`` action so they can never exist without a GL entry."""
 
+    permission_classes = [IsAuthenticated, FinanceAccess]
+
     serializer_class = CustomerReceiptSerializer
     queryset = CustomerReceipt.objects.select_related("invoice__customer", "invoice__organization")
 
@@ -1246,6 +1284,8 @@ class CustomerReceiptViewSet(viewsets.ReadOnlyModelViewSet):
 
 class CustomerCreditViewSet(viewsets.ReadOnlyModelViewSet):
     """On-account credits (overpayments, credit notes, returns) held for a customer."""
+
+    permission_classes = [IsAuthenticated, FinanceAccess]
 
     serializer_class = CustomerCreditSerializer
     queryset = CustomerCredit.objects.select_related("organization", "customer")
@@ -1265,6 +1305,8 @@ class CustomerCreditViewSet(viewsets.ReadOnlyModelViewSet):
 class DunningNoticeViewSet(viewsets.ReadOnlyModelViewSet):
     """The collections queue. ``run`` walks the ladder for an organization and
     issues whatever step each overdue invoice has newly earned."""
+
+    permission_classes = [IsAuthenticated, FinanceAccess]
 
     serializer_class = DunningNoticeSerializer
     queryset = DunningNotice.objects.select_related("invoice__customer")
@@ -1311,6 +1353,8 @@ class PaymentRunViewSet(viewsets.ModelViewSet):
     Every state change is a named action rather than a PATCH — a payment run's
     status is the audit trail, not a field anyone gets to set.
     """
+
+    permission_classes = [IsAuthenticated, FinanceManageOnly]
 
     serializer_class = PaymentRunSerializer
     queryset = PaymentRun.objects.select_related("organization").prefetch_related(

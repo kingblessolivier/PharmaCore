@@ -9,12 +9,13 @@ from django.db.models import QuerySet
 from django.http import FileResponse
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.documents.models import Document
+from apps.documents.permissions import visible_doc_types
 from apps.documents.serializers import DocumentSerializer
 from apps.iam.models import User
 from apps.iam.scoping import organizations_visible_to
@@ -26,11 +27,19 @@ class DocumentViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = DocumentSerializer
     queryset = Document.objects.select_related("organization")
 
+    permission_classes = [IsAuthenticated]
+
     def get_queryset(self) -> QuerySet[Document]:
         user = cast(User, self.request.user)
         qs = Document.objects.select_related("organization")
         if not (user.is_superuser or user.has_role("SYS_ADMIN")):
             qs = qs.filter(organization__in=organizations_visible_to(user))
+            # Org scoping alone let a cashier download a colleague's payslip.
+            # A document's type decides who may read it, not only which pharmacy
+            # produced it. See apps/documents/permissions.py.
+            allowed = visible_doc_types(user)
+            if allowed is not None:
+                qs = qs.filter(doc_type__in=allowed)
         params = self.request.query_params
         if params.get("reference_type"):
             qs = qs.filter(reference_type=params["reference_type"])

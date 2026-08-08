@@ -17,12 +17,12 @@ export function IngredientsPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["active-ingredients"],
-    queryFn: () => api<Paginated<ActiveIngredient>>("/api/catalog/active-ingredients/"),
+    queryFn: () => api<Paginated<ActiveIngredient>>("/api/catalog/ingredients/"),
   });
 
   const createMutation = useMutation({
     mutationFn: () =>
-      api<ActiveIngredient>("/api/catalog/active-ingredients/", {
+      api<ActiveIngredient>("/api/catalog/ingredients/", {
         method: "POST",
         body: JSON.stringify({ name }),
       }),
@@ -35,7 +35,7 @@ export function IngredientsPage() {
 
   const updateMutation = useMutation({
     mutationFn: () =>
-      api<ActiveIngredient>(`/api/catalog/active-ingredients/${editing?.id}/`, {
+      api<ActiveIngredient>(`/api/catalog/ingredients/${editing?.id}/`, {
         method: "PUT",
         body: JSON.stringify({ name }),
       }),
@@ -46,7 +46,7 @@ export function IngredientsPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api<void>(`/api/catalog/active-ingredients/${id}/`, { method: "DELETE" }),
+    mutationFn: (id: number) => api<void>(`/api/catalog/ingredients/${id}/`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["active-ingredients"] }),
   });
 

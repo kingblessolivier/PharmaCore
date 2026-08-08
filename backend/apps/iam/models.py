@@ -43,6 +43,20 @@ class Role(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, default="")
     permissions = models.ManyToManyField(Permission, related_name="roles", blank=True)
+    # Authority limit (apps/iam/authority.py R2) — how much money someone holding
+    # this role may approve. Competence and limit are deliberately separate: a
+    # branch manager and a group accountant may both hold ``finance.manage`` and
+    # only one of them can sign off forty million francs. Null means no ceiling.
+    approval_limit = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=(
+            "Default approval ceiling in RWF for this role. "
+            "Empty means unlimited — reserve that for SYS_ADMIN."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -275,6 +289,19 @@ class User(AbstractUser):
         on_delete=models.SET_NULL,
         related_name="direct_reports",
         help_text="The user's supervisor — used for senior oversight and approval escalation.",
+    )
+    # Authority limit (apps/iam/authority.py R2). Overrides whatever the user's
+    # roles allow — which is how a deputy is covered for a fortnight without being
+    # handed a role. Null means "use the roles"; see authority.approval_limit().
+    approval_limit = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=(
+            "Personal approval ceiling in RWF, overriding this user's roles. "
+            "Leave empty to use the highest limit among their roles."
+        ),
     )
 
     class Meta(AbstractUser.Meta):  # type: ignore[name-defined]

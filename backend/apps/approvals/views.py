@@ -102,7 +102,7 @@ class ApprovalRequestViewSet(viewsets.ReadOnlyModelViewSet):
         except (User.DoesNotExist, TypeError, ValueError) as exc:
             raise ValidationError("A valid 'to_user' id is required.") from exc
         try:
-            reassign_approval(approval=approval, to_user=to_user)
+            reassign_approval(approval=approval, to_user=to_user, by=user)
         except ApprovalError as exc:
             raise ValidationError(str(exc)) from exc
         return Response(ApprovalRequestSerializer(approval).data)

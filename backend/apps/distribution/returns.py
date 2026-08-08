@@ -120,7 +120,7 @@ def approve_return(*, return_request: CustomerReturn, user: User | None = None) 
     restocked = 0
     rejected = 0
     credit = ZERO
-    today = timezone.now().date()
+    today = timezone.localdate()
 
     for line in lines:
         rejected += line.quantity_rejected

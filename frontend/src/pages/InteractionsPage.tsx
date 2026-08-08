@@ -28,7 +28,7 @@ export function InteractionsPage() {
 
   const ingredientsQuery = useQuery({
     queryKey: ["all-ingredients"],
-    queryFn: () => api<Paginated<ActiveIngredient>>("/api/catalog/active-ingredients/?page_size=100"),
+    queryFn: () => api<Paginated<ActiveIngredient>>("/api/catalog/ingredients/?page_size=100"),
   });
 
   const createMutation = useMutation({

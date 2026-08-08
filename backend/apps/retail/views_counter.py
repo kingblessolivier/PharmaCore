@@ -12,11 +12,13 @@ from typing import Any, cast
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from apps.core.lookups import lookup_pk
 from apps.iam.models import Organization, User
+from apps.iam.permissions import HasPermission
 from apps.iam.scoping import organizations_visible_to
 from apps.retail.counter import (
     active_promotions,
@@ -57,6 +59,8 @@ def _sale(request: Request, organization: Organization) -> Sale:
 
 class CounterViewSet(viewsets.ViewSet):
     """Actions performed at the till."""
+
+    permission_classes = [IsAuthenticated, HasPermission.require("sale.create")]
 
     @action(detail=False, methods=["get"])
     def scan(self, request: Request) -> Response:
@@ -118,7 +122,8 @@ class CounterViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=["get"], url_path="promotions")
     def promotions(self, request: Request) -> Response:
-        """Coupons in force today, so the till can offer them rather than guess."""
+        """Coupons in force today at *this* pharmacy, so the till can offer them."""
+        org = _org(request)
         return Response(
             [
                 {
@@ -132,7 +137,7 @@ class CounterViewSet(viewsets.ViewSet):
                         max(p.max_redemptions - p.times_redeemed, 0) if p.max_redemptions else None
                     ),
                 }
-                for p in active_promotions()
+                for p in active_promotions(organization=org)
             ]
         )
 
@@ -195,6 +200,8 @@ class OfflineSyncViewSet(viewsets.ViewSet):
     The whole sale arrives in one request — lines, tenders, dispensing details —
     because offline the basket was never on the server to begin with.
     """
+
+    permission_classes = [IsAuthenticated, HasPermission.require("sale.create")]
 
     @action(detail=False, methods=["post"], url_path="sync")
     def sync(self, request: Request) -> Response:

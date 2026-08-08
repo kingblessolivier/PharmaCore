@@ -32,6 +32,7 @@ from apps.distribution.models import (
     VanStock,
     VanStockMovement,
 )
+from apps.distribution.permissions import DistributionAccess
 from apps.distribution.serializers import (
     BackorderLineSerializer,
     DepotProductListingSerializer,
@@ -216,6 +217,8 @@ class PublishListingView(APIView):
 class BackorderViewSet(viewsets.ReadOnlyModelViewSet):
     """Unmet demand — read-only here; it is created by the ordering flow."""
 
+    permission_classes = [IsAuthenticated, DistributionAccess]
+
     serializer_class = BackorderLineSerializer
     queryset = BackorderLine.objects.select_related("depot", "retail", "product", "order")
 
@@ -390,6 +393,8 @@ class ReturnActionsView(APIView):
 class VanStockViewSet(viewsets.ReadOnlyModelViewSet):
     """What is on each van. Quantities move only through the actions below."""
 
+    permission_classes = [IsAuthenticated, DistributionAccess]
+
     serializer_class = VanStockSerializer
     queryset = VanStock.objects.select_related("rep", "rep__user", "product")
 
@@ -516,6 +521,8 @@ class RepPerformanceView(APIView):
 
 class VanMovementViewSet(viewsets.ReadOnlyModelViewSet):
     """The audit trail behind every van quantity."""
+
+    permission_classes = [IsAuthenticated, DistributionAccess]
 
     serializer_class = VanStockMovementSerializer
     queryset = VanStockMovement.objects.select_related("rep", "product")

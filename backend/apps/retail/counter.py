@@ -29,7 +29,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from django.db import models, transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 from apps.iam.models import Organization, User
@@ -107,14 +107,19 @@ class PromotionOutcome:
         return self.promotion is not None and self.discount > 0
 
 
-def active_promotions(*, on: date | None = None) -> list[POSPromotion]:
-    """Promotions in force today. Effective dates are respected, not decorative."""
+def active_promotions(*, organization: Any = None, on: date | None = None) -> list[POSPromotion]:
+    """Promotions in force today **at this pharmacy**.
+
+    Effective dates are respected, not decorative — and so is whose promotion it
+    is. A promotion with no organization is group-wide, which is how a chain runs
+    one campaign across its branches.
+    """
     when = on or timezone.localdate()
-    return list(
-        POSPromotion.objects.filter(
-            is_active=True, valid_from__lte=when, valid_until__gte=when
-        ).order_by("code")
-    )
+    qs = POSPromotion.objects.filter(is_active=True, valid_from__lte=when, valid_until__gte=when)
+    if organization is not None:
+        org_id = getattr(organization, "pk", organization)
+        qs = qs.filter(Q(organization_id=org_id) | Q(organization__isnull=True))
+    return list(qs.order_by("code"))
 
 
 def evaluate_promotion(*, sale: Sale, code: str, on: date | None = None) -> PromotionOutcome:
@@ -129,7 +134,13 @@ def evaluate_promotion(*, sale: Sale, code: str, on: date | None = None) -> Prom
     if not cleaned:
         return PromotionOutcome(None, ZERO, "No code entered.")
 
-    promotion = POSPromotion.objects.filter(code__iexact=cleaned).first()
+    # Scoped to the pharmacy ringing the sale: a code created at one branch used
+    # to be redeemable at every branch in the system.
+    promotion = (
+        POSPromotion.objects.filter(code__iexact=cleaned)
+        .filter(Q(organization_id=sale.organization_id) | Q(organization__isnull=True))
+        .first()
+    )
     if promotion is None:
         return PromotionOutcome(None, ZERO, f"No promotion with the code {cleaned}.")
     if not promotion.is_active:

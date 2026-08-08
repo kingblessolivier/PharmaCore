@@ -102,7 +102,7 @@ class DemandRow:
 
     @property
     def age_days(self) -> int:
-        return (timezone.now().date() - self.oldest).days if self.oldest else 0
+        return (timezone.localdate() - self.oldest).days if self.oldest else 0
 
 
 def demand_board(*, depot: Organization | int, include_sourcing: bool = True) -> list[DemandRow]:

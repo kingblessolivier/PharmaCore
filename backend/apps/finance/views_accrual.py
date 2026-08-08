@@ -11,6 +11,7 @@ from django.utils import timezone
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -23,6 +24,7 @@ from apps.finance.accruals import (
     schedule_summary,
 )
 from apps.finance.models import Account, CostCentre, RecurringSchedule, ScheduleRun
+from apps.finance.permissions import FinanceAccess
 from apps.finance.views import _date_param, _require_finance_manage, _resolve_org
 from apps.iam.models import User
 from apps.iam.scoping import organizations_visible_to
@@ -100,6 +102,8 @@ class RecurringScheduleViewSet(viewsets.ModelViewSet):
     A schedule is never edited into a different shape once it has started
     posting — cancel it and start another, so the history stays readable.
     """
+
+    permission_classes = [IsAuthenticated, FinanceAccess]
 
     serializer_class = RecurringScheduleSerializer
     queryset = RecurringSchedule.objects.select_related("expense_account", "cost_centre")

@@ -252,7 +252,14 @@ class ProductContraindication(models.Model):
 
 
 class PriceList(models.Model):
-    """A named price list (Wholesale, Retail, Promotional, Contract)."""
+    """A named price list (Wholesale, Retail, Promotional, Contract).
+
+    ``organization`` is what makes the list *someone's*. Without it every active
+    list applied to every pharmacy in the system, so one shop running a weekend
+    promotion silently repriced its competitors and the depot. Null means a
+    group-wide list set by HQ, which is a real and useful case — a chain running
+    one price across its branches — so the field is nullable rather than required.
+    """
 
     class ListType(models.TextChoices):
         WHOLESALE = "WHOLESALE", "Wholesale"
@@ -260,6 +267,14 @@ class PriceList(models.Model):
         PROMOTIONAL = "PROMOTIONAL", "Promotional"
         CONTRACT = "CONTRACT", "Contract"
 
+    organization = models.ForeignKey(
+        "iam.Organization",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="price_lists",
+        help_text="Whose list this is. Empty means group-wide (set by HQ).",
+    )
     name = models.CharField(max_length=255)
     list_type = models.CharField(max_length=20, choices=ListType.choices, default=ListType.RETAIL)
     effective_from = models.DateTimeField(null=True, blank=True)

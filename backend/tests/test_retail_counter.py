@@ -15,7 +15,7 @@ import pytest
 from apps.catalog.models import Product, ProductBarcode
 from apps.finance.models import TaxRecord
 from apps.finance.services import ensure_default_accounts, tenant_settings_for
-from apps.iam.models import Organization, User
+from apps.iam.models import Organization, Role, User
 from apps.inventory.models import InventoryBatch
 from apps.retail.counter import (
     PrescriptionError,
@@ -575,6 +575,9 @@ def test_a_failed_replay_never_reports_success(org: Organization) -> None:
     product = _product(requires_prescription=True)
     _stock(org, product)
     cashier = User.objects.create_user(username="till", password="x", organization=org)
+    # A till operator is a cashier: they may ring up a sale (`sale.create`) but
+    # not dispense a prescription-only item, which is what makes this replay fail.
+    cashier.roles.add(Role.objects.get(code="CASHIER"))
 
     client = APIClient()
     client.force_authenticate(user=cashier)

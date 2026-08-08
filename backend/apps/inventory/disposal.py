@@ -202,7 +202,7 @@ def destruction_candidates(*, organization: Any) -> list[dict[str, Any]]:
     thing to be sitting unnoticed on a shelf.
     """
     org_id = getattr(organization, "pk", organization)
-    today = timezone.now().date()
+    today = timezone.localdate()
     rows: list[dict[str, Any]] = []
     batches = (
         InventoryBatch.objects.filter(organization_id=org_id, quantity_available__gt=0)

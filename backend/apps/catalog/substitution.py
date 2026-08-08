@@ -64,7 +64,7 @@ def _available(*, organization: Any, product_ids: list[int]) -> dict[int, int]:
             organization_id=getattr(organization, "pk", organization),
             product_id__in=product_ids,
             status=InventoryBatch.Status.ACTIVE,
-            expiry_date__gte=timezone.now().date(),
+            expiry_date__gte=timezone.localdate(),
         )
         .annotate(free=F("quantity_available") - F("quantity_reserved"))
         .filter(free__gt=0)

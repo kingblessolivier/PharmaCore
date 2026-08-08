@@ -40,7 +40,7 @@ function NewInvoiceModal({ onClose, orgId }: { onClose: () => void; orgId: numbe
 
   const customersQ = useQuery({
     queryKey: ["organizations", "customers"],
-    queryFn: () => api<Paginated<Organization>>("/api/iam/organizations/?page_size=200"),
+    queryFn: () => api<Paginated<Organization>>("/api/organizations/?page_size=200"),
   });
 
   // Class B is the only standard-rated class; everything else is 0%, so the VAT

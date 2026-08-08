@@ -10,6 +10,7 @@ from django.db.models import QuerySet
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
@@ -123,6 +124,8 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 class StatutoryRateViewSet(viewsets.ReadOnlyModelViewSet):
     """The versioned PAYE/RSSB/CBHI rate table the payroll engine reads from."""
 
+    permission_classes = [IsAuthenticated]
+
     serializer_class = StatutoryRateSerializer
     queryset = StatutoryRate.objects.all()
 
@@ -211,6 +214,8 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
 
 
 class AttendanceLogViewSet(viewsets.ModelViewSet):
+
+    permission_classes = [IsAuthenticated]
     serializer_class = AttendanceLogSerializer
     queryset = AttendanceLog.objects.select_related("employee")
 
@@ -266,6 +271,8 @@ class AttendanceLogViewSet(viewsets.ModelViewSet):
 
 
 class ShiftRosterViewSet(viewsets.ModelViewSet):
+
+    permission_classes = [IsAuthenticated]
     serializer_class = ShiftRosterSerializer
     queryset = ShiftRoster.objects.select_related("organization", "employee")
 
@@ -282,6 +289,8 @@ class ShiftRosterViewSet(viewsets.ModelViewSet):
 
 
 class LeaveRequestViewSet(viewsets.ModelViewSet):
+
+    permission_classes = [IsAuthenticated]
     serializer_class = LeaveRequestSerializer
     queryset = LeaveRequest.objects.select_related("employee", "approved_by")
 
