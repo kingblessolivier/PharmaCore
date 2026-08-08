@@ -18,6 +18,7 @@ import { Badge, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
 import { dateTime, shortDate } from "../lib/format";
 import type { GoodsReceivedNote, Paginated } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
 export function GrnPage() {
   const [open, setOpen] = useState<GoodsReceivedNote | null>(null);
@@ -86,9 +87,7 @@ export function GrnPage() {
       header: "Status",
       value: (g) => g.status,
       render: (g) => (
-        <Badge tone={g.status === "FINALIZED" ? "success" : "neutral"}>
-          {g.status === "FINALIZED" ? "Finalised" : "Draft"}
-        </Badge>
+<StatusChip status={g.status} size="sm" />
       ),
     },
     {

@@ -34,6 +34,7 @@ import {
 } from "../lib/insurance";
 import { useDefaultOrg } from "../lib/recordData";
 import type { Paginated } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -169,9 +170,7 @@ export function InsuranceRemittancesPage() {
       header: "Status",
       value: (a) => a.status,
       render: (a) => (
-        <Badge tone={a.status === "POSTED" ? "success" : "neutral"}>
-          {a.status === "POSTED" ? "Posted" : "Draft"}
-        </Badge>
+<StatusChip status={a.status} size="sm" />
       ),
     },
   ];

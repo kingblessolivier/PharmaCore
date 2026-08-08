@@ -63,9 +63,12 @@ const STATUS: Record<string, StatusMeaning> = {
   APPROVED: { icon: CheckCircle2, tone: "success", label: "Approved" },
   ACCEPTED: { icon: CheckCircle2, tone: "success", label: "Accepted" },
   MATCHED: { icon: CheckCheck, tone: "success", label: "Matched" },
+  EXPLAINED: { icon: FileCheck, tone: "success", label: "Explained" },
   POSTED: { icon: FileCheck, tone: "success", label: "Posted" },
+  FINALIZED: { icon: FileCheck, tone: "success", label: "Finalised" },
 
   // Moving
+  IN_PROGRESS: { icon: CircleDashed, tone: "info", label: "In progress" },
   PICKING: { icon: Truck, tone: "info", label: "Picking" },
   RELEASED: { icon: Truck, tone: "info", label: "Released" },
   IN_TRANSIT: { icon: Truck, tone: "info", label: "In transit" },
@@ -87,11 +90,15 @@ const STATUS: Record<string, StatusMeaning> = {
   // Money
   PAID: { icon: BadgeCheck, tone: "success", label: "Paid" },
   UNPAID: { icon: Clock, tone: "warning", label: "Unpaid" },
+  UNMATCHED: { icon: CircleDot, tone: "warning", label: "Unmatched" },
   OVERDUE: { icon: AlertTriangle, tone: "danger", label: "Overdue" },
 
   // Open / shut
   OPEN: { icon: CircleDot, tone: "info", label: "Open" },
   CLOSED: { icon: Lock, tone: "neutral", label: "Closed" },
+  LOCKED: { icon: Lock, tone: "neutral", label: "Locked" },
+  ARCHIVED: { icon: Lock, tone: "neutral", label: "Archived" },
+  IGNORED: { icon: Ban, tone: "neutral", label: "Ignored" },
   ACTIVE: { icon: CheckCircle2, tone: "success", label: "Active" },
 
   // Stopped
@@ -107,7 +114,14 @@ const STATUS: Record<string, StatusMeaning> = {
   RECALLED: { icon: OctagonAlert, tone: "danger", label: "Recalled" },
   EXPIRED: { icon: CalendarX, tone: "danger", label: "Expired" },
   VARIANCE: { icon: AlertTriangle, tone: "danger", label: "Variance" },
+  // Cold-chain excursion states. NORMAL is deliberately quiet — a fridge behaving
+  // itself should not compete for attention with one that is not.
+  NORMAL: { icon: CheckCircle2, tone: "success", label: "Normal" },
+  WARNING: { icon: AlertTriangle, tone: "warning", label: "Warning" },
   CRITICAL_BREACH: { icon: OctagonAlert, tone: "danger", label: "Critical breach" },
+  // A prescription past its validity window: still ACTIVE in the field, but not
+  // dispensable. The screens derive it, so it needs a name here.
+  LAPSED: { icon: CalendarX, tone: "warning", label: "Lapsed" },
   DESTROYED: { icon: Ban, tone: "neutral", label: "Destroyed" },
   PASSED: { icon: CheckCircle2, tone: "success", label: "Passed" },
 };

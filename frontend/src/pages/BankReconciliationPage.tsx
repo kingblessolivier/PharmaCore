@@ -23,24 +23,10 @@ import type {
   BankStatementLine,
   LineSuggestion,
   ReconciliationSummary,
-  StatementLineStatus,
 } from "../lib/finance";
 import { useDefaultOrg } from "../lib/recordData";
 import type { BankAccount, Paginated } from "../lib/types";
-
-const LINE_TONE: Record<StatementLineStatus, "default" | "success" | "info" | "warning"> = {
-  UNMATCHED: "warning",
-  MATCHED: "success",
-  EXPLAINED: "info",
-  IGNORED: "default",
-};
-
-const LINE_LABEL: Record<StatementLineStatus, string> = {
-  UNMATCHED: "Unmatched",
-  MATCHED: "Matched",
-  EXPLAINED: "Posted",
-  IGNORED: "Ignored",
-};
+import { StatusChip } from "../components/Status";
 
 /* -------------------------------------------------------------------------- */
 
@@ -453,7 +439,7 @@ function StatementWorkspace({ statement }: { statement: BankStatement }) {
                 key: "status",
                 header: "Status",
                 value: (l) => l.status,
-                render: (l) => <Badge tone={LINE_TONE[l.status]}>{LINE_LABEL[l.status]}</Badge>,
+                render: (l) => <StatusChip status={l.status} size="sm" />,
               },
               {
                 key: "actions",

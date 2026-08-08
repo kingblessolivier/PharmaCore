@@ -18,16 +18,10 @@ import {
 import { Badge, Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
 import { shortDate } from "../lib/format";
-import type { Prescription, PrescriptionStatus } from "../lib/retail";
+import type { Prescription } from "../lib/retail";
 import { useDefaultOrg, useProducts } from "../lib/recordData";
 import type { Paginated } from "../lib/types";
-
-const STATUS_TONE: Record<PrescriptionStatus, "success" | "default" | "warning" | "danger"> = {
-  ACTIVE: "success",
-  FULFILLED: "default",
-  EXPIRED: "warning",
-  CANCELLED: "danger",
-};
+import { StatusChip } from "../components/Status";
 
 /** Expiry is a fact about today. A script that lapsed last week still reads
  *  ACTIVE until something looks at the date. */
@@ -108,9 +102,7 @@ function PrescriptionDrawer({
       subtitle={prescription ? `${prescription.patient_name} · ${prescription.prescriber_name}` : undefined}
       badge={
         prescription ? (
-          <Badge tone={isLapsed(prescription) ? "warning" : STATUS_TONE[prescription.status]}>
-            {isLapsed(prescription) ? "Lapsed" : prescription.status}
-          </Badge>
+          <StatusChip status={isLapsed(prescription) ? "LAPSED" : prescription.status} />
         ) : undefined
       }
       width="max-w-4xl"
@@ -468,9 +460,7 @@ export function PrescriptionsPage() {
             header: "Status",
             value: (p) => (isLapsed(p) ? "LAPSED" : p.status),
             render: (p) => (
-              <Badge tone={isLapsed(p) ? "warning" : STATUS_TONE[p.status]}>
-                {isLapsed(p) ? "Lapsed" : p.status}
-              </Badge>
+              <StatusChip status={isLapsed(p) ? "LAPSED" : p.status} />
             ),
           },
         ]}

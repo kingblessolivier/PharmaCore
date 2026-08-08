@@ -13,10 +13,11 @@ import { AlertTriangle, Thermometer } from "lucide-react";
 import { useState } from "react";
 import { DataGrid, type Column } from "../components/DataGrid";
 import { Drawer, Facts, Section } from "../components/RecordKit";
-import { Badge, PageHeader } from "../components/ui";
+import { PageHeader } from "../components/ui";
 import { api } from "../lib/api";
 import { dateTime } from "../lib/format";
 import type { Paginated, TemperatureLog } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
 /** One sensor's current standing, derived from its readings. */
 interface SensorState {
@@ -29,14 +30,6 @@ interface SensorState {
   /** Consecutive most-recent readings that are not NORMAL. */
   breachRun: number;
   breachSince: string | null;
-}
-
-function tone(status: TemperatureLog["excursion_status"]) {
-  return status === "CRITICAL_BREACH" ? "danger" : status === "WARNING" ? "warning" : "success";
-}
-
-function label(status: TemperatureLog["excursion_status"]) {
-  return status === "CRITICAL_BREACH" ? "Breach" : status === "WARNING" ? "Warning" : "Normal";
 }
 
 export function TemperatureLogsPage() {
@@ -121,7 +114,7 @@ export function TemperatureLogsPage() {
       key: "status",
       header: "Status",
       value: (s) => s.latest.excursion_status,
-      render: (s) => <Badge tone={tone(s.latest.excursion_status)}>{label(s.latest.excursion_status)}</Badge>,
+      render: (s) => <StatusChip status={s.latest.excursion_status} size="sm" />,
     },
     {
       key: "breachRun",
@@ -211,9 +204,7 @@ export function TemperatureLogsPage() {
           title={open.sensor_name}
           subtitle={`${open.readings} reading(s) held`}
           badge={
-            <Badge tone={tone(open.latest.excursion_status)}>
-              {label(open.latest.excursion_status)}
-            </Badge>
+            <StatusChip status={open.latest.excursion_status} size="sm" />
           }
           onClose={() => setOpen(null)}
         >
@@ -222,7 +213,7 @@ export function TemperatureLogsPage() {
               rows={[
                 ["Latest", `${open.latest.temperature_celsius}°C`],
                 ["Humidity", open.latest.humidity_percent ? `${open.latest.humidity_percent}%` : "—"],
-                ["Status", label(open.latest.excursion_status)],
+                ["Status", <StatusChip status={open.latest.excursion_status} />],
                 ["Recorded", dateTime(open.latest.recorded_at)],
                 ["Consecutive breaches", String(open.breachRun)],
                 [
@@ -262,7 +253,7 @@ export function TemperatureLogsPage() {
                         {l.humidity_percent ? `${l.humidity_percent}%` : "—"}
                       </td>
                       <td className="px-3 py-2">
-                        <Badge tone={tone(l.excursion_status)}>{label(l.excursion_status)}</Badge>
+                        <StatusChip status={l.excursion_status} size="sm" />
                       </td>
                     </tr>
                   ))}
