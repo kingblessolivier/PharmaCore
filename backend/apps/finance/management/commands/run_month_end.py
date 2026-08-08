@@ -19,6 +19,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError
+from django.utils import timezone
 
 from apps.finance.accruals import run_schedules, schedule_summary
 from apps.finance.operations import (
@@ -52,7 +53,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args: Any, **options: Any) -> None:
-        as_of = date.today()
+        as_of = timezone.localdate()
         if options.get("as_of"):
             try:
                 as_of = date.fromisoformat(options["as_of"])

@@ -26,6 +26,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from django.db import transaction
+from django.utils import timezone
 
 from apps.iam.models import Organization, User
 
@@ -264,7 +265,7 @@ def seed_rate(
 
 def latest_rates(*, on: date | None = None) -> dict[str, str]:
     """The rate table as it stood on a date — what a screen shows in its header."""
-    when = on or date.today()
+    when = on or timezone.localdate()
     out: dict[str, str] = {}
     for currency in (
         ExchangeRate.objects.filter(rate_date__lte=when)

@@ -278,11 +278,11 @@ class TemperatureSensor(models.Model):
     @property
     def calibration_state(self) -> str:
         """``VALID`` / ``DUE_SOON`` (≤30 days) / ``OVERDUE`` / ``UNKNOWN``."""
-        from datetime import date, timedelta
+        from datetime import timedelta
 
         if not self.calibration_due_date:
             return "UNKNOWN"
-        today = date.today()
+        today = timezone.localdate()
         if self.calibration_due_date < today:
             return "OVERDUE"
         if self.calibration_due_date <= today + timedelta(days=30):

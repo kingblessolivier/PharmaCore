@@ -90,7 +90,7 @@ def demand_statistics(organization: Organization, *, days: int = 90) -> dict[int
     stats: dict[int, dict[str, Any]] = {}
     for product_id, by_day in per_product_per_day.items():
         # Zero-demand days count: they are exactly what makes demand erratic.
-        series = [by_day.get(date.today() - timedelta(days=i), 0) for i in range(days)]
+        series = [by_day.get(timezone.localdate() - timedelta(days=i), 0) for i in range(days)]
         total = sum(series)
         mean = total / days if days else 0.0
         variance = sum((v - mean) ** 2 for v in series) / days if days else 0.0
@@ -141,7 +141,7 @@ def on_hand_map(organization: Organization) -> dict[int, int]:
         InventoryBatch.objects.filter(
             organization=organization,
             status=InventoryBatch.Status.ACTIVE,
-            expiry_date__gte=date.today(),
+            expiry_date__gte=timezone.localdate(),
         )
         .values("product_id")
         .annotate(total=Sum("quantity_available"))
@@ -365,7 +365,7 @@ def slow_and_dead_stock(
     ):
         last_moved.setdefault(product_id, occurred)
 
-    today = date.today()
+    today = timezone.localdate()
     rows: list[dict[str, Any]] = []
     batches = (
         InventoryBatch.objects.filter(organization=organization, quantity_available__gt=0)
@@ -418,7 +418,7 @@ def near_expiry_actions(
     hand against observed demand — the honest test of whether it can clear in time.
     """
     stats = demand_statistics(organization, days=90)
-    today = date.today()
+    today = timezone.localdate()
     horizon = today + timedelta(days=horizon_days)
 
     rows: list[dict[str, Any]] = []

@@ -46,6 +46,8 @@ class ActiveIngredient(models.Model):
     name = models.CharField(max_length=255, unique=True)
     atc_code = models.CharField(max_length=10, blank=True, default="")
 
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+
     class Meta:
         ordering = ["name"]
 
@@ -216,6 +218,8 @@ class ProductInteraction(models.Model):
     severity = models.CharField(max_length=20, choices=Severity.choices, default=Severity.MODERATE)
     effect = models.TextField(blank=True, default="")
     management = models.TextField(blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
 
     class Meta:
         ordering = ["ingredient_a__name", "ingredient_b__name"]

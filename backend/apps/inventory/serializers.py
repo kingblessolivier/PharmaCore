@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import date
 from typing import Any
 
+from django.utils import timezone
 from rest_framework import serializers
 
 from apps.catalog.models import Product, Supplier
@@ -520,7 +520,7 @@ class InventoryBatchSerializer(serializers.ModelSerializer):
         return f"{obj.product.generic_name} {obj.product.strength}".strip()
 
     def get_days_to_expiry(self, obj: InventoryBatch) -> int:
-        return (obj.expiry_date - date.today()).days
+        return (obj.expiry_date - timezone.localdate()).days
 
 
 class IntakeSerializer(serializers.Serializer):

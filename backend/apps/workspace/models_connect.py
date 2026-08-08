@@ -247,6 +247,8 @@ class MailLabel(models.Model):
     name = models.CharField(max_length=60)
     colour = models.CharField(max_length=20, blank=True, default="")
 
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+
     class Meta:
         ordering = ["name"]
         constraints = [models.UniqueConstraint(fields=["user", "name"], name="uniq_label_per_user")]

@@ -2257,3 +2257,18 @@ export interface ClinicalServiceRecord {
   fee_charged: string;
   performed_at: string;
 }
+
+
+/** `/api/finance/reports/inventory-valuation/` — what is sitting on the shelf, at cost. */
+export interface InventoryValuation {
+  as_of: string;
+  total_units: number;
+  total_value: string;
+  by_product: {
+    product_id: number;
+    product_name: string;
+    units: number;
+    value: string;
+    batches: number;
+  }[];
+}

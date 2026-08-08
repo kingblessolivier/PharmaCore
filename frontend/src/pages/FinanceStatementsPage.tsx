@@ -26,6 +26,7 @@ import type {
   ProfitAndLoss,
   StatementLine,
   TrialBalance,
+  InventoryValuation,
 } from "../lib/types";
 
 const money = (n: string | number) =>
@@ -41,13 +42,17 @@ function monthBounds(d: Date): { start: string; end: string } {
   return { start: iso(start), end: iso(end) };
 }
 
-type Tab = "trial" | "pl" | "bs" | "cf" | "group" | "close";
+type Tab = "trial" | "pl" | "bs" | "cf" | "group" | "close" | "stock";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "pl", label: "Profit & loss" },
   { id: "bs", label: "Balance sheet" },
   { id: "cf", label: "Cash flow" },
   { id: "trial", label: "Trial balance" },
+  // The valuation report has existed and been reachable from nowhere. Its own
+  // docstring says it "powers the inventory-valuation statement tab" — this is
+  // that tab, finally.
+  { id: "stock", label: "Inventory valuation" },
   { id: "group", label: "Consolidation" },
   { id: "close", label: "Period close" },
 ];
@@ -126,6 +131,11 @@ export function FinanceStatementsPage() {
     queryFn: () =>
       api<TrialBalance>(`/api/finance/reports/trial-balance/?organization=${orgId}&as_of=${end}`),
     enabled: enabled && tab === "trial",
+  });
+  const stockQ = useQuery({
+    queryKey: ["fin-stock-valuation", orgId],
+    queryFn: () => api<InventoryValuation>("/api/finance/reports/inventory-valuation/"),
+    enabled: tab === "stock",
   });
   const groupQ = useQuery({
     queryKey: ["fin-group", start, end],
@@ -375,6 +385,75 @@ export function FinanceStatementsPage() {
               </table>
             </div>
           ))}
+        </div>
+      )}
+
+      {tab === "stock" && stockQ.data && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-line bg-surface-0 p-3">
+              <div className="text-xs text-ink-500">Value on hand, at cost</div>
+              <div className="mt-0.5 text-xl font-semibold tabular-nums text-ink-900">
+                {money(Number(stockQ.data.total_value))}
+              </div>
+            </div>
+            <div className="rounded-lg border border-line bg-surface-0 p-3">
+              <div className="text-xs text-ink-500">Units</div>
+              <div className="mt-0.5 text-xl font-semibold tabular-nums text-ink-900">
+                {stockQ.data.total_units.toLocaleString()}
+              </div>
+            </div>
+            <div className="rounded-lg border border-line bg-surface-0 p-3">
+              <div className="text-xs text-ink-500">Lines</div>
+              <div className="mt-0.5 text-xl font-semibold tabular-nums text-ink-900">
+                {stockQ.data.by_product.length.toLocaleString()}
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-ink-500">
+            Batches with no recorded cost contribute nothing — they are physically present, but the
+            ledger cannot value what carries no cost stamp.
+          </p>
+          <DataGrid
+            rows={stockQ.data.by_product}
+            columns={[
+              {
+                key: "product_name",
+                header: "Medicine",
+                value: (r) => r.product_name,
+                render: (r) => <span className="font-medium text-ink-900">{r.product_name}</span>,
+              },
+              {
+                key: "units",
+                header: "Units",
+                align: "right",
+                numeric: true,
+                value: (r) => r.units,
+                render: (r) => <span className="tabular-nums">{r.units.toLocaleString()}</span>,
+              },
+              {
+                key: "batches",
+                header: "Batches",
+                align: "right",
+                numeric: true,
+                value: (r) => r.batches,
+              },
+              {
+                key: "value",
+                header: "Value at cost",
+                align: "right",
+                numeric: true,
+                value: (r) => Number(r.value),
+                render: (r) => money(Number(r.value)),
+              },
+            ]}
+            getRowId={(r) => r.product_id}
+            loading={stockQ.isLoading}
+            storageKey="inventory-valuation"
+            exportName="inventory-valuation"
+            searchPlaceholder="Search by medicine…"
+            emptyMessage="No valued stock on hand."
+          />
         </div>
       )}
 

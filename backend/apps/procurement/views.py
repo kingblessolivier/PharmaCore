@@ -14,6 +14,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
 from django.db.models import Count, Q, QuerySet
+from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
@@ -205,7 +206,7 @@ class SupplierProfileViewSet(_AuditedViewSet):
         if org is None:
             raise ValidationError({"organization": "An organization is required."})
         self.guard_org(org)
-        today = date.today()
+        today = timezone.localdate()
         evaluation = services.refresh_supplier_scores(
             supplier=profile.supplier,
             organization=org,
@@ -246,7 +247,7 @@ class SupplierLicenceViewSet(_AuditedViewSet):
         if supplier:
             qs = qs.filter(supplier_id=supplier)
         if self.request.query_params.get("expiring") == "1":
-            qs = qs.filter(expires_on__lte=date.today() + timedelta(days=90))
+            qs = qs.filter(expires_on__lte=timezone.localdate() + timedelta(days=90))
         return qs
 
     @action(detail=True, methods=["post"])
@@ -885,7 +886,9 @@ class SupplierNoteViewSet(_AuditedViewSet):
         if note.status != SupplierNote.Status.ISSUED:
             raise ValidationError("Only an issued note can be settled.")
         note.status = SupplierNote.Status.SETTLED
-        note.settled_on = _parse_date(request.data.get("settled_on"), "settled_on", date.today())
+        note.settled_on = _parse_date(
+            request.data.get("settled_on"), "settled_on", timezone.localdate()
+        )
         note.save(update_fields=["status", "settled_on", "updated_at"])
         self._audit("SUPPLIER_NOTE_SETTLED", note)
         return Response(SupplierNoteSerializer(note).data)
@@ -916,7 +919,7 @@ class SupplierStatementView(APIView):
         ).first()
         if supplier is None:
             raise ValidationError({"supplier": "A supplier id is required."})
-        today = date.today()
+        today = timezone.localdate()
         return Response(
             services.supplier_statement(
                 organization=org,
@@ -943,7 +946,7 @@ class ProcurementOverviewView(APIView):
             (o.total_amount_base for o in receivable.prefetch_related("lines")), Decimal("0")
         )
         invoices = SupplierInvoice.objects.filter(organization__in=orgs)
-        today = date.today()
+        today = timezone.localdate()
         return Response(
             {
                 "requisitions_pending": PurchaseRequisition.objects.filter(

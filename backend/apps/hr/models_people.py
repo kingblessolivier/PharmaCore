@@ -32,6 +32,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.db import models
+from django.utils import timezone
 
 ZERO = Decimal("0.00")
 
@@ -120,7 +121,7 @@ class EmploymentContract(models.Model):
 
     @property
     def is_expiring(self) -> bool:
-        return bool(self.end_date and (self.end_date - date.today()).days <= 60)
+        return bool(self.end_date and (self.end_date - timezone.localdate()).days <= 60)
 
 
 class SalaryStructure(models.Model):
@@ -577,7 +578,7 @@ class LoanInstallment(models.Model):
 
     @property
     def is_overdue(self) -> bool:
-        return not self.is_paid and self.due_date < date.today()
+        return not self.is_paid and self.due_date < timezone.localdate()
 
 
 class PayrollAdjustment(models.Model):
@@ -720,7 +721,7 @@ class StatutoryFiling(models.Model):
     @property
     def is_overdue(self) -> bool:
         return self.status not in {self.Status.FILED, self.Status.FILED_PAID} and (
-            self.due_date < date.today()
+            self.due_date < timezone.localdate()
         )
 
     @property
@@ -1143,7 +1144,7 @@ class TrainingRecord(models.Model):
         return (
             self.status in {self.Status.ASSIGNED, self.Status.IN_PROGRESS}
             and self.due_on is not None
-            and self.due_on < date.today()
+            and self.due_on < timezone.localdate()
         )
 
 
@@ -1226,7 +1227,7 @@ class CompetencyAssessment(models.Model):
     def is_valid(self) -> bool:
         if self.result == self.Result.NOT_COMPETENT:
             return False
-        return self.valid_until is None or self.valid_until >= date.today()
+        return self.valid_until is None or self.valid_until >= timezone.localdate()
 
 
 class DisciplinaryAction(models.Model):
@@ -1281,7 +1282,7 @@ class DisciplinaryAction(models.Model):
     @property
     def is_live(self) -> bool:
         return self.status in {self.Status.ISSUED, self.Status.UPHELD} and (
-            self.expires_on is None or self.expires_on >= date.today()
+            self.expires_on is None or self.expires_on >= timezone.localdate()
         )
 
 

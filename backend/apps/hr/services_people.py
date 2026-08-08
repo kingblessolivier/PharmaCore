@@ -202,7 +202,7 @@ def set_salary_structure(
 
 def current_salary_structure(employee: Employee, on: date | None = None) -> SalaryStructure | None:
     """The structure in force on a day — what payroll must resolve against."""
-    day = on or date.today()
+    day = on or timezone.localdate()
     for structure in employee.salary_structures.prefetch_related("components").all():
         if structure.covers(day):
             return structure
@@ -248,7 +248,7 @@ def seed_default_leave_types(organization: Organization) -> list[LeaveType]:
 def ensure_leave_balance(
     employee: Employee, leave_type: LeaveType, year: int | None = None
 ) -> LeaveBalance:
-    year = year or date.today().year
+    year = year or timezone.localdate().year
     balance, created = LeaveBalance.objects.get_or_create(
         employee=employee, leave_type=leave_type, year=year
     )
@@ -272,7 +272,7 @@ def accrue_monthly_leave(
 
     Idempotent per (balance, month): re-running the same month adds nothing.
     """
-    day = up_to or date.today()
+    day = up_to or timezone.localdate()
     posted = 0
     types = LeaveType.objects.filter(
         organization=organization, is_active=True, accrual=LeaveType.Accrual.MONTHLY
@@ -567,7 +567,7 @@ def create_loan(
     if installments_count < 1:
         raise PeopleError("A loan needs at least one installment.")
 
-    start = start_date or date.today()
+    start = start_date or timezone.localdate()
     total = principal + (principal * Decimal(interest_rate_pct) / Decimal("100"))
     monthly = _q(total / Decimal(installments_count))
 
@@ -698,7 +698,7 @@ DEFAULT_CLEARANCE_ITEMS: list[tuple[str, str, bool]] = [
 def start_onboarding(*, employee: Employee, user: User | None = None) -> OnboardingChecklist:
     checklist, created = OnboardingChecklist.objects.get_or_create(
         employee=employee,
-        defaults={"target_completion": date.today() + timedelta(days=14)},
+        defaults={"target_completion": timezone.localdate() + timedelta(days=14)},
     )
     if created:
         for order, (label, category, mandatory) in enumerate(DEFAULT_ONBOARDING_ITEMS):
@@ -869,7 +869,7 @@ def compute_final_settlement(
             "leave_encashment": encashment,
             "notice_pay": notice_pay,
             "loan_recovery": loan_balance,
-            "computed_on": date.today(),
+            "computed_on": timezone.localdate(),
         },
     )
     settlement.net_payable = _q(settlement.gross_dues - settlement.total_deductions)
@@ -943,7 +943,7 @@ def assert_can_handle_controlled(employee: Employee) -> None:
 
 def compliance_alerts(organization: Organization, within_days: int = 90) -> dict[str, Any]:
     """Everything about to lapse — the People dashboard's warning list."""
-    horizon = date.today() + timedelta(days=within_days)
+    horizon = timezone.localdate() + timedelta(days=within_days)
     employees = Employee.objects.filter(organization=organization).exclude(
         employment_status=Employee.Status.TERMINATED
     )
@@ -978,6 +978,6 @@ def compliance_alerts(organization: Organization, within_days: int = 90) -> dict
         "loans_overdue": LoanInstallment.objects.filter(
             loan__employee__organization=organization,
             is_paid=False,
-            due_date__lt=date.today(),
+            due_date__lt=timezone.localdate(),
         ).count(),
     }

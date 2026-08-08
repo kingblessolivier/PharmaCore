@@ -31,6 +31,7 @@ from typing import Any
 
 from django.db.models import DecimalField, ExpressionWrapper, F, Q, Sum
 from django.db.models.functions import Coalesce
+from django.utils import timezone
 
 from apps.finance.reports import ZERO, _q, account_balances, profit_and_loss
 from apps.iam.models import Organization
@@ -78,7 +79,7 @@ def inventory_expiry_exposure(
     """
     from apps.inventory.models import InventoryBatch
 
-    today = as_of or date.today()
+    today = as_of or timezone.localdate()
     live = InventoryBatch.objects.filter(
         organization=organization, quantity_available__gt=0
     ).exclude(status=InventoryBatch.Status.RECALLED)

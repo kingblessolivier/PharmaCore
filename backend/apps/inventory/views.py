@@ -6,7 +6,7 @@ Org-scoped; reads for any authed user in the org, writes admin/manager-only and 
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Any, cast
 
 from django.db.models import Q, QuerySet
@@ -531,7 +531,7 @@ class InventoryBatchViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(quantity_available__gt=0)
         within = self.request.query_params.get("expiring_within")
         if within:
-            qs = qs.filter(expiry_date__lte=date.today() + timedelta(days=int(within)))
+            qs = qs.filter(expiry_date__lte=timezone.localdate() + timedelta(days=int(within)))
         return qs
 
     def _act(self, action_name: str, batch: InventoryBatch, changes: dict[str, object]) -> None:

@@ -12,7 +12,6 @@ import { LoginPage } from "./pages/LoginPage";
 import { OrganizationDetailPage } from "./pages/OrganizationDetailPage";
 import { OrdersPage } from "./pages/OrdersPage";
 import { FinancePage } from "./pages/FinancePage";
-import { OrganizationsPage } from "./pages/OrganizationsPage";
 import { PosPage } from "./pages/PosPage";
 import { ProductDetailPage } from "./pages/ProductDetailPage";
 import { ProductsPage } from "./pages/ProductsPage";
@@ -229,7 +228,9 @@ function App() {
               <Route path="/procurement/suppliers" element={forProcurement(<SupplierMasterPage />)} />
               <Route path="/admin" element={adminOnly(<AdminHome />)} />
               <Route path="/companies" element={adminOnly(<CompaniesPage />)} />
-              <Route path="/organizations" element={adminOnly(<OrganizationsPage />)} />
+              {/* Retired: a strict subset of "Organizations & branches", which sat directly
+                  above it in the same Admin menu and read the same endpoint. */}
+              <Route path="/organizations" element={<Navigate to="/companies" replace />} />
               <Route path="/organizations/:id" element={adminOnly(<OrganizationDetailPage />)} />
               <Route path="/departments" element={adminOnly(<DepartmentsPage />)} />
               <Route path="/users" element={adminOnly(<UsersPage />)} />

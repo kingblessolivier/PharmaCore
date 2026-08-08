@@ -14,6 +14,7 @@ from typing import Any, cast
 
 from django.db.models import Q, QuerySet
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -291,7 +292,9 @@ class SourceDemandView(APIView):
         raw_products = request.data.get("products") or []
         needed_raw = request.data.get("needed_by")
         needed_by = (
-            date.fromisoformat(needed_raw) if needed_raw else date.today() + timedelta(days=30)
+            date.fromisoformat(needed_raw)
+            if needed_raw
+            else timezone.localdate() + timedelta(days=30)
         )
 
         try:
@@ -489,7 +492,7 @@ class RepPerformanceView(APIView):
         org_id = _org_param(request)
         _assert_may_act_for(user, org_id)
 
-        today = date.today()
+        today = timezone.localdate()
         start_raw = request.query_params.get("start")
         end_raw = request.query_params.get("end")
         start = date.fromisoformat(start_raw) if start_raw else today.replace(day=1)
@@ -578,10 +581,14 @@ class TradingPartnersView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    #: Organization types that sell into the trade.
-    SELLER_TYPES = ("DEPOT", "DISTRIBUTOR", "HQ")
+    #: Organization types that sell into the trade. Drawn from ``Organization.OrgType``
+    #: rather than written out, because the literal list previously carried
+    #: "DISTRIBUTOR" and "RETAIL_PHARMACY" — neither of which is a real org type, so
+    #: neither could ever match. The behaviour was right by accident and the code
+    #: stated something false about the domain.
+    SELLER_TYPES = (Organization.OrgType.DEPOT, Organization.OrgType.HQ)
     #: Organization types that buy from it.
-    BUYER_TYPES = ("RETAIL", "RETAIL_PHARMACY")
+    BUYER_TYPES = (Organization.OrgType.RETAIL,)
 
     def get(self, request: Request) -> Response:
         user = cast(User, request.user)

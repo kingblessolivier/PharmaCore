@@ -112,6 +112,8 @@ class BankStatementLine(models.Model):
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.UNMATCHED)
     note = models.CharField(max_length=255, blank=True, default="")
 
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+
     class Meta:
         ordering = ["line_date", "id"]
         constraints = [

@@ -256,7 +256,7 @@ def build_pick_tasks(
                 organization=wave.organization,
                 product=product,
                 status=InventoryBatch.Status.ACTIVE,
-                expiry_date__gte=date.today(),
+                expiry_date__gte=timezone.localdate(),
                 quantity_available__gt=0,
             )
             .select_related("bin_location", "bin_location__zone")
