@@ -73,6 +73,7 @@ import { StockDisposalPage } from "./pages/StockDisposalPage";
 import { PurchaseOrdersPage } from "./pages/PurchaseOrdersPage";
 import { ClaimWorkbenchPage } from "./pages/ClaimWorkbenchPage";
 import { GrnWorkbenchPage } from "./pages/GrnWorkbenchPage";
+import { RequisitionWorkbenchPage } from "./pages/RequisitionWorkbenchPage";
 import { OrderComposePage } from "./pages/OrderComposePage";
 import {
   AccessWorkspace,
@@ -210,6 +211,7 @@ function App() {
               <Route path="/distribution/returns" element={forPharmacy(<CustomerReturnsPage />)} />
               <Route path="/procurement" element={forProcurement(<ProcurementHome />)} />
               <Route path="/procurement/requisitions" element={forProcurement(<RequisitionsPage />)} />
+              <Route path="/procurement/requisitions/:id" element={forProcurement(<RequisitionWorkbenchPage />)} />
               <Route path="/procurement/rfqs" element={forProcurement(<RfqPage />)} />
               <Route path="/procurement/orders" element={forProcurement(<SupplierOrdersPage />)} />
               <Route path="/procurement/imports" element={forProcurement(<ImportsPage />)} />
