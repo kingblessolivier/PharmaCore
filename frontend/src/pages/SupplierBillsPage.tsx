@@ -13,19 +13,13 @@ import {
   Select,
   Textarea,
 } from "../components/RecordKit";
-import { Badge, Button, PageHeader } from "../components/ui";
+import { Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
 import { money, shortDate } from "../lib/format";
 import { useDefaultOrg } from "../lib/recordData";
 import type { Paginated, Supplier, SupplierBill } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
-const STATUS_TONE: Record<string, "warning" | "info" | "success" | "danger" | "default"> = {
-  UNPAID: "warning",
-  PARTIAL: "info",
-  PAID: "success",
-  OVERDUE: "danger",
-  CANCELLED: "default",
-};
 
 const METHODS: [string, string][] = [
   ["BANK_TRANSFER", "Bank transfer"],
@@ -187,9 +181,7 @@ function BillDrawer({ bill, onClose }: { bill: SupplierBill; onClose: () => void
       title={`${bill.bill_number} · ${bill.supplier_name}`}
       subtitle={bill.due_date ? `Due ${shortDate(bill.due_date)}` : "No due date"}
       badge={
-        <Badge tone={isOverdue(bill) ? "danger" : (STATUS_TONE[bill.status] ?? "default")}>
-          {isOverdue(bill) ? "Overdue" : bill.status}
-        </Badge>
+<StatusChip status={isOverdue(bill) ? "OVERDUE" : bill.status} />
       }
       width="max-w-2xl"
       onClose={onClose}
@@ -382,9 +374,7 @@ export function SupplierBillsPage() {
             header: "Status",
             value: (b) => (isOverdue(b) ? "OVERDUE" : b.status),
             render: (b) => (
-              <Badge tone={isOverdue(b) ? "danger" : (STATUS_TONE[b.status] ?? "default")}>
-                {isOverdue(b) ? "Overdue" : b.status}
-              </Badge>
+<StatusChip status={isOverdue(b) ? "OVERDUE" : b.status} size="sm" />
             ),
           },
         ]}

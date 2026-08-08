@@ -18,6 +18,7 @@ import { api } from "../lib/api";
 import { money, shortDate } from "../lib/format";
 import { approveCount, varianceReport } from "../lib/inventory";
 import type { Paginated, StockCount } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
 export function StockCountsPage() {
   const qc = useQueryClient();
@@ -100,17 +101,7 @@ export function StockCountsPage() {
       header: "Status",
       value: (c) => c.status,
       render: (c) => (
-        <Badge
-          tone={c.status === "APPROVED" ? "success" : c.status === "SUBMITTED" ? "warning" : "neutral"}
-        >
-          {c.status === "APPROVED"
-            ? "Approved"
-            : c.status === "SUBMITTED"
-              ? "Awaiting approval"
-              : c.status === "IN_PROGRESS"
-                ? "In progress"
-                : "Draft"}
-        </Badge>
+<StatusChip status={c.status} size="sm" />
       ),
     },
     {

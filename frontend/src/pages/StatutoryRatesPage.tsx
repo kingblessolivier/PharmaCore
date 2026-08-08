@@ -43,7 +43,7 @@ export function StatutoryRatesPage() {
   ];
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <button
         onClick={() => navigate("/people")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -52,7 +52,7 @@ export function StatutoryRatesPage() {
       </button>
 
       <PageHeader title="Statutory rates (PAYE / RSSB / CBHI)" />
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
         The versioned rate table the payroll engine reads from. Rates are data
         — a new Finance Law becomes a new row with a later <code>effective_from</code>,
         never a code change. The engine always picks the row whose effective date

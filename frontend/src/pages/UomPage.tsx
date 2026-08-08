@@ -105,7 +105,7 @@ export function UomPage() {
   );
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <button
         onClick={() => navigate("/catalog")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -121,7 +121,7 @@ export function UomPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
         Full CRUD management for pack-to-strip and tablet conversions and OTC increment pricing.
       </p>
 

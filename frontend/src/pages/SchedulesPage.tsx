@@ -21,6 +21,7 @@ import { money, shortDate } from "../lib/format";
 import type { CostCentre } from "../lib/finance";
 import { useDefaultOrg } from "../lib/recordData";
 import type { Account, Paginated } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
 type ScheduleKind = "PREPAYMENT" | "ACCRUAL";
 type ScheduleStatus = "ACTIVE" | "COMPLETED" | "CANCELLED";
@@ -71,11 +72,6 @@ const KIND_LABEL: Record<ScheduleKind, string> = {
   ACCRUAL: "Accrual",
 };
 
-const STATUS_TONE: Record<ScheduleStatus, "success" | "default" | "warning"> = {
-  ACTIVE: "success",
-  COMPLETED: "default",
-  CANCELLED: "warning",
-};
 
 /* -------------------------------------------------------------------------- */
 
@@ -311,7 +307,7 @@ function ScheduleDrawer({
     <Drawer
       title={schedule.name}
       subtitle={`${KIND_LABEL[schedule.kind]} · ${schedule.expense_account_code} ${schedule.expense_account_name}`}
-      badge={<Badge tone={STATUS_TONE[schedule.status]}>{schedule.status}</Badge>}
+      badge={<StatusChip status={schedule.status} />}
       width="max-w-3xl"
       onClose={onClose}
       footer={
@@ -569,9 +565,7 @@ export function SchedulesPage() {
             header: "Status",
             value: (s) => s.status,
             render: (s) => (
-              <Badge tone={STATUS_TONE[s.status]}>
-                {s.status.charAt(0) + s.status.slice(1).toLowerCase()}
-              </Badge>
+<StatusChip status={s.status} />
             ),
           },
         ]}

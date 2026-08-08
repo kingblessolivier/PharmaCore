@@ -7,7 +7,6 @@ import {
   BookOpen,
   Boxes,
   Building2,
-  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ClipboardList,
@@ -44,12 +43,10 @@ import {
   ShoppingBag,
   Ship,
   FileSearch,
-  Gavel,
   Receipt,
   Handshake,
   ScanLine,
   RefreshCw,
-  MoveRight,
   Moon,
   Sun,
 } from "lucide-react";
@@ -427,9 +424,7 @@ const NAV: NavGroup[] = [
     match: ["/inventory"],
     items: [
       { to: "/inventory", label: "Warehouse Overview", icon: Warehouse, end: true },
-      { to: "/inventory/warehouses", label: "Warehouses", icon: Building2 },
-      { to: "/inventory/zones", label: "Zones & Bins", icon: Boxes },
-      { to: "/inventory/putaway", label: "Put-away Rules", icon: MoveRight },
+      { to: "/inventory/warehouses", label: "Warehouse setup", icon: Building2 },
       { to: "/inventory/picking", label: "Wave Picking", icon: ClipboardList },
       { to: "/inventory/replenishment", label: "Replenishment", icon: RefreshCw },
       { to: "/inventory/serialisation", label: "Track & Trace", icon: ScanLine },
@@ -495,11 +490,7 @@ const NAV: NavGroup[] = [
     app: "finance",
     needs: ["finance.view"],
     items: [
-      { to: "/finance/receivables", label: "Customer invoices", icon: Receipt },
-      { to: "/finance/statement", label: "Customer statements", icon: FileBarChart },
-      { to: "/finance/dunning", label: "Collections & dunning", icon: Gavel },
-      { to: "/finance/credit", label: "Credit control", icon: Wallet },
-      { to: "/finance/aging", label: "Aging", icon: CreditCard },
+      { to: "/finance/receivables", label: "Customer money", icon: Receipt },
     ],
   },
   {
@@ -509,15 +500,7 @@ const NAV: NavGroup[] = [
     items: [
       { to: "/finance/payables", label: "Supplier bills", icon: CreditCard },
       { to: "/finance/payment-runs", label: "Payment runs", icon: Banknote },
-    ],
-  },
-  {
-    label: "Cash & bank",
-    app: "finance",
-    needs: ["finance.manage"],
-    items: [
-      { to: "/finance/banking", label: "Accounts & cash book", icon: Landmark },
-      { to: "/finance/reconciliation", label: "Bank reconciliation", icon: CheckCircle2 },
+      { to: "/finance/banking", label: "Cash & bank", icon: Landmark },
     ],
   },
   {

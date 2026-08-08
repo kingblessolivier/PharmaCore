@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Empty, ErrorNote } from "../components/RecordKit";
-import { Badge, Button, Spinner } from "../components/ui";
+import { Button, Spinner } from "../components/ui";
 import {
   Fieldset,
   Icon,
@@ -39,17 +39,8 @@ import {
 import { api } from "../lib/api";
 import { money, shortDate } from "../lib/format";
 import type { StockOrder } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
-const TONE: Record<string, "neutral" | "warning" | "success" | "danger"> = {
-  DRAFT: "neutral",
-  PENDING: "warning",
-  APPROVED: "success",
-  PICKING: "warning",
-  IN_TRANSIT: "warning",
-  DELIVERED: "success",
-  PARTIALLY_RECEIVED: "warning",
-  CANCELLED: "danger",
-};
 
 export function OrderWorkbenchPage() {
   const { id } = useParams<{ id: string }>();
@@ -109,7 +100,7 @@ export function OrderWorkbenchPage() {
           title={order.order_number || `Order #${order.id}`}
           subtitle={`${order.depot_name} → ${order.retail_name}`}
           status={
-            <Badge tone={TONE[order.status] ?? "neutral"}>{order.status.replace(/_/g, " ")}</Badge>
+            <StatusChip status={order.status} />
           }
           facts={[
             { label: "Ordered", value: shortDate(order.created_at) },
@@ -157,9 +148,7 @@ export function OrderWorkbenchPage() {
                     </ReadOnly>
                   </Row>
                   <Row label="Status">
-                    <Badge tone={TONE[order.status] ?? "neutral"}>
-                      {order.status.replace(/_/g, " ")}
-                    </Badge>
+                    <StatusChip status={order.status} />
                   </Row>
                 </Fieldset>
 
@@ -239,17 +228,7 @@ export function OrderWorkbenchPage() {
                     </span>
                   </Row>
                   <Row label="Status">
-                    <Badge
-                      tone={
-                        order.payment_status === "PAID"
-                          ? "success"
-                          : order.payment_status === "PARTIAL"
-                            ? "warning"
-                            : "neutral"
-                      }
-                    >
-                      {order.payment_status}
-                    </Badge>
+                    <StatusChip status={order.payment_status} />
                   </Row>
                 </Fieldset>
 
@@ -301,9 +280,7 @@ export function OrderWorkbenchPage() {
                           <span className="text-form tabular-nums text-ink-700">
                             {row.quantity.toLocaleString()} short
                           </span>
-                          <Badge tone={row.status === "OPEN" ? "warning" : "neutral"}>
-                            {row.status}
-                          </Badge>
+                          <StatusChip status={row.status} />
                         </span>
                       </li>
                     ))}

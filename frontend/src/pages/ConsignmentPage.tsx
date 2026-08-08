@@ -23,13 +23,8 @@ import type {
   Paginated,
   Supplier,
 } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
-const STATUS_TONE: Record<string, string> = {
-  DRAFT: "neutral",
-  ACTIVE: "success",
-  SUSPENDED: "warning",
-  CLOSED: "neutral",
-};
 
 const BLANK = {
   agreement_no: "",
@@ -179,7 +174,7 @@ export function ConsignmentPage() {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <button
         onClick={() => navigate("/inventory")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -195,7 +190,7 @@ export function ConsignmentPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
         Stock that is not where its owner is. <strong>Supplier-owned</strong> sits in our
         warehouse and we owe for it only as it is consumed; <strong>customer-held</strong> sits
         at a customer and stays ours until they use it. Location and ownership are tracked
@@ -236,7 +231,7 @@ export function ConsignmentPage() {
             key: "status",
             header: "Status",
             align: "center",
-            render: (a) => <Badge tone={STATUS_TONE[a.status] ?? "neutral"}>{a.status}</Badge>,
+            render: (a) => <StatusChip status={a.status} />,
           },
           {
             key: "units_held",
@@ -344,9 +339,7 @@ export function ConsignmentPage() {
             header: "Status",
             align: "center",
             render: (s) => (
-              <Badge tone={s.status === "PAID" ? "success" : s.status === "INVOICED" ? "warning" : "neutral"}>
-                {s.status}
-              </Badge>
+              <StatusChip status={s.status} />
             ),
           },
           { key: "supplier_bill_no", header: "AP Bill", value: (s) => s.supplier_bill_no ?? "—" },

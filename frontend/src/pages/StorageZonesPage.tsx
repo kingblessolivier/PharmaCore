@@ -86,7 +86,7 @@ export function StorageZonesPage() {
   }
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <button
         onClick={() => navigate("/inventory")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -107,7 +107,7 @@ export function StorageZonesPage() {
           </div>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
         Climate-controlled storage zones (Ambient, Cold Room 2–8°C, Freezer, Safe) and bin locations.
       </p>
 

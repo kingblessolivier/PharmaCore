@@ -71,7 +71,7 @@ export function IngredientsPage() {
   }
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <button
         onClick={() => navigate("/catalog")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -87,7 +87,7 @@ export function IngredientsPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
         Full CRUD management for International Nonproprietary Names (INN) active ingredients.
       </p>
 

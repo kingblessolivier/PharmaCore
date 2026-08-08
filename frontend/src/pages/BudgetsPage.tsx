@@ -28,6 +28,7 @@ import type {
 } from "../lib/finance";
 import { useDefaultOrg } from "../lib/recordData";
 import type { Account, Paginated } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
 const MONTHS = [
   "January",
@@ -43,13 +44,6 @@ const MONTHS = [
   "November",
   "December",
 ];
-
-const STATUS_TONE: Record<Budget["status"], "default" | "info" | "success" | "warning"> = {
-  DRAFT: "default",
-  APPROVED: "info",
-  LOCKED: "success",
-  ARCHIVED: "warning",
-};
 
 const VERDICT_TONE: Record<VarianceVerdict, "success" | "danger" | "default"> = {
   FAVOURABLE: "success",
@@ -593,9 +587,7 @@ export function BudgetsPage() {
               header: "Status",
               value: (b) => b.status,
               render: (b) => (
-                <Badge tone={STATUS_TONE[b.status]}>
-                  {b.status.charAt(0) + b.status.slice(1).toLowerCase()}
-                </Badge>
+                <StatusChip status={b.status} />
               ),
             },
             {

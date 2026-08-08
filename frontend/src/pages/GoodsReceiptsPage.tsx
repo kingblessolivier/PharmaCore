@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { PackageCheck, ThermometerSnowflake, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -435,6 +436,7 @@ function ReceiptDrawer({ receipt, onClose }: { receipt: GoodsReceipt; onClose: (
 /* -------------------------------------------------------------------------- */
 
 export function GoodsReceiptsPage() {
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [status, setStatus] = useState("");
   const [openId, setOpenId] = useState<number | null>(null);
@@ -478,7 +480,11 @@ export function GoodsReceiptsPage() {
         exportName="goods-receipts"
         searchPlaceholder="Search by GRN, PO, supplier, delivery note…"
         emptyMessage="No goods receipts yet."
-        onRowClick={(r) => setOpenId(r.id)}
+        /* Opens the full receipt. The drawer could not show the cold-chain
+           condition, the shelf life arriving and the variance against the order
+           at the same time — which are precisely the three things worth seeing
+           before the receipt is posted. */
+        onRowClick={(r) => navigate(`/procurement/receipts/${r.id}`)}
         toolbar={
           <select
             value={status}

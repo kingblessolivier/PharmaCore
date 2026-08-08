@@ -13,12 +13,21 @@
 
 import { Workspace } from "../components/Workspace";
 import { AttendancePage } from "./AttendancePage";
+import { BankingPage } from "./BankingPage";
+import { BankReconciliationPage } from "./BankReconciliationPage";
 import { ColdChainCompliancePage } from "./ColdChainCompliancePage";
+import { CreditProfilesPage } from "./CreditProfilesPage";
+import { CustomerStatementPage } from "./CustomerStatementPage";
+import { DunningPage } from "./DunningPage";
+import { FinancePage } from "./FinancePage";
 import { IngredientsPage } from "./IngredientsPage";
 import { InteractionsPage } from "./InteractionsPage";
 import { ManufacturersPage } from "./ManufacturersPage";
 import { PermissionMatrixPage } from "./PermissionMatrixPage";
+import { PutawayRulesPage } from "./PutawayRulesPage";
+import { ReceivablesPage } from "./ReceivablesPage";
 import { ShiftRosterPage } from "./ShiftRosterPage";
+import { StorageZonesPage } from "./StorageZonesPage";
 import { StatutoryFilingsPage } from "./StatutoryFilingsPage";
 import { StatutoryRatesPage } from "./StatutoryRatesPage";
 import { SubstitutesPage } from "./SubstitutesPage";
@@ -29,6 +38,7 @@ import { TemperatureLogsPage } from "./TemperatureLogsPage";
 import { TimesheetsPage } from "./TimesheetsPage";
 import { UomPage } from "./UomPage";
 import { UsersPage } from "./UsersPage";
+import { WarehousesPage } from "./WarehousesPage";
 import { VatPage } from "./VatPage";
 
 /** VAT, EBM, RRA payments and tax codes are one desk, worked in that order. */
@@ -116,6 +126,53 @@ export function AccessWorkspace() {
       tabs={[
         { id: "users", label: "Users", element: <UsersPage /> },
         { id: "permissions", label: "Role permissions", element: <PermissionMatrixPage /> },
+      ]}
+    />
+  );
+}
+
+
+/** Everything owed to us, and the escalating steps for getting it in. */
+export function ReceivablesWorkspace() {
+  return (
+    <Workspace
+      title="Money in"
+      subtitle="What customers owe, how old it is, what has been sent to chase it, and how much credit each is allowed."
+      tabs={[
+        { id: "invoices", label: "Customer invoices", element: <ReceivablesPage /> },
+        { id: "aging", label: "Aging", element: <FinancePage /> },
+        { id: "statements", label: "Statements", element: <CustomerStatementPage /> },
+        { id: "dunning", label: "Collections & dunning", element: <DunningPage /> },
+        { id: "credit", label: "Credit control", element: <CreditProfilesPage /> },
+      ]}
+    />
+  );
+}
+
+/** The cash book and the act of agreeing it to the bank. */
+export function CashBankWorkspace() {
+  return (
+    <Workspace
+      title="Cash & bank"
+      subtitle="The accounts and their cash book, and the reconciliation that proves the book against the statement."
+      tabs={[
+        { id: "accounts", label: "Accounts & cash book", element: <BankingPage /> },
+        { id: "reconciliation", label: "Reconciliation", element: <BankReconciliationPage /> },
+      ]}
+    />
+  );
+}
+
+/** Where stock physically lives, and the rules that put it there. */
+export function WarehouseSetupWorkspace() {
+  return (
+    <Workspace
+      title="Warehouse setup"
+      subtitle="The premises, the zones and bins inside them, and the rules deciding where an incoming pallet goes."
+      tabs={[
+        { id: "warehouses", label: "Warehouses", element: <WarehousesPage /> },
+        { id: "zones", label: "Zones & bins", element: <StorageZonesPage /> },
+        { id: "putaway", label: "Put-away rules", element: <PutawayRulesPage /> },
       ]}
     />
   );

@@ -30,6 +30,7 @@ import type {
   SerialTrace,
   SerialUnit,
 } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
 const BIZ_STEPS: { value: BizStep; label: string }[] = [
   { value: "receiving", label: "Receiving — goods in" },
@@ -41,16 +42,6 @@ const BIZ_STEPS: { value: BizStep; label: string }[] = [
   { value: "destroying", label: "Destroying — witnessed disposal" },
 ];
 
-const STATUS_TONE: Record<string, string> = {
-  COMMISSIONED: "neutral",
-  IN_STOCK: "success",
-  IN_TRANSIT: "warning",
-  DISPENSED: "neutral",
-  RETURNED: "warning",
-  RECALLED: "danger",
-  DESTROYED: "danger",
-  DECOMMISSIONED: "neutral",
-};
 
 export function SerialisationPage() {
   const navigate = useNavigate();
@@ -186,7 +177,7 @@ export function SerialisationPage() {
   const containers = units.filter((u) => u.level !== "EACH");
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <button
         onClick={() => navigate("/inventory")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -202,7 +193,7 @@ export function SerialisationPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
         Every scan changes state and leaves a record. Commission a pack from its GS1
         DataMatrix, pack it into a case and a pallet, then observe it through receiving,
         dispatch and dispensing — the unit history and the EPCIS export are the same data.
@@ -311,7 +302,7 @@ export function SerialisationPage() {
             key: "status",
             header: "Status",
             align: "center",
-            render: (u) => <Badge tone={STATUS_TONE[u.status] ?? "neutral"}>{u.status}</Badge>,
+            render: (u) => <StatusChip status={u.status} />,
           },
           {
             key: "children_count",
@@ -475,9 +466,7 @@ export function SerialisationPage() {
                   {traceQuery.data.product_name ?? "Unidentified product"}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-2 text-xs text-ink-600">
-                  <Badge tone={STATUS_TONE[traceQuery.data.status] ?? "neutral"}>
-                    {traceQuery.data.status}
-                  </Badge>
+                  <StatusChip status={traceQuery.data.status} />
                   <span>Batch {traceQuery.data.batch_number || "—"}</span>
                   <span>Expires {traceQuery.data.expiry_date ?? "—"}</span>
                 </div>

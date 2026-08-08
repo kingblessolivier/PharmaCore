@@ -15,6 +15,7 @@ import type {
   ProductSubstitute,
   ProductUomConversion,
 } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
 function IngredientsSection({ productId }: { productId: number }) {
   const qc = useQueryClient();
@@ -629,9 +630,7 @@ export function ProductDetailPage() {
         {product.brand_name && <span className="text-ink-500">{product.brand_name}</span>}
         {product.requires_prescription && <Badge>Rx</Badge>}
         {product.is_essential && <Badge tone="success">WHO Essential</Badge>}
-        <Badge tone={product.lifecycle_status === "ACTIVE" ? "neutral" : "warning"}>
-          {product.lifecycle_status}
-        </Badge>
+        <StatusChip status={product.lifecycle_status ?? "UNKNOWN"} />
       </div>
       <div className="mb-4 grid grid-cols-2 gap-3 rounded-lg border border-line bg-surface-0 p-4 text-sm sm:grid-cols-4">
         <div>

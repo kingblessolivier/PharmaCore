@@ -30,6 +30,7 @@ import type {
   SensorCalibration,
   TemperatureSensor,
 } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
 type Tab = "sensors" | "calibrations" | "excursions";
 
@@ -179,7 +180,7 @@ export function ColdChainCompliancePage() {
   const dueSoon = sensors.filter((s) => s.calibration_state === "DUE_SOON").length;
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <button
         onClick={() => navigate("/inventory")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -195,7 +196,7 @@ export function ColdChainCompliancePage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
         GDP treats an uncalibrated reading as no reading at all. Every probe carries its own
         identity, stated accuracy and certificate trail; every excursion is worked through to a
         QA-signed disposition before the affected stock can move again.
@@ -430,7 +431,7 @@ export function ColdChainCompliancePage() {
               header: "Status",
               align: "center",
               render: (x) => (
-                <Badge tone={x.status === "CLOSED" ? "neutral" : "warning"}>{x.status}</Badge>
+                <StatusChip status={x.status} />
               ),
             },
             {

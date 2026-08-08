@@ -27,6 +27,7 @@ import { api } from "../lib/api";
 import { shortDate } from "../lib/format";
 import { checkEligibility, type InsuranceScheme, type MemberPolicy, type Quote } from "../lib/insurance";
 import type { Paginated } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -145,7 +146,7 @@ export function InsuranceMembersPage() {
         p.valid_to < TODAY ? (
           <Badge tone="danger">Expired</Badge>
         ) : (
-          <Badge tone={p.status === "ACTIVE" ? "success" : "warning"}>{p.status_display}</Badge>
+          <StatusChip status={p.status_display} />
         ),
     },
   ];

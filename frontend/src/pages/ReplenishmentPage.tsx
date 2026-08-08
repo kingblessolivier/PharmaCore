@@ -198,7 +198,7 @@ export function ReplenishmentPage() {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <button
         onClick={() => navigate("/inventory")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -224,7 +224,7 @@ export function ReplenishmentPage() {
           </div>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
         Min/max, reorder point and par level are the levers a buyer turns. Recompute sets them
         from observed demand — lead-time cover plus safety stock sized to the service level.
         Rules marked <strong>manual</strong> keep their hand-set numbers.

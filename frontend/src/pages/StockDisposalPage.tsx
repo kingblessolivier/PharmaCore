@@ -34,6 +34,7 @@ import {
 } from "../lib/inventory";
 import { useDefaultOrg } from "../lib/recordData";
 import type { Paginated, StockDisposal } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
 interface Draft {
   disposal_no: string;
@@ -135,9 +136,7 @@ export function StockDisposalPage() {
       header: "Status",
       value: (d) => d.status,
       render: (d) => (
-        <Badge tone={d.status === "DESTROYED" ? "success" : "neutral"}>
-          {d.status === "DESTROYED" ? "Destroyed" : d.status === "APPROVED" ? "Approved" : "Draft"}
-        </Badge>
+<StatusChip status={d.status} size="sm" />
       ),
     },
     {

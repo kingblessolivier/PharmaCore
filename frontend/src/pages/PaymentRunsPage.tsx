@@ -2,23 +2,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Banknote, Check, Download, Lock, Plus, Send } from "lucide-react";
 import { useState } from "react";
 import { DataGrid, type Column } from "../components/DataGrid";
-import { Badge, Button, Card, PageHeader, SelectField, TextField } from "../components/ui";
+import { Button, Card, PageHeader, SelectField, TextField } from "../components/ui";
 import { Drawer } from "../components/RecordKit";
 import { api, ApiError, downloadFile } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { Paginated, PaymentRun, SupplierBill } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
 const money = (n: string | number) =>
   Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
-const STATUS_TONE: Record<string, string> = {
-  DRAFT: "neutral",
-  AWAITING_APPROVAL: "warning",
-  APPROVED: "info",
-  DISBURSED: "success",
-  LOCKED: "success",
-  CANCELLED: "danger",
-};
 
 /** What the operator can do next, given where the run has got to. */
 const NEXT_STEP: Record<string, string> = {
@@ -199,7 +192,7 @@ function RunDetail({ run, onClose }: { run: PaymentRun; onClose: () => void }) {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div>
             <p className="text-xs uppercase tracking-wide text-ink-500">Status</p>
-            <Badge tone={STATUS_TONE[run.status] ?? "neutral"}>{run.status}</Badge>
+            <StatusChip status={run.status} />
           </div>
           <div>
             <p className="text-xs uppercase tracking-wide text-ink-500">Total</p>
@@ -331,7 +324,7 @@ export function PaymentRunsPage() {
       key: "status",
       header: "Status",
       value: (r) => r.status,
-      render: (r) => <Badge tone={STATUS_TONE[r.status] ?? "neutral"}>{r.status}</Badge>,
+      render: (r) => <StatusChip status={r.status} />,
     },
   ];
 
