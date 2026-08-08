@@ -51,7 +51,7 @@ class DashboardView(APIView):
         user = cast(User, request.user)
         orgs = organizations_visible_to(user)
         org_ids = list(orgs.values_list("id", flat=True))
-        today = timezone.now().date()
+        today = timezone.localdate()
         soon = today + timedelta(days=90)
 
         # Sales completed today (Sale.total is computed, so sum in Python — today's

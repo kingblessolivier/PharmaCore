@@ -28,6 +28,7 @@ from apps.distribution.models import (
     StockOrder,
     TenderContract,
 )
+from apps.distribution.permissions import DistributionAccess
 from apps.distribution.serializers import (
     CustomerReturnSerializer,
     DepotProductListingSerializer,
@@ -88,7 +89,7 @@ class AgingView(APIView):
     def get(self, request: Request) -> Response:
         user = cast(User, request.user)
         visible_ids = set(organizations_visible_to(user).values_list("id", flat=True))
-        today = timezone.now().date()
+        today = timezone.localdate()
         empty = {"current": 0.0, "d30": 0.0, "d60": 0.0, "d90": 0.0, "over90": 0.0}
 
         def side(orders: QuerySet[StockOrder], partner_attr: str) -> dict[str, Any]:
@@ -409,6 +410,8 @@ class InTransitStockViewSet(viewsets.ReadOnlyModelViewSet):
     to me') or ?source=<org> ('what I've sent out').
     """
 
+    permission_classes = [IsAuthenticated, DistributionAccess]
+
     serializer_class = InTransitStockSerializer
     queryset = InTransitStock.objects.select_related(
         "order", "source_org", "destination_org", "product"
@@ -438,6 +441,8 @@ class GRNViewSet(viewsets.ReadOnlyModelViewSet):
     (lean flow); this viewset just exposes the resulting GRN records.
     """
 
+    permission_classes = [IsAuthenticated, DistributionAccess]
+
     serializer_class = GRNSerializer
     queryset = GoodsReceivedNote.objects.select_related("order", "retail").prefetch_related("lines")
 
@@ -451,6 +456,8 @@ class GRNViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class DepotProductListingViewSet(viewsets.ModelViewSet):
+
+    permission_classes = [IsAuthenticated, DistributionAccess]
     serializer_class = DepotProductListingSerializer
     queryset = DepotProductListing.objects.select_related("depot", "product")
 
@@ -464,6 +471,8 @@ class DepotProductListingViewSet(viewsets.ModelViewSet):
 
 
 class SalesRepresentativeViewSet(viewsets.ModelViewSet):
+
+    permission_classes = [IsAuthenticated, DistributionAccess]
     serializer_class = SalesRepresentativeSerializer
     queryset = SalesRepresentative.objects.select_related("organization", "user", "employee")
 
@@ -477,6 +486,8 @@ class SalesRepresentativeViewSet(viewsets.ModelViewSet):
 
 
 class JourneyPlanViewSet(viewsets.ModelViewSet):
+
+    permission_classes = [IsAuthenticated, DistributionAccess]
     serializer_class = JourneyPlanSerializer
     queryset = JourneyPlan.objects.select_related("rep", "customer_org")
 
@@ -490,6 +501,8 @@ class JourneyPlanViewSet(viewsets.ModelViewSet):
 
 
 class SalesVisitLogViewSet(viewsets.ModelViewSet):
+
+    permission_classes = [IsAuthenticated, DistributionAccess]
     serializer_class = SalesVisitLogSerializer
     queryset = SalesVisitLog.objects.select_related("rep", "customer_org", "order")
 
@@ -503,6 +516,8 @@ class SalesVisitLogViewSet(viewsets.ModelViewSet):
 
 
 class TenderContractViewSet(viewsets.ModelViewSet):
+
+    permission_classes = [IsAuthenticated, DistributionAccess]
     serializer_class = TenderContractSerializer
     queryset = TenderContract.objects.select_related("depot", "client_org", "product")
 
@@ -516,6 +531,8 @@ class TenderContractViewSet(viewsets.ModelViewSet):
 
 
 class CustomerReturnViewSet(viewsets.ModelViewSet):
+
+    permission_classes = [IsAuthenticated, DistributionAccess]
     serializer_class = CustomerReturnSerializer
     queryset = CustomerReturn.objects.select_related("depot", "retail")
 

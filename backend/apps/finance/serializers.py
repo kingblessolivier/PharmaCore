@@ -666,7 +666,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
         the deadline the invoice sits on."""
         from django.utils import timezone
 
-        return (timezone.now().date() - obj.due_date).days
+        return (timezone.localdate() - obj.due_date).days
 
 
 class CustomerCreditSerializer(serializers.ModelSerializer):

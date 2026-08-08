@@ -7,9 +7,26 @@ from datetime import timedelta
 import pytest
 from apps.approvals.models import ApprovalRequest
 from apps.approvals.services import ApprovalError, claim, decide, refresh_sla
+from apps.iam import authority
 from apps.iam.models import Organization, Role, User
 from django.utils import timezone
 from rest_framework.test import APIClient
+
+
+@pytest.fixture(autouse=True)
+def register_test_resource():
+    """``test.thing`` stands in for a real approval kind, so it needs a rule.
+
+    Deciding now requires the competence the resource demands (authority.py R1);
+    an unregistered type deliberately falls back to admin-only. Mapping the
+    stand-in to ``finance.manage`` makes the ACCOUNTANT fixture exactly the right
+    shape for these tests: a competent approver who is *not* senior oversight.
+    """
+    authority.register_resource(
+        "test.thing", authority.ResourceRule(permission="finance.manage", label="Test thing")
+    )
+    yield
+    authority.unregister_resource("test.thing")
 
 
 def _auth(user: User) -> APIClient:

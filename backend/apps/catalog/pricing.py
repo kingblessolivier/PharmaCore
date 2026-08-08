@@ -28,6 +28,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.catalog.models import PriceList, ProductPrice
@@ -54,14 +55,28 @@ class ResolvedPrice:
         return self.source == "PRICE_LIST"
 
 
-def active_lists(*, at: datetime | None = None, list_type: str | None = None) -> list[PriceList]:
-    """Price lists in force right now.
+def active_lists(
+    *,
+    organization: Any = None,
+    at: datetime | None = None,
+    list_type: str | None = None,
+) -> list[PriceList]:
+    """Price lists in force right now **for this organization**.
 
     A list with no dates is open-ended, which is how most standing lists are set
     up; one with dates only applies inside them.
+
+    ``organization`` is not optional in spirit even though it is in signature:
+    omitting it returns every tenant's lists, which is what this function used to
+    do unconditionally and is why one pharmacy's promotion repriced its
+    competitors. Callers that price a real sale always pass it. A list with no
+    organization is group-wide and applies everywhere, which is the HQ case.
     """
     at = at or timezone.now()
     qs = PriceList.objects.filter(is_active=True)
+    if organization is not None:
+        org_id = getattr(organization, "pk", organization)
+        qs = qs.filter(Q(organization_id=org_id) | Q(organization__isnull=True))
     if list_type:
         qs = qs.filter(list_type=list_type)
     return [
@@ -82,7 +97,7 @@ def resolve(
 ) -> ResolvedPrice:
     """The price this line should be sold at, and why."""
     product_id = getattr(product, "pk", product)
-    lists = active_lists(at=at, list_type=list_type)
+    lists = active_lists(organization=organization, at=at, list_type=list_type)
 
     best: ProductPrice | None = None
     if lists:
@@ -172,7 +187,7 @@ def coverage(*, organization: Any) -> dict[str, Any]:
             "product_id", flat=True
         )
     )
-    lists = active_lists()
+    lists = active_lists(organization=org_id)
     priced = set(
         ProductPrice.objects.filter(price_list__in=lists).values_list("product_id", flat=True)
     )

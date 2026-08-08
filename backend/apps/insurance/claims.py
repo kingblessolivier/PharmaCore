@@ -159,7 +159,7 @@ def submit(*, claim: Claim, user: User | None = None) -> Claim:
         )
 
     deadline = claim.service_date + timedelta(days=claim.scheme.claim_window_days)
-    if timezone.now().date() > deadline:
+    if timezone.localdate() > deadline:
         raise ClaimError(
             f"The claim window for {claim.scheme.name} closed on {deadline} "
             f"({claim.scheme.claim_window_days} days after service). Submitting now would be "
@@ -385,7 +385,7 @@ def work_queue(*, organization: Any) -> list[dict[str, Any]]:
     claim that misses the window is not late — it is unrecoverable.
     """
     org_id = getattr(organization, "pk", organization)
-    today = timezone.now().date()
+    today = timezone.localdate()
     rows: list[dict[str, Any]] = []
     claims = (
         Claim.objects.filter(organization_id=org_id)
@@ -419,7 +419,7 @@ def work_queue(*, organization: Any) -> list[dict[str, Any]]:
 def insurer_exposure(*, organization: Any) -> list[dict[str, Any]]:
     """What each payer owes, aged. Insurer debt behaves like any other AR."""
     org_id = getattr(organization, "pk", organization)
-    today = timezone.now().date()
+    today = timezone.localdate()
     out: list[dict[str, Any]] = []
 
     for scheme in InsuranceScheme.objects.filter(organization_id=org_id, is_active=True):
@@ -461,7 +461,7 @@ def insurer_exposure(*, organization: Any) -> list[dict[str, Any]]:
 def summary(*, organization: Any) -> dict[str, Any]:
     """Headline insurance figures for the module overview."""
     org_id = getattr(organization, "pk", organization)
-    today = timezone.now().date()
+    today = timezone.localdate()
     claims = Claim.objects.filter(organization_id=org_id)
 
     agg = claims.aggregate(

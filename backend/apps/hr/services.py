@@ -28,7 +28,7 @@ def allocate_employee_number(employee: Employee) -> str:
 def request_termination(
     *, employee: Employee, requested_by: User, reason: str, effective_date: Any = None
 ) -> ApprovalRequest:
-    eff = effective_date or timezone.now().date()
+    eff = effective_date or timezone.localdate()
     return request_approval(
         resource_type="hr.employee_termination",
         resource_id=str(employee.pk),
@@ -44,7 +44,7 @@ def request_termination(
 def _apply_termination(approval: ApprovalRequest) -> None:
     employee = Employee.objects.select_related("user").get(pk=int(approval.resource_id))
     employee.employment_status = Employee.Status.TERMINATED
-    employee.end_date = approval.payload.get("effective_date") or timezone.now().date()
+    employee.end_date = approval.payload.get("effective_date") or timezone.localdate()
     employee.save(update_fields=["employment_status", "end_date", "updated_at"])
     # De-provision the login, if any (roadmap: "de-provision login" on offboarding).
     linked_user = employee.user
@@ -83,7 +83,7 @@ def clock_attendance(
     if direction not in {"IN", "OUT"}:
         raise ValueError("direction must be 'IN' or 'OUT'.")
 
-    today = timezone.now().date()
+    today = timezone.localdate()
     now = timezone.now()
     log = AttendanceLog.objects.select_for_update().filter(employee=employee, date=today).first()
 

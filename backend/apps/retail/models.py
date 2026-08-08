@@ -420,14 +420,28 @@ class ControlledSubstanceRegister(models.Model):
 
 
 class POSPromotion(models.Model):
-    """Retail promotional campaigns & coupon engine. ROADMAP '6. Retail (POS)'."""
+    """Retail promotional campaigns & coupon engine. ROADMAP '6. Retail (POS)'.
+
+    Scoped by ``organization`` for the same reason as ``catalog.PriceList``: a
+    code created anywhere used to work everywhere. ``code`` was also globally
+    unique, so two branches could not both run a "WEEKEND10" — the second was
+    rejected as a duplicate. Uniqueness is now per organization.
+    """
 
     class PromoType(models.TextChoices):
         PERCENT_DISCOUNT = "PERCENT", "Percentage Discount (%)"
         FLAT_DISCOUNT = "FLAT", "Flat Amount Off (RWF)"
         BOGO = "BOGO", "Buy One Get One"
 
-    code = models.CharField(max_length=50, unique=True)
+    organization = models.ForeignKey(
+        "iam.Organization",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="promotions",
+        help_text="Whose promotion this is. Empty means group-wide (set by HQ).",
+    )
+    code = models.CharField(max_length=50)
     name = models.CharField(max_length=150)
     promo_type = models.CharField(
         max_length=20, choices=PromoType.choices, default=PromoType.PERCENT_DISCOUNT
@@ -445,6 +459,21 @@ class POSPromotion(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            # Per organization, not globally — two branches may each run a
+            # "WEEKEND10". The null case (a group-wide code) is covered by the
+            # second constraint, because SQL treats NULLs as distinct.
+            models.UniqueConstraint(
+                fields=["organization", "code"],
+                condition=models.Q(organization__isnull=False),
+                name="uniq_promo_code_per_org",
+            ),
+            models.UniqueConstraint(
+                fields=["code"],
+                condition=models.Q(organization__isnull=True),
+                name="uniq_group_wide_promo_code",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"Promo {self.code} · {self.name}"

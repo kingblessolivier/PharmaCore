@@ -82,7 +82,7 @@ def _fefo_consume(item: SaleItem, org_id: int, user: User | None) -> None:
             organization_id=org_id,
             product=item.product,
             status=InventoryBatch.Status.ACTIVE,
-            expiry_date__gte=timezone.now().date(),  # never sell expired stock
+            expiry_date__gte=timezone.localdate(),  # never sell expired stock
         )
         .order_by("expiry_date", "batch_number")  # FEFO
     )

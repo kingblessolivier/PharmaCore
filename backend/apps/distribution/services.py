@@ -157,7 +157,7 @@ def _reserve_item(item: OrderItem, depot_id: int, user: User | None) -> ItemAllo
             # Never ship expired stock. FEFO orders by expiry, so without this the
             # soonest-expiring batch is picked *first* — meaning expired goods are
             # not merely reachable, they are preferred.
-            expiry_date__gte=timezone.now().date(),
+            expiry_date__gte=timezone.localdate(),
         )
         .order_by("expiry_date", "batch_number")  # FEFO
     )

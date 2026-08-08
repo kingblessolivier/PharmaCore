@@ -62,7 +62,7 @@ def physical_free(*, depot: Organization | int, product: Product | int) -> int:
             organization_id=depot_id,
             product_id=product_id,
             status=InventoryBatch.Status.ACTIVE,
-            expiry_date__gte=timezone.now().date(),
+            expiry_date__gte=timezone.localdate(),
         )
         .annotate(free=F("quantity_available") - F("quantity_reserved"))
         .filter(free__gt=0)
@@ -246,7 +246,7 @@ def active_contract(
             product_id=_pk(product),
             client_org_id=_pk(buyer),
             is_active=True,
-            valid_until__gte=timezone.now().date(),
+            valid_until__gte=timezone.localdate(),
         )
         .filter(drawn_qty__lt=F("total_committed_qty"))
         .order_by("-created_at")
@@ -457,7 +457,7 @@ def coverage(*, depot: Organization | int) -> dict[str, object]:
         InventoryBatch.objects.filter(
             organization_id=depot_id,
             status=InventoryBatch.Status.ACTIVE,
-            expiry_date__gte=timezone.now().date(),
+            expiry_date__gte=timezone.localdate(),
             quantity_available__gt=0,
         )
         .values("product_id")

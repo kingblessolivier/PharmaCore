@@ -61,7 +61,7 @@ def load_van(
             product=product,
             batch_number=batch_number,
             status=InventoryBatch.Status.ACTIVE,
-            expiry_date__gte=timezone.now().date(),
+            expiry_date__gte=timezone.localdate(),
         )
         .first()
     )

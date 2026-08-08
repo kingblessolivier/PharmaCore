@@ -453,7 +453,7 @@ class PharmacyProductSerializer(serializers.ModelSerializer):
             organization=obj.organization,
             product=obj.product,
             status=InventoryBatch.Status.ACTIVE,
-            expiry_date__gte=timezone.now().date(),
+            expiry_date__gte=timezone.localdate(),
         ).aggregate(total=Sum("quantity_available"))["total"]
         return int(total or 0)
 
@@ -627,7 +627,7 @@ class ReorderRuleSerializer(serializers.ModelSerializer):
             organization=obj.organization,
             product=obj.product,
             status=InventoryBatch.Status.ACTIVE,
-            expiry_date__gte=timezone.now().date(),
+            expiry_date__gte=timezone.localdate(),
         ).aggregate(t=Sum("quantity_available"))["t"]
         return int(total or 0)
 

@@ -406,11 +406,11 @@ def post_journal(
         if existing is not None:
             return existing
 
-    assert_period_open(organization, entry_date or timezone.now().date())
+    assert_period_open(organization, entry_date or timezone.localdate())
 
     entry = JournalEntry.objects.create(
         organization=organization,
-        entry_date=entry_date or timezone.now().date(),
+        entry_date=entry_date or timezone.localdate(),
         description=description,
         reference_type=reference_type,
         reference_id=reference_id,
@@ -1023,7 +1023,7 @@ def cash_flow_forecast(organization: Organization) -> dict[str, Any]:
     outflows (unpaid supplier bills), bucketed by how soon they're due."""
     from apps.distribution.models import StockOrder
 
-    today = timezone.now().date()
+    today = timezone.localdate()
     buckets = ["d30", "d60", "d90", "over90"]
     empty = dict.fromkeys(buckets, Decimal("0"))
 
@@ -1775,7 +1775,7 @@ def _apply_tax_payment(approval: ApprovalRequest) -> None:
     payload = approval.payload
     payment = record_tax_payment(
         organization=organization,
-        paid_on=payload.get("paid_on") or timezone.now().date(),
+        paid_on=payload.get("paid_on") or timezone.localdate(),
         period_start=payload["period_start"],
         period_end=payload["period_end"],
         amount=Decimal(payload["amount"]),
@@ -2309,7 +2309,7 @@ def record_customer_receipt(
     if invoice.is_settled:
         raise ValueError(f"Invoice {invoice.invoice_number} is already paid in full.")
 
-    received_on = received_on or timezone.now().date()
+    received_on = received_on or timezone.localdate()
     organization = invoice.organization
     seq = next_number(organization=organization, domain="FINANCE", kind="RCT")
     receipt = CustomerReceipt.objects.create(
@@ -2446,7 +2446,7 @@ def cancel_customer_invoice(
 
     post_journal(
         organization=organization,
-        entry_date=timezone.now().date(),
+        entry_date=timezone.localdate(),
         description=f"Cancel customer invoice {invoice.invoice_number}",
         lines=lines,
         reference_type="customer_invoice_cancel",
@@ -2481,7 +2481,7 @@ def apply_dunning(*, organization: Organization, today: Any = None) -> list[Dunn
     issues nothing new. Reaching the legal step puts the customer's credit
     profile on hold, which blocks further B2B orders.
     """
-    today = today or timezone.now().date()
+    today = today or timezone.localdate()
     issued: list[DunningNotice] = []
 
     open_invoices = CustomerInvoice.objects.filter(organization=organization).exclude(
@@ -2532,7 +2532,7 @@ def days_overdue(organization: Organization, customer: Organization, *, today: A
 
     Zero when nothing is overdue.
     """
-    today = today or timezone.now().date()
+    today = today or timezone.localdate()
     oldest = (
         CustomerInvoice.objects.filter(organization=organization, customer=customer)
         .exclude(status__in=[CustomerInvoice.Status.PAID, CustomerInvoice.Status.CANCELLED])

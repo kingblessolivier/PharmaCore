@@ -16,10 +16,12 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from apps.finance.models import Account, BankAccount, BankStatement, CostCentre
+from apps.finance.permissions import FinanceAccess
 from apps.finance.reconciliation import (
     ReconciliationError,
     auto_match,
@@ -46,6 +48,8 @@ from apps.iam.scoping import organizations_visible_to
 
 
 class BankStatementViewSet(viewsets.ModelViewSet):
+
+    permission_classes = [IsAuthenticated, FinanceAccess]
     serializer_class = BankStatementSerializer
     queryset = BankStatement.objects.select_related("bank_account", "imported_by")
     http_method_names = ["get", "post", "patch", "head", "options"]

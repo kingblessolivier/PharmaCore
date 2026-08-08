@@ -66,7 +66,7 @@ def check_eligibility(
     Returns a verdict rather than raising, because "not eligible" is a normal
     answer at a counter — the sale proceeds as a cash sale.
     """
-    on = on or timezone.now().date()
+    on = on or timezone.localdate()
     qs = MemberPolicy.objects.select_related("scheme").filter(member_number=member_number)
     if scheme is not None:
         qs = qs.filter(scheme_id=getattr(scheme, "pk", scheme))

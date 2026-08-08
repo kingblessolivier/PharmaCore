@@ -73,7 +73,7 @@ export function CatalogHome() {
 
   const ingredientsQuery = useQuery({
     queryKey: ["count", "ingredients"],
-    queryFn: () => api<Paginated<unknown>>("/api/catalog/active-ingredients/?page_size=1"),
+    queryFn: () => api<Paginated<unknown>>("/api/catalog/ingredients/?page_size=1"),
     select: (r) => r.count,
   });
 

@@ -158,7 +158,7 @@ def quarantine_queue(*, organization: Any) -> list[dict[str, Any]]:
     dispensed, so the age of the queue is the number that matters — not its size.
     """
     org_id = getattr(organization, "pk", organization)
-    today = timezone.now().date()
+    today = timezone.localdate()
     rows: list[dict[str, Any]] = []
     checks = (
         QualityCheck.objects.filter(
