@@ -22,10 +22,22 @@ from apps.inventory.models import (
     StockDisposal,
     StockMovement,
 )
+from django.utils import timezone
 
 pytestmark = pytest.mark.django_db
 
-TODAY = date.today()
+
+def today() -> date:
+    """The same clock the product reads, at the moment it is asked.
+
+    This was `TODAY = date.today()` evaluated once at module import, which is
+    wrong twice over: it is the operating system's date rather than Django's
+    (the two differ on a UTC server — see D22), and it freezes. The suite takes
+    five minutes, so a run starting at 23:59 asserted against yesterday while the
+    code under test had already moved on, and `days_to_expiry == 30` came back
+    29. That is a real failure of the test, not of the product.
+    """
+    return timezone.localdate()
 
 
 @pytest.fixture
@@ -53,7 +65,7 @@ def batch(org, product, qty=100, *, number="B1", days=365, status=None, cost="10
         organization=org,
         product=product,
         batch_number=number,
-        expiry_date=TODAY + timedelta(days=days),
+        expiry_date=today() + timedelta(days=days),
         quantity_available=qty,
         wholesale_cost=Decimal(cost),
         status=status or InventoryBatch.Status.ACTIVE,
@@ -164,7 +176,7 @@ def test_a_recall_traces_stock_that_already_left(org, product, receiver):
         destination_org=pharmacy,
         product=product,
         batch_number="TRACE-1",
-        expiry_date=TODAY + timedelta(days=365),
+        expiry_date=today() + timedelta(days=365),
         quantity=25,
     )
     grn = GoodsReceivedNote.objects.create(grn_number="GRN-T1", order=order, retail=pharmacy)
@@ -173,7 +185,7 @@ def test_a_recall_traces_stock_that_already_left(org, product, receiver):
         order_item=item,
         product=product,
         batch_number="TRACE-1",
-        expiry_date=TODAY + timedelta(days=365),
+        expiry_date=today() + timedelta(days=365),
         quantity_expected=30,
         quantity_received=30,
     )

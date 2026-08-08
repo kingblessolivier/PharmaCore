@@ -26,10 +26,22 @@ from apps.distribution.services import approve_and_allocate
 from apps.iam.models import Organization, User
 from apps.inventory.models import InventoryBatch
 from apps.procurement.models import PurchaseRequisition
+from django.utils import timezone
 
 pytestmark = pytest.mark.django_db
 
-TODAY = date.today()
+
+def today() -> date:
+    """The same clock the product reads, at the moment it is asked.
+
+    This was `TODAY = date.today()` evaluated once at module import, which is
+    wrong twice over: it is the operating system's date rather than Django's
+    (the two differ on a UTC server — see D22), and it freezes. The suite takes
+    five minutes, so a run starting at 23:59 asserted against yesterday while the
+    code under test had already moved on, and `days_to_expiry == 30` came back
+    29. That is a real failure of the test, not of the product.
+    """
+    return timezone.localdate()
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +71,7 @@ def stock(depot, product, qty, *, expiry_days=365, batch="B1", reserved=0):
         organization=depot,
         product=product,
         batch_number=batch,
-        expiry_date=TODAY + timedelta(days=expiry_days),
+        expiry_date=today() + timedelta(days=expiry_days),
         quantity_available=qty,
         quantity_reserved=reserved,
         status=InventoryBatch.Status.ACTIVE,
@@ -301,7 +313,7 @@ def test_tender_price_beats_the_list_price(depot, retail, product):
         product=product,
         contract_price=Decimal("1800"),
         total_committed_qty=1000,
-        valid_until=TODAY + timedelta(days=90),
+        valid_until=today() + timedelta(days=90),
     )
 
     assert marketplace.price_for(depot=depot, product=product, buyer=retail) == Decimal("1800")
@@ -320,7 +332,7 @@ def test_expired_or_exhausted_tender_does_not_govern(depot, retail, product):
         product=product,
         contract_price=Decimal("1800"),
         total_committed_qty=1000,
-        valid_until=TODAY - timedelta(days=1),
+        valid_until=today() - timedelta(days=1),
     )
     assert marketplace.active_contract(depot=depot, product=product, buyer=retail) is None
 
@@ -332,7 +344,7 @@ def test_expired_or_exhausted_tender_does_not_govern(depot, retail, product):
         contract_price=Decimal("1800"),
         total_committed_qty=100,
         drawn_qty=100,
-        valid_until=TODAY + timedelta(days=90),
+        valid_until=today() + timedelta(days=90),
     )
     assert marketplace.active_contract(depot=depot, product=product, buyer=retail) is None
 
@@ -350,7 +362,7 @@ def test_approved_return_restocks_and_credits_only_accepted_units(depot, retail,
         return_request=request,
         product=product,
         batch_number="B1",
-        expiry_date=TODAY + timedelta(days=200),
+        expiry_date=today() + timedelta(days=200),
         quantity_returned=100,
         unit_price=Decimal("2500"),
     )
@@ -386,7 +398,7 @@ def test_expired_goods_cannot_be_restocked(depot, retail, product):
         return_request=request,
         product=product,
         batch_number="OLD",
-        expiry_date=TODAY - timedelta(days=1),
+        expiry_date=today() - timedelta(days=1),
         quantity_returned=10,
         unit_price=Decimal("2500"),
     )
@@ -403,7 +415,7 @@ def test_approving_twice_does_not_duplicate_stock(depot, retail, product):
         return_request=request,
         product=product,
         batch_number="B1",
-        expiry_date=TODAY + timedelta(days=200),
+        expiry_date=today() + timedelta(days=200),
         quantity_returned=50,
         unit_price=Decimal("1000"),
     )
@@ -482,7 +494,7 @@ def test_rep_performance_uses_real_orders(depot, retail, rep, product):
     order.items.create(product=product, quantity_ordered=10, price_per_unit=Decimal("2500"))
 
     perf = fieldsales.performance(
-        rep=rep, start=TODAY - timedelta(days=1), end=TODAY + timedelta(days=1)
+        rep=rep, start=today() - timedelta(days=1), end=today() + timedelta(days=1)
     )
     assert perf.orders == 1
     assert perf.revenue == Decimal("25000.00")
@@ -501,7 +513,7 @@ def test_cancelled_orders_earn_no_commission(depot, retail, rep, product):
     order.items.create(product=product, quantity_ordered=10, price_per_unit=Decimal("2500"))
 
     perf = fieldsales.performance(
-        rep=rep, start=TODAY - timedelta(days=1), end=TODAY + timedelta(days=1)
+        rep=rep, start=today() - timedelta(days=1), end=today() + timedelta(days=1)
     )
     assert perf.orders == 0
     assert perf.commission == Decimal("0.00")
@@ -732,7 +744,7 @@ def test_approving_a_return_reports_the_credit_note_number(depot, retail, produc
         return_request=request,
         product=product,
         batch_number="B1",
-        expiry_date=TODAY + timedelta(days=200),
+        expiry_date=today() + timedelta(days=200),
         quantity_returned=10,
         unit_price=Decimal("500"),
     )
