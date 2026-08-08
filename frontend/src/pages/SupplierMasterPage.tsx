@@ -35,6 +35,7 @@ import {
   type SupplierProfile,
 } from "../lib/procurement";
 import type { Paginated } from "../lib/types";
+import { useNavigate } from "react-router-dom";
 
 const STANDINGS = ["PREFERRED", "APPROVED", "PROBATION", "SUSPENDED", "BLACKLISTED"] as const;
 const KINDS = [
@@ -177,7 +178,7 @@ function LicenceRow({ licence, onDelete }: { licence: SupplierLicence; onDelete:
   );
 }
 
-function LicencesTab({ profile }: { profile: SupplierProfile }) {
+export function LicencesTab({ profile }: { profile: SupplierProfile }) {
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [deleting, setDeleting] = useState<SupplierLicence | null>(null);
@@ -370,7 +371,7 @@ function LicencesTab({ profile }: { profile: SupplierProfile }) {
 
 /* -------------------------------------------------------------------------- */
 
-function PriceAgreementsTab({ profile }: { profile: SupplierProfile }) {
+export function PriceAgreementsTab({ profile }: { profile: SupplierProfile }) {
   const qc = useQueryClient();
   const { data: products = [] } = useProducts();
   const [adding, setAdding] = useState(false);
@@ -603,7 +604,7 @@ function ScoreBar({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PerformanceTab({ profile }: { profile: SupplierProfile }) {
+export function PerformanceTab({ profile }: { profile: SupplierProfile }) {
   const qc = useQueryClient();
   const { orgId } = useDefaultOrg();
   const today = new Date().toISOString().slice(0, 10);
@@ -753,7 +754,7 @@ function PerformanceTab({ profile }: { profile: SupplierProfile }) {
 
 /* -------------------------------------------------------------------------- */
 
-function TermsTab({ profile }: { profile: SupplierProfile }) {
+export function TermsTab({ profile }: { profile: SupplierProfile }) {
   const qc = useQueryClient();
   const [form, setForm] = useState({ ...profile });
   const [standing, setStanding] = useState(profile.standing);
@@ -1000,6 +1001,7 @@ function TermsTab({ profile }: { profile: SupplierProfile }) {
 /* -------------------------------------------------------------------------- */
 
 export function SupplierMasterPage() {
+  const navigate = useNavigate();
   const [selected, setSelected] = useState<SupplierProfile | null>(null);
   const [tab, setTab] = useState<Tab>("terms");
   const [creating, setCreating] = useState(false);
@@ -1046,10 +1048,9 @@ export function SupplierMasterPage() {
         exportName="supplier-master"
         searchPlaceholder="Search suppliers by name, country, contact…"
         emptyMessage="No suppliers have a procurement profile yet."
-        onRowClick={(p) => {
-          setSelected(p);
-          setTab("terms");
-        }}
+        /* Opens the supplier itself. Whether a purchase order can even be
+           raised against them was four clicks into a drawer. */
+        onRowClick={(p) => navigate(`/procurement/suppliers/${p.id}`)}
         columns={[
           {
             key: "supplier_name",
