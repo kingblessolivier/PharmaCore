@@ -33,6 +33,7 @@ import {
 } from "../lib/insurance";
 import { useDefaultOrg } from "../lib/recordData";
 import { StatusChip } from "../components/Status";
+import { useNavigate } from "react-router-dom";
 
 type Action = { row: ClaimQueueRow; kind: "adjudicate" | "reverse" };
 
@@ -48,6 +49,7 @@ const REJECTION_REASONS = [
 ] as const;
 
 export function InsuranceClaimsPage() {
+  const navigate = useNavigate();
   const { orgId } = useDefaultOrg();
   const qc = useQueryClient();
   const [action, setAction] = useState<Action | null>(null);
@@ -247,6 +249,9 @@ export function InsuranceClaimsPage() {
         rows={rows}
         columns={columns}
         getRowId={(r) => r.claim}
+        /* Opens the claim itself. A rejection code in a table cell tells a clerk
+           nothing about whether the money is recoverable. */
+        onRowClick={(r) => navigate(`/insurance/claims/${r.claim}`)}
         loading={queue.isLoading}
         storageKey="insurance-claims"
         exportName="claims"

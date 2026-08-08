@@ -71,6 +71,7 @@ import { BatchRecallsPage } from "./pages/BatchRecallsPage";
 import { StockCountsPage } from "./pages/StockCountsPage";
 import { StockDisposalPage } from "./pages/StockDisposalPage";
 import { PurchaseOrdersPage } from "./pages/PurchaseOrdersPage";
+import { ClaimWorkbenchPage } from "./pages/ClaimWorkbenchPage";
 import { GrnWorkbenchPage } from "./pages/GrnWorkbenchPage";
 import { OrderComposePage } from "./pages/OrderComposePage";
 import {
@@ -185,6 +186,7 @@ function App() {
               {/* Insurance */}
               <Route path="/insurance" element={forPharmacy(<InsuranceHome />)} />
               <Route path="/insurance/claims" element={forPharmacy(<InsuranceClaimsPage />)} />
+              <Route path="/insurance/claims/:id" element={forPharmacy(<ClaimWorkbenchPage />)} />
               <Route path="/insurance/schemes" element={forPharmacy(<InsuranceSchemesPage />)} />
               <Route path="/insurance/members" element={forPharmacy(<InsuranceMembersPage />)} />
               <Route
