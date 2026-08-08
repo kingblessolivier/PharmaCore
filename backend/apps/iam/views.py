@@ -22,6 +22,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from apps.iam import authority
 from apps.iam.audit import _client_ip, record_audit
 from apps.iam.authentication import (
     VersionedTokenObtainPairSerializer,
@@ -632,6 +633,45 @@ class UserViewSet(viewsets.ModelViewSet):
             qs = qs.filter(organization_id=org)
         return qs
 
+    def _assert_may_grant(self, serializer: BaseSerializer[Any]) -> None:
+        """R4 — you cannot give away what you do not hold.
+
+        ``authority.can_delegate`` existed and was called from exactly one place:
+        reassigning an approval. Assigning a *role* was unchecked, so an ORG_ADMIN
+        could grant SYS_ADMIN and an approval limit larger than their own — which
+        makes every other rule in the authority model optional, since anyone who
+        can administer users can simply grant themselves past it.
+        """
+        actor = cast(User, self.request.user)
+        if actor.is_superuser or actor.has_role("SYS_ADMIN"):
+            return
+
+        roles = serializer.validated_data.get("roles")
+        if roles:
+            # SYS_ADMIN carries no explicit permission rows — it holds every
+            # permission implicitly (see User.has_permission). Comparing
+            # permission sets therefore waved it straight through: the role with
+            # the most power was the one the ceiling could not see. It is named
+            # here rather than inferred, because "grants everything" is a
+            # property of the code, not of the data.
+            if any(role.code == "SYS_ADMIN" for role in roles):
+                raise PermissionDenied("Only a system administrator may grant the SYS_ADMIN role.")
+            wanted: set[str] = set()
+            for role in roles:
+                wanted |= set(role.permissions.values_list("code", flat=True))
+            check = authority.can_delegate(granter=actor, permission_codes=wanted)
+            if not check.allowed:
+                raise PermissionDenied(check.reason)
+
+        limit = serializer.validated_data.get("approval_limit")
+        if limit is not None:
+            mine = authority.approval_limit(actor)
+            # `None` is an unlimited ceiling — only SYS_ADMIN reaches here with one.
+            if mine is not None and limit > mine:
+                raise PermissionDenied(
+                    f"You cannot grant an approval limit of {limit}; your own is {mine}."
+                )
+
     @action(detail=True, methods=["get"])
     def activity(self, request: Request, pk: str | None = None) -> Response:
         """What this user has been doing: recent audit trail + action counts + last login.
@@ -725,6 +765,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer: BaseSerializer[Any]) -> None:
         self._guard_org(serializer)
+        self._assert_may_grant(serializer)
         obj = serializer.save()
         record_audit(
             action="CREATE",
@@ -737,6 +778,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer: BaseSerializer[Any]) -> None:
         self._guard_org(serializer)
+        self._assert_may_grant(serializer)
         obj = serializer.save()
         record_audit(
             action="UPDATE",

@@ -164,11 +164,14 @@ function UserModal({
   user,
   orgs,
   roles,
+  people,
   onClose,
 }: {
   user?: UserAdmin;
   orgs: Organization[];
   roles: Role[];
+  /** Everyone this admin can see — the candidates for a reporting line. */
+  people: UserAdmin[];
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -181,6 +184,8 @@ function UserModal({
   const [phone, setPhone] = useState(user?.phone ?? "");
   const [organization, setOrganization] = useState(user?.organization ? String(user.organization) : "");
   const [selectedRoles, setSelectedRoles] = useState<string[]>(user?.roles ?? []);
+  const [reportsTo, setReportsTo] = useState(user?.reports_to ? String(user.reports_to) : "");
+  const [approvalLimit, setApprovalLimit] = useState(user?.approval_limit ?? "");
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation({
@@ -193,6 +198,11 @@ function UserModal({
         phone,
         organization: organization ? Number(organization) : null,
         roles: selectedRoles,
+        /* The two inputs the authority model runs on. Without a supervisor an
+           escalation chain has nowhere to go; without a limit a person falls
+           back to whatever their role happens to allow. */
+        reports_to: reportsTo ? Number(reportsTo) : null,
+        approval_limit: approvalLimit === "" ? null : approvalLimit,
       };
       if (password) body.password = password;
       return api<UserAdmin>(editing ? `/api/users/${user!.id}/` : "/api/users/", {
@@ -259,6 +269,39 @@ function UserModal({
             ))}
           </SelectField>
         </div>
+        {/* Authority — who this person answers to, and what they may commit.
+            Both were on the model and settable from nowhere, which left every
+            escalation chain empty and every limit at its role default. */}
+        <div className="grid grid-cols-2 gap-3">
+          <SelectField
+            label="Reports to"
+            value={reportsTo}
+            onChange={(e) => setReportsTo(e.target.value)}
+          >
+            <option value="">— nobody —</option>
+            {people
+              .filter((p) => p.id !== user?.id)
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {[p.first_name, p.last_name].filter(Boolean).join(" ") || p.username}
+                </option>
+              ))}
+          </SelectField>
+          <TextField
+            label="Approval limit (RWF)"
+            type="number"
+            min={0}
+            value={approvalLimit}
+            onChange={(e) => setApprovalLimit(e.target.value)}
+            placeholder="blank = use their roles"
+          />
+        </div>
+        <p className="-mt-2 text-micro text-ink-500">
+          Anything above the limit escalates to the person named above, and up from there
+          until someone is both permitted and within limit. You cannot grant a limit
+          higher than your own.
+        </p>
+
         <div>
           <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-ink-500">
             Roles
@@ -559,13 +602,19 @@ export function UsersPage() {
       />
 
       {adding && roles.data && orgs.data && (
-        <UserModal orgs={orgs.data.results} roles={roles.data} onClose={() => setAdding(false)} />
+        <UserModal
+          orgs={orgs.data.results}
+          roles={roles.data}
+          people={users.data?.results ?? []}
+          onClose={() => setAdding(false)}
+        />
       )}
       {editing && roles.data && orgs.data && (
         <UserModal
           user={editing}
           orgs={orgs.data.results}
           roles={roles.data}
+          people={users.data?.results ?? []}
           onClose={() => setEditing(null)}
         />
       )}
