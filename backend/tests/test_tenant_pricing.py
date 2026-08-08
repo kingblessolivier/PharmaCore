@@ -22,10 +22,22 @@ from apps.iam.models import Organization
 from apps.inventory.models import PharmacyProduct
 from apps.retail.counter import active_promotions, evaluate_promotion
 from apps.retail.models import POSPromotion, Sale
+from django.utils import timezone
 
 pytestmark = pytest.mark.django_db
 
-TODAY = date.today()
+
+def today() -> date:
+    """The same clock the product reads, at the moment it is asked.
+
+    This was `TODAY = date.today()` evaluated once at module import, which is
+    wrong twice over: it is the operating system's date rather than Django's
+    (the two differ on a UTC server — see D22), and it freezes. The suite takes
+    five minutes, so a run starting at 23:59 asserted against yesterday while the
+    code under test had already moved on, and `days_to_expiry == 30` came back
+    29. That is a real failure of the test, not of the product.
+    """
+    return timezone.localdate()
 
 
 @pytest.fixture
@@ -114,8 +126,8 @@ def promo(org, code, **kw):
         code=code,
         name=f"{code} campaign",
         discount_value=Decimal(kw.get("value", "10")),
-        valid_from=TODAY - timedelta(days=1),
-        valid_until=TODAY + timedelta(days=30),
+        valid_from=today() - timedelta(days=1),
+        valid_until=today() + timedelta(days=30),
         is_active=True,
     )
 

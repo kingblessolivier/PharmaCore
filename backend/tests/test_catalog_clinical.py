@@ -23,10 +23,22 @@ from apps.catalog.models import (
 )
 from apps.iam.models import Organization
 from apps.inventory.models import InventoryBatch, PharmacyProduct
+from django.utils import timezone
 
 pytestmark = pytest.mark.django_db
 
-TODAY = date.today()
+
+def today() -> date:
+    """The same clock the product reads, at the moment it is asked.
+
+    This was `TODAY = date.today()` evaluated once at module import, which is
+    wrong twice over: it is the operating system's date rather than Django's
+    (the two differ on a UTC server — see D22), and it freezes. The suite takes
+    five minutes, so a run starting at 23:59 asserted against yesterday while the
+    code under test had already moved on, and `days_to_expiry == 30` came back
+    29. That is a real failure of the test, not of the product.
+    """
+    return timezone.localdate()
 
 
 @pytest.fixture
@@ -51,7 +63,7 @@ def stock(org, prod, qty, *, days=365, number="B1"):
         organization=org,
         product=prod,
         batch_number=number,
-        expiry_date=TODAY + timedelta(days=days),
+        expiry_date=today() + timedelta(days=days),
         quantity_available=qty,
         status=InventoryBatch.Status.ACTIVE,
     )

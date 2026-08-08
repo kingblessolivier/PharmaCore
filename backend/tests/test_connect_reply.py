@@ -46,7 +46,10 @@ def test_a_reply_joins_the_thread_rather_than_starting_a_new_one(org):
     """The behaviour the whole screen exists for."""
     alice, bob = person(org, "alice"), person(org, "bob")
     sent = connect.send_mail(
-        sender=alice, subject="Stock for Friday", body="Do we have enough?", to=[bob],
+        sender=alice,
+        subject="Stock for Friday",
+        body="Do we have enough?",
+        to=[bob],
         organization=org,
     )
 
@@ -153,9 +156,7 @@ def test_each_message_says_whether_it_is_yours(org):
 
 def test_the_whole_conversation_is_returned_not_just_your_copy(org):
     alice, bob = person(org, "alice"), person(org, "bob")
-    sent = connect.send_mail(
-        sender=alice, subject="Long one", body="1", to=[bob], organization=org
-    )
+    sent = connect.send_mail(sender=alice, subject="Long one", body="1", to=[bob], organization=org)
     for n in ("2", "3"):
         connect.send_mail(
             sender=bob, subject="", body=n, to=[alice], thread=sent.thread, organization=org
@@ -176,9 +177,7 @@ def test_a_thread_you_are_not_on_is_not_readable(org):
 def test_reading_a_thread_does_not_mark_it_read_for_everyone(org):
     """Read state is per person — that is what MailRecipient is for."""
     alice, bob, carol = person(org, "alice"), person(org, "bob"), person(org, "carol")
-    connect.send_mail(
-        sender=alice, subject="Notice", body="x", to=[bob, carol], organization=org
-    )
+    connect.send_mail(sender=alice, subject="Notice", body="x", to=[bob, carol], organization=org)
     connect.mark_read(recipient=inbox_row(bob), user=bob)
 
     assert MailRecipient.objects.get(user=bob).read_at is not None

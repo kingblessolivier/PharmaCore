@@ -21,10 +21,22 @@ from apps.insurance.models import (
     RemittanceAdvice,
     SchemeFormulary,
 )
+from django.utils import timezone
 
 pytestmark = pytest.mark.django_db
 
-TODAY = date.today()
+
+def today() -> date:
+    """The same clock the product reads, at the moment it is asked.
+
+    This was `TODAY = date.today()` evaluated once at module import, which is
+    wrong twice over: it is the operating system's date rather than Django's
+    (the two differ on a UTC server — see D22), and it freezes. The suite takes
+    five minutes, so a run starting at 23:59 asserted against yesterday while the
+    code under test had already moved on, and `days_to_expiry == 30` came back
+    29. That is a real failure of the test, not of the product.
+    """
+    return timezone.localdate()
 
 
 @pytest.fixture
@@ -57,8 +69,8 @@ def member(cbhi):
         scheme=cbhi,
         member_number="CBHI-001",
         full_name="J. Uwase",
-        valid_from=TODAY - timedelta(days=30),
-        valid_to=TODAY + timedelta(days=300),
+        valid_from=today() - timedelta(days=30),
+        valid_to=today() + timedelta(days=300),
     )
 
 
@@ -80,7 +92,7 @@ def test_a_valid_card_is_eligible(member):
 
 def test_an_expired_card_is_refused_before_dispensing(member):
     """Found at claim time this is a debt already incurred; found here it is not."""
-    member.valid_to = TODAY - timedelta(days=1)
+    member.valid_to = today() - timedelta(days=1)
     member.save()
     verdict = elig.check_eligibility(member_number="CBHI-001")
     assert verdict.is_eligible is False
@@ -125,8 +137,8 @@ def test_ubudehe_category_one_pays_nothing(cbhi, product):
         full_name="Poorest Household",
         ubudehe_category=1,
         copay_pct_override=Decimal("0.00"),
-        valid_from=TODAY - timedelta(days=10),
-        valid_to=TODAY + timedelta(days=300),
+        valid_from=today() - timedelta(days=10),
+        valid_to=today() + timedelta(days=300),
     )
     cover(cbhi, product)
     split = elig.split_basket(
@@ -238,7 +250,7 @@ def test_a_claim_past_its_window_is_refused(org, member, cbhi, product):
     sale = _insured_sale(org, product)
     outcome = claim_service.build_from_sale(sale=sale, policy=member)
     claim = outcome.claim
-    claim.service_date = TODAY - timedelta(days=45)  # window is 30 days
+    claim.service_date = today() - timedelta(days=45)  # window is 30 days
     claim.save()
 
     with pytest.raises(claim_service.ClaimError, match="claim window"):
@@ -310,7 +322,7 @@ def test_a_settled_claim_cannot_be_reversed(org, member, cbhi, product):
 def test_the_work_queue_ranks_by_how_close_the_window_is(org, member, cbhi, product):
     cover(cbhi, product)
     urgent = claim_service.build_from_sale(sale=_insured_sale(org, product), policy=member).claim
-    urgent.service_date = TODAY - timedelta(days=28)
+    urgent.service_date = today() - timedelta(days=28)
     urgent.save()
     relaxed = claim_service.build_from_sale(sale=_insured_sale(org, product), policy=member).claim
 
@@ -335,7 +347,7 @@ def test_a_remittance_that_does_not_foot_is_refused(org, member, cbhi, product):
         organization=org,
         scheme=cbhi,
         reference="RA-1",
-        advice_date=TODAY,
+        advice_date=today(),
         total_advised=Decimal("9000"),
     )
     recon.add_line(advice=advice, claim=claim, amount_paid=Decimal("7000"))
@@ -353,7 +365,7 @@ def test_posting_a_remittance_settles_its_claims(org, member, cbhi, product):
         organization=org,
         scheme=cbhi,
         reference="RA-2",
-        advice_date=TODAY,
+        advice_date=today(),
         total_advised=Decimal("7000"),
     )
     recon.add_line(
@@ -375,7 +387,7 @@ def test_a_claim_from_another_scheme_cannot_be_matched(org, member, cbhi, produc
 
     other = InsuranceScheme.objects.create(organization=org, code="MMI", name="Military")
     advice = RemittanceAdvice.objects.create(
-        organization=org, scheme=other, reference="RA-3", advice_date=TODAY
+        organization=org, scheme=other, reference="RA-3", advice_date=today()
     )
     with pytest.raises(recon.ReconciliationError, match="is against"):
         recon.add_line(advice=advice, claim=claim, amount_paid=Decimal("100"))
