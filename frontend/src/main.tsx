@@ -11,6 +11,10 @@ import "@fontsource-variable/inter";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import "./index.css";
+import { initTheme } from "./lib/theme";
+
+/* Before first paint, so the page never flashes the wrong theme on the way in. */
+initTheme();
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {

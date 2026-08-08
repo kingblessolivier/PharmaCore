@@ -52,12 +52,15 @@ import {
   Route as RouteIcon,
   RefreshCw,
   MoveRight,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { can } from "../lib/roles";
+import { applyTheme, storedTheme, type Theme } from "../lib/theme";
 import type { AppNotification, Organization, Paginated } from "../lib/types";
 import { CommandPalette } from "./CommandPalette";
 
@@ -215,6 +218,25 @@ function OrgSwitcher() {
         </div>
       )}
     </div>
+  );
+}
+
+function ThemeToggle() {
+  const [theme, setTheme] = useState<Theme>(() => storedTheme());
+  const dark = theme === "dark";
+  return (
+    <button
+      onClick={() => {
+        const next: Theme = dark ? "light" : "dark";
+        setTheme(next);
+        applyTheme(next);
+      }}
+      className="rounded-md p-1.5 text-ink-600 hover:bg-surface-100"
+      aria-label={dark ? "Switch to light" : "Switch to dark"}
+      title={dark ? "Switch to light" : "Switch to dark"}
+    >
+      {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+    </button>
   );
 }
 
@@ -670,6 +692,7 @@ export function AppShell() {
           <kbd className="rounded border border-line px-1 font-mono text-[10px]">⌘K</kbd>
         </button>
         <div className="ml-auto flex items-center gap-3">
+          <ThemeToggle />
           <NotificationsBell />
           <div className="flex items-center gap-2 text-sm">
             <Users className="h-4 w-4 text-ink-500" />

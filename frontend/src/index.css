@@ -104,10 +104,14 @@
    fills unreadable and turns every status tint into a glare. Surfaces lift as
    they come forward (0 is lightest, matching the light theme's stacking), and
    status fills become deep and desaturated with a bright foreground.
+
+   Opt-in, not OS-led. A pharmacy counter is a bright room, and following the
+   operator's personal laptop setting meant the till rendered dark for anyone
+   whose machine was — including on screens built against a light reference. The
+   toggle in the shell sets `data-theme` and remembers it.
 --------------------------------------------------------------------------- */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --brand-50: #042f2e;
+:root[data-theme="dark"] {
+  --brand-50: #042f2e;
     --brand-100: #0c3f3c;
     --brand-200: #115e59;
     --brand-300: #0f766e;
@@ -164,8 +168,84 @@
     --info-200: #1e3a8a;
     --info-500: #3b82f6;
     --info-600: #60a5fa;
-    --info-700: #93c5fd;
-  }
+  --info-700: #93c5fd;
+}
+
+/* ---------------------------------------------------------------------------
+   Form controls, built to be *solid*.
+
+   The reference for these screens is a working ERP form, where every control has
+   a visible edge: you can see at a glance where a field begins and ends, which
+   ones are editable, and where the grid lines fall. The soft borderless style
+   modern web forms favour reads as calm on a marketing page and as ambiguous on
+   a data-entry screen, where an operator needs to hit the right box without
+   looking.
+
+   So: a real 1px border on every input, a near-square 3px radius rather than 8,
+   a white fill that separates the field from the panel behind it, and cell
+   borders on the line grids. Denser and crisper, not older.
+--------------------------------------------------------------------------- */
+.field-control {
+  height: var(--field-h);
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: var(--surface-0);
+  color: var(--ink-900);
+  padding: 0 8px;
+  font-size: 13px;
+  line-height: 18px;
+  outline: none;
+}
+.field-control:hover:not(:disabled) {
+  border-color: var(--ink-400);
+}
+.field-control:focus {
+  border-color: var(--brand-600);
+  /* A ring rather than a thicker border: a border that changes width on focus
+     shifts every neighbouring control by a pixel. */
+  box-shadow: 0 0 0 2px var(--brand-100);
+}
+.field-control:disabled {
+  background: var(--surface-100);
+  color: var(--ink-400);
+}
+.field-control::placeholder {
+  color: var(--ink-400);
+}
+select.field-control {
+  /* Native arrow, native keyboard behaviour, no re-implemented listbox. */
+  padding-right: 4px;
+}
+
+/* Line grids read as a grid: ruled both ways, with a shaded header. */
+.data-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.data-grid th,
+.data-grid td {
+  border: 1px solid var(--line-200);
+  padding: 3px 8px;
+}
+.data-grid thead th {
+  background: var(--surface-100);
+  border-color: var(--line-strong);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-600);
+  text-align: left;
+}
+.data-grid tbody tr:hover {
+  background: var(--brand-50);
+}
+.data-grid tfoot td {
+  background: var(--surface-100);
+  border-color: var(--line-strong);
+  font-weight: 600;
 }
 
 body {

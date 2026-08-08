@@ -97,6 +97,7 @@ import { BatchRecallsPage } from "./pages/BatchRecallsPage";
 import { StockCountsPage } from "./pages/StockCountsPage";
 import { StockDisposalPage } from "./pages/StockDisposalPage";
 import { PurchaseOrdersPage } from "./pages/PurchaseOrdersPage";
+import { OrderComposePage } from "./pages/OrderComposePage";
 import { OrderWorkbenchPage } from "./pages/OrderWorkbenchPage";
 import { GrnPage } from "./pages/GrnPage";
 import { InTransitPage } from "./pages/InTransitPage";
@@ -211,6 +212,7 @@ function App() {
               <Route path="/connect/mail" element={<MailPage />} />
               <Route path="/distribution" element={forPharmacy(<DistributionHome />)} />
               <Route path="/distribution/orders" element={forPharmacy(<PurchaseOrdersPage />)} />
+              <Route path="/distribution/orders/new" element={forPharmacy(<OrderComposePage />)} />
               <Route path="/distribution/orders/:id" element={forPharmacy(<OrderWorkbenchPage />)} />
               <Route path="/distribution/grn" element={forPharmacy(<GrnPage />)} />
               <Route path="/distribution/in-transit" element={forPharmacy(<InTransitPage />)} />
