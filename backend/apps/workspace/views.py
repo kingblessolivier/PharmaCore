@@ -129,3 +129,16 @@ class MyWorkView(APIView):
 
         user = cast(User, request.user)
         return Response({**worklist.for_user(user), "next_steps": worklist.next_steps(user)})
+
+
+class ModuleWorkView(APIView):
+    """What needs doing inside one app — a module home as a queue, not a menu."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        from apps.workspace import modulework
+
+        user = cast(User, request.user)
+        module = request.query_params.get("module") or None
+        return Response({"queues": modulework.queues_for(user, module)})

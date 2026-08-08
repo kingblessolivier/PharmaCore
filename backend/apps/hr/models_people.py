@@ -42,6 +42,11 @@ ZERO = Decimal("0.00")
 # ---------------------------------------------------------------------------
 
 
+def current_cpd_year() -> int:
+    """The CPD year to stamp on a new record, resolved when the record is made."""
+    return timezone.localdate().year
+
+
 class EmploymentContract(models.Model):
     """A signed agreement between the org and an employee.
 
@@ -1158,7 +1163,11 @@ class CPDRecord(models.Model):
     activity_date = models.DateField()
     hours = models.DecimalField(max_digits=5, decimal_places=2)
     provider = models.CharField(max_length=150, blank=True, default="")
-    cpd_year = models.PositiveIntegerField(default=date.today().year)
+    # A callable, not a value. `default=date.today().year` is evaluated once when
+    # this module is imported, so a long-running process stamps every CPD record
+    # with the year the server last restarted — in January that is silently the
+    # wrong year for everything logged afterwards.
+    cpd_year = models.PositiveIntegerField(default=current_cpd_year)
     is_accredited = models.BooleanField(default=True)
     accreditation_body = models.CharField(max_length=150, blank=True, default="")
     evidence_url = models.CharField(max_length=255, blank=True, default="")

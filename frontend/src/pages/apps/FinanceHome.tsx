@@ -13,7 +13,14 @@ import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import type { AccountingPeriod, FinancePerformance, Paginated, VatReturn } from "../../lib/types";
 import type { CloseReadiness, MoneyMap, MoneySourceRow, PeriodTask } from "../../lib/finance";
-import { AppHeader, SectionCard, SectionGrid, StatTile } from "../../components/AppHome";
+import {
+  AppHeader,
+  SectionCard,
+  SectionGrid,
+  StatTile,
+  WorkQueue,
+} from "../../components/AppHome";
+import { useModuleWork } from "../../lib/modulework";
 import { Spinner } from "../../components/ui";
 
 const money = (n: string | number) =>
@@ -289,6 +296,7 @@ function CloseReadinessPanel({ orgId, start, end }: { orgId: number; start: stri
 }
 
 export function FinanceHome() {
+  const work = useModuleWork("finance");
   const { user } = useAuth();
   const orgId = user?.organization ?? 0;
   const [preset, setPreset] = useState<PeriodPreset>("this-month");
@@ -325,6 +333,8 @@ export function FinanceHome() {
         title="Finance"
         subtitle="How much is invested, how the business is performing, who owes you, and whether cash is safe."
       />
+
+      <WorkQueue items={work.items} loading={work.loading} />
 
       {/* Period switcher — the leader's cockpit can compare across windows. */}
       <div className="mb-4 flex flex-wrap items-center gap-2">

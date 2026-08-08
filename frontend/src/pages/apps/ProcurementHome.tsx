@@ -17,12 +17,15 @@ import {
   SectionCard,
   SectionGrid,
   StatTile,
+  WorkQueue,
 } from "../../components/AppHome";
+import { useModuleWork } from "../../lib/modulework";
 import { Card } from "../../components/ui";
 import { api } from "../../lib/api";
 import { money, type ProcurementOverview } from "../../lib/procurement";
 
 export function ProcurementHome() {
+  const work = useModuleWork("procurement");
   const { data } = useQuery({
     queryKey: ["procurement-overview"],
     queryFn: () => api<ProcurementOverview>("/api/procurement/overview/"),
@@ -70,6 +73,8 @@ export function ProcurementHome() {
         title="Procurement & Imports"
         subtitle="Branch requisitions consolidated at HQ, RFQ and quote comparison, supplier purchase orders, import documents with landed-cost allocation, goods receipt against the PO, and supplier invoices matched three ways before a franc is owed."
       />
+
+      <WorkQueue items={work.items} loading={work.loading} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
         <Link to="/procurement/requisitions">

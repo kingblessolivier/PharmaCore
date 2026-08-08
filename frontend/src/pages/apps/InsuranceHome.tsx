@@ -24,12 +24,15 @@ import {
   SectionCard,
   SectionGrid,
   StatTile,
+  WorkQueue,
 } from "../../components/AppHome";
+import { useModuleWork } from "../../lib/modulework";
 import { money } from "../../lib/format";
 import { insuranceOverview } from "../../lib/insurance";
 import { useDefaultOrg } from "../../lib/recordData";
 
 export function InsuranceHome() {
+  const work = useModuleWork("insurance");
   const { orgId } = useDefaultOrg();
 
   const overview = useQuery({
@@ -50,6 +53,8 @@ export function InsuranceHome() {
         title="Insurance"
         subtitle="Who pays for a medicine when the patient does not pay all of it — eligibility at the counter, claims after it, and what the insurers actually settled."
       />
+
+      <WorkQueue items={work.items} loading={work.loading} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Link to="/insurance/claims">

@@ -1,7 +1,7 @@
 # System-wide audit — a day in the life of every role
 
 **Status:** findings complete · remediation in PRs #93 and #94 · **Date:** 2026-08-07
-**Scorecard:** see §11 — all 20 live defects closed or reduced; 2 withdrawn as wrong.
+**Scorecard:** see §11 — every live defect closed; 2 withdrawn as wrong.
 **Method:** live API walkthrough as each of the ten seeded roles, across a retail
 pharmacy, a depot and an HQ, plus static analysis of every model, route and screen.
 
@@ -519,7 +519,7 @@ now closed, and all four are on the gate list.
 | D8 | `PROCUREMENT_OFFICER` not a role | **withdrawn — I was wrong** |
 | D9 | No manager role | **closed** — `BRANCH_MANAGER`, `AUDITOR` |
 | D10 | Dashboard: no trend, branch split or margin | **closed** — #94 |
-| D11 | Charts locked inside Finance | **partly** — the dashboard has them; nine module homes still do not |
+| D11 | Charts locked inside Finance | **closed** — dashboard, Retail home and Inventory home |
 | D12 | Four reports built and never shown | **mostly withdrawn** — three were already shown; the fourth is now a tab |
 | D13 | Duplicated screens (suppliers, GRN, POs, orgs) | **closed** — one retired, six renamed |
 | D14 | One job crosses five nav groups | **partly** — `next_steps` links the common ones; module homes are not yet work queues |
