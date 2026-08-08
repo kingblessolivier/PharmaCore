@@ -266,7 +266,14 @@ class UserAdminSerializer(serializers.ModelSerializer):
             "phone",
             "tin",
             "payroll_email",
+            # The two inputs the authority model runs on (apps/iam/authority.py).
+            # `reports_to` was already accepted here and settable from no screen;
+            # `approval_limit` was not accepted at all, so a per-person ceiling
+            # could not be granted through the API by any means. Both are what
+            # make R2 and R3 more than a design — without them every escalation
+            # chain is empty and every limit is whatever the role happens to say.
             "reports_to",
+            "approval_limit",
             "organization",
             "department",
             "roles",

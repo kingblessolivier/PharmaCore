@@ -108,6 +108,10 @@ export interface UserAdmin {
   organization: number | null;
   department: number | null;
   roles: string[];
+  /** Who this person answers to — the chain escalation walks. */
+  reports_to: number | null;
+  /** Personal ceiling in RWF; null means fall back to their roles. */
+  approval_limit: string | null;
   is_active: boolean;
   date_joined: string;
 }

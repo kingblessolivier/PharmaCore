@@ -3,8 +3,9 @@ import { Building2, Network, Plus } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { api, ApiError } from "../lib/api";
 import type { Company, Organization, Paginated } from "../lib/types";
-import { Badge, Button, Modal, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
+import { Badge, Button, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
 import { DataGrid } from "../components/DataGrid";
+import { Drawer } from "../components/RecordKit";
 
 function CompanyModal({ company, onClose }: { company?: Company; onClose: () => void }) {
   const qc = useQueryClient();
@@ -46,7 +47,7 @@ function CompanyModal({ company, onClose }: { company?: Company; onClose: () => 
   }
 
   return (
-    <Modal title={editing ? `Edit ${company!.name}` : "Add company"} onClose={onClose}>
+    <Drawer title={editing ? `Edit ${company!.name}` : "Add company"} onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-4">
         <TextField label="Company name" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
         <TextField label="Legal name (optional)" value={legalName} onChange={(e) => setLegalName(e.target.value)} />
@@ -69,7 +70,7 @@ function CompanyModal({ company, onClose }: { company?: Company; onClose: () => 
           </Button>
         </div>
       </form>
-    </Modal>
+    </Drawer>
   );
 }
 
@@ -109,7 +110,7 @@ function BranchesModal({ company, onClose }: { company: Company; onClose: () => 
   });
 
   return (
-    <Modal title={`${company.name} — branches`} size="lg" onClose={onClose}>
+    <Drawer title={`${company.name} — branches`} onClose={onClose} width="max-w-4xl">
       <div className="flex flex-col gap-4">
         {orgs.isLoading && (
           <div className="flex justify-center py-6">
@@ -119,8 +120,8 @@ function BranchesModal({ company, onClose }: { company: Company; onClose: () => 
         {orgs.data && (
           <>
             <div className="overflow-hidden rounded-lg border border-line">
-              <table className="w-full text-sm">
-                <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
+              <table className="data-grid">
+                <thead>
                   <tr>
                     <th className="px-3 py-2">Branch</th>
                     <th className="px-3 py-2">Type</th>
@@ -173,7 +174,7 @@ function BranchesModal({ company, onClose }: { company: Company; onClose: () => 
           </>
         )}
       </div>
-    </Modal>
+    </Drawer>
   );
 }
 

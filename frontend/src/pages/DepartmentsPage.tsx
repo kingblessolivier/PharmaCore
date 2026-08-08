@@ -4,16 +4,16 @@ import { useState, type FormEvent } from "react";
 import {
   Button,
   ConfirmModal,
-  Modal,
   PageHeader,
   SelectField,
-  Spinner,
   TextField,
 } from "../components/ui";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { isAdmin } from "../lib/roles";
 import type { Department, Organization, Paginated } from "../lib/types";
+import { Drawer } from "../components/RecordKit";
+import { DataGrid } from "../components/DataGrid";
 
 const DEPT_CODES = [
   "WAREHOUSE",
@@ -67,7 +67,7 @@ function CreateDeptModal({
   }
 
   return (
-    <Modal title="New department" onClose={onClose}>
+    <Drawer title="New department" onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-4">
         <SelectField
           label="Organization"
@@ -104,7 +104,7 @@ function CreateDeptModal({
           </Button>
         </div>
       </form>
-    </Modal>
+    </Drawer>
   );
 }
 
@@ -150,56 +150,63 @@ export function DepartmentsPage() {
         }
       />
 
-      {depts.isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
+      {/* DataGrid renders its own loading state, so the separate spinner went
+          with the hand-rolled table. The error case still needs saying. */}
+      {depts.isError && (
+        <p className="mb-3 text-form text-danger-700">Failed to load departments.</p>
       )}
-      {depts.isError && <p className="text-sm text-red-600">Failed to load departments.</p>}
 
-      {depts.data && (
-        <div className="overflow-hidden rounded-lg border border-line bg-surface-0">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-4 py-2.5">Organization</th>
-                <th className="px-4 py-2.5">Code</th>
-                <th className="px-4 py-2.5">Name</th>
-                {admin && <th className="px-4 py-2.5 text-right">Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {depts.data.results.map((d) => (
-                <tr key={d.id} className="border-b border-line last:border-0 hover:bg-surface-100">
-                  <td className="px-4 py-2.5">{orgName(d.organization)}</td>
-                  <td className="px-4 py-2.5 font-mono text-ink-700">{d.code}</td>
-                  <td className="px-4 py-2.5 font-medium">{d.name}</td>
-                  {admin && (
-                    <td className="px-4 py-2.5">
-                      <div className="flex justify-end">
-                        <button
-                          onClick={() => setDeleting(d)}
-                          className="rounded-md p-1.5 text-ink-500 hover:bg-red-50 hover:text-red-600"
-                          aria-label={`Delete ${d.name}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-              {depts.data.results.length === 0 && (
-                <tr>
-                  <td colSpan={admin ? 4 : 3} className="px-4 py-8 text-center text-ink-500">
-                    No departments yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* On DataGrid like every other list: search, sort, column choice, density
+          and CSV export come with it, and a department list is exactly the sort
+          of reference table someone needs to export. */}
+      <DataGrid<Department>
+        rows={depts.data?.results ?? []}
+        loading={depts.isLoading}
+        getRowId={(d) => d.id}
+        storageKey="departments"
+        exportName="departments"
+        searchPlaceholder="Search by name, code or organization…"
+        emptyMessage="No departments yet."
+        columns={[
+          {
+            key: "organization",
+            header: "Organization",
+            value: (d) => orgName(d.organization),
+          },
+          {
+            key: "code",
+            header: "Code",
+            value: (d) => d.code,
+            render: (d) => <span className="font-mono text-ink-700">{d.code}</span>,
+          },
+          {
+            key: "name",
+            header: "Name",
+            value: (d) => d.name,
+            render: (d) => <span className="font-medium text-ink-900">{d.name}</span>,
+          },
+          ...(admin
+            ? [
+                {
+                  key: "actions",
+                  header: "",
+                  align: "right" as const,
+                  fixed: true,
+                  sortable: false,
+                  render: (d: Department) => (
+                    <button
+                      onClick={() => setDeleting(d)}
+                      className="rounded-md p-1.5 text-ink-500 hover:bg-danger-50 hover:text-danger-600"
+                      aria-label={`Delete ${d.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  ),
+                },
+              ]
+            : []),
+        ]}
+      />
 
       {showCreate && orgs.data && (
         <CreateDeptModal organizations={orgs.data.results} onClose={() => setShowCreate(false)} />
