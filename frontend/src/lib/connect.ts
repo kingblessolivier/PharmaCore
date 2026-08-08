@@ -176,7 +176,19 @@ export function mailThread(recipientId: number) {
   return api<{
     thread: number;
     subject: string;
-    messages: { id: number; sender: number | null; sender_name: string; body: string; sent_at: string }[];
+    messages: {
+      id: number;
+      sender: number | null;
+      sender_name: string;
+      /** Drawn to the right, like your own messages in any mail client. */
+      is_mine: boolean;
+      body: string;
+      sent_at: string;
+    }[];
+    /** Everyone on the thread except you — who "Reply all" addresses. BCC excluded. */
+    participants: { id: number; name: string }[];
+    /** The last sender — who plain "Reply" addresses. Empty if that was you. */
+    reply_to: { id: number; name: string }[];
   }>(`/api/workspace/mail/${recipientId}/thread/`);
 }
 

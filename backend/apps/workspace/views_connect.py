@@ -287,26 +287,71 @@ class MailViewSet(ViewSet):
 
     @action(detail=True, methods=["get"])
     def thread(self, request: Request, pk: str | None = None) -> Response:
-        """The whole conversation this message belongs to."""
+        """The whole conversation this message belongs to, and who is on it.
+
+        Participants are what a reply needs and the payload did not carry: to
+        reply to the sender you need the sender, and to reply to everyone you
+        need everyone who has been addressed. Without them the screen could
+        display a conversation and not continue it, which is what it did.
+
+        BCC recipients are deliberately excluded. Someone blind-copied is not
+        visible to the thread, and surfacing them in a reply-all list would
+        disclose exactly what BCC exists to hide.
+        """
         user = cast(User, request.user)
         recipient = get_object_or_404(MailRecipient, pk=lookup_pk(pk), user=user)
-        messages = recipient.message.thread.messages.select_related("sender").all()
+        thread = recipient.message.thread
+        messages = thread.messages.select_related("sender").prefetch_related("recipients__user")
+
+        people: dict[int, dict[str, Any]] = {}
+
+        def remember(person: User | None) -> None:
+            if person is None or person.pk == user.pk:
+                return
+            people.setdefault(
+                person.pk,
+                {"id": person.pk, "name": person.get_full_name() or person.username},
+            )
+
+        payload = []
+        for message in messages:
+            remember(message.sender)
+            for row in message.recipients.all():
+                if row.kind != MailRecipient.Kind.BCC:
+                    remember(row.user)
+            payload.append(
+                {
+                    "id": message.pk,
+                    "sender": message.sender_id,
+                    "sender_name": (
+                        (message.sender.get_full_name() or message.sender.username)
+                        if message.sender
+                        else ""
+                    ),
+                    "is_mine": message.sender_id == user.pk,
+                    "body": message.body,
+                    "sent_at": message.sent_at,
+                }
+            )
+
+        last = messages.last()
         return Response(
             {
-                "thread": recipient.message.thread_id,
-                "subject": recipient.message.thread.subject,
-                "messages": [
-                    {
-                        "id": m.pk,
-                        "sender": m.sender_id,
-                        "sender_name": (
-                            (m.sender.get_full_name() or m.sender.username) if m.sender else ""
-                        ),
-                        "body": m.body,
-                        "sent_at": m.sent_at,
-                    }
-                    for m in messages
-                ],
+                "thread": thread.pk,
+                "subject": thread.subject,
+                "messages": payload,
+                "participants": list(people.values()),
+                # Who "Reply" addresses, as opposed to "Reply all".
+                "reply_to": (
+                    [
+                        {
+                            "id": last.sender_id,
+                            "name": last.sender.get_full_name() or last.sender.username,
+                        }
+                    ]
+                    if last and last.sender and last.sender_id != user.pk
+                    else []
+                ),
             }
         )
 

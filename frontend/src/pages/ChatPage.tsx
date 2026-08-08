@@ -34,7 +34,15 @@ export function ChatPage() {
   const [newName, setNewName] = useState("");
   const [newTopic, setNewTopic] = useState("");
 
-  const spaces = useQuery({ queryKey: ["spaces"], queryFn: listSpaces });
+  /* Chat was static: a colleague's reply arrived only if you reloaded the page,
+     which makes it a message board. Polling is the honest option here — there is
+     no websocket in this stack, and 4s is close enough to live for a counter
+     conversation while staying cheap on a weak connection. */
+  const spaces = useQuery({
+    queryKey: ["spaces"],
+    queryFn: listSpaces,
+    refetchInterval: 15_000,
+  });
 
   // Open the first space once the list arrives, so the screen is never an
   // empty pane with no indication of what to do.
@@ -46,6 +54,10 @@ export function ChatPage() {
     queryKey: ["messages", activeId],
     enabled: activeId != null,
     queryFn: () => listMessages(activeId as number),
+    refetchInterval: 4_000,
+    /* Keep the thread on screen while the next poll lands, so the conversation
+       does not blink out every four seconds. */
+    placeholderData: (prev) => prev,
   });
 
   const read = useMutation({
@@ -264,19 +276,39 @@ function MessageRow({
   onDelete: () => void;
   onReact: (emoji: string) => void;
 }) {
+  /* `is_mine` has been on the payload all along and the screen rendered every
+     message identically, so a conversation read as a flat log. Side and tint are
+     what make it read as a conversation — and the author's name is dropped on
+     your own messages, because you know who you are. */
+  const mine = message.is_mine;
+
   return (
-    <div className="group">
-      <div className="flex items-baseline gap-2">
-        <span className="text-sm font-medium text-ink-900">{message.author_name}</span>
-        <span className="text-xs text-ink-500">{dateTime(message.created_at)}</span>
-        {message.edited_at && <span className="text-xs text-ink-400">(edited)</span>}
+    <div className={`group flex flex-col ${mine ? "items-end" : "items-start"}`}>
+      <div
+        className={`max-w-[75%] rounded-2xl px-3 py-2 ${
+          mine
+            ? "rounded-br-sm bg-brand-600 text-white"
+            : "rounded-bl-sm bg-surface-100 text-ink-900"
+        }`}
+      >
+        {!mine && (
+          <span className="block text-micro font-semibold text-ink-700">
+            {message.author_name}
+          </span>
+        )}
+        {message.is_deleted ? (
+          <p className={`text-form italic ${mine ? "text-white/70" : "text-ink-400"}`}>
+            This message was deleted.
+          </p>
+        ) : (
+          <p className="whitespace-pre-wrap text-form">{message.body}</p>
+        )}
       </div>
 
-      {message.is_deleted ? (
-        <p className="text-sm italic text-ink-400">This message was deleted.</p>
-      ) : (
-        <p className="whitespace-pre-wrap text-sm text-ink-800">{message.body}</p>
-      )}
+      <div className="mt-0.5 flex items-center gap-1.5 px-1">
+        <span className="text-micro text-ink-500">{dateTime(message.created_at)}</span>
+        {message.edited_at && <span className="text-micro text-ink-400">edited</span>}
+      </div>
 
       <div className="mt-1 flex flex-wrap items-center gap-1.5">
         {message.reactions.map((r) => (
