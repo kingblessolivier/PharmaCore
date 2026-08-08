@@ -250,9 +250,9 @@ export function DataGrid<T>({
 
       {/* Grid */}
       <div className="overflow-auto rounded-lg border border-line bg-surface-0">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 z-10 bg-surface-0 shadow-[0_1px_0_0_var(--line-200,#e2e8f0)]">
-            <tr className="text-left text-xs uppercase tracking-wide text-ink-500">
+        <table className="list-grid w-full text-form">
+          <thead className="sticky top-0 z-10">
+            <tr className="text-left text-micro uppercase tracking-wide">
               {selectable && (
                 <th className="w-8 px-3 py-2">
                   <input

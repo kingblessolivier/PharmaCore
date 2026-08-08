@@ -1,5 +1,15 @@
 # PharmaCore — Design Tokens
 
+> **Implementation note (2026-08-08).** This document specified a full palette;
+> the implementation defined ten CSS variables while the code used forty-eight,
+> so **696 of 2,600 colour utilities generated no CSS at all** — every `danger`,
+> `warning` and `success`. The spec was right and unbuilt, which is the failure
+> mode a design document is least able to detect on its own.
+>
+> The ramps are now complete in `frontend/src/index.css`, and
+> `npm run lint` fails if the code ever references a token the stylesheet does
+> not define. See [14-design-system-rebuild.md](./14-design-system-rebuild.md).
+
 The atomic values of the visual language. Everything in the UI is built from
 these — no hardcoded hex, no arbitrary spacing. Tokens ship as CSS custom
 properties and a Tailwind config at build time.

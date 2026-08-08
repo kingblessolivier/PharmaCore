@@ -36,7 +36,6 @@ import {
   UserCheck,
   UserCog,
   Users,
-  Calendar,
   Clock,
   Wallet,
   Thermometer,
@@ -49,15 +48,17 @@ import {
   Receipt,
   Handshake,
   ScanLine,
-  Route as RouteIcon,
   RefreshCw,
   MoveRight,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { can } from "../lib/roles";
+import { applyTheme, storedTheme, type Theme } from "../lib/theme";
 import type { AppNotification, Organization, Paginated } from "../lib/types";
 import { CommandPalette } from "./CommandPalette";
 
@@ -218,6 +219,25 @@ function OrgSwitcher() {
   );
 }
 
+function ThemeToggle() {
+  const [theme, setTheme] = useState<Theme>(() => storedTheme());
+  const dark = theme === "dark";
+  return (
+    <button
+      onClick={() => {
+        const next: Theme = dark ? "light" : "dark";
+        setTheme(next);
+        applyTheme(next);
+      }}
+      className="rounded-md p-1.5 text-ink-600 hover:bg-surface-100"
+      aria-label={dark ? "Switch to light" : "Switch to dark"}
+      title={dark ? "Switch to light" : "Switch to dark"}
+    >
+      {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+    </button>
+  );
+}
+
 function NotificationsBell() {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -358,11 +378,7 @@ const NAV: NavGroup[] = [
       { to: "/products", label: "Products", icon: Pill },
       { to: "/catalog/price-lists", label: "Price Lists", icon: CreditCard },
       { to: "/catalog/formularies", label: "Formularies", icon: ShieldCheck },
-      { to: "/catalog/interactions", label: "Drug Interactions", icon: Shield },
-      { to: "/catalog/substitutes", label: "Substitutes", icon: Pill },
-      { to: "/catalog/uom", label: "UoM Conversions", icon: Boxes },
-      { to: "/catalog/manufacturers", label: "Manufacturers", icon: Building2 },
-      { to: "/catalog/ingredients", label: "Active Ingredients", icon: FileText },
+      { to: "/catalog/manufacturers", label: "Reference data", icon: Boxes },
       { to: "/catalog/low-stock", label: "Low Stock", icon: ClipboardList },
       { to: "/catalog/expiry", label: "Expiry Forecast", icon: Clock },
     ],
@@ -418,8 +434,7 @@ const NAV: NavGroup[] = [
       { to: "/inventory/replenishment", label: "Replenishment", icon: RefreshCw },
       { to: "/inventory/serialisation", label: "Track & Trace", icon: ScanLine },
       { to: "/inventory/consignment", label: "Consignment / VMI", icon: Handshake },
-      { to: "/inventory/temperature", label: "Temperature Logs", icon: Thermometer },
-      { to: "/inventory/coldchain", label: "Cold-Chain Compliance", icon: RouteIcon },
+      { to: "/inventory/coldchain", label: "Cold chain", icon: Thermometer },
       { to: "/inventory/qc", label: "Quality Control", icon: FileText },
       { to: "/inventory/recalls", label: "Batch Recalls", icon: Shield },
       { to: "/inventory/counts", label: "Physical Counts", icon: ClipboardList },
@@ -519,21 +534,14 @@ const NAV: NavGroup[] = [
     ],
   },
   {
-    label: "Tax & compliance",
-    app: "finance",
-    needs: ["finance.manage"],
-    items: [
-      { to: "/finance/tax", label: "VAT return", icon: ScrollText },
-      { to: "/finance/tax-ebm", label: "EBM audit", icon: ScrollText },
-      { to: "/finance/tax/payments", label: "RRA payments", icon: Landmark },
-      { to: "/finance/tax-codes", label: "Tax codes", icon: Receipt },
-    ],
-  },
-  {
+    // Tax was four entries — VAT return, EBM audit, RRA payments, tax codes.
+    // They are one desk worked in that order, so they are one screen now, and a
+    // group heading over a single item is just a heading.
     label: "Performance",
     app: "finance",
     needs: ["finance.view"],
     items: [
+      { to: "/finance/tax", label: "Tax & compliance", icon: ScrollText },
       { to: "/finance/budgets", label: "Budgets & variance", icon: FileBarChart },
       {
         to: "/finance/tenant-settings",
@@ -550,16 +558,13 @@ const NAV: NavGroup[] = [
     items: [
       { to: "/people", label: "Overview", icon: Users, end: true },
       { to: "/people/employees", label: "Employees", icon: UserCog },
-      { to: "/people/attendance", label: "Time & Attendance", icon: Clock },
-      { to: "/people/roster", label: "Shift Rosters", icon: Calendar },
+      { to: "/people/attendance", label: "Time & attendance", icon: Clock },
       { to: "/people/leave", label: "Leave & Accrual", icon: UserCheck },
-      { to: "/people/timesheets", label: "Timesheets", icon: ClipboardList },
       { to: "/people/payroll", label: "Payroll", icon: Wallet },
       { to: "/people/loans", label: "Loans & Advances", icon: CreditCard },
       { to: "/people/recruitment", label: "Recruitment", icon: UserCheck },
       { to: "/people/offboarding", label: "Offboarding", icon: LogOut },
-      { to: "/people/filings", label: "Statutory Filings", icon: FileText },
-      { to: "/people/statutory-rates", label: "Statutory rates", icon: ScrollText },
+      { to: "/people/filings", label: "Statutory filings", icon: FileText },
     ],
   },
   {
@@ -581,8 +586,7 @@ const NAV: NavGroup[] = [
       { to: "/admin", label: "Admin Overview", icon: ShieldCheck, end: true },
       { to: "/companies", label: "Organizations & branches", icon: Building2 },
       { to: "/departments", label: "Departments", icon: Boxes },
-      { to: "/users", label: "Users & roles", icon: Users },
-      { to: "/permissions", label: "Permissions", icon: ShieldCheck },
+      { to: "/users", label: "Users & access", icon: Users },
       { to: "/activity", label: "Audit log", icon: Activity },
     ],
   },
@@ -670,6 +674,7 @@ export function AppShell() {
           <kbd className="rounded border border-line px-1 font-mono text-[10px]">⌘K</kbd>
         </button>
         <div className="ml-auto flex items-center gap-3">
+          <ThemeToggle />
           <NotificationsBell />
           <div className="flex items-center gap-2 text-sm">
             <Users className="h-4 w-4 text-ink-500" />

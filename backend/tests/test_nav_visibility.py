@@ -45,9 +45,18 @@ def nav_groups() -> list[tuple[str, list[str] | str, int]]:
 
 
 def test_the_gates_were_actually_found() -> None:
+    """Guards the *parser*, not the size of the nav.
+
+    This originally asserted more than 100 entries, which quietly made the nav
+    un-shrinkable — and shrinking it is the goal: consolidating six desks that
+    had been split across the menu took it from 112 to 88. The thing worth
+    protecting is that this file can still find the gates at all, because a
+    parser that silently matches nothing would make every visibility test below
+    pass for the wrong reason.
+    """
     groups = nav_groups()
-    assert len(groups) >= 15, f"only parsed {len(groups)} nav groups — the parser is stale"
-    assert sum(n for _, _, n in groups) > 100
+    assert len(groups) >= 12, f"only parsed {len(groups)} nav groups — the parser is stale"
+    assert sum(n for _, _, n in groups) > 50, "the parser found groups but almost no entries"
 
 
 @pytest.fixture

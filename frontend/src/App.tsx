@@ -16,10 +16,8 @@ import { PosPage } from "./pages/PosPage";
 import { ProductDetailPage } from "./pages/ProductDetailPage";
 import { ProductsPage } from "./pages/ProductsPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
-import { UsersPage } from "./pages/UsersPage";
 import { ActivityPage } from "./pages/ActivityPage";
 import { CompaniesPage } from "./pages/CompaniesPage";
-import { PermissionMatrixPage } from "./pages/PermissionMatrixPage";
 import { ApprovalsInboxPage } from "./pages/ApprovalsInboxPage";
 import { ChartOfAccountsPage } from "./pages/ChartOfAccountsPage";
 import { JournalPage } from "./pages/JournalPage";
@@ -35,15 +33,8 @@ import { DunningPage } from "./pages/DunningPage";
 import { CustomerStatementPage } from "./pages/CustomerStatementPage";
 import { PaymentRunsPage } from "./pages/PaymentRunsPage";
 import { FixedAssetsPage } from "./pages/FixedAssetsPage";
-import { TaxEbmPage } from "./pages/TaxEbmPage";
-import { VatPage } from "./pages/VatPage";
-import { TaxPaymentsPage } from "./pages/TaxPaymentsPage";
 import { BudgetsPage } from "./pages/BudgetsPage";
-import { TaxCodesPage } from "./pages/TaxCodesPage";
 import { TenantSettingsPage } from "./pages/TenantSettingsPage";
-import { StatutoryRatesPage } from "./pages/StatutoryRatesPage";
-import { AttendancePage } from "./pages/AttendancePage";
-import { ShiftRosterPage } from "./pages/ShiftRosterPage";
 import { LeavePage } from "./pages/LeavePage";
 import { DemandBoardPage } from "./pages/DemandBoardPage";
 import { DepotListingsPage } from "./pages/DepotListingsPage";
@@ -76,14 +67,8 @@ import { LowStockPage } from "./pages/LowStockPage";
 import { ExpiryPage } from "./pages/ExpiryPage";
 import { PriceListsPage } from "./pages/PriceListsPage";
 import { FormulariesPage } from "./pages/FormulariesPage";
-import { InteractionsPage } from "./pages/InteractionsPage";
-import { UomPage } from "./pages/UomPage";
-import { SubstitutesPage } from "./pages/SubstitutesPage";
-import { ManufacturersPage } from "./pages/ManufacturersPage";
-import { IngredientsPage } from "./pages/IngredientsPage";
 
 import { InventoryHome } from "./pages/apps/InventoryHome";
-import { ColdChainCompliancePage } from "./pages/ColdChainCompliancePage";
 import { ConsignmentPage } from "./pages/ConsignmentPage";
 import { PickWavesPage } from "./pages/PickWavesPage";
 import { PutawayRulesPage } from "./pages/PutawayRulesPage";
@@ -91,12 +76,21 @@ import { ReplenishmentPage } from "./pages/ReplenishmentPage";
 import { SerialisationPage } from "./pages/SerialisationPage";
 import { StorageZonesPage } from "./pages/StorageZonesPage";
 import { WarehousesPage } from "./pages/WarehousesPage";
-import { TemperatureLogsPage } from "./pages/TemperatureLogsPage";
 import { QualityControlPage } from "./pages/QualityControlPage";
 import { BatchRecallsPage } from "./pages/BatchRecallsPage";
 import { StockCountsPage } from "./pages/StockCountsPage";
 import { StockDisposalPage } from "./pages/StockDisposalPage";
 import { PurchaseOrdersPage } from "./pages/PurchaseOrdersPage";
+import { OrderComposePage } from "./pages/OrderComposePage";
+import {
+  AccessWorkspace,
+  ColdChainWorkspace,
+  ReferenceDataWorkspace,
+  StatutoryWorkspace,
+  TaxWorkspace,
+  TimeWorkspace,
+} from "./pages/workspaces";
+import { OrderWorkbenchPage } from "./pages/OrderWorkbenchPage";
 import { GrnPage } from "./pages/GrnPage";
 import { InTransitPage } from "./pages/InTransitPage";
 
@@ -109,11 +103,9 @@ import { ImportsPage } from "./pages/ImportsPage";
 import { GoodsReceiptsPage } from "./pages/GoodsReceiptsPage";
 import { SupplierInvoicesPage } from "./pages/SupplierInvoicesPage";
 
-import { TimesheetsPage } from "./pages/TimesheetsPage";
 import { LoansPage } from "./pages/LoansPage";
 import { RecruitmentPage } from "./pages/RecruitmentPage";
 import { OffboardingPage } from "./pages/OffboardingPage";
-import { StatutoryFilingsPage } from "./pages/StatutoryFilingsPage";
 import { FinanceCockpitPage } from "./pages/FinanceCockpitPage";
 
 const queryClient = new QueryClient({
@@ -177,11 +169,11 @@ function App() {
               <Route path="/catalog/expiry" element={forPharmacy(<ExpiryPage />)} />
               <Route path="/catalog/price-lists" element={forPharmacy(<PriceListsPage />)} />
               <Route path="/catalog/formularies" element={forPharmacy(<FormulariesPage />)} />
-              <Route path="/catalog/interactions" element={forPharmacy(<InteractionsPage />)} />
-              <Route path="/catalog/uom" element={forPharmacy(<UomPage />)} />
-              <Route path="/catalog/substitutes" element={forPharmacy(<SubstitutesPage />)} />
-              <Route path="/catalog/manufacturers" element={forPharmacy(<ManufacturersPage />)} />
-              <Route path="/catalog/ingredients" element={forPharmacy(<IngredientsPage />)} />
+              <Route path="/catalog/interactions" element={<Navigate to="/catalog/manufacturers?tab=interactions" replace />} />
+              <Route path="/catalog/uom" element={<Navigate to="/catalog/manufacturers?tab=uom" replace />} />
+              <Route path="/catalog/substitutes" element={<Navigate to="/catalog/manufacturers?tab=substitutes" replace />} />
+              <Route path="/catalog/manufacturers" element={forPharmacy(<ReferenceDataWorkspace />)} />
+              <Route path="/catalog/ingredients" element={<Navigate to="/catalog/manufacturers?tab=ingredients" replace />} />
               <Route path="/inventory" element={forPharmacy(<InventoryHome />)} />
               <Route path="/inventory/warehouses" element={forPharmacy(<WarehousesPage />)} />
               <Route path="/inventory/zones" element={forPharmacy(<StorageZonesPage />)} />
@@ -190,8 +182,8 @@ function App() {
               <Route path="/inventory/replenishment" element={forPharmacy(<ReplenishmentPage />)} />
               <Route path="/inventory/serialisation" element={forPharmacy(<SerialisationPage />)} />
               <Route path="/inventory/consignment" element={forPharmacy(<ConsignmentPage />)} />
-              <Route path="/inventory/coldchain" element={forPharmacy(<ColdChainCompliancePage />)} />
-              <Route path="/inventory/temperature" element={forPharmacy(<TemperatureLogsPage />)} />
+              <Route path="/inventory/coldchain" element={forPharmacy(<ColdChainWorkspace />)} />
+              <Route path="/inventory/temperature" element={<Navigate to="/inventory/coldchain?tab=logs" replace />} />
               <Route path="/inventory/qc" element={forPharmacy(<QualityControlPage />)} />
               <Route path="/inventory/recalls" element={forPharmacy(<BatchRecallsPage />)} />
               <Route path="/inventory/counts" element={forPharmacy(<StockCountsPage />)} />
@@ -210,6 +202,8 @@ function App() {
               <Route path="/connect/mail" element={<MailPage />} />
               <Route path="/distribution" element={forPharmacy(<DistributionHome />)} />
               <Route path="/distribution/orders" element={forPharmacy(<PurchaseOrdersPage />)} />
+              <Route path="/distribution/orders/new" element={forPharmacy(<OrderComposePage />)} />
+              <Route path="/distribution/orders/:id" element={forPharmacy(<OrderWorkbenchPage />)} />
               <Route path="/distribution/grn" element={forPharmacy(<GrnPage />)} />
               <Route path="/distribution/in-transit" element={forPharmacy(<InTransitPage />)} />
               <Route path="/distribution/listings" element={forPharmacy(<DepotListingsPage />)} />
@@ -233,8 +227,8 @@ function App() {
               <Route path="/organizations" element={<Navigate to="/companies" replace />} />
               <Route path="/organizations/:id" element={adminOnly(<OrganizationDetailPage />)} />
               <Route path="/departments" element={adminOnly(<DepartmentsPage />)} />
-              <Route path="/users" element={adminOnly(<UsersPage />)} />
-              <Route path="/permissions" element={adminOnly(<PermissionMatrixPage />)} />
+              <Route path="/users" element={adminOnly(<AccessWorkspace />)} />
+              <Route path="/permissions" element={<Navigate to="/users?tab=permissions" replace />} />
               <Route path="/activity" element={adminOnly(<ActivityPage />)} />
               <Route path="/products" element={forPharmacy(<ProductsPage />)} />
               <Route path="/products/:id" element={forPharmacy(<ProductDetailPage />)} />
@@ -260,12 +254,12 @@ function App() {
               />
               <Route path="/finance/statements" element={forFinance(<FinanceStatementsPage />)} />
               <Route path="/finance/assets" element={forFinance(<FixedAssetsPage />)} />
-              <Route path="/finance/tax-ebm" element={forFinance(<TaxEbmPage />)} />
-              <Route path="/finance/tax" element={forFinance(<VatPage />)} />
-              <Route path="/finance/tax/payments" element={forFinance(<TaxPaymentsPage />)} />
+              <Route path="/finance/tax-ebm" element={<Navigate to="/finance/tax?tab=ebm" replace />} />
+              <Route path="/finance/tax" element={forFinance(<TaxWorkspace />)} />
+              <Route path="/finance/tax/payments" element={<Navigate to="/finance/tax?tab=payments" replace />} />
               <Route path="/finance/budgets" element={forFinance(<BudgetsPage />)} />
               <Route path="/finance/schedules" element={forFinance(<SchedulesPage />)} />
-              <Route path="/finance/tax-codes" element={forFinance(<TaxCodesPage />)} />
+              <Route path="/finance/tax-codes" element={<Navigate to="/finance/tax?tab=codes" replace />} />
               <Route
                 path="/finance/tenant-settings"
                 element={forFinance(<TenantSettingsPage />)}
@@ -274,15 +268,15 @@ function App() {
               <Route path="/people/employees" element={forHR(<EmployeesPage />)} />
               <Route path="/people/employees/:id" element={forHR(<EmployeeDetailPage />)} />
               <Route path="/people/payroll" element={forHR(<PayrollPage />)} />
-              <Route path="/people/attendance" element={forHR(<AttendancePage />)} />
-              <Route path="/people/roster" element={forHR(<ShiftRosterPage />)} />
+              <Route path="/people/attendance" element={forHR(<TimeWorkspace />)} />
+              <Route path="/people/roster" element={<Navigate to="/people/attendance?tab=roster" replace />} />
               <Route path="/people/leave" element={forHR(<LeavePage />)} />
-              <Route path="/people/timesheets" element={forHR(<TimesheetsPage />)} />
+              <Route path="/people/timesheets" element={<Navigate to="/people/attendance?tab=timesheets" replace />} />
               <Route path="/people/loans" element={forHR(<LoansPage />)} />
               <Route path="/people/recruitment" element={forHR(<RecruitmentPage />)} />
               <Route path="/people/offboarding" element={forHR(<OffboardingPage />)} />
-              <Route path="/people/filings" element={forHR(<StatutoryFilingsPage />)} />
-              <Route path="/people/statutory-rates" element={forHR(<StatutoryRatesPage />)} />
+              <Route path="/people/filings" element={forHR(<StatutoryWorkspace />)} />
+              <Route path="/people/statutory-rates" element={<Navigate to="/people/filings?tab=rates" replace />} />
               <Route path="/approvals" element={<ApprovalsInboxPage />} />
               <Route path="/documents" element={<DocumentsPage />} />
             </Route>
