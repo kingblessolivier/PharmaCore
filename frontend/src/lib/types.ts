@@ -2272,3 +2272,28 @@ export interface InventoryValuation {
     batches: number;
   }[];
 }
+
+
+/** One candidate from typing a name at the till. */
+export interface CounterSearchHit {
+  product: number;
+  label: string;
+  brand_name: string;
+  dosage_form: string;
+  pack_size: string;
+  units: number;
+  unit_price: string;
+  price_source: string;
+  on_hand: number;
+  matched_on: string;
+  requires_prescription: boolean;
+  is_controlled: boolean;
+}
+
+export interface CounterSearchResponse {
+  query: string;
+  /** Set only when the input came off a scanner, so the till adds it directly. */
+  exact: Extract<ScanResult, { found: true }> | null;
+  count: number;
+  results: CounterSearchHit[];
+}

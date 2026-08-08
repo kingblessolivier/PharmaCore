@@ -26,6 +26,7 @@ import {
 } from "../lib/offlineQueue";
 import { useDefaultOrg } from "../lib/recordData";
 import type { ActivePromotion, ScanResult } from "../lib/retail";
+import type { CounterSearchHit, CounterSearchResponse } from "../lib/types";
 
 interface Line {
   product: number;
@@ -269,6 +270,62 @@ export function PosPage() {
     },
   });
 
+  /* ------------------------------------------------------------- typing */
+  /* Most pharmacies here have no barcode labelling, so typing a name is not a
+     fallback to scanning — it is the primary way a line gets onto the basket.
+     The scanner path is untouched: a scanner types fast and presses Enter, and
+     `looks_like_a_barcode` on the server tells the two apart without asking the
+     cashier which mode they are in. */
+
+  const [highlight, setHighlight] = useState(0);
+  const typed = code.trim();
+  /* A barcode is answered by Enter, not by a dropdown; suppress the list for one
+     so a scan never flashes a menu on its way past. */
+  const isBarcode = typed.length >= 8 && /^\d+$/.test(typed);
+
+  const search = useQuery({
+    queryKey: ["counter-search", orgId, typed],
+    enabled: orgId != null && typed.length >= 2 && !isBarcode,
+    queryFn: () =>
+      api<CounterSearchResponse>(
+        `/api/retail/counter/search/?organization=${orgId}&q=${encodeURIComponent(typed)}`,
+      ),
+    /* Keep the previous list on screen while the next one loads, so the rows do
+       not blink out from under a finger already moving toward them. */
+    placeholderData: (prev) => prev,
+  });
+
+  const hits = search.data?.results ?? [];
+  const showList = !isBarcode && typed.length >= 2 && hits.length > 0;
+
+  useEffect(() => setHighlight(0), [typed]);
+
+  const addHit = useCallback(
+    (hit: CounterSearchHit) => {
+      addLine({
+        found: true,
+        code: "",
+        product: hit.product,
+        label: hit.label,
+        units: hit.units,
+        packaging_level: "EACH",
+        unit_price: hit.unit_price,
+        price_source: hit.price_source,
+        price_list_name: "",
+        on_hand: hit.on_hand,
+        substitutes: null,
+        requires_prescription: hit.requires_prescription,
+        is_controlled: hit.is_controlled,
+      } as Extract<ScanResult, { found: true }>);
+      setNotice(
+        hit.on_hand <= 0 ? { text: `${hit.label} shows no stock on hand.`, tone: "warn" } : null,
+      );
+      setCode("");
+      focusScan();
+    },
+    [addLine, focusScan],
+  );
+
   /* -------------------------------------------------------------- promotions */
 
   const applyCoupon = useMutation({
@@ -414,17 +471,95 @@ export function PosPage() {
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && code.trim()) {
+                  if (showList && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
                     e.preventDefault();
-                    scan.mutate(code.trim());
+                    setHighlight((i) =>
+                      e.key === "ArrowDown"
+                        ? Math.min(i + 1, hits.length - 1)
+                        : Math.max(i - 1, 0),
+                    );
+                    return;
+                  }
+                  if (e.key === "Escape" && showList) {
+                    e.preventDefault();
+                    setCode("");
+                    return;
+                  }
+                  if (e.key !== "Enter" || !typed) return;
+                  e.preventDefault();
+                  /* A visible list means the cashier is choosing, so Enter takes
+                     what is highlighted. Otherwise it is a scan or a bare code. */
+                  if (showList && hits[highlight]) {
+                    addHit(hits[highlight]);
+                  } else {
+                    scan.mutate(typed);
                   }
                 }}
-                placeholder="Scan a barcode, or type a code and press Enter"
+                placeholder="Scan a barcode, or type a medicine name"
                 className="h-12 w-full rounded-md border border-line bg-surface-0 pl-11 pr-3 text-base text-ink-900 outline-none focus:border-brand-500"
                 autoComplete="off"
                 spellCheck={false}
+                role="combobox"
+                aria-expanded={showList}
+                aria-controls="counter-search-results"
               />
+              {showList && (
+                <ul
+                  id="counter-search-results"
+                  className="absolute left-0 right-0 top-14 z-30 max-h-80 overflow-y-auto rounded-md border border-line bg-surface-0 py-1 shadow-lg"
+                >
+                  {hits.map((hit, i) => (
+                    <li key={hit.product}>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onMouseEnter={() => setHighlight(i)}
+                        onClick={() => addHit(hit)}
+                        className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left ${
+                          i === highlight ? "bg-brand-50" : "hover:bg-surface-100"
+                        }`}
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-ink-900">
+                            {hit.label}
+                            {hit.brand_name && (
+                              <span className="ml-1.5 font-normal text-ink-500">
+                                ({hit.brand_name})
+                              </span>
+                            )}
+                          </span>
+                          <span className="block truncate text-xs text-ink-500">
+                            {[hit.dosage_form, hit.pack_size].filter(Boolean).join(" · ")}
+                            {hit.requires_prescription && " · prescription"}
+                            {hit.is_controlled && " · controlled"}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <span className="block text-sm tabular-nums text-ink-900">
+                            {hit.unit_price ? money(Number(hit.unit_price)) : "no price"}
+                          </span>
+                          {/* Stock is the thing that decides whether this row is
+                              usable, so it is never further away than the price. */}
+                          <span
+                            className={`block text-xs tabular-nums ${
+                              hit.on_hand > 0 ? "text-ink-500" : "text-danger-600"
+                            }`}
+                          >
+                            {hit.on_hand > 0 ? `${hit.on_hand} in stock` : "out of stock"}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
+            {!isBarcode && typed.length >= 2 && hits.length === 0 && !search.isFetching && (
+              <p className="mt-2 text-sm text-ink-500">
+                Nothing here matches “{typed}”. Check the spelling, or search by the active
+                ingredient.
+              </p>
+            )}
             {notice && (
               <p
                 className={`mt-2 flex items-center gap-1.5 text-sm ${
