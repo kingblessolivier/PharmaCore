@@ -51,10 +51,10 @@ export function TextField({
   return (
     <label className="flex flex-col gap-1.5">
       {label && (
-        <span className="text-xs font-medium uppercase tracking-wide text-ink-500">{label}</span>
+        <span className="text-micro font-medium uppercase tracking-wide text-ink-500">{label}</span>
       )}
       <input
-        className={`rounded-md border border-line bg-surface-0 px-3 py-2 text-sm text-ink-900 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-50 ${className}`}
+        className={`field-control ${className}`}
         {...props}
       />
     </label>
@@ -70,10 +70,10 @@ export function SelectField({
   return (
     <label className="flex flex-col gap-1.5">
       {label && (
-        <span className="text-xs font-medium uppercase tracking-wide text-ink-500">{label}</span>
+        <span className="text-micro font-medium uppercase tracking-wide text-ink-500">{label}</span>
       )}
       <select
-        className={`rounded-md border border-line bg-surface-0 px-3 py-2 text-sm text-ink-900 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-50 ${className}`}
+        className={`field-control ${className}`}
         {...props}
       >
         {children}
@@ -90,11 +90,11 @@ export function TextArea({
   return (
     <label className="flex flex-col gap-1.5">
       {label && (
-        <span className="text-xs font-medium uppercase tracking-wide text-ink-500">{label}</span>
+        <span className="text-micro font-medium uppercase tracking-wide text-ink-500">{label}</span>
       )}
       <textarea
         rows={2}
-        className={`rounded-md border border-line bg-surface-0 px-3 py-2 text-sm text-ink-900 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-50 ${className}`}
+        className={`field-control ${className}`}
         {...props}
       />
     </label>

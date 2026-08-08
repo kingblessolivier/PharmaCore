@@ -248,6 +248,23 @@ select.field-control {
   font-weight: 600;
 }
 
+/* The list grid keeps its sticky header (so it needs an opaque background of its
+   own rather than a table border) but gains the column rules that make a long
+   list scannable: without them the eye loses its place crossing eight columns. */
+.list-grid thead th {
+  background: var(--surface-100);
+  color: var(--ink-600);
+  font-weight: 600;
+  box-shadow: inset 0 -1px 0 0 var(--line-strong);
+}
+.list-grid th + th,
+.list-grid td + td {
+  border-left: 1px solid var(--line-200);
+}
+.list-grid tbody tr:hover {
+  background: var(--brand-50);
+}
+
 body {
   margin: 0;
   background: var(--surface-100);

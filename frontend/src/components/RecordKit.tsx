@@ -127,8 +127,12 @@ export function Field({
   );
 }
 
-const CONTROL =
-  "w-full rounded-md border border-line bg-surface-0 px-2.5 py-1.5 text-sm text-ink-900 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-50 disabled:bg-surface-100 disabled:text-ink-500";
+/* The one control style, defined once in index.css (`.field-control`): a real
+   1px border, near-square corners and a white fill, so an operator can see where
+   a field begins without hunting for it. Every screen in the product inherits it
+   from here — the alternative was 107 files agreeing by hand, which is how the
+   inputs drifted in the first place. */
+const CONTROL = "field-control";
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${CONTROL} ${props.className ?? ""}`} />;
