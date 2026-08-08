@@ -1,6 +1,7 @@
 # System-wide audit — a day in the life of every role
 
-**Status:** findings complete, remediation not started · **Date:** 2026-08-07
+**Status:** findings complete · remediation in PRs #93 and #94 · **Date:** 2026-08-07
+**Scorecard:** see §11 — 15 of 20 live defects closed, 5 open, 1 withdrawn.
 **Method:** live API walkthrough as each of the ten seeded roles, across a retail
 pharmacy, a depot and an HQ, plus static analysis of every model, route and screen.
 
@@ -485,3 +486,54 @@ The standing caveat is unchanged and is now demonstrably load-bearing: **no scre
 in this project has ever been rendered in a browser**, because no browser tool is
 available in this environment. D5 is what that gap looks like when it reaches a
 user.
+
+---
+
+## 11. Scorecard — checked back against the code, not against memory
+
+Re-run on 2026-08-08 by repeating the audit's own probes against the current
+branch. Two things came out of that re-check and both are worth stating plainly.
+
+**D2 was still open.** I listed it in Phase A, fixed the finance half of the same
+root cause (D1), and never did this one. The controlled substances register — the
+document a Rwanda FDA inspector asks for — was still returning **200** to a
+cashier, a driver and a warehouse clerk.
+
+**My own gate did not catch it**, because `MUST_BE_REFUSED` never listed the
+register. A gate only guards what it is told to guard, and I wrote the list.
+
+The re-check also found two things the original audit had not looked at:
+`/api/retail/dispensing/` and `/api/retail/prescriptions/` — **named patients and
+what they were prescribed** — readable by a driver and a warehouse clerk. Both are
+now closed, and all four are on the gate list.
+
+| # | Defect | Status |
+|---|---|---|
+| D1 | Finance readable by everyone | **closed** — #93 |
+| D2 | Controlled substances register open | **closed** — missed in #93, fixed after re-check |
+| D3 | Cross-tenant price lists | **closed** — #93 |
+| D4 | Cross-tenant promotions | **closed** — #93 |
+| D5 | Active Ingredients screen dead | **closed** — #93 |
+| D6 | Receivables dropdown dead | **closed** — #93 |
+| D7 | Five roles gate nothing | **closed** — #94 |
+| D8 | `PROCUREMENT_OFFICER` not a role | **withdrawn — I was wrong** |
+| D9 | No manager role | **closed** — `BRANCH_MANAGER`, `AUDITOR` |
+| D10 | Dashboard: no trend, branch split or margin | **closed** — #94 |
+| D11 | Charts locked inside Finance | **partly** — the dashboard has them; nine module homes still do not |
+| D12 | Four reports built and never shown | **open** |
+| D13 | Duplicated screens (suppliers, GRN, POs, orgs) | **open** |
+| D14 | One job crosses five nav groups | **partly** — `next_steps` links the common ones; module homes are not yet work queues |
+| D15 | 75 models without `created_at` | **open** |
+| D16 | Two impossible org-type strings | **open** |
+| D17 | 17 models with no API | **open** — mostly not defects; `ExchangeRate`/`FxRevaluation` deserve a look |
+| D18 | Anyone could approve anything | **closed** — #93 |
+| D19 | Nobody could approve anything | **closed** — #93 |
+| D20 | Document vault leaked payslips | **closed** — #93 |
+| D21 | UTC vs Kigali date, 38 call sites | **closed** — #93 |
+
+**15 closed, 2 partly, 5 open, 1 withdrawn.**
+
+The five open ones are all cosmetic or hygiene — no security, money or patient
+data among them. That is the right shape for what is left, but it is worth being
+explicit that "F2 is done" means the severity-1 and severity-2 findings are done,
+not the list.
