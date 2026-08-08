@@ -299,8 +299,8 @@ function ConsolidateModal({
   requisitions: PurchaseRequisition[];
   onClose: () => void;
 }) {
-  const qc = useQueryClient();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { orgId } = useDefaultOrg();
   const [supplier, setSupplier] = useState<number | null>(null);
   const [expected, setExpected] = useState("");
@@ -388,6 +388,7 @@ function ConsolidateModal({
 /* -------------------------------------------------------------------------- */
 
 export function RequisitionsPage() {
+  const navigate = useNavigate();
   const [open, setOpen] = useState<PurchaseRequisition | null>(null);
   const [creating, setCreating] = useState(false);
   const [consolidating, setConsolidating] = useState<PurchaseRequisition[] | null>(null);
@@ -424,7 +425,10 @@ export function RequisitionsPage() {
         exportName="requisitions"
         searchPlaceholder="Search by number, branch, requester…"
         emptyMessage="No requisitions yet."
-        onRowClick={(r) => setOpen(r)}
+        /* Opens the requisition itself. A list cannot show the difference
+           between approved-and-ordered and approved-and-forgotten, which is the
+           only failure this document actually has. */
+        onRowClick={(r) => navigate(`/procurement/requisitions/${r.id}`)}
         bulkActions={(selected, clear) => {
           const approved = selected.filter((r) => r.status === "APPROVED");
           return (
