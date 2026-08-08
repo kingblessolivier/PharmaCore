@@ -269,7 +269,10 @@ export function PurchaseOrdersPage() {
         exportName="purchase-orders"
         searchPlaceholder="Search by PO number, depot or branch…"
         emptyMessage="No purchase orders found matching current filter."
-        onRowClick={(o) => setViewing(o)}
+        /* Opens the full document rather than a side panel. The drawer stayed
+           for the quick look-up; a 28rem panel could not hold parties, dates,
+           lines, payments, deliveries and shortfalls without becoming a scroll. */
+        onRowClick={(o) => navigate(`/distribution/orders/${o.id}`)}
         columns={[
           {
             key: "order_number",
