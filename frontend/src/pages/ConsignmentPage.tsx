@@ -23,13 +23,8 @@ import type {
   Paginated,
   Supplier,
 } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
-const STATUS_TONE: Record<string, string> = {
-  DRAFT: "neutral",
-  ACTIVE: "success",
-  SUSPENDED: "warning",
-  CLOSED: "neutral",
-};
 
 const BLANK = {
   agreement_no: "",
@@ -236,7 +231,7 @@ export function ConsignmentPage() {
             key: "status",
             header: "Status",
             align: "center",
-            render: (a) => <Badge tone={STATUS_TONE[a.status] ?? "neutral"}>{a.status}</Badge>,
+            render: (a) => <StatusChip status={a.status} />,
           },
           {
             key: "units_held",
@@ -344,9 +339,7 @@ export function ConsignmentPage() {
             header: "Status",
             align: "center",
             render: (s) => (
-              <Badge tone={s.status === "PAID" ? "success" : s.status === "INVOICED" ? "warning" : "neutral"}>
-                {s.status}
-              </Badge>
+              <StatusChip status={s.status} />
             ),
           },
           { key: "supplier_bill_no", header: "AP Bill", value: (s) => s.supplier_bill_no ?? "—" },

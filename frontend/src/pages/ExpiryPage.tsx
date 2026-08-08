@@ -16,6 +16,7 @@ import { api } from "../lib/api";
 import { money, shortDate } from "../lib/format";
 import { useDefaultOrg } from "../lib/recordData";
 import type { InventoryBatch, Paginated } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
 /** Anything inside this window is close enough to plan around. */
 const HORIZON_DAYS = 90;
@@ -103,7 +104,7 @@ export function ExpiryPage() {
       header: "Status",
       value: (b) => b.status,
       render: (b) => (
-        <Badge tone={b.status === "ACTIVE" ? "neutral" : "warning"}>{b.status}</Badge>
+        <StatusChip status={b.status} />
       ),
     },
   ];

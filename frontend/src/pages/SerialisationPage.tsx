@@ -30,6 +30,7 @@ import type {
   SerialTrace,
   SerialUnit,
 } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
 const BIZ_STEPS: { value: BizStep; label: string }[] = [
   { value: "receiving", label: "Receiving — goods in" },
@@ -41,16 +42,6 @@ const BIZ_STEPS: { value: BizStep; label: string }[] = [
   { value: "destroying", label: "Destroying — witnessed disposal" },
 ];
 
-const STATUS_TONE: Record<string, string> = {
-  COMMISSIONED: "neutral",
-  IN_STOCK: "success",
-  IN_TRANSIT: "warning",
-  DISPENSED: "neutral",
-  RETURNED: "warning",
-  RECALLED: "danger",
-  DESTROYED: "danger",
-  DECOMMISSIONED: "neutral",
-};
 
 export function SerialisationPage() {
   const navigate = useNavigate();
@@ -311,7 +302,7 @@ export function SerialisationPage() {
             key: "status",
             header: "Status",
             align: "center",
-            render: (u) => <Badge tone={STATUS_TONE[u.status] ?? "neutral"}>{u.status}</Badge>,
+            render: (u) => <StatusChip status={u.status} />,
           },
           {
             key: "children_count",
@@ -475,9 +466,7 @@ export function SerialisationPage() {
                   {traceQuery.data.product_name ?? "Unidentified product"}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-2 text-xs text-ink-600">
-                  <Badge tone={STATUS_TONE[traceQuery.data.status] ?? "neutral"}>
-                    {traceQuery.data.status}
-                  </Badge>
+                  <StatusChip status={traceQuery.data.status} />
                   <span>Batch {traceQuery.data.batch_number || "—"}</span>
                   <span>Expires {traceQuery.data.expiry_date ?? "—"}</span>
                 </div>

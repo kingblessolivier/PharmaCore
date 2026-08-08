@@ -131,18 +131,22 @@ export function Card({
 }
 
 export function Badge({ children, tone = "neutral" }: { children: ReactNode; tone?: string }) {
+  /* These were Tailwind's stock green/amber/red/sky rather than the project's
+     tokens, so a badge kept its light-mode colours in dark mode and sat outside
+     the palette everything around it uses. Same hues, now from the ramps. */
   const tones: Record<string, string> = {
     neutral: "bg-surface-100 text-ink-700",
+    brand: "bg-brand-50 text-brand-700",
     depot: "bg-brand-50 text-brand-700",
     retail: "bg-brand-50 text-brand-700",
-    success: "bg-green-50 text-green-700",
-    warning: "bg-amber-50 text-amber-800",
-    danger: "bg-red-50 text-red-700",
-    info: "bg-sky-50 text-sky-700",
+    success: "bg-success-50 text-success-700",
+    warning: "bg-warning-50 text-warning-800",
+    danger: "bg-danger-50 text-danger-700",
+    info: "bg-info-50 text-info-700",
   };
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${tones[tone] ?? tones.neutral}`}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-micro font-semibold ${tones[tone] ?? tones.neutral}`}
     >
       {children}
     </span>

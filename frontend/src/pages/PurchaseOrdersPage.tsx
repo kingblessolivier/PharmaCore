@@ -2,12 +2,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CreditCard, PackageCheck, Plus, Truck } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Badge, Button, PageHeader, SelectField, TextField } from "../components/ui";
+import { Button, PageHeader, SelectField, TextField } from "../components/ui";
 import { DataGrid } from "../components/DataGrid";
 import { Drawer, Empty, Facts, Section } from "../components/RecordKit";
 import { money, shortDate } from "../lib/format";
 import { api } from "../lib/api";
 import type { Paginated, StockOrder } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
 export function PurchaseOrdersPage() {
   const navigate = useNavigate();
@@ -155,19 +156,7 @@ export function PurchaseOrdersPage() {
             header: "Order Status",
             value: (o) => o.status,
             render: (o) => (
-              <Badge
-                tone={
-                  o.status === "DELIVERED"
-                    ? "success"
-                    : o.status === "IN_TRANSIT"
-                      ? "warning"
-                      : o.status === "APPROVED"
-                        ? "brand"
-                        : "neutral"
-                }
-              >
-                {o.status}
-              </Badge>
+              <StatusChip status={o.status} />
             ),
           },
           {
@@ -175,9 +164,7 @@ export function PurchaseOrdersPage() {
             header: "Payment",
             value: (o) => o.payment_status,
             render: (o) => (
-              <Badge tone={o.payment_status === "PAID" ? "success" : "warning"}>
-                {o.payment_status}
-              </Badge>
+              <StatusChip status={o.payment_status} />
             ),
           },
           {
@@ -274,7 +261,7 @@ export function PurchaseOrdersPage() {
         <Drawer
           title={viewing.order_number}
           subtitle={`${viewing.depot_name} → ${viewing.retail_name}`}
-          badge={<Badge tone={viewing.status === "DELIVERED" ? "success" : "neutral"}>{viewing.status}</Badge>}
+          badge={<StatusChip status={viewing.status} />}
           onClose={() => setViewing(null)}
         >
           <Section title="Order">
@@ -337,7 +324,7 @@ export function PurchaseOrdersPage() {
                       {b.product_name} × {b.quantity.toLocaleString()}
                       {b.note && <span className="block text-xs text-ink-500">{b.note}</span>}
                     </span>
-                    <Badge tone={b.status === "FULFILLED" ? "success" : "warning"}>{b.status}</Badge>
+                    <StatusChip status={b.status} />
                   </li>
                 ))}
               </ul>

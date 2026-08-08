@@ -30,6 +30,7 @@ import type {
   SensorCalibration,
   TemperatureSensor,
 } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
 type Tab = "sensors" | "calibrations" | "excursions";
 
@@ -430,7 +431,7 @@ export function ColdChainCompliancePage() {
               header: "Status",
               align: "center",
               render: (x) => (
-                <Badge tone={x.status === "CLOSED" ? "neutral" : "warning"}>{x.status}</Badge>
+                <StatusChip status={x.status} />
               ),
             },
             {

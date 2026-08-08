@@ -13,17 +13,11 @@ import type {
   Organization,
   Paginated,
 } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
 const money = (n: string | number) =>
   Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
-const STATUS_TONE: Record<string, string> = {
-  OPEN: "info",
-  PARTIAL: "warning",
-  PAID: "success",
-  OVERDUE: "danger",
-  CANCELLED: "neutral",
-};
 
 function NewInvoiceModal({ onClose, orgId }: { onClose: () => void; orgId: number }) {
   const qc = useQueryClient();
@@ -310,7 +304,7 @@ function InvoiceDetailDrawer({
                   Raised {inv.invoice_date} · Due {inv.due_date} · Tax class {inv.tax_class}
                 </div>
               </div>
-              <Badge tone={STATUS_TONE[inv.status] ?? "neutral"}>{inv.status}</Badge>
+              <StatusChip status={inv.status} />
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
               <div>
@@ -555,7 +549,7 @@ export function ReceivablesPage() {
       key: "status",
       header: "Status",
       value: (r) => r.status,
-      render: (r) => <Badge tone={STATUS_TONE[r.status] ?? "neutral"}>{r.status}</Badge>,
+      render: (r) => <StatusChip status={r.status} />,
     },
     {
       key: "actions",

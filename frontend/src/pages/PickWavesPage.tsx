@@ -12,7 +12,6 @@ import {
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Badge,
   Button,
   Card,
   ConfirmModal,
@@ -25,22 +24,8 @@ import { Drawer } from "../components/RecordKit";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { Paginated, PickTask, PickWave, Product, StorageZone, Warehouse } from "../lib/types";
+import { StatusChip } from "../components/Status";
 
-const STATUS_TONE: Record<string, string> = {
-  DRAFT: "neutral",
-  RELEASED: "warning",
-  PICKING: "warning",
-  PICKED: "success",
-  CANCELLED: "danger",
-};
-
-const TASK_TONE: Record<string, string> = {
-  PENDING: "neutral",
-  ASSIGNED: "warning",
-  PICKED: "success",
-  SHORT: "danger",
-  CANCELLED: "neutral",
-};
 
 type Demand = { product: number; quantity: number; reference_type: string; reference_id: string };
 
@@ -243,7 +228,7 @@ export function PickWavesPage() {
             key: "status",
             header: "Status",
             align: "center",
-            render: (w) => <Badge tone={STATUS_TONE[w.status] ?? "neutral"}>{w.status}</Badge>,
+            render: (w) => <StatusChip status={w.status} />,
           },
           { key: "warehouse_name", header: "Warehouse", value: (w) => w.warehouse_name ?? "—" },
           { key: "zone_name", header: "Zone", value: (w) => w.zone_name ?? "—" },
@@ -477,7 +462,7 @@ export function PickWavesPage() {
         <Drawer title={`${openWave.wave_no} — Pick List`} onClose={() => setOpenWave(null)}>
           <Card className="mb-4 p-4 text-xs">
             <div className="flex items-center justify-between">
-              <Badge tone={STATUS_TONE[openWave.status] ?? "neutral"}>{openWave.status}</Badge>
+              <StatusChip status={openWave.status} />
               <span className="text-ink-600">
                 {openWave.task_summary.picked} picked · {openWave.task_summary.short} short ·{" "}
                 {openWave.task_summary.total} total
@@ -514,7 +499,7 @@ export function PickWavesPage() {
                     <div className="font-mono font-semibold">
                       {t.quantity_picked}/{t.quantity_requested}
                     </div>
-                    <Badge tone={TASK_TONE[t.status] ?? "neutral"}>{t.status}</Badge>
+                    <StatusChip status={t.status} />
                   </div>
                   {(t.status === "ASSIGNED" || t.status === "PENDING") && (
                     <button

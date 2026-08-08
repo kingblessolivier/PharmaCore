@@ -32,6 +32,7 @@ import {
   type ClaimQueueRow,
 } from "../lib/insurance";
 import { useDefaultOrg } from "../lib/recordData";
+import { StatusChip } from "../components/Status";
 
 type Action = { row: ClaimQueueRow; kind: "adjudicate" | "reverse" };
 
@@ -149,19 +150,7 @@ export function InsuranceClaimsPage() {
       header: "Status",
       value: (r) => r.status,
       render: (r) => (
-        <Badge
-          tone={
-            r.status === "REJECTED"
-              ? "danger"
-              : r.status === "SUBMITTED"
-                ? "brand"
-                : r.status === "PART_PAID"
-                  ? "warning"
-                  : "neutral"
-          }
-        >
-          {r.status}
-        </Badge>
+        <StatusChip status={r.status} />
       ),
     },
     {
