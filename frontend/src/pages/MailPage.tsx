@@ -48,6 +48,10 @@ export function MailPage() {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [to, setTo] = useState<number[]>([]);
+  /* Replying is the whole point of mail and the screen could not do it: the
+     thread rendered read-only, and compose only ever started a new subject. */
+  const [replyBody, setReplyBody] = useState("");
+  const [replyAll, setReplyAll] = useState(false);
 
   const mail = useQuery({
     queryKey: ["mail", folder],
@@ -68,6 +72,23 @@ export function MailPage() {
   });
 
   const refresh = () => void qc.invalidateQueries({ queryKey: ["mail"] });
+
+  const reply = useMutation({
+    mutationFn: () =>
+      sendMail({
+        /* No subject: the server keeps the thread's own, the way a reply should
+           never rename the conversation it is joining. */
+        subject: "",
+        body: replyBody,
+        to: (replyAll ? thread.data?.participants : thread.data?.reply_to)?.map((p) => p.id) ?? [],
+        thread: thread.data?.thread,
+      }),
+    onSuccess: () => {
+      setReplyBody("");
+      void qc.invalidateQueries({ queryKey: ["mail-thread", open?.recipient] });
+      refresh();
+    },
+  });
 
   const flag = useMutation({
     mutationFn: (p: {
@@ -233,19 +254,76 @@ export function MailPage() {
           {thread.isLoading ? (
             <Spinner />
           ) : (
-            <Section title="Conversation">
-              <ul className="space-y-4">
-                {(thread.data?.messages ?? []).map((m) => (
-                  <li key={m.id} className="border-b border-line pb-3 last:border-0">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-sm font-medium text-ink-900">{m.sender_name}</span>
-                      <span className="text-xs text-ink-500">{dateTime(m.sent_at)}</span>
+            <>
+              <Section title="Conversation">
+                <ul className="space-y-3">
+                  {(thread.data?.messages ?? []).map((m) => (
+                    <li
+                      key={m.id}
+                      className={`max-w-[85%] rounded-lg border px-3 py-2 ${
+                        m.is_mine
+                          ? "ml-auto border-brand-200 bg-brand-50"
+                          : "border-line bg-surface-0"
+                      }`}
+                    >
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-form font-medium text-ink-900">
+                          {m.is_mine ? "You" : m.sender_name}
+                        </span>
+                        <span className="text-micro text-ink-500">{dateTime(m.sent_at)}</span>
+                      </div>
+                      <p className="mt-1 whitespace-pre-wrap text-form text-ink-800">{m.body}</p>
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+
+              {/* The reply box sits at the foot of the conversation, where a
+                  reply belongs — not behind a button that opens a new compose
+                  window and loses the thread you were reading. */}
+              <Section title={replyAll ? "Reply to everyone" : "Reply"}>
+                {(thread.data?.participants.length ?? 0) === 0 ? (
+                  <p className="text-form text-ink-500">
+                    Nobody else is on this thread, so there is no one to reply to.
+                  </p>
+                ) : (
+                  <>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <span className="text-form text-ink-600">
+                        To{" "}
+                        {(replyAll ? thread.data?.participants : thread.data?.reply_to)
+                          ?.map((p) => p.name)
+                          .join(", ") || "—"}
+                      </span>
+                      {(thread.data?.participants.length ?? 0) > 1 && (
+                        <button
+                          onClick={() => setReplyAll((v) => !v)}
+                          className="text-form font-medium text-brand-700 hover:underline"
+                        >
+                          {replyAll ? "Reply to sender only" : "Reply to everyone"}
+                        </button>
+                      )}
                     </div>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink-700">{m.body}</p>
-                  </li>
-                ))}
-              </ul>
-            </Section>
+                    <Textarea
+                      rows={4}
+                      value={replyBody}
+                      onChange={(e) => setReplyBody(e.target.value)}
+                      placeholder="Write a reply…"
+                    />
+                    <div className="mt-2 flex justify-end">
+                      <Button
+                        onClick={() => reply.mutate()}
+                        disabled={reply.isPending || !replyBody.trim()}
+                      >
+                        <Send className="h-4 w-4" />
+                        {reply.isPending ? "Sending…" : "Send reply"}
+                      </Button>
+                    </div>
+                    <ErrorNote error={reply.error} />
+                  </>
+                )}
+              </Section>
+            </>
           )}
         </Drawer>
       )}
