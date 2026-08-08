@@ -40,8 +40,11 @@ def shops():
 @pytest.fixture
 def drug(shops):
     product = Product.objects.create(generic_name="Amoxicillin", strength="500mg")
-    for org, price in ((shops["remera"], "1000"), (shops["nyamirambo"], "1200"),
-                       (shops["depot"], "700")):
+    for org, price in (
+        (shops["remera"], "1000"),
+        (shops["nyamirambo"], "1200"),
+        (shops["depot"], "700"),
+    ):
         PharmacyProduct.objects.create(
             organization=org, product=product, retail_price=Decimal(price), is_active=True
         )
@@ -63,9 +66,9 @@ def test_a_promo_at_one_pharmacy_leaves_the_others_alone(shops, drug):
     ProductPrice.objects.create(price_list=promo, product=drug, unit_price=Decimal("650"))
 
     assert pricing.resolve(product=drug, organization=shops["remera"]).unit_price == Decimal("650")
-    assert pricing.resolve(
-        product=drug, organization=shops["nyamirambo"]
-    ).unit_price == Decimal("1200")
+    assert pricing.resolve(product=drug, organization=shops["nyamirambo"]).unit_price == Decimal(
+        "1200"
+    )
     assert pricing.resolve(product=drug, organization=shops["depot"]).unit_price == Decimal("700")
 
 
@@ -85,9 +88,9 @@ def test_a_branch_list_beats_the_group_list_when_cheaper(shops, drug):
     ProductPrice.objects.create(price_list=local, product=drug, unit_price=Decimal("750"))
 
     assert pricing.resolve(product=drug, organization=shops["remera"]).unit_price == Decimal("750")
-    assert pricing.resolve(
-        product=drug, organization=shops["nyamirambo"]
-    ).unit_price == Decimal("900")
+    assert pricing.resolve(product=drug, organization=shops["nyamirambo"]).unit_price == Decimal(
+        "900"
+    )
 
 
 def test_coverage_counts_only_this_pharmacys_lists(shops, drug):
@@ -130,9 +133,7 @@ def test_your_own_coupon_is_found(shops, drug):
     """Scoping decides *found or not found*; what it is worth is a separate matter."""
     promo(shops["remera"], "REMERA10")
     sale = Sale.objects.create(organization=shops["remera"], status=Sale.Status.OPEN)
-    assert "No promotion with the code" not in evaluate_promotion(
-        sale=sale, code="REMERA10"
-    ).reason
+    assert "No promotion with the code" not in evaluate_promotion(sale=sale, code="REMERA10").reason
 
 
 def test_a_group_wide_coupon_is_found_at_every_branch(shops):
@@ -141,9 +142,9 @@ def test_a_group_wide_coupon_is_found_at_every_branch(shops):
         sale = Sale.objects.create(
             organization=shops[key], status=Sale.Status.OPEN, sale_number=f"T-{n}"
         )
-        assert "No promotion with the code" not in evaluate_promotion(
-            sale=sale, code="CHAIN10"
-        ).reason
+        assert (
+            "No promotion with the code" not in evaluate_promotion(sale=sale, code="CHAIN10").reason
+        )
 
 
 def test_two_branches_may_each_run_the_same_code(shops):

@@ -443,6 +443,59 @@ export interface DashboardSummary {
   payable_due: number;
   licences_expiring: number;
   org_count: number;
+  /** Today's trading with cost taken off — revenue alone hides a bad day. */
+  today: { sales: number; revenue: number; margin: number; margin_pct: number };
+  /** Something to compare today against, stated as amounts rather than a % change. */
+  compared: { yesterday: number; same_day_last_week: number };
+  trend: { date: string; revenue: number }[];
+  /** Per branch. A group total told an owner of four pharmacies nothing. */
+  by_branch: {
+    organization: number;
+    name: string;
+    type: string;
+    sales: number;
+    revenue: number;
+    margin: number;
+    margin_pct: number;
+  }[];
+  expiry_exposure: {
+    bands: { band: string; value: number; units: number }[];
+    total_at_risk: number;
+  };
+}
+
+export interface WorkItem {
+  id: number;
+  resource_type: string;
+  label: string;
+  resource_id: string;
+  organization: number;
+  organization_name: string;
+  requested_by: string;
+  requested_at: string;
+  reason: string;
+  amount: number | null;
+  sla_breached: boolean;
+  claimed_by: string | null;
+  /** Present on items you may not decide — why, and who can. */
+  why?: string;
+  escalate_to?: string[];
+  /** Present on your own requests — who it is sitting with. */
+  with?: string[];
+}
+
+export interface MyWork {
+  waiting_on_me: WorkItem[];
+  needs_escalation: WorkItem[];
+  raised_by_me: WorkItem[];
+  my_team: {
+    size: number;
+    members: { id: number; name: string; roles: string[] }[];
+    open_requests: WorkItem[];
+    breaching: WorkItem[];
+  };
+  next_steps: { label: string; to: string; count: number; tone: string }[];
+  as_of: string;
 }
 
 export interface StockMovement {
