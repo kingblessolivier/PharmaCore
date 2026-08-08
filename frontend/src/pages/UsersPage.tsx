@@ -16,7 +16,6 @@ import {
   Badge,
   Button,
   ConfirmModal,
-  Modal,
   PageHeader,
   SelectField,
   Spinner,
@@ -24,6 +23,7 @@ import {
 } from "../components/ui";
 import { ResetPasswordModal } from "../components/ResetPasswordModal";
 import { DataGrid } from "../components/DataGrid";
+import { Drawer } from "../components/RecordKit";
 
 const DOC_TYPES = [
   ["NATIONAL_ID", "National ID"],
@@ -76,11 +76,11 @@ function DocumentsModal({ user, onClose }: { user: UserAdmin; onClose: () => voi
   });
 
   return (
-    <Modal title={`${user.username} — identity documents`} size="lg" onClose={onClose}>
+    <Drawer title={`${user.username} — identity documents`} onClose={onClose} width="max-w-4xl">
       <div className="flex flex-col gap-4">
         <div className="overflow-hidden rounded-lg border border-line">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
+          <table className="data-grid">
+            <thead>
               <tr>
                 <th className="px-3 py-2">Type</th>
                 <th className="px-3 py-2">Number</th>
@@ -156,7 +156,7 @@ function DocumentsModal({ user, onClose }: { user: UserAdmin; onClose: () => voi
           {error && <p className="mt-2 text-sm text-danger">{error}</p>}
         </div>
       </div>
-    </Modal>
+    </Drawer>
   );
 }
 
@@ -225,7 +225,7 @@ function UserModal({
   }
 
   return (
-    <Modal title={editing ? `Edit ${user!.username}` : "Add user"} onClose={onClose}>
+    <Drawer title={editing ? `Edit ${user!.username}` : "Add user"} onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
           <TextField
@@ -333,7 +333,7 @@ function UserModal({
           </Button>
         </div>
       </form>
-    </Modal>
+    </Drawer>
   );
 }
 
@@ -362,7 +362,7 @@ function ActivityModal({ userId, onClose }: { userId: number; onClose: () => voi
     ["logins", "Logins"],
   ];
   return (
-    <Modal title="User activity" size="lg" onClose={onClose}>
+    <Drawer title="User activity" onClose={onClose} width="max-w-4xl">
       {isLoading && (
         <div className="flex justify-center py-8">
           <Spinner />
@@ -399,8 +399,8 @@ function ActivityModal({ userId, onClose }: { userId: number; onClose: () => voi
             )}
           </div>
           <div className="max-h-72 overflow-y-auto rounded-lg border border-line">
-            <table className="w-full text-sm">
-              <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
+            <table className="data-grid">
+              <thead>
                 <tr>
                   <th className="px-3 py-2">When</th>
                   <th className="px-3 py-2">Action</th>
@@ -425,7 +425,7 @@ function ActivityModal({ userId, onClose }: { userId: number; onClose: () => voi
           </div>
         </div>
       )}
-    </Modal>
+    </Drawer>
   );
 }
 
