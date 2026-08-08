@@ -71,6 +71,7 @@ import { BatchRecallsPage } from "./pages/BatchRecallsPage";
 import { StockCountsPage } from "./pages/StockCountsPage";
 import { StockDisposalPage } from "./pages/StockDisposalPage";
 import { PurchaseOrdersPage } from "./pages/PurchaseOrdersPage";
+import { GrnWorkbenchPage } from "./pages/GrnWorkbenchPage";
 import { OrderComposePage } from "./pages/OrderComposePage";
 import {
   AccessWorkspace,
@@ -211,6 +212,7 @@ function App() {
               <Route path="/procurement/orders" element={forProcurement(<SupplierOrdersPage />)} />
               <Route path="/procurement/imports" element={forProcurement(<ImportsPage />)} />
               <Route path="/procurement/receipts" element={forProcurement(<GoodsReceiptsPage />)} />
+              <Route path="/procurement/receipts/:id" element={forProcurement(<GrnWorkbenchPage />)} />
               <Route path="/procurement/invoices" element={forProcurement(<SupplierInvoicesPage />)} />
               <Route path="/procurement/suppliers" element={forProcurement(<SupplierMasterPage />)} />
               <Route path="/admin" element={adminOnly(<AdminHome />)} />
