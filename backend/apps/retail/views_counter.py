@@ -20,6 +20,7 @@ from apps.core.lookups import lookup_pk
 from apps.iam.models import Organization, User
 from apps.iam.permissions import HasPermission
 from apps.iam.scoping import organizations_visible_to
+from apps.retail import counter
 from apps.retail.counter import (
     active_promotions,
     apply_promotion,
@@ -57,6 +58,50 @@ def _sale(request: Request, organization: Organization) -> Sale:
     return sale
 
 
+def _scan_payload(organization: Organization, result: counter.ScanResult) -> dict[str, Any]:
+    """Everything the till needs to add one line, in one round trip.
+
+    Shared by ``scan`` and ``search`` so the two entry points can never disagree
+    about what a product costs or whether it is in stock.
+    """
+    from django.db.models import Sum
+
+    from apps.catalog import pricing, substitution
+    from apps.inventory.models import InventoryBatch
+
+    resolved = pricing.resolve(product=result.product, organization=organization)
+    on_hand = (
+        InventoryBatch.objects.filter(organization=organization, product=result.product).aggregate(
+            total=Sum("quantity_available")
+        )["total"]
+        or 0
+    )
+    return {
+        "found": True,
+        "code": result.barcode,
+        "product": result.product.pk,
+        "label": f"{result.product.generic_name} {result.product.strength}".strip(),
+        # Scanning a carton must add the carton, not one tablet.
+        "units": result.units,
+        "packaging_level": result.packaging_level,
+        # Resolved through any price list in force, falling back to the pharmacy's
+        # own price. Reading `retail_price` alone meant a promotional list changed
+        # nothing at the till.
+        "unit_price": str(resolved.unit_price) if resolved.unit_price else "",
+        "price_source": resolved.source,
+        "price_list_name": resolved.price_list_name,
+        "on_hand": int(on_hand),
+        # An empty shelf is exactly when the catalogue is most useful.
+        "substitutes": (
+            substitution.suggest(product=result.product, organization=organization)
+            if on_hand <= 0
+            else None
+        ),
+        "requires_prescription": result.product.requires_prescription,
+        "is_controlled": result.product.is_controlled_substance,
+    }
+
+
 class CounterViewSet(viewsets.ViewSet):
     """Actions performed at the till."""
 
@@ -77,46 +122,53 @@ class CounterViewSet(viewsets.ViewSet):
                 {"found": False, "code": code, "detail": f"No product matches {code!r}."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        return Response(_scan_payload(organization, result))
 
-        from django.db.models import Sum
+    @action(detail=False, methods=["get"])
+    def search(self, request: Request) -> Response:
+        """Find a product by typing its name, not by scanning it.
 
-        from apps.catalog import pricing, substitution
+        The till could only resolve an exact barcode, so in a pharmacy without
+        barcode labelling — which is most of them here — nothing could be sold at
+        all. This is the other half of the counter's input, not a fallback.
 
-        # Price resolves through catalog (any list in force, else this pharmacy's
-        # own price); stock comes from inventory.
-        from apps.inventory.models import InventoryBatch
+        Returns an ``exact`` hit when the input came off a scanner, so the till
+        can add the line without a second round trip and the scanner path is
+        unchanged. Otherwise it returns ranked candidates for the cashier to pick.
+        """
+        organization = _org(request)
+        query = (request.query_params.get("q") or request.query_params.get("code") or "").strip()
 
-        resolved = pricing.resolve(product=result.product, organization=organization)
-        on_hand = (
-            InventoryBatch.objects.filter(
-                organization=organization, product=result.product
-            ).aggregate(total=Sum("quantity_available"))["total"]
-            or 0
-        )
+        exact = None
+        if counter.looks_like_a_barcode(query):
+            hit = resolve_barcode(organization=organization, code=query)
+            if hit is not None:
+                exact = _scan_payload(organization, hit)
+
+        matches = counter.search_products(organization=organization, query=query)
         return Response(
             {
-                "found": True,
-                "code": result.barcode,
-                "product": result.product.pk,
-                "label": f"{result.product.generic_name} {result.product.strength}".strip(),
-                # Scanning a carton must add the carton, not one tablet.
-                "units": result.units,
-                "packaging_level": result.packaging_level,
-                # Resolved through any price list in force, falling back to the
-                # pharmacy's own price. Reading `retail_price` alone meant a
-                # promotional list changed nothing at the till.
-                "unit_price": str(resolved.unit_price) if resolved.unit_price else "",
-                "price_source": resolved.source,
-                "price_list_name": resolved.price_list_name,
-                "on_hand": int(on_hand),
-                # An empty shelf is exactly when the catalogue is most useful.
-                "substitutes": (
-                    substitution.suggest(product=result.product, organization=organization)
-                    if on_hand <= 0
-                    else None
-                ),
-                "requires_prescription": result.product.requires_prescription,
-                "is_controlled": result.product.is_controlled_substance,
+                "query": query,
+                "exact": exact,
+                "count": len(matches),
+                "results": [
+                    {
+                        "product": m.product.pk,
+                        "label": f"{m.product.generic_name} {m.product.strength}".strip(),
+                        "brand_name": m.product.brand_name,
+                        "dosage_form": m.product.dosage_form,
+                        "pack_size": m.product.pack_size,
+                        # One unit: a name search has no packaging level to read.
+                        "units": 1,
+                        "unit_price": str(m.unit_price) if m.unit_price else "",
+                        "price_source": m.price_source,
+                        "on_hand": m.on_hand,
+                        "matched_on": m.matched_on,
+                        "requires_prescription": m.product.requires_prescription,
+                        "is_controlled": m.product.is_controlled_substance,
+                    }
+                    for m in matches
+                ],
             }
         )
 

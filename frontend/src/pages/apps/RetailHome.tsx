@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { ChartFrame, LineTrend, VizRoot } from "../../components/Charts";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -12,6 +13,7 @@ import {
   Tag,
 } from "lucide-react";
 import { api } from "../../lib/api";
+import { shortDate } from "../../lib/format";
 import type { DashboardSummary, Paginated } from "../../lib/types";
 import type { ClinicalEncounter, Prescription } from "../../lib/retail";
 import { queueSize } from "../../lib/offlineQueue";
@@ -23,7 +25,9 @@ import {
   SectionCard,
   SectionGrid,
   StatTile,
+  WorkQueue,
 } from "../../components/AppHome";
+import { useModuleWork } from "../../lib/modulework";
 
 const money = (n: number) => `RWF ${Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
@@ -170,6 +174,11 @@ function CounterReadiness({ orgId }: { orgId: number }) {
 }
 
 export function RetailHome() {
+  const dash = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: () => api<DashboardSummary>("/api/dashboard/"),
+  });
+  const work = useModuleWork("retail");
   const { user } = useAuth();
   const orgId = user?.organization ?? 0;
   const d = useQuery({ queryKey: ["dashboard"], queryFn: () => api<DashboardSummary>("/api/dashboard/") });
@@ -183,6 +192,24 @@ export function RetailHome() {
         title="Retail Pharmacy & Point of Sale (POS)"
         subtitle="OTC & prescription dispensing, cash-drawer till reconciliation, controlled-substance register, promotions, and clinical services."
       />
+
+      <WorkQueue items={work.items} loading={work.loading} />
+
+      <VizRoot>
+        <ChartFrame
+          title="Revenue, last 14 days"
+          subtitle="A single day's takings cannot be judged on its own."
+        >
+          <LineTrend
+            points={(dash.data?.trend ?? []).map((p) => ({
+              label: shortDate(p.date),
+              values: [p.revenue],
+            }))}
+            seriesNames={["Revenue"]}
+            valueFormat={money}
+          />
+        </ChartFrame>
+      </VizRoot>
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Sales today" value={s ? money(s.sales_today.total) : "…"} hint={s ? `${s.sales_today.count} sales` : ""} />

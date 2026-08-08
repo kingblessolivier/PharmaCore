@@ -243,7 +243,7 @@ def resolve_supplier_price(
     A branch-specific agreement beats a group-wide one; among those, the highest
     ``min_quantity`` the order qualifies for wins.
     """
-    day = day or date.today()
+    day = day or timezone.localdate()
     candidates = [
         a
         for a in SupplierPriceAgreement.objects.filter(
@@ -529,7 +529,7 @@ def send_rfq(*, rfq: RequestForQuotation, user: User) -> RequestForQuotation:
     if not rfq.rfq_number:
         rfq.rfq_number = next_document_number(rfq.organization, NumberSequence.Kind.RFQ)
     rfq.status = RequestForQuotation.Status.SENT
-    rfq.issued_on = rfq.issued_on or date.today()
+    rfq.issued_on = rfq.issued_on or timezone.localdate()
     rfq.save(update_fields=["rfq_number", "status", "issued_on", "updated_at"])
     record_audit(
         action="RFQ_SENT",
@@ -607,7 +607,9 @@ def award_quote(*, quote: SupplierQuote, user: User) -> PurchaseOrder:
         other_charges=quote.other_charges,
         discount_amount=quote.discount_amount,
         expected_delivery=(
-            date.today() + timedelta(days=quote.lead_time_days) if quote.lead_time_days else None
+            timezone.localdate() + timedelta(days=quote.lead_time_days)
+            if quote.lead_time_days
+            else None
         ),
         is_import=quote.currency != "RWF",
         requisition=rfq.requisition,
@@ -623,7 +625,9 @@ def award_quote(*, quote: SupplierQuote, user: User) -> PurchaseOrder:
             quantity_ordered=line.quantity_offered,
             unit_price=line.unit_price,
             expected_delivery=(
-                date.today() + timedelta(days=line.lead_time_days) if line.lead_time_days else None
+                timezone.localdate() + timedelta(days=line.lead_time_days)
+                if line.lead_time_days
+                else None
             ),
             notes=line.notes,
         )
@@ -998,7 +1002,7 @@ def build_receipt_draft(
         order=order,
         organization=cast(Any, order.destination),
         consignment=order.consignment,
-        received_on=received_on or date.today(),
+        received_on=received_on or timezone.localdate(),
         requires_qc=needs_qc,
         received_by=user,
     )
@@ -1008,7 +1012,7 @@ def build_receipt_draft(
             order_line=line,
             product=line.product,
             batch_number="",
-            expiry_date=date.today() + timedelta(days=365),
+            expiry_date=timezone.localdate() + timedelta(days=365),
             quantity_expected=line.quantity_outstanding,
             quantity_received=line.quantity_outstanding,
             unit_cost=line.effective_unit_cost,
@@ -1041,7 +1045,7 @@ def post_goods_receipt(*, receipt: GoodsReceipt, user: User) -> GoodsReceipt:
             raise ProcurementError(
                 f"A batch number is required for {line.product} (GDP traceability)."
             )
-        if line.quantity_received > 0 and line.expiry_date <= date.today():
+        if line.quantity_received > 0 and line.expiry_date <= timezone.localdate():
             raise ProcurementError(
                 f"{line.product} batch {line.batch_number} is already expired "
                 f"({line.expiry_date}) — refuse the delivery."

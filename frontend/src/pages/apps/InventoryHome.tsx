@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { ChartFrame, BarChart, VizRoot } from "../../components/Charts";
 import {
   AlertTriangle,
   Boxes,
@@ -23,15 +24,29 @@ import {
   SectionCard,
   SectionGrid,
   StatTile,
+  WorkQueue,
 } from "../../components/AppHome";
+import { useModuleWork } from "../../lib/modulework";
 import { Badge, Card } from "../../components/ui";
 import { api } from "../../lib/api";
 import { inventoryOverview, type InventoryOverview } from "../../lib/inventory";
 import { money } from "../../lib/format";
 import { useDefaultOrg } from "../../lib/recordData";
-import type { Paginated } from "../../lib/types";
+import type { DashboardSummary, Paginated } from "../../lib/types";
+
+const BAND_LABELS: Record<string, string> = {
+  expired: "Already expired",
+  within_30: "Within 30 days",
+  within_60: "31–60 days",
+  within_90: "61–90 days",
+};
 
 export function InventoryHome() {
+  const dash = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: () => api<DashboardSummary>("/api/dashboard/"),
+  });
+  const work = useModuleWork("inventory");
   const { orgId } = useDefaultOrg();
 
   // What needs a decision, as opposed to what exists. The counts below are
@@ -133,6 +148,27 @@ export function InventoryHome() {
         title="Inventory & Warehouse Operations"
         subtitle="Good Distribution Practice (GDP) facilities and zones, put-away and wave picking, demand-driven replenishment, GS1 serialisation and EPCIS track-and-trace, consignment ownership, cold-chain calibration and excursion investigations, QC quarantine, recalls, counts and witnessed disposal."
       />
+
+      <WorkQueue items={work.items} loading={work.loading} />
+
+      <VizRoot>
+        <ChartFrame
+          title="Stock at risk, by expiry band"
+          subtitle="Banded because the action differs: sell through, move it, or write it off."
+        >
+          <BarChart
+            data={(dash.data?.expiry_exposure?.bands ?? [])
+              .filter((b) => b.value > 0)
+              .map((b) => ({
+                label: BAND_LABELS[b.band] ?? b.band,
+                value: b.value,
+                secondary: `${b.units.toLocaleString()} units`,
+              }))}
+            valueFormat={money}
+            ordinalRamp
+          />
+        </ChartFrame>
+      </VizRoot>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
         <Link to="/inventory/warehouses">

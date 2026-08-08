@@ -289,7 +289,75 @@ approval rights from the buy side**, so whoever raises a purchase order can neve
 approve one. `PROCUREMENT_OFFICER` is therefore excluded from the approval-capable
 roles here. D7 and D9 were verified against the database and stand.
 
-## 7. Method
+## 7. What F2-D / F2-E / F2-F delivered
+
+### D — the nav gates on capability, not job title
+
+The side nav gated on **role names**, which is why five of eleven roles appeared
+in no group at all. It now gates on permission codes, so adding a role and
+granting it permissions makes the nav follow without anyone editing `AppShell.tsx`.
+
+Insurance and Distribution had no permissions to gate on; they do now
+(`iam/migrations/0020_nav_permissions.py`).
+
+| Role | Before | After | Now reaches |
+|---|---|---|---|
+| WAREHOUSE_CLERK | 21 | **47** | Inventory, Distribution, Procurement |
+| DISPATCHER | 21 | **40** | Distribution, Inventory |
+| INSURANCE_CLERK | 21 | **40** | Insurance, Catalog, Money in |
+| DRIVER | 21 | **28** | Distribution — and *not* the till |
+| BRANCH_MANAGER | — | **86** | oversight, without the ledger or Admin |
+| AUDITOR | — | **85** | read-only across the business |
+
+Two things went the other way, which is the point:
+
+* **Retail is no longer `roles: "all"`.** A driver's and a warehouse clerk's home
+  screen was the cash drawer. It now needs `sale.create`.
+* **Finance split `view` from `manage`.** Giving a branch manager sight of their
+  own margin also handed them the chart of accounts and the VAT return — which is
+  how "just make them an admin" starts. Money in and the cockpit are `finance.view`;
+  the ledger, tax, banking and payment runs are `finance.manage`.
+
+`tests/test_nav_visibility.py` parses the gates straight out of `AppShell.tsx` and
+evaluates them against the seeded matrix, so the nav and the RBAC cannot drift
+apart silently. It also asserts an auditor holds **only** `.view` codes.
+
+### E — financial facts reach the people accountable for them
+
+Falls out of the permission split rather than needing its own mechanism: a branch
+manager holds `finance.view`, and `organizations_visible_to` already scopes them
+to their own branch. So they see their branch's margin, receivables and expiry
+exposure, and not the group ledger. `DRIVER` and `CASHIER` hold neither code.
+
+### F — the home screen answers "what needs doing"
+
+**`apps/workspace/worklist.py`** — three lists, and the split between the first
+two is the useful part:
+
+* `waiting_on_me` — approvals I am competent **and** authorised to decide now;
+* `needs_escalation` — ones I can see and cannot decide, **with the reason and who
+  can**. These are what rot in a shared queue while everyone assumes someone else
+  is handling them;
+* `my_team` — for anyone with reports, what their people raised and what has
+  breached SLA. The reporting line made visible rather than merely recorded.
+
+Plus `next_steps`: deliberately small and real — "3 deliveries to receive",
+"2 expired batches still on the shelf" — each a true count with a link. A
+dashboard that invents suggestions teaches people to ignore it.
+
+**`apps/core/insights.py`** gives the dashboard the three things it lacked:
+a 14-day trend, a per-branch split, and **margin** computed from the batches FEFO
+actually drew (two batches of the same medicine bought months apart rarely cost
+the same).
+
+`DashboardPage` is rebuilt: work first, numbers second. Charts come from the
+existing `Charts.tsx` primitives — which is the D11 fix, since every chart in the
+product had been locked inside Finance.
+
+Comparison is stated as an **amount**, not a percentage: a jump from RWF 2,000 to
+RWF 6,000 is "+200%" and means nothing on a quiet day.
+
+## 8. Method
 
 Unchanged from the six subsystems before it, plus the two gates this audit showed
 were missing:

@@ -3,7 +3,14 @@ import { Activity, Boxes, Building2, KeyRound, Network, ShieldCheck, Terminal, U
 import { useState } from "react";
 import { api } from "../../lib/api";
 import type { Paginated } from "../../lib/types";
-import { AppHeader, SectionCard, SectionGrid, StatTile } from "../../components/AppHome";
+import {
+  AppHeader,
+  SectionCard,
+  SectionGrid,
+  StatTile,
+  WorkQueue,
+} from "../../components/AppHome";
+import { useModuleWork } from "../../lib/modulework";
 import { ApiKeysModal } from "../../components/ApiKeysModal";
 
 // Only the count is needed for the overview — fetch a single row.
@@ -16,6 +23,7 @@ function useCount(key: string, path: string) {
 }
 
 export function AdminHome() {
+  const work = useModuleWork("admin");
   const [apiKeysOpen, setApiKeysOpen] = useState(false);
   const companies = useCount("companies", "/api/companies/?page_size=1");
   const orgs = useCount("orgs", "/api/organizations/?page_size=1");
@@ -31,6 +39,8 @@ export function AdminHome() {
         title="Admin"
         subtitle="Companies, branches, people, access and the audit trail — the control room."
       />
+
+      <WorkQueue items={work.items} loading={work.loading} />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Companies" value={n(companies)} />

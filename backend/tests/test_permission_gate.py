@@ -120,6 +120,22 @@ MUST_BE_REFUSED = [
     ("payment runs", "/api/finance/payment-runs/", ["CASHIER", "DRIVER", "WAREHOUSE_CLERK"]),
     ("payroll runs", "/api/hr/payroll-runs/", ["CASHIER", "DRIVER"]),
     ("employee records", "/api/hr/employees/", ["CASHIER", "DRIVER"]),
+    # D2 and its neighbours. The audit named the controlled register; the first
+    # pass fixed the finance half of that finding and not this one, and the gate
+    # passed anyway because the register was not on this list. A gate only
+    # guards what it is told to guard.
+    (
+        "the controlled substances register",
+        "/api/retail/controlled-drugs/",
+        ["CASHIER", "DRIVER", "WAREHOUSE_CLERK"],
+    ),
+    (
+        "dispensing records (named patients)",
+        "/api/retail/dispensing/",
+        ["DRIVER", "WAREHOUSE_CLERK"],
+    ),
+    ("prescriptions", "/api/retail/prescriptions/", ["DRIVER", "WAREHOUSE_CLERK"]),
+    ("price lists", "/api/catalog/price-lists/", ["DRIVER"]),
 ]
 
 

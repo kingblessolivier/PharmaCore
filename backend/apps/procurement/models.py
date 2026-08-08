@@ -29,6 +29,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 BASE_CURRENCY = "RWF"
 ZERO = Decimal("0.00")
@@ -270,11 +271,11 @@ class SupplierLicence(models.Model):
 
     @property
     def is_expired(self) -> bool:
-        return bool(self.expires_on and self.expires_on < date.today())
+        return bool(self.expires_on and self.expires_on < timezone.localdate())
 
     @property
     def days_to_expiry(self) -> int | None:
-        return (self.expires_on - date.today()).days if self.expires_on else None
+        return (self.expires_on - timezone.localdate()).days if self.expires_on else None
 
 
 class SupplierPriceAgreement(models.Model):

@@ -25,6 +25,7 @@ class Permission(models.Model):
     action = models.CharField(max_length=40)  # e.g. "create", "approve", "manage"
     code = models.CharField(max_length=80, unique=True)  # "<resource>.<action>"
     description = models.CharField(max_length=200, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
 
     class Meta:
         ordering = ["resource", "action"]

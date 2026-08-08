@@ -82,9 +82,9 @@ def test_a_branch_manager_cannot_dispense_however_senior(org):
     pharmacist = person("jean_pharmacist", org, "PHARMACIST", reports_to=manager)
 
     assert pharmacist.has_permission("sale.dispense")
-    assert not manager.has_permission("sale.dispense"), (
-        "rank must not confer a competence the role was never granted"
-    )
+    assert not manager.has_permission(
+        "sale.dispense"
+    ), "rank must not confer a competence the role was never granted"
     # And the manager holds oversight the pharmacist does not.
     assert manager.has_permission("audit.view")
     assert not pharmacist.has_permission("audit.view")
@@ -132,9 +132,9 @@ def test_a_personal_override_beats_the_role(org):
 
 def test_the_highest_role_limit_applies_when_someone_holds_two(org):
     both = person("dual", org, "CASHIER", "HR_MANAGER")
-    assert authority.approval_limit(both) == Decimal("3000000"), (
-        "holding an extra role must never reduce what someone may approve"
-    )
+    assert authority.approval_limit(both) == Decimal(
+        "3000000"
+    ), "holding an extra role must never reduce what someone may approve"
 
 
 def test_an_unlimited_role_has_no_ceiling(org):
@@ -205,9 +205,10 @@ def test_you_cannot_reassign_an_approval_you_could_not_decide(org):
     assert "do not hold" in str(exc.value)
 
     # The CEO can, and the recipient is competent and within limit.
-    assert services.reassign(
-        approval=payroll(org, hr), to_user=other_hr, by=ceo
-    ).claimed_by_id == other_hr.pk
+    assert (
+        services.reassign(approval=payroll(org, hr), to_user=other_hr, by=ceo).claimed_by_id
+        == other_hr.pk
+    )
 
 
 def test_you_cannot_reassign_to_someone_who_cannot_decide_it(org):

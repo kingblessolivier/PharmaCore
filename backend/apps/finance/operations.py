@@ -27,6 +27,7 @@ from typing import Any
 
 from django.db import transaction
 from django.db.models import Q
+from django.utils import timezone
 
 from apps.iam.models import Organization, User
 
@@ -79,7 +80,7 @@ def settle_card_batch(
         raise ValueError("The acquirer fee must be between zero and the gross amount.")
 
     accounts = ensure_default_accounts(organization)
-    when = settled_on or date.today()
+    when = settled_on or timezone.localdate()
     net = _q(gross - fee)
 
     lines: list[JournalLineInput] = [
@@ -152,7 +153,7 @@ def post_drawer_variance(*, drawer: Any, user: User | None = None) -> JournalEnt
         ]
     )
 
-    closed_on = drawer.closed_at.date() if drawer.closed_at else date.today()
+    closed_on = drawer.closed_at.date() if drawer.closed_at else timezone.localdate()
     return post_journal(
         organization=organization,
         entry_date=closed_on,
@@ -312,7 +313,7 @@ def post_expiry_provision(
     """
     from .pharmacy import inventory_expiry_exposure
 
-    when = _month_end(as_of or date.today())
+    when = _month_end(as_of or timezone.localdate())
     exposure = inventory_expiry_exposure(organization, as_of=when)
     required = _q(exposure["suggested_provision"])
     carried = current_provision_balance(organization)

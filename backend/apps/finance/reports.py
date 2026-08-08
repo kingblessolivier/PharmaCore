@@ -17,6 +17,7 @@ from typing import Any
 
 from django.db.models import Case, DecimalField, F, Q, Sum, When
 from django.db.models.functions import Coalesce
+from django.utils import timezone
 
 from apps.finance.models import Account, JournalEntry, JournalLine, SupplierBill
 from apps.finance.services import default_classification
@@ -415,7 +416,7 @@ def _payroll_liability(organization: Organization) -> Decimal:
     positive when owed. 2100 is trade payables, not payroll — including it
     double-counted supplier debt as a payroll liability."""
     codes = {"2200", "2210", "2220", "2230", "2240", "2250", "2600"}
-    rows = account_balances(organization, end=date.today())
+    rows = account_balances(organization, end=timezone.localdate())
     total = sum((r.signed for r in rows if r.code in codes), Decimal("0"))
     return _q(total)
 
@@ -819,7 +820,7 @@ def inventory_valuation(organization: Organization) -> dict[str, Any]:
         bucket["batches"] += 1
 
     return {
-        "as_of": date.today(),
+        "as_of": timezone.localdate(),
         "total_units": total_units,
         "total_value": _q(total),
         "by_product": [
@@ -950,7 +951,7 @@ def vat_return(organization: Organization, *, start: date, end: date) -> dict[st
 def _payroll_liability_balance(organization: Organization, code: str) -> Decimal:
     """Signed balance of one control account (used by vat_return for the
     period-end carry-forward)."""
-    rows = account_balances(organization, end=date.today())
+    rows = account_balances(organization, end=timezone.localdate())
     match = next((r for r in rows if r.code == code), None)
     return match.signed if match else Decimal("0")
 
@@ -987,7 +988,7 @@ def ar_aging(organization: Organization, *, as_of: date | None = None) -> dict[s
     """
     from apps.finance.models import CustomerInvoice  # local: avoids an import cycle
 
-    as_of = as_of or date.today()
+    as_of = as_of or timezone.localdate()
     zero = Decimal("0.00")
     totals: dict[str, Decimal] = {name: zero for name, _ in _AGING_BUCKETS}
     totals["outstanding"] = zero

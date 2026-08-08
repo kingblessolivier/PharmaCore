@@ -22,12 +22,15 @@ import {
   SectionCard,
   SectionGrid,
   StatTile,
+  WorkQueue,
 } from "../../components/AppHome";
+import { useModuleWork } from "../../lib/modulework";
 import { Card } from "../../components/ui";
 import { api } from "../../lib/api";
 import type { PeopleOverview } from "../../lib/people";
 
 export function PeopleHome() {
+  const work = useModuleWork("people");
   const { data } = useQuery({
     queryKey: ["people-overview"],
     queryFn: () => api<PeopleOverview>("/api/hr/overview/"),
@@ -101,6 +104,8 @@ export function PeopleHome() {
         title="People"
         subtitle="Who works here, what they earn and how it is calculated, whether they are present, and whether they are still qualified to do the job — from the day they apply to the day they are cleared."
       />
+
+      <WorkQueue items={work.items} loading={work.loading} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
         <Link to="/people/employees">

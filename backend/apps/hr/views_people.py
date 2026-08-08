@@ -13,6 +13,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
 from django.db.models import Q, QuerySet
+from django.utils import timezone
 from rest_framework import status as http
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -198,7 +199,7 @@ class EmploymentContractViewSet(_PeopleViewSet):
             qs = qs.filter(
                 is_current=True,
                 end_date__isnull=False,
-                end_date__lte=date.today() + timedelta(days=60),
+                end_date__lte=timezone.localdate() + timedelta(days=60),
             )
         return qs
 
@@ -336,7 +337,7 @@ class LeaveBalanceViewSet(_PeopleViewSet):
             raise ValidationError({"organization": "Unknown or not visible."})
         posted = people.accrue_monthly_leave(
             organization=org,
-            up_to=_parse_date(request.data.get("up_to"), "up_to", date.today()),
+            up_to=_parse_date(request.data.get("up_to"), "up_to", timezone.localdate()),
             user=cast(User, request.user),
         )
         return Response({"movements_posted": posted})
@@ -498,7 +499,7 @@ class LoanAdvanceViewSet(_PeopleViewSet):
         if loan.status != LoanAdvance.Status.ACTIVE:
             raise ValidationError("Approve the loan before disbursing it.")
         loan.disbursed_on = _parse_date(
-            request.data.get("disbursed_on"), "disbursed_on", date.today()
+            request.data.get("disbursed_on"), "disbursed_on", timezone.localdate()
         )
         loan.disbursement_method = str(request.data.get("method", "BANK"))
         loan.disbursement_reference = str(request.data.get("reference", ""))
@@ -572,7 +573,7 @@ class JobRequisitionViewSet(_PeopleViewSet):
         }:
             raise ValidationError("Only a draft, pending or held requisition can be opened.")
         requisition.status = JobRequisition.Status.OPEN
-        requisition.opened_at = requisition.opened_at or date.today()
+        requisition.opened_at = requisition.opened_at or timezone.localdate()
         requisition.save(update_fields=["status", "opened_at", "updated_at"])
         self._audit("REQUISITION_OPENED", requisition)
         return Response(JobRequisitionSerializer(requisition).data)
@@ -622,7 +623,7 @@ class ApplicantViewSet(_PeopleViewSet):
                 raise ValidationError("This applicant cannot advance any further automatically.")
             applicant.stage = order[order.index(applicant.stage) + 1]
         if applicant.stage == Applicant.Stage.OFFERED:
-            applicant.offer_sent_on = date.today()
+            applicant.offer_sent_on = timezone.localdate()
             if request.data.get("offered_salary"):
                 applicant.offered_salary = _decimal(
                     request.data["offered_salary"], "offered_salary"
@@ -647,7 +648,9 @@ class ApplicantViewSet(_PeopleViewSet):
             employee = people.hire_applicant(
                 applicant=applicant,
                 organization=applicant.requisition.organization,
-                hire_date=_parse_date(request.data.get("hire_date"), "hire_date", date.today()),
+                hire_date=_parse_date(
+                    request.data.get("hire_date"), "hire_date", timezone.localdate()
+                ),
                 user=cast(User, request.user),
             )
         except people.PeopleError as exc:
@@ -794,7 +797,9 @@ class TerminationViewSet(_PeopleViewSet):
         if settlement is None:
             raise ValidationError("Compute the final settlement first.")
         settlement.status = settlement.Status.PAID
-        settlement.paid_on = _parse_date(request.data.get("paid_on"), "paid_on", date.today())
+        settlement.paid_on = _parse_date(
+            request.data.get("paid_on"), "paid_on", timezone.localdate()
+        )
         settlement.payment_method = str(request.data.get("method", "BANK"))
         settlement.payment_reference = str(request.data.get("reference", ""))
         settlement.approved_by = cast(User, request.user)
@@ -826,7 +831,7 @@ class TrainingRecordViewSet(_PeopleViewSet):
         if self.request.query_params.get("overdue") == "1":
             qs = qs.filter(
                 status__in=[TrainingRecord.Status.ASSIGNED, TrainingRecord.Status.IN_PROGRESS],
-                due_on__lt=date.today(),
+                due_on__lt=timezone.localdate(),
             )
         return qs
 
@@ -837,7 +842,7 @@ class TrainingRecordViewSet(_PeopleViewSet):
         record = self.get_object()
         record.acknowledged_at = timezone.now()
         record.status = TrainingRecord.Status.COMPLETED
-        record.completed_on = date.today()
+        record.completed_on = timezone.localdate()
         record.save(update_fields=["acknowledged_at", "status", "completed_on"])
         return Response(TrainingRecordSerializer(record).data)
 
@@ -846,7 +851,7 @@ class TrainingRecordViewSet(_PeopleViewSet):
         record = self.get_object()
         record.status = TrainingRecord.Status.COMPLETED
         record.completed_on = _parse_date(
-            request.data.get("completed_on"), "completed_on", date.today()
+            request.data.get("completed_on"), "completed_on", timezone.localdate()
         )
         if request.data.get("score") not in (None, ""):
             record.score = _decimal(request.data["score"], "score")
@@ -913,7 +918,7 @@ class DisciplinaryActionViewSet(_PeopleViewSet):
         if action_record.status != DisciplinaryAction.Status.DRAFT:
             raise ValidationError("Only a draft action can be issued.")
         action_record.status = DisciplinaryAction.Status.ISSUED
-        action_record.issued_on = date.today()
+        action_record.issued_on = timezone.localdate()
         action_record.issued_by = cast(User, request.user)
         action_record.save(update_fields=["status", "issued_on", "issued_by"])
         self._audit("DISCIPLINARY_ISSUED", action_record)
@@ -1011,7 +1016,7 @@ class StatutoryFilingViewSet(_PeopleViewSet):
                 f"balance ({filing.gl_balance_at_generation}). Reconcile before filing."
             )
         filing.status = StatutoryFiling.Status.FILED
-        filing.filed_on = date.today()
+        filing.filed_on = timezone.localdate()
         filing.filed_by = cast(User, request.user)
         filing.authority_reference = str(request.data.get("authority_reference", ""))
         filing.save()
@@ -1047,7 +1052,7 @@ class PeopleOverviewView(APIView):
 
         employees = Employee.objects.filter(organization=org)
         active = employees.exclude(employment_status=Employee.Status.TERMINATED)
-        today = date.today()
+        today = timezone.localdate()
         return Response(
             {
                 "organization_id": org.pk,

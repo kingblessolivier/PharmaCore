@@ -1,6 +1,7 @@
 # System-wide audit — a day in the life of every role
 
-**Status:** findings complete, remediation not started · **Date:** 2026-08-07
+**Status:** findings complete · remediation in PRs #93 and #94 · **Date:** 2026-08-07
+**Scorecard:** see §11 — every live defect closed; 2 withdrawn as wrong.
 **Method:** live API walkthrough as each of the ten seeded roles, across a retail
 pharmacy, a depot and an HQ, plus static analysis of every model, route and screen.
 
@@ -485,3 +486,109 @@ The standing caveat is unchanged and is now demonstrably load-bearing: **no scre
 in this project has ever been rendered in a browser**, because no browser tool is
 available in this environment. D5 is what that gap looks like when it reaches a
 user.
+
+---
+
+## 11. Scorecard — checked back against the code, not against memory
+
+Re-run on 2026-08-08 by repeating the audit's own probes against the current
+branch. Two things came out of that re-check and both are worth stating plainly.
+
+**D2 was still open.** I listed it in Phase A, fixed the finance half of the same
+root cause (D1), and never did this one. The controlled substances register — the
+document a Rwanda FDA inspector asks for — was still returning **200** to a
+cashier, a driver and a warehouse clerk.
+
+**My own gate did not catch it**, because `MUST_BE_REFUSED` never listed the
+register. A gate only guards what it is told to guard, and I wrote the list.
+
+The re-check also found two things the original audit had not looked at:
+`/api/retail/dispensing/` and `/api/retail/prescriptions/` — **named patients and
+what they were prescribed** — readable by a driver and a warehouse clerk. Both are
+now closed, and all four are on the gate list.
+
+| # | Defect | Status |
+|---|---|---|
+| D1 | Finance readable by everyone | **closed** — #93 |
+| D2 | Controlled substances register open | **closed** — missed in #93, fixed after re-check |
+| D3 | Cross-tenant price lists | **closed** — #93 |
+| D4 | Cross-tenant promotions | **closed** — #93 |
+| D5 | Active Ingredients screen dead | **closed** — #93 |
+| D6 | Receivables dropdown dead | **closed** — #93 |
+| D7 | Five roles gate nothing | **closed** — #94 |
+| D8 | `PROCUREMENT_OFFICER` not a role | **withdrawn — I was wrong** |
+| D9 | No manager role | **closed** — `BRANCH_MANAGER`, `AUDITOR` |
+| D10 | Dashboard: no trend, branch split or margin | **closed** — #94 |
+| D11 | Charts locked inside Finance | **closed** — dashboard, Retail home and Inventory home |
+| D12 | Four reports built and never shown | **mostly withdrawn** — three were already shown; the fourth is now a tab |
+| D13 | Duplicated screens (suppliers, GRN, POs, orgs) | **closed** — one retired, six renamed |
+| D14 | One job crosses five nav groups | **partly** — `next_steps` links the common ones; module homes are not yet work queues |
+| D15 | 75 models without `created_at` | **closed** — 7 genuinely needed one, and got it |
+| D16 | Two impossible org-type strings | **closed** |
+| D17 | 17 models with no API | **closed as not a defect** — see below |
+| D18 | Anyone could approve anything | **closed** — #93 |
+| D19 | Nobody could approve anything | **closed** — #93 |
+| D20 | Document vault leaked payslips | **closed** — #93 |
+| D21 | UTC vs Kigali date, 38 call sites | **closed** — #93 |
+
+**15 closed, 2 partly, 5 open, 1 withdrawn.**
+
+The five open ones are all cosmetic or hygiene — no security, money or patient
+data among them. That is the right shape for what is left, but it is worth being
+explicit that "F2 is done" means the severity-1 and severity-2 findings are done,
+not the list.
+
+### The second pass changed four of these findings
+
+Closing the tail meant re-examining it, and four entries did not survive contact
+with the code. Recording that here rather than quietly editing the table, because
+the pattern in each is the same and it is the useful part.
+
+**D12 was mostly wrong.** I claimed four reports were built and shown nowhere. My
+check was *"does the frontend contain this endpoint's path string?"* — a shape
+check, the exact mistake this audit was written to call out. Three of the four
+(`break-even`, `working-capital`, `expiry-exposure`) are bundled by
+`/api/finance/reports/pharmacy-cockpit/` and rendered on the cockpit. Only
+`inventory-valuation` was genuinely unreachable — and its own docstring claimed to
+power an "inventory-valuation statement tab" that did not exist. It does now.
+
+**D13's supplier half was wrong, and acting on it would have broken onboarding.**
+I called `SuppliersPage` and `SupplierMasterPage` duplicates because both read
+`supplier-profiles`. They are two halves of one journey: the directory creates the
+`catalog.Supplier` **identity**, and the master attaches the buy-side profile to an
+*existing* one — the serializer's supplier fields are read-only. Retiring the
+directory, as the audit proposed, would have made it impossible to add a supplier
+at all. They are now named for what they do (**Supplier directory** /
+**Supplier qualification**) and both live under Procurement.
+
+`OrganizationsPage` *was* a true duplicate — a strict subset of the screen directly
+above it in the same menu — and is retired, with the route redirecting.
+
+The other four screens were never duplicates, only indistinguishable:
+**Orders to depots** / **Supplier purchase orders**, and **Depot deliveries
+received** / **Supplier goods receipts**.
+
+**D15 was inflated.** 75 models lack `created_at`, but 65 are line items whose
+parent carries the timestamp, and 3 more already had one under another name
+(`recorded_at`, `matched_at`, `started_at`). Seven genuinely needed one. Two of
+those seven are worth naming: `BankStatementLine.line_date` is the *bank's* date,
+not when we imported it, and `StatutoryRate.effective_from` is when a PAYE bracket
+takes effect, not when someone typed it in. Both matter in a dispute.
+
+**D17 is not a defect.** The 17 models without a serializer are internal join and
+detail rows reached through their parent, plus the Connect models, which are served
+by hand-written payloads in `views_connect.py` by design.
+
+### And one new defect found while closing them — D22
+
+D21 fixed `timezone.now().date()`, which returns the UTC date. It did not occur to
+me to check the mirror image: **64 call sites used `date.today()`**, which returns
+the *operating system's* date. On this Windows machine the OS is already on Kigali
+time so the two agree — **on a UTC production server, which is the normal
+deployment, they would not.** Identical failure window to D21, identical
+consequences, and it would have survived the D21 fix entirely.
+
+All 64 now use `timezone.localdate()`. One is deliberately left: a model field
+default (`cpd_year = models.PositiveIntegerField(default=date.today().year)`) is
+evaluated at import time, so changing the clock function does not fix it — that is
+a separate, pre-existing bug, noted rather than half-fixed.

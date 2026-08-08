@@ -8,10 +8,11 @@ from typing import Any, cast
 from django.db.models import QuerySet
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import BasePermission, IsAuthenticated
+from rest_framework.permissions import SAFE_METHODS, BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
+from rest_framework.views import APIView
 
 from apps.catalog.models import (
     ActiveIngredient,
@@ -50,8 +51,33 @@ from apps.iam.permissions import IsAdminRole
 _WRITE_ACTIONS = {"create", "update", "partial_update", "destroy", "bulk_import"}
 
 
+class PricingAccess(BasePermission):
+    """What we charge is commercial information; what a medicine *is* is not.
+
+    Price lists and their lines were readable by any authenticated user, so a
+    driver could pull every price the business trades on. The product master
+    stays open — a warehouse clerk has to be able to look a carton up.
+    """
+
+    message = "Pricing is limited to staff who trade on it."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        user = request.user
+        if not user.is_authenticated or not isinstance(user, User):
+            return False
+        if request.method in SAFE_METHODS:
+            return user.has_permission("catalog.view")
+        return user.has_permission("catalog.manage")
+
+
 class _AuditedAdminViewSet(viewsets.ModelViewSet):
-    """Base: reads for any authed user, writes admin-only, every write audited."""
+    """Base: reads for any authed user, writes admin-only, every write audited.
+
+    The drug catalogue is **reference data**. A warehouse clerk putting stock away
+    and a driver checking a carton both need to look a product up, and neither
+    holds ``catalog.view``. What a medicine *costs* is a different matter — see
+    ``PriceListViewSet`` below.
+    """
 
     entity_type = ""
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
@@ -246,6 +272,11 @@ class ProductContraindicationViewSet(_AuditedAdminViewSet):
 
 
 class PriceListViewSet(_AuditedAdminViewSet):
+    permission_classes = [IsAuthenticated, PricingAccess]
+
+    def get_permissions(self) -> list[BasePermission]:
+        return [IsAuthenticated(), PricingAccess()]
+
     entity_type = "price_list"
     serializer_class = PriceListSerializer
     queryset = PriceList.objects.all()
@@ -254,6 +285,11 @@ class PriceListViewSet(_AuditedAdminViewSet):
 
 
 class ProductPriceViewSet(_AuditedAdminViewSet):
+    permission_classes = [IsAuthenticated, PricingAccess]
+
+    def get_permissions(self) -> list[BasePermission]:
+        return [IsAuthenticated(), PricingAccess()]
+
     entity_type = "product_price"
     serializer_class = ProductPriceSerializer
     queryset = ProductPrice.objects.select_related("price_list", "product").all()

@@ -443,6 +443,59 @@ export interface DashboardSummary {
   payable_due: number;
   licences_expiring: number;
   org_count: number;
+  /** Today's trading with cost taken off — revenue alone hides a bad day. */
+  today: { sales: number; revenue: number; margin: number; margin_pct: number };
+  /** Something to compare today against, stated as amounts rather than a % change. */
+  compared: { yesterday: number; same_day_last_week: number };
+  trend: { date: string; revenue: number }[];
+  /** Per branch. A group total told an owner of four pharmacies nothing. */
+  by_branch: {
+    organization: number;
+    name: string;
+    type: string;
+    sales: number;
+    revenue: number;
+    margin: number;
+    margin_pct: number;
+  }[];
+  expiry_exposure: {
+    bands: { band: string; value: number; units: number }[];
+    total_at_risk: number;
+  };
+}
+
+export interface WorkItem {
+  id: number;
+  resource_type: string;
+  label: string;
+  resource_id: string;
+  organization: number;
+  organization_name: string;
+  requested_by: string;
+  requested_at: string;
+  reason: string;
+  amount: number | null;
+  sla_breached: boolean;
+  claimed_by: string | null;
+  /** Present on items you may not decide — why, and who can. */
+  why?: string;
+  escalate_to?: string[];
+  /** Present on your own requests — who it is sitting with. */
+  with?: string[];
+}
+
+export interface MyWork {
+  waiting_on_me: WorkItem[];
+  needs_escalation: WorkItem[];
+  raised_by_me: WorkItem[];
+  my_team: {
+    size: number;
+    members: { id: number; name: string; roles: string[] }[];
+    open_requests: WorkItem[];
+    breaching: WorkItem[];
+  };
+  next_steps: { label: string; to: string; count: number; tone: string }[];
+  as_of: string;
 }
 
 export interface StockMovement {
@@ -2203,4 +2256,44 @@ export interface ClinicalServiceRecord {
   clinical_notes: string;
   fee_charged: string;
   performed_at: string;
+}
+
+
+/** `/api/finance/reports/inventory-valuation/` — what is sitting on the shelf, at cost. */
+export interface InventoryValuation {
+  as_of: string;
+  total_units: number;
+  total_value: string;
+  by_product: {
+    product_id: number;
+    product_name: string;
+    units: number;
+    value: string;
+    batches: number;
+  }[];
+}
+
+
+/** One candidate from typing a name at the till. */
+export interface CounterSearchHit {
+  product: number;
+  label: string;
+  brand_name: string;
+  dosage_form: string;
+  pack_size: string;
+  units: number;
+  unit_price: string;
+  price_source: string;
+  on_hand: number;
+  matched_on: string;
+  requires_prescription: boolean;
+  is_controlled: boolean;
+}
+
+export interface CounterSearchResponse {
+  query: string;
+  /** Set only when the input came off a scanner, so the till adds it directly. */
+  exact: Extract<ScanResult, { found: true }> | null;
+  count: number;
+  results: CounterSearchHit[];
 }

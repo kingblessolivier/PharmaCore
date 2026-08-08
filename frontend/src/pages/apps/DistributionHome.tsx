@@ -33,7 +33,9 @@ import {
   SectionCard,
   SectionGrid,
   StatTile,
+  WorkQueue,
 } from "../../components/AppHome";
+import { useModuleWork } from "../../lib/modulework";
 import { api } from "../../lib/api";
 import { overview } from "../../lib/distribution";
 import { money } from "../../lib/format";
@@ -41,6 +43,7 @@ import { useDefaultOrg } from "../../lib/recordData";
 import type { Paginated, StockOrder } from "../../lib/types";
 
 export function DistributionHome() {
+  const work = useModuleWork("distribution");
   const { orgId } = useDefaultOrg();
 
   const health = useQuery({
@@ -86,6 +89,8 @@ export function DistributionHome() {
         title="Distribution"
         subtitle="What you offer to retail pharmacies, what they ordered that you could not supply, and what is moving between you."
       />
+
+      <WorkQueue items={work.items} loading={work.loading} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Link to="/distribution/listings">

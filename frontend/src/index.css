@@ -2,30 +2,169 @@
 @tailwind components;
 @tailwind utilities;
 
-/* PharmaCore design tokens — see docs/design/01-design-tokens.md.
-   Light values on :root; dark values under prefers-color-scheme. */
+/* ---------------------------------------------------------------------------
+   PharmaCore design tokens — see docs/design/01-design-tokens.md.
+
+   The palette used to define ten variables while the application referenced
+   forty-eight. Every `danger`, `warning` and `success` utility, and the ink and
+   surface steps in between the three that existed, generated **no CSS at all** —
+   696 of 2,600 colour utilities, 27% of them. So every expired-stock badge,
+   every overdue warning and every success tick rendered with no colour on it.
+
+   Ramps are complete here for that reason: a token that exists in the code and
+   not in the stylesheet fails silently, which is the worst way for a design
+   system to fail. `npm run check:tokens` fails the build if that gap reopens.
+
+   Hues are chosen for a working screen rather than a marketing page. Teal reads
+   as the brand without competing with status; status colours are held apart from
+   it so "this is ours" and "this needs attention" are never confusable. Every
+   step below is the same hue at a controlled lightness, so a border, a fill and
+   a label from the same family always agree.
+--------------------------------------------------------------------------- */
+
 :root {
+  /* --- Brand: teal. Actions, selection, focus. ------------------------- */
   --brand-50: #f0fdfa;
+  --brand-100: #ccfbf1;
+  --brand-200: #99f6e4;
+  --brand-300: #5eead4;
+  --brand-400: #2dd4bf;
   --brand-500: #14b8a6;
   --brand-600: #0d9488;
   --brand-700: #0f766e;
-  --ink-900: #0f172a;
-  --ink-700: #334155;
+  --brand-800: #115e59;
+  --brand-900: #134e4a;
+
+  /* --- Ink: text and iconography, warm-neutral slate. ------------------ */
+  --ink-300: #cbd5e1;
+  --ink-400: #94a3b8;
   --ink-500: #64748b;
-  --line-200: #e2e8f0;
-  --surface-100: #f8fafc;
+  --ink-600: #475569;
+  --ink-700: #334155;
+  --ink-800: #1e293b;
+  --ink-900: #0f172a;
+
+  /* --- Surfaces: the planes a screen is built from. -------------------- */
+  /* 0 is the card, 50 a hairline tint for table stripes and headers, 100 the
+     page behind them, 200 an inset well. Four planes is enough depth for dense
+     data and few enough that nothing floats ambiguously. */
   --surface-0: #ffffff;
+  --surface-50: #f8fafc;
+  --surface-100: #f1f5f9;
+  --surface-200: #e2e8f0;
+  --line-200: #e2e8f0;
+  --line-strong: #cbd5e1;
+
+  /* --- Status. Reserved: never reused as a chart series or a brand accent. */
+  /* danger — money lost, stock expired, a regulation broken. */
+  --danger-50: #fef2f2;
+  --danger-200: #fecaca;
+  --danger-300: #fca5a5;
+  --danger-500: #ef4444;
+  --danger-600: #dc2626;
+  --danger-700: #b91c1c;
+  --danger-800: #991b1b;
+  --danger-900: #7f1d1d;
+
+  /* warning — amber, not orange: orange next to red reads as a second danger. */
+  --warning-50: #fffbeb;
+  --warning-200: #fde68a;
+  --warning-300: #fcd34d;
+  --warning-400: #fbbf24;
+  --warning-500: #f59e0b;
+  --warning-600: #d97706;
+  --warning-700: #b45309;
+  --warning-800: #92400e;
+  --warning-900: #78350f;
+
+  /* success — green, held far enough from brand teal to stay distinguishable. */
+  --success-50: #f0fdf4;
+  --success-200: #bbf7d0;
+  --success-500: #22c55e;
+  --success-600: #16a34a;
+  --success-700: #15803d;
+  --success-800: #166534;
+  --success-900: #14532d;
+
+  /* info — blue, for neutral system messages that are not a problem. */
+  --info-50: #eff6ff;
+  --info-200: #bfdbfe;
+  --info-500: #3b82f6;
+  --info-600: #2563eb;
+  --info-700: #1d4ed8;
+
+  /* --- Density. An ERP is read at arm's length for eight hours. --------- */
+  --row-h: 32px;
+  --row-h-compact: 28px;
+  --field-h: 32px;
 }
 
+/* ---------------------------------------------------------------------------
+   Dark. Selected, not inverted: a flipped palette makes light text on saturated
+   fills unreadable and turns every status tint into a glare. Surfaces lift as
+   they come forward (0 is lightest, matching the light theme's stacking), and
+   status fills become deep and desaturated with a bright foreground.
+--------------------------------------------------------------------------- */
 @media (prefers-color-scheme: dark) {
   :root {
-    --brand-50: #0c2a28;
-    --ink-900: #e8edf4;
-    --ink-700: #c0c9d6;
+    --brand-50: #042f2e;
+    --brand-100: #0c3f3c;
+    --brand-200: #115e59;
+    --brand-300: #0f766e;
+    --brand-400: #14b8a6;
+    --brand-500: #2dd4bf;
+    --brand-600: #5eead4;
+    --brand-700: #99f6e4;
+    --brand-800: #ccfbf1;
+    --brand-900: #f0fdfa;
+
+    --ink-300: #475569;
+    --ink-400: #64748b;
     --ink-500: #8b96a6;
-    --line-200: #26303e;
-    --surface-100: #0f1722;
+    --ink-600: #a8b3c2;
+    --ink-700: #c0c9d6;
+    --ink-800: #dbe2ea;
+    --ink-900: #e8edf4;
+
     --surface-0: #151e2a;
+    --surface-50: #131b26;
+    --surface-100: #0f1722;
+    --surface-200: #1d2836;
+    --line-200: #26303e;
+    --line-strong: #3a4655;
+
+    --danger-50: #2a1416;
+    --danger-200: #7f1d1d;
+    --danger-300: #991b1b;
+    --danger-500: #ef4444;
+    --danger-600: #f87171;
+    --danger-700: #fca5a5;
+    --danger-800: #fecaca;
+    --danger-900: #fee2e2;
+
+    --warning-50: #2a2010;
+    --warning-200: #78350f;
+    --warning-300: #92400e;
+    --warning-400: #b45309;
+    --warning-500: #f59e0b;
+    --warning-600: #fbbf24;
+    --warning-700: #fcd34d;
+    --warning-800: #fde68a;
+    --warning-900: #fef3c7;
+
+    --success-50: #0d2818;
+    --success-200: #14532d;
+    --success-500: #22c55e;
+    --success-600: #4ade80;
+    --success-700: #86efac;
+    --success-800: #bbf7d0;
+    --success-900: #dcfce7;
+
+    --info-50: #10203a;
+    --info-200: #1e3a8a;
+    --info-500: #3b82f6;
+    --info-600: #60a5fa;
+    --info-700: #93c5fd;
   }
 }
 
@@ -34,8 +173,17 @@ body {
   background: var(--surface-100);
   color: var(--ink-900);
   font-family:
-    Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Inter's default figures are proportional, so a column of prices does not
+     line up. Contextual alternates off keeps medicine codes literal. */
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "calt" 0;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Numbers in a column must line up, or the column cannot be scanned. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Accessibility baseline: visible keyboard focus (mouse clicks stay clean). */

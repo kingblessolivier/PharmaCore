@@ -22,6 +22,8 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
+from django.utils import timezone
+
 GROUP_SEPARATOR = "\x1d"
 
 # Symbology identifiers a scanner may prefix. ]d2 = DataMatrix/GS1, ]C1 = GS1-128,
@@ -103,7 +105,7 @@ def parse_gs1_date(value: str) -> date:
     if not 1 <= mm <= 12:
         raise GS1ParseError(f"Invalid GS1 date '{value}' — month {mm:02d} out of range.")
 
-    current = date.today().year
+    current = timezone.localdate().year
     year = current - (current % 100) + yy
     if year - current >= 51:
         year -= 100

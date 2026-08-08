@@ -113,3 +113,32 @@ class MentionableUsersView(APIView):
             qs = qs.filter(organization_id=oid) if oid else qs.none()
         data = [{"id": u.pk, "username": u.username} for u in qs.order_by("username")[:50]]
         return Response(data)
+
+
+class MyWorkView(APIView):
+    """What is waiting for you, what you cannot action, and what your team raised.
+
+    The nav answers "which table would you like to open". This answers "what needs
+    doing", which is the question people actually arrive with.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        from apps.workspace import worklist
+
+        user = cast(User, request.user)
+        return Response({**worklist.for_user(user), "next_steps": worklist.next_steps(user)})
+
+
+class ModuleWorkView(APIView):
+    """What needs doing inside one app — a module home as a queue, not a menu."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        from apps.workspace import modulework
+
+        user = cast(User, request.user)
+        module = request.query_params.get("module") or None
+        return Response({"queues": modulework.queues_for(user, module)})

@@ -1,6 +1,13 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { TrendingDown, TrendingUp, type LucideIcon } from "lucide-react";
+import type { WorkQueueItem } from "../lib/modulework";
+import {
+  ArrowRight,
+  CheckCircle2,
+  TrendingDown,
+  TrendingUp,
+  type LucideIcon,
+} from "lucide-react";
 
 /** The header of a subsystem's home page: hue tile + glyph + title + one-line subtitle. */
 export function AppHeader({
@@ -162,3 +169,63 @@ export function SectionGrid({
     </div>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/* Work queue — the reason a module home is not just a menu.                   */
+/*                                                                             */
+/* Arriving at Inventory should say "four batches are in quarantine waiting on  */
+/* you", not offer fourteen tables to browse. Every line is a real count with a */
+/* real link; a module with nothing outstanding says so in one line and gets    */
+/* out of the way.                                                              */
+/* -------------------------------------------------------------------------- */
+
+export function WorkQueue({
+  items,
+  loading = false,
+  emptyMessage = "Nothing needs your attention here.",
+}: {
+  items: WorkQueueItem[];
+  loading?: boolean;
+  emptyMessage?: string;
+}) {
+  if (loading) {
+    return (
+      <div className="mb-6 h-16 animate-pulse rounded-lg border border-line bg-surface-100" />
+    );
+  }
+  if (items.length === 0) {
+    return (
+      <div className="mb-6 flex items-center gap-2 rounded-lg border border-line bg-surface-0 px-4 py-3 text-sm text-ink-500">
+        <CheckCircle2 className="h-4 w-4 text-success-600" />
+        {emptyMessage}
+      </div>
+    );
+  }
+  return (
+    <div className="mb-6 space-y-1.5">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+        Waiting on you
+      </div>
+      {items.map((item) => (
+        <Link
+          key={`${item.to}-${item.label}`}
+          to={item.to}
+          className={`flex items-center justify-between rounded-lg border px-4 py-2.5 text-sm transition-colors hover:bg-surface-100 ${
+            item.tone === "danger"
+              ? "border-danger-200 bg-danger-50 text-danger-900"
+              : item.tone === "warning"
+                ? "border-warning-200 bg-warning-50 text-warning-900"
+                : "border-line bg-surface-0 text-ink-800"
+          }`}
+        >
+          <span>
+            <span className="mr-1.5 font-semibold tabular-nums">{item.count}</span>
+            {item.label}
+          </span>
+          <ArrowRight className="h-3.5 w-3.5 shrink-0 opacity-60" />
+        </Link>
+      ))}
+    </div>
+  );
+}
+

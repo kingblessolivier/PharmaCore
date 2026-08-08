@@ -32,6 +32,7 @@ from apps.retail.models import (
     Prescription,
     Sale,
 )
+from apps.retail.permissions import ControlledRegisterAccess, PatientRecordAccess
 from apps.retail.serializers import (
     ClinicalServiceRecordSerializer,
     ClinicalServiceSerializer,
@@ -234,7 +235,7 @@ class DispensingViewSet(viewsets.ReadOnlyModelViewSet):
     pharmacist, patient, and prescriber. Org-scoped; filter with ?organization."""
 
     serializer_class = DispensingSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, PatientRecordAccess]
     queryset = Dispensing.objects.select_related("sale", "dispensed_by").order_by("-created_at")
 
     def get_queryset(self) -> QuerySet[Dispensing]:
@@ -357,7 +358,7 @@ class DrawerSessionViewSet(viewsets.ModelViewSet):
 
 class PrescriptionViewSet(viewsets.ModelViewSet):
     serializer_class = PrescriptionSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, PatientRecordAccess]
 
     def get_queryset(self) -> QuerySet[Prescription]:
         user = cast(User, self.request.user)
@@ -369,7 +370,7 @@ class PrescriptionViewSet(viewsets.ModelViewSet):
 
 class ControlledSubstanceRegisterViewSet(viewsets.ModelViewSet):
     serializer_class = ControlledSubstanceRegisterSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, ControlledRegisterAccess]
 
     def get_queryset(self) -> QuerySet[ControlledSubstanceRegister]:
         user = cast(User, self.request.user)

@@ -92,6 +92,148 @@ def resolve_barcode(*, organization: Organization, code: str) -> ScanResult | No
 
 
 # --------------------------------------------------------------------------- #
+# Typing — the till's *other* primary input
+# --------------------------------------------------------------------------- #
+#
+# The counter could only resolve an exact barcode. Type "amox" and it answered
+# "Nothing matches amox." — so in a pharmacy without barcode labelling, which is
+# most of them here, the till could not sell anything at all.
+#
+# Searching by name is not a lesser fallback to scanning. It is how a pharmacist
+# works when the customer says "something for a chest infection", when the box is
+# unlabelled, and when the scanner is broken. It has to be as fast and as
+# keyboard-driven as the scanner path, because there is a queue.
+
+
+#: Nothing shorter is a search — it is a keystroke on the way to one, and
+#: answering it costs a round trip to return half the catalogue.
+MIN_QUERY = 2
+
+#: A till shows a handful of rows. More than this is a scroll, and a scrolling
+#: cashier is a slow one.
+SEARCH_LIMIT = 12
+
+
+@dataclass
+class ProductMatch:
+    """One candidate the cashier could ring up, with everything needed to decide."""
+
+    product: Any
+    on_hand: int
+    unit_price: Decimal
+    price_source: str
+    rank: int
+    matched_on: str
+
+
+def _rank(product: Any, needle: str, on_hand: int) -> tuple[int, str]:
+    """How good a match this is, and what matched — lower rank sorts first.
+
+    Ordering is about what a cashier scanning a list with a customer waiting
+    actually needs. A name that *starts* with what they typed is almost always
+    the one they meant; a mid-word hit rarely is. Stock breaks every tie, because
+    a perfect match you cannot sell is not a match.
+    """
+    generic = (product.generic_name or "").lower()
+    brand = (product.brand_name or "").lower()
+
+    if generic.startswith(needle):
+        base, matched = 0, "generic name"
+    elif brand.startswith(needle):
+        base, matched = 1, "brand name"
+    elif needle in generic:
+        base, matched = 2, "generic name"
+    elif needle in brand:
+        base, matched = 3, "brand name"
+    else:
+        base, matched = 4, "ingredient"
+
+    # Out of stock drops a whole tier rather than being hidden: the cashier still
+    # needs to know it exists so they can offer a substitute or order it.
+    return (base * 2) + (0 if on_hand > 0 else 1), matched
+
+
+def search_products(
+    *, organization: Organization, query: str, limit: int = SEARCH_LIMIT
+) -> list[ProductMatch]:
+    """Products this pharmacy sells, matching what the cashier typed.
+
+    Restricted to the pharmacy's own listings. The national catalogue holds
+    thousands of medicines this branch has never carried, and offering them at
+    the till produces a sale line for something that cannot be dispensed.
+    """
+    from apps.catalog import pricing
+    from apps.catalog.models import Product
+    from apps.inventory.models import InventoryBatch, PharmacyProduct
+
+    needle = (query or "").strip().lower()
+    if len(needle) < MIN_QUERY:
+        return []
+
+    listed = PharmacyProduct.objects.filter(organization=organization, is_active=True).values_list(
+        "product_id", flat=True
+    )
+    found = (
+        Product.objects.filter(pk__in=listed)
+        .filter(
+            Q(generic_name__icontains=needle)
+            | Q(brand_name__icontains=needle)
+            # An ingredient hit is how "something with amoxicillin in it" works.
+            | Q(ingredients__ingredient__name__icontains=needle)
+        )
+        .distinct()[: limit * 3]
+    )
+    candidates = list(found)
+    if not candidates:
+        return []
+
+    # One aggregate for the whole result set rather than a query per row: this
+    # runs on every keystroke.
+    stock = {
+        row["product_id"]: row["qty"] or 0
+        for row in InventoryBatch.objects.filter(
+            organization=organization,
+            product_id__in=[p.pk for p in candidates],
+            status=InventoryBatch.Status.ACTIVE,
+            expiry_date__gte=timezone.localdate(),
+        )
+        .values("product_id")
+        .annotate(qty=Sum("quantity_available"))
+    }
+
+    matches: list[ProductMatch] = []
+    for product in candidates:
+        on_hand = int(stock.get(product.pk, 0))
+        rank, matched_on = _rank(product, needle, on_hand)
+        resolved = pricing.resolve(product=product, organization=organization)
+        matches.append(
+            ProductMatch(
+                product=product,
+                on_hand=on_hand,
+                unit_price=resolved.unit_price,
+                price_source=resolved.source,
+                rank=rank,
+                matched_on=matched_on,
+            )
+        )
+
+    matches.sort(key=lambda m: (m.rank, (m.product.generic_name or "").lower()))
+    return matches[:limit]
+
+
+def looks_like_a_barcode(value: str) -> bool:
+    """Whether this came off a scanner rather than out of somebody's fingers.
+
+    A scanner is a keyboard that types fast and presses Enter, so the till cannot
+    ask the user which mode they are in — it has to tell. Barcodes are all digits
+    and at least eight of them (EAN-8 is the shortest in practical use); no
+    medicine name is.
+    """
+    cleaned = (value or "").strip()
+    return len(cleaned) >= 8 and cleaned.isdigit()
+
+
+# --------------------------------------------------------------------------- #
 # Promotions
 # --------------------------------------------------------------------------- #
 

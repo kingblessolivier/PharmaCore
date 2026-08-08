@@ -22,7 +22,6 @@ import {
   LogOut,
   Mail,
   MessageSquare,
-  Network,
   Pill,
   ScrollText,
   Search,
@@ -58,7 +57,7 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { isAdmin } from "../lib/roles";
+import { can } from "../lib/roles";
 import type { AppNotification, Organization, Paginated } from "../lib/types";
 import { CommandPalette } from "./CommandPalette";
 
@@ -81,21 +80,21 @@ interface AppTile {
   hue: string;
   icon: typeof LayoutDashboard;
   to: string | null; // null = not built yet ("soon")
-  roles: "all" | string[];
+  needs: "all" | string[];
 }
 const APPS: AppTile[] = [
-  { label: "Retail", hue: "#0D9488", icon: ShoppingCart, to: "/retail", roles: "all" },
-  { label: "Catalog", hue: "#CA8A04", icon: Pill, to: "/catalog", roles: ["ORG_ADMIN", "PHARMACIST"] },
-  { label: "Distribution", hue: "#3B5BDB", icon: Truck, to: "/distribution", roles: ["ORG_ADMIN", "PHARMACIST"] },
-  { label: "Inventory", hue: "#0891B2", icon: Warehouse, to: "/inventory", roles: ["ORG_ADMIN", "PHARMACIST"] },
-  { label: "Procurement", hue: "#7C3AED", icon: ShoppingBag, to: "/procurement", roles: ["ORG_ADMIN", "PROCUREMENT_OFFICER"] },
-  { label: "Finance", hue: "#15803D", icon: Wallet, to: "/finance", roles: ["ORG_ADMIN"] },
-  { label: "Insights", hue: "#DB2777", icon: BarChart3, to: "/", roles: "all" },
-  { label: "Admin", hue: "#475569", icon: ShieldCheck, to: "/admin", roles: ["ORG_ADMIN"] },
-  { label: "Insurance", hue: "#7C3AED", icon: Shield, to: "/insurance", roles: ["ORG_ADMIN", "PHARMACIST"] },
-  { label: "People", hue: "#EA580C", icon: Users, to: "/people", roles: ["HR_MANAGER"] },
-  { label: "Online", hue: "#0EA5E9", icon: Globe, to: null, roles: "all" },
-  { label: "Connect", hue: "#2563EB", icon: MessageSquare, to: "/connect/chat", roles: "all" },
+  { label: "Retail", hue: "#0D9488", icon: ShoppingCart, to: "/retail", needs: ["sale.create"] },
+  { label: "Catalog", hue: "#CA8A04", icon: Pill, to: "/catalog", needs: ["catalog.view"] },
+  { label: "Distribution", hue: "#3B5BDB", icon: Truck, to: "/distribution", needs: ["distribution.view"] },
+  { label: "Inventory", hue: "#0891B2", icon: Warehouse, to: "/inventory", needs: ["inventory.view"] },
+  { label: "Procurement", hue: "#7C3AED", icon: ShoppingBag, to: "/procurement", needs: ["procurement.view"] },
+  { label: "Finance", hue: "#15803D", icon: Wallet, to: "/finance", needs: ["finance.view"] },
+  { label: "Insights", hue: "#DB2777", icon: BarChart3, to: "/", needs: "all" },
+  { label: "Admin", hue: "#475569", icon: ShieldCheck, to: "/admin", needs: ["organization.manage"] },
+  { label: "Insurance", hue: "#7C3AED", icon: Shield, to: "/insurance", needs: ["insurance.view"] },
+  { label: "People", hue: "#EA580C", icon: Users, to: "/people", needs: ["employee.view", "user.manage"] },
+  { label: "Online", hue: "#0EA5E9", icon: Globe, to: null, needs: "all" },
+  { label: "Connect", hue: "#2563EB", icon: MessageSquare, to: "/connect/chat", needs: "all" },
 ];
 
 function AppSwitcher() {
@@ -103,11 +102,9 @@ function AppSwitcher() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const admin = isAdmin(user);
-  const roles = user?.roles ?? [];
-  const canSee = (r: "all" | string[]) =>
-    r === "all" || admin || r.some((x) => roles.includes(x));
-  const tiles = APPS.filter((t) => canSee(t.roles));
+  const canSee = (needs: "all" | string[]) =>
+    needs === "all" || needs.some((code) => can(user, code));
+  const tiles = APPS.filter((t) => canSee(t.needs));
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -315,12 +312,26 @@ interface NavItem {
   label: string;
   icon: typeof LayoutDashboard;
   end?: boolean;
-  roles?: "all" | string[]; // per-item override; else inherits the group
+  /** Per-item override; else inherits the group's. */
+  needs?: "all" | string[];
 }
 
 interface NavGroup {
   label: string; // "" = ungrouped (rendered without a header)
-  roles: "all" | string[]; // "all" = everyone; else visible to admins + these roles
+  /**
+   * Permission codes that reveal this group — **capability, not job title**.
+   *
+   * The nav used to gate on role names, and five of the eleven seeded roles
+   * appeared in no group at all: a warehouse clerk could not open Inventory, a
+   * dispatcher could not open Distribution, an insurance clerk could not open
+   * Insurance (audit D7). Every one of those screens was built for exactly the
+   * person who could not reach it. Gating on what someone may *do* fixes that
+   * class of bug permanently — add a role, grant it permissions, and the nav
+   * follows without anyone editing this file.
+   *
+   * "all" means every signed-in user (Connect, the dashboard).
+   */
+  needs: "all" | string[];
   items: NavItem[];
   /** Route prefixes that belong to this app. When the user is inside one of these,
    * the side nav shows ONLY this group (Oracle/Workspace behaviour: pick an app,
@@ -337,10 +348,10 @@ interface NavGroup {
 // Organizations, Departments, Users and the Audit Log all live under ADMIN (not as
 // separate top-level entries).
 const NAV: NavGroup[] = [
-  { label: "", roles: "all", items: [{ to: "/", label: "Dashboard", icon: LayoutDashboard, end: true }] },
+  { label: "", needs: "all", items: [{ to: "/", label: "Dashboard", icon: LayoutDashboard, end: true }] },
   {
     label: "Catalog",
-    roles: ["ORG_ADMIN", "PHARMACIST"],
+    needs: ["catalog.view"],
     match: ["/catalog", "/products"],
     items: [
       { to: "/catalog", label: "Catalog Overview", icon: Pill, end: true },
@@ -358,7 +369,7 @@ const NAV: NavGroup[] = [
   },
   {
     label: "Insurance",
-    roles: ["ORG_ADMIN", "PHARMACIST"],
+    needs: ["insurance.view"],
     match: ["/insurance"],
     items: [
       { to: "/insurance", label: "Insurance Overview", icon: Shield, end: true },
@@ -370,7 +381,7 @@ const NAV: NavGroup[] = [
   },
   {
     label: "Connect",
-    roles: "all",
+    needs: "all",
     match: ["/connect"],
     items: [
       { to: "/connect/chat", label: "Chat", icon: MessageSquare },
@@ -379,25 +390,24 @@ const NAV: NavGroup[] = [
   },
   {
     label: "Distribution",
-    roles: ["ORG_ADMIN", "PHARMACIST"],
-    match: ["/distribution", "/suppliers"],
+    needs: ["distribution.view"],
+    match: ["/distribution"],
     items: [
       { to: "/distribution", label: "Distribution Overview", icon: Truck, end: true },
-      { to: "/distribution/orders", label: "B2B Purchase Orders", icon: ClipboardList },
+      { to: "/distribution/orders", label: "Orders to depots", icon: ClipboardList },
       { to: "/distribution/in-transit", label: "In-Transit Stock", icon: Truck },
-      { to: "/distribution/grn", label: "Goods Received Notes", icon: PackageCheck },
+      { to: "/distribution/grn", label: "Depot deliveries received", icon: PackageCheck },
       { to: "/distribution/listings", label: "Depot Offered Listings", icon: Store },
       { to: "/distribution/portal", label: "B2B Ordering Portal", icon: ShoppingCart },
       { to: "/distribution/demand", label: "Unmet Demand", icon: TrendingUp },
       { to: "/distribution/sales-reps", label: "Field Sales & Reps", icon: Users },
       { to: "/distribution/tenders", label: "Institutional Tenders", icon: FileText },
       { to: "/distribution/returns", label: "Customer Returns", icon: RotateCcw },
-      { to: "/suppliers", label: "Suppliers", icon: Building2 },
     ],
   },
   {
     label: "Inventory",
-    roles: ["ORG_ADMIN", "PHARMACIST"],
+    needs: ["inventory.view"],
     match: ["/inventory"],
     items: [
       { to: "/inventory", label: "Warehouse Overview", icon: Warehouse, end: true },
@@ -418,22 +428,25 @@ const NAV: NavGroup[] = [
   },
   {
     label: "Procurement",
-    roles: ["ORG_ADMIN", "PROCUREMENT_OFFICER"],
-    match: ["/procurement"],
+    needs: ["procurement.view"],
+    match: ["/procurement", "/suppliers"],
     items: [
       { to: "/procurement", label: "Procurement Overview", icon: ShoppingBag, end: true },
       { to: "/procurement/requisitions", label: "Requisitions", icon: ClipboardList },
       { to: "/procurement/rfqs", label: "RFQ & Quotes", icon: FileSearch },
-      { to: "/procurement/orders", label: "Purchase Orders", icon: ShoppingBag },
+      { to: "/procurement/orders", label: "Supplier purchase orders", icon: ShoppingBag },
       { to: "/procurement/imports", label: "Imports & Landed Cost", icon: Ship },
-      { to: "/procurement/receipts", label: "Goods Receipts", icon: PackageCheck },
+      { to: "/procurement/receipts", label: "Supplier goods receipts", icon: PackageCheck },
       { to: "/procurement/invoices", label: "Supplier Invoices", icon: Receipt },
-      { to: "/procurement/suppliers", label: "Supplier Master", icon: Handshake },
+      { to: "/suppliers", label: "Supplier directory", icon: Building2 },
+      { to: "/procurement/suppliers", label: "Supplier qualification", icon: Handshake },
     ],
   },
   {
+    // Not "all" any more: a driver and a warehouse clerk both landed on the
+    // point-of-sale till, which is the one screen neither should open.
     label: "Retail",
-    roles: "all",
+    needs: ["sale.create"],
     match: ["/retail", "/pos"],
     items: [
       { to: "/retail", label: "Retail Overview", icon: ShoppingCart, end: true },
@@ -449,9 +462,13 @@ const NAV: NavGroup[] = [
     // named tables — five separate receivables entries, four separate tax entries —
     // so a user could not predict where anything lived. These sections name the work
     // instead. See docs/development/finance-redesign-plan.md §2A.
+    // Reading your branch's numbers is `finance.view`; the ledger itself is
+    // `finance.manage`. Without the split, giving a branch manager sight of
+    // their own margin also handed them the chart of accounts and the VAT
+    // return, which is how "just make them an admin" starts.
     label: "Finance",
     app: "finance",
-    roles: ["ACCOUNTANT", "ORG_ADMIN"],
+    needs: ["finance.view"],
     match: ["/finance"],
     items: [
       { to: "/finance", label: "Home", icon: Wallet, end: true },
@@ -461,7 +478,7 @@ const NAV: NavGroup[] = [
   {
     label: "Money in",
     app: "finance",
-    roles: ["ACCOUNTANT", "ORG_ADMIN"],
+    needs: ["finance.view"],
     items: [
       { to: "/finance/receivables", label: "Customer invoices", icon: Receipt },
       { to: "/finance/statement", label: "Customer statements", icon: FileBarChart },
@@ -473,7 +490,7 @@ const NAV: NavGroup[] = [
   {
     label: "Money out",
     app: "finance",
-    roles: ["ACCOUNTANT", "ORG_ADMIN"],
+    needs: ["finance.manage"],
     items: [
       { to: "/finance/payables", label: "Supplier bills", icon: CreditCard },
       { to: "/finance/payment-runs", label: "Payment runs", icon: Banknote },
@@ -482,7 +499,7 @@ const NAV: NavGroup[] = [
   {
     label: "Cash & bank",
     app: "finance",
-    roles: ["ACCOUNTANT", "ORG_ADMIN"],
+    needs: ["finance.manage"],
     items: [
       { to: "/finance/banking", label: "Accounts & cash book", icon: Landmark },
       { to: "/finance/reconciliation", label: "Bank reconciliation", icon: CheckCircle2 },
@@ -491,7 +508,7 @@ const NAV: NavGroup[] = [
   {
     label: "Ledger & close",
     app: "finance",
-    roles: ["ACCOUNTANT", "ORG_ADMIN"],
+    needs: ["finance.manage"],
     items: [
       { to: "/finance/accounts", label: "Chart of accounts", icon: BookOpen },
       { to: "/finance/cost-centres", label: "Cost centres", icon: Building2 },
@@ -504,7 +521,7 @@ const NAV: NavGroup[] = [
   {
     label: "Tax & compliance",
     app: "finance",
-    roles: ["ACCOUNTANT", "ORG_ADMIN"],
+    needs: ["finance.manage"],
     items: [
       { to: "/finance/tax", label: "VAT return", icon: ScrollText },
       { to: "/finance/tax-ebm", label: "EBM audit", icon: ScrollText },
@@ -515,15 +532,20 @@ const NAV: NavGroup[] = [
   {
     label: "Performance",
     app: "finance",
-    roles: ["ACCOUNTANT", "ORG_ADMIN"],
+    needs: ["finance.view"],
     items: [
       { to: "/finance/budgets", label: "Budgets & variance", icon: FileBarChart },
-      { to: "/finance/tenant-settings", label: "Finance settings", icon: Sliders },
+      {
+        to: "/finance/tenant-settings",
+        label: "Finance settings",
+        icon: Sliders,
+        needs: ["finance.manage"],
+      },
     ],
   },
   {
     label: "People",
-    roles: ["HR_MANAGER", "ORG_ADMIN"],
+    needs: ["employee.view", "user.manage"],
     match: ["/people"],
     items: [
       { to: "/people", label: "Overview", icon: Users, end: true },
@@ -542,23 +564,22 @@ const NAV: NavGroup[] = [
   },
   {
     label: "",
-    roles: "all",
+    needs: ["approval.decide"],
     items: [{ to: "/approvals", label: "Approvals", icon: ShieldCheck }],
   },
   {
     label: "Insights",
-    roles: ["ORG_ADMIN"],
+    needs: ["audit.view", "finance.view"],
     match: ["/documents"],
     items: [{ to: "/documents", label: "Documents", icon: FileText }],
   },
   {
     label: "Admin",
-    roles: ["ORG_ADMIN"],
+    needs: ["organization.manage", "company.manage"],
     match: ["/admin", "/companies", "/organizations", "/departments", "/users", "/permissions", "/activity"],
     items: [
       { to: "/admin", label: "Admin Overview", icon: ShieldCheck, end: true },
       { to: "/companies", label: "Organizations & branches", icon: Building2 },
-      { to: "/organizations", label: "Organizations", icon: Network },
       { to: "/departments", label: "Departments", icon: Boxes },
       { to: "/users", label: "Users & roles", icon: Users },
       { to: "/permissions", label: "Permissions", icon: ShieldCheck },
@@ -592,15 +613,15 @@ export function AppShell() {
   const { user, logout } = useAuth();
   const [paletteOpen, setPaletteOpen] = useState(false);
 
-  // Tailor the nav to the signed-in role — a cashier sees the till, not the
-  // whole admin console. Admins see everything.
-  const admin = isAdmin(user);
-  const userRoles = user?.roles ?? [];
-  const canSee = (roles: "all" | string[] | undefined) =>
-    roles === undefined || roles === "all" || admin || roles.some((r) => userRoles.includes(r));
-  const visible = NAV.filter((g) => canSee(g.roles)).map((g) => ({
+  // Tailor the nav to what the signed-in user may actually do. A cashier sees the
+  // till, not the admin console; a warehouse clerk sees Inventory, which the old
+  // role-name gate denied them. `can()` already grants everything to a superuser
+  // and SYS_ADMIN, so no separate admin bypass is needed here.
+  const canSee = (needs: "all" | string[] | undefined) =>
+    needs === undefined || needs === "all" || needs.some((code) => can(user, code));
+  const visible = NAV.filter((g) => canSee(g.needs)).map((g) => ({
     ...g,
-    items: g.items.filter((i) => canSee(i.roles ?? g.roles)),
+    items: g.items.filter((i) => canSee(i.needs ?? g.needs)),
   }));
 
   // App-scoped side nav (Oracle Fusion / Workspace behaviour): once you're inside an
@@ -711,12 +732,15 @@ export function AppShell() {
               </div>
             ),
           )}
-          {admin && (
+          {can(user, "organization.manage") && (
             <>
               <div className="mt-4 px-3 text-[11px] uppercase tracking-wide text-ink-500">
                 More modules
               </div>
-              {["Insurance", "Online store"].map((m) => (
+              {/* Insurance used to be listed here as "soon". It has been built since,
+                  so advertising it as unbuilt sent people looking for a screen that
+                  is already two clicks away. */}
+              {["Online store"].map((m) => (
                 <div key={m} className="px-3 py-1.5 text-sm text-ink-500/60">
                   {m} <span className="text-[10px]">soon</span>
                 </div>

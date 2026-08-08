@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date
 from typing import Any
 
+from django.utils import timezone
 from rest_framework import serializers
 
 from apps.iam.models import (
@@ -140,7 +140,7 @@ class LicenseSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "user_name", "days_to_expiry", "created_at"]
 
     def get_days_to_expiry(self, obj: License) -> int | None:
-        return (obj.expiry_date - date.today()).days if obj.expiry_date else None
+        return (obj.expiry_date - timezone.localdate()).days if obj.expiry_date else None
 
 
 class AuditLogSerializer(serializers.ModelSerializer):

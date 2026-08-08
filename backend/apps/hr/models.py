@@ -248,6 +248,8 @@ class StatutoryRate(models.Model):
     effective_from = models.DateField()
     effective_to = models.DateField(null=True, blank=True)
 
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+
     class Meta:
         ordering = ["rate_type", "band_min"]
         indexes = [models.Index(fields=["rate_type", "effective_from"])]

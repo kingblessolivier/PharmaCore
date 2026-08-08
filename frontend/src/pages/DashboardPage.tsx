@@ -1,211 +1,363 @@
+/* -------------------------------------------------------------------------- */
+/* The home screen: what needs doing, then how the business is going.          */
+/*                                                                             */
+/* This was eight flat tiles of today's numbers. Three things were missing and  */
+/* each defeated the purpose: no time dimension (so "sales today" could not be  */
+/* judged), no per-branch split (a group owner with four pharmacies got one     */
+/* summed number), and no margin — which for a pharmacy is the number that      */
+/* decides whether the business works, because revenue is largely set by what   */
+/* the insurer reimburses.                                                      */
+/*                                                                             */
+/* Work comes first and numbers second, deliberately. Most people signing in    */
+/* have a job to finish, not a report to read; the bosses who want the report   */
+/* have an empty work queue and see the charts immediately.                     */
+/* -------------------------------------------------------------------------- */
+
 import { useQuery } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  ArrowDownCircle,
-  ArrowUpCircle,
-  CalendarClock,
-  CheckCircle2,
-  ClipboardCheck,
-  PackageCheck,
-  ShieldAlert,
-  ShoppingCart,
-  Truck,
-} from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock, ShieldCheck, Users } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Card, PageHeader, Spinner } from "../components/ui";
+import { BarChart, ChartFrame, LineTrend, VizRoot } from "../components/Charts";
+import { Badge, Card, PageHeader, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import type { DashboardSummary } from "../lib/types";
-
-const money = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+import { money, shortDate } from "../lib/format";
+import type { DashboardSummary, MyWork, WorkItem } from "../lib/types";
 
 function Tile({
   label,
   value,
-  sub,
-  icon: Icon,
-  tone = "neutral",
+  hint,
+  tone,
   to,
 }: {
   label: string;
   value: string | number;
-  sub?: string;
-  icon: typeof ShoppingCart;
-  tone?: "neutral" | "warn" | "danger" | "good";
+  hint?: string;
+  tone?: "danger" | "warning" | "good";
   to?: string;
 }) {
-  const tones: Record<string, string> = {
-    neutral: "text-brand-600",
-    warn: "text-amber-600",
-    danger: "text-red-600",
-    good: "text-green-600",
-  };
+  const colour =
+    tone === "danger"
+      ? "text-danger-700"
+      : tone === "warning"
+        ? "text-warning-700"
+        : tone === "good"
+          ? "text-success-700"
+          : "text-ink-900";
   const inner = (
     <Card className="h-full p-4 transition-colors hover:border-brand-300">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium uppercase tracking-wide text-ink-500">{label}</span>
-        <Icon className={`h-4 w-4 ${tones[tone]}`} />
-      </div>
-      <div className="mt-2 text-2xl font-semibold tabular-nums text-ink-900">{value}</div>
-      {sub && <div className="mt-0.5 text-xs text-ink-500">{sub}</div>}
+      <div className="text-xs text-ink-500">{label}</div>
+      <div className={`mt-1 text-2xl font-semibold tabular-nums ${colour}`}>{value}</div>
+      {hint && <div className="mt-0.5 text-xs text-ink-500">{hint}</div>}
     </Card>
   );
-  return to ? (
-    <Link to={to} className="block">
-      {inner}
-    </Link>
-  ) : (
-    inner
+  return to ? <Link to={to}>{inner}</Link> : inner;
+}
+
+function WorkRow({ item, action }: { item: WorkItem; action?: string }) {
+  return (
+    <li className="flex items-start justify-between gap-3 border-b border-line py-2.5 last:border-0">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-ink-900">{item.label}</span>
+          {item.sla_breached && <Badge tone="danger">overdue</Badge>}
+        </div>
+        <div className="mt-0.5 text-xs text-ink-500">
+          {item.requested_by} · {item.organization_name}
+          {item.amount != null && <> · {money(item.amount)}</>}
+        </div>
+        {item.reason && <div className="mt-0.5 truncate text-xs text-ink-600">{item.reason}</div>}
+        {item.why && (
+          <div className="mt-1 text-xs text-warning-700">
+            {item.why}
+            {item.escalate_to && item.escalate_to.length > 0 && (
+              <> Goes to {item.escalate_to.join(" or ")}.</>
+            )}
+          </div>
+        )}
+        {item.with && item.with.length > 0 && (
+          <div className="mt-1 text-xs text-ink-500">With {item.with.join(" or ")}.</div>
+        )}
+      </div>
+      {action && (
+        <Link
+          to="/approvals"
+          className="shrink-0 whitespace-nowrap text-xs font-medium text-brand-700 hover:underline"
+        >
+          {action} <ArrowRight className="inline h-3 w-3" />
+        </Link>
+      )}
+    </li>
   );
 }
 
-export function DashboardPage() {
-  const { user } = useAuth();
-  const { data, isLoading } = useQuery({
-    queryKey: ["dashboard"],
-    queryFn: () => api<DashboardSummary>("/api/dashboard/"),
-    refetchInterval: 60000,
-  });
+function WorkPanel({ work }: { work: MyWork }) {
+  const { waiting_on_me, needs_escalation, raised_by_me, my_team, next_steps } = work;
+  const nothing =
+    waiting_on_me.length === 0 &&
+    needs_escalation.length === 0 &&
+    raised_by_me.length === 0 &&
+    next_steps.length === 0 &&
+    my_team.breaching.length === 0;
+
+  if (nothing) return null;
 
   return (
-    <div>
-      <PageHeader title={`Welcome, ${user?.username ?? ""}`} />
-      <p className="mb-5 text-sm text-ink-500">Here's what needs your attention today.</p>
-
-      {isLoading && (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
+    <div className="grid gap-3 lg:grid-cols-2">
+      {(waiting_on_me.length > 0 || next_steps.length > 0) && (
+        <Card className="p-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+            <ShieldCheck className="h-4 w-4 text-brand-600" /> Waiting on you
+          </div>
+          {next_steps.length > 0 && (
+            <ul className="mt-2 space-y-1.5">
+              {next_steps.map((step) => (
+                <li key={step.to}>
+                  <Link
+                    to={step.to}
+                    className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-surface-100 ${
+                      step.tone === "danger"
+                        ? "border-danger-200 bg-danger-50 text-danger-900"
+                        : "border-line text-ink-800"
+                    }`}
+                  >
+                    {step.label}
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          {waiting_on_me.length > 0 && (
+            <ul className="mt-2">
+              {waiting_on_me.slice(0, 6).map((item) => (
+                <WorkRow key={item.id} item={item} action="Decide" />
+              ))}
+            </ul>
+          )}
+        </Card>
       )}
 
-      {data && (
-        <div className="flex flex-col gap-6">
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <Tile
-              label="Sales today"
-              value={`${money(data.sales_today.total)} RWF`}
-              sub={`${data.sales_today.count} sale${data.sales_today.count === 1 ? "" : "s"}`}
-              icon={ShoppingCart}
-              to="/pos"
-            />
-            <Tile
-              label="To approve"
-              value={data.pending_approvals}
-              sub="orders awaiting approval"
-              icon={ClipboardCheck}
-              tone={data.pending_approvals ? "warn" : "neutral"}
-              to="/orders"
-            />
-            <Tile
-              label="To receive"
-              value={data.awaiting_receipt}
-              sub="orders in transit to you"
-              icon={PackageCheck}
-              tone={data.awaiting_receipt ? "warn" : "neutral"}
-              to="/orders"
-            />
-            <Tile
-              label="In transit"
-              value={money(data.in_transit_units)}
-              sub="units on the way in"
-              icon={Truck}
-              to="/orders"
-            />
-            <Tile
-              label="Low stock"
-              value={data.low_stock.count}
-              sub="products below minimum"
-              icon={AlertTriangle}
-              tone={data.low_stock.count ? "danger" : "good"}
-            />
-            <Tile
-              label="Expiring soon"
-              value={data.expiring_soon.count}
-              sub={`${money(data.expiring_soon.units)} units · 90 days`}
-              icon={CalendarClock}
-              tone={data.expiring_soon.count ? "warn" : "neutral"}
-            />
-            <Tile
-              label="Money in (owed to you)"
-              value={`${money(data.receivable_due)} RWF`}
-              sub="unpaid by buyers"
-              icon={ArrowDownCircle}
-              tone={data.receivable_due ? "warn" : "good"}
-              to="/orders"
-            />
-            <Tile
-              label="Money out (you owe)"
-              value={`${money(data.payable_due)} RWF`}
-              sub="unpaid to wholesalers"
-              icon={ArrowUpCircle}
-              tone={data.payable_due ? "warn" : "good"}
-              to="/orders"
-            />
+      {needs_escalation.length > 0 && (
+        <Card className="p-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+            <Clock className="h-4 w-4 text-warning-600" /> Not yours to decide
           </div>
+          <p className="mt-1 text-xs text-ink-500">
+            Visible to you, above your authority. Named here so they do not sit in a shared
+            queue while everyone assumes someone else is handling them.
+          </p>
+          <ul className="mt-2">
+            {needs_escalation.slice(0, 5).map((item) => (
+              <WorkRow key={item.id} item={item} />
+            ))}
+          </ul>
+        </Card>
+      )}
 
-          {(data.expired.count > 0 || data.licences_expiring > 0) && (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {data.expired.count > 0 && (
-                <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>
-                    <b>{data.expired.count}</b> expired batch
-                    {data.expired.count === 1 ? "" : "es"} ({money(data.expired.units)} units) still
-                    on hand — quarantine and write them off. They can't be sold.
-                  </span>
-                </div>
-              )}
-              {data.licences_expiring > 0 && (
-                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>
-                    <b>{data.licences_expiring}</b> licence
-                    {data.licences_expiring === 1 ? "" : "s"} expiring within 60 days — renew to stay
-                    compliant.
-                  </span>
-                </div>
-              )}
+      {my_team.size > 0 && (
+        <Card className="p-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+            <Users className="h-4 w-4 text-brand-600" /> Your team ({my_team.size})
+          </div>
+          {my_team.breaching.length > 0 && (
+            <div className="mt-2 flex items-start gap-2 rounded-md border border-danger-200 bg-danger-50 p-2.5 text-xs text-danger-900">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                {my_team.breaching.length} request
+                {my_team.breaching.length > 1 ? "s" : ""} from your team has passed its
+                agreed response time.
+              </span>
             </div>
           )}
-
-          {data.low_stock.items.length > 0 && (
-            <div className="overflow-hidden rounded-lg border border-line bg-surface-0">
-              <div className="flex items-center gap-2 border-b border-line px-4 py-3">
-                <AlertTriangle className="h-4 w-4 text-red-600" />
-                <h2 className="text-sm font-semibold text-ink-900">Reorder soon</h2>
-              </div>
-              <table className="w-full text-sm">
-                <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
-                  <tr>
-                    <th className="px-4 py-2">Medicine</th>
-                    <th className="px-4 py-2">Pharmacy</th>
-                    <th className="px-4 py-2 text-right">On hand</th>
-                    <th className="px-4 py-2 text-right">Minimum</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.low_stock.items.map((it, i) => (
-                    <tr key={i} className="border-b border-line last:border-0">
-                      <td className="px-4 py-2 font-medium">{it.product}</td>
-                      <td className="px-4 py-2 text-ink-700">{it.organization}</td>
-                      <td className="px-4 py-2 text-right font-mono text-red-600">{it.on_hand}</td>
-                      <td className="px-4 py-2 text-right font-mono text-ink-500">{it.min}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          {my_team.open_requests.length > 0 ? (
+            <ul className="mt-2">
+              {my_team.open_requests.slice(0, 5).map((item) => (
+                <WorkRow key={item.id} item={item} />
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-sm text-ink-500">Nothing outstanding from your team.</p>
           )}
+        </Card>
+      )}
 
-          {data.low_stock.count === 0 &&
-            data.expiring_soon.count === 0 &&
-            data.pending_approvals === 0 &&
-            data.awaiting_receipt === 0 && (
-              <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-                <CheckCircle2 className="h-4 w-4" /> All clear — nothing needs attention right now.
-              </div>
-            )}
+      {raised_by_me.length > 0 && (
+        <Card className="p-4">
+          <div className="text-sm font-semibold text-ink-900">Raised by you</div>
+          <ul className="mt-2">
+            {raised_by_me.slice(0, 5).map((item) => (
+              <WorkRow key={item.id} item={item} />
+            ))}
+          </ul>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+const BAND_LABELS: Record<string, string> = {
+  expired: "Already expired",
+  within_30: "Within 30 days",
+  within_60: "31–60 days",
+  within_90: "61–90 days",
+};
+
+export function DashboardPage() {
+  const { user } = useAuth();
+  const summary = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: () => api<DashboardSummary>("/api/dashboard/"),
+  });
+  const work = useQuery({
+    queryKey: ["my-work"],
+    queryFn: () => api<MyWork>("/api/workspace/my-work/"),
+  });
+
+  if (summary.isLoading) return <Spinner />;
+  const d = summary.data;
+  if (!d) return null;
+
+  const branches = d.by_branch ?? [];
+  const trend = (d.trend ?? []).map((point) => ({
+    label: shortDate(point.date),
+    values: [point.revenue],
+  }));
+  const bands = (d.expiry_exposure?.bands ?? []).filter((b) => b.value > 0);
+
+  // Yesterday is the honest comparison, and it is stated as an amount rather
+  // than a percentage: a jump from RWF 2,000 to RWF 6,000 is "+200%" and means
+  // nothing on a quiet day.
+  const yesterday = d.compared?.yesterday ?? 0;
+  const diff = (d.today?.revenue ?? 0) - yesterday;
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <PageHeader title={`Good day${user?.first_name ? `, ${user.first_name}` : ""}`} />
+        <p className="-mt-2 text-sm text-ink-500">
+          {d.org_count > 1
+            ? `${d.org_count} organizations · today, with the last 14 days for context`
+            : "Today, with the last 14 days for context"}
+        </p>
+      </div>
+
+      {work.data && <WorkPanel work={work.data} />}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Tile
+          label="Revenue today"
+          value={money(d.today?.revenue ?? 0)}
+          hint={
+            yesterday > 0
+              ? `${diff >= 0 ? "+" : ""}${money(diff)} against yesterday`
+              : "no trading yesterday"
+          }
+          tone={diff >= 0 ? "good" : "warning"}
+        />
+        <Tile
+          label="Gross margin today"
+          value={money(d.today?.margin ?? 0)}
+          hint={`${d.today?.margin_pct ?? 0}% of revenue`}
+          tone={(d.today?.margin_pct ?? 0) < 15 ? "warning" : "good"}
+        />
+        <Tile
+          label="Owed to us"
+          value={money(d.receivable_due)}
+          to="/finance/aging"
+          hint="customer invoices outstanding"
+        />
+        <Tile
+          label="Stock at risk"
+          value={money(d.expiry_exposure?.total_at_risk ?? 0)}
+          to="/catalog/expiry"
+          hint="expiring within 90 days"
+          tone={(d.expiry_exposure?.total_at_risk ?? 0) > 0 ? "warning" : undefined}
+        />
+      </div>
+
+      <VizRoot>
+        <div className="grid gap-3 lg:grid-cols-2">
+          <ChartFrame
+            title="Revenue, last 14 days"
+            subtitle="A single day's takings cannot be judged on its own."
+          >
+            <LineTrend points={trend} seriesNames={["Revenue"]} valueFormat={money} />
+          </ChartFrame>
+
+          {branches.length > 1 ? (
+            <ChartFrame
+              title="Today by branch"
+              subtitle="Which pharmacy earned it — the question a group total cannot answer."
+            >
+              <BarChart
+                data={branches.map((b) => ({
+                  label: b.name,
+                  value: b.revenue,
+                  secondary: `${b.margin_pct}% margin · ${b.sales} sales`,
+                }))}
+                valueFormat={money}
+              />
+            </ChartFrame>
+          ) : (
+            <ChartFrame
+              title="Stock at risk by expiry band"
+              subtitle="Banded because the action differs: sell through, move, or write off."
+            >
+              <BarChart
+                data={bands.map((b) => ({
+                  label: BAND_LABELS[b.band] ?? b.band,
+                  value: b.value,
+                  secondary: `${b.units.toLocaleString()} units`,
+                }))}
+                valueFormat={money}
+                ordinalRamp
+              />
+            </ChartFrame>
+          )}
         </div>
+      </VizRoot>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Tile
+          label="Low stock lines"
+          value={d.low_stock.count}
+          to="/catalog/low-stock"
+          tone={d.low_stock.count > 0 ? "warning" : undefined}
+        />
+        <Tile
+          label="Expired on the shelf"
+          value={d.expired.count}
+          hint={`${d.expired.units.toLocaleString()} units`}
+          to="/catalog/expiry"
+          tone={d.expired.count > 0 ? "danger" : undefined}
+        />
+        <Tile label="Units in transit" value={d.in_transit_units.toLocaleString()} to="/distribution/in-transit" />
+        <Tile
+          label="Licences expiring"
+          value={d.licences_expiring}
+          hint="within 60 days"
+          tone={d.licences_expiring > 0 ? "warning" : undefined}
+        />
+      </div>
+
+      {d.low_stock.items.length > 0 && (
+        <Card className="p-4">
+          <div className="text-sm font-semibold text-ink-900">Running low</div>
+          <ul className="mt-2 divide-y divide-line">
+            {d.low_stock.items.map((item, i) => (
+              <li key={i} className="flex items-center justify-between py-2 text-sm">
+                <span className="text-ink-800">
+                  {item.product}
+                  {d.org_count > 1 && <span className="text-ink-500"> · {item.organization}</span>}
+                </span>
+                <span className="tabular-nums text-ink-600">
+                  {item.on_hand} left · min {item.min}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
     </div>
   );

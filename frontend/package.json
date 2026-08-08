@@ -3,16 +3,19 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "PharmaCore web frontend (by Medlink) — React + TypeScript + Vite.",
+  "description": "PharmaCore web frontend (by Medlink) \u2014 React + TypeScript + Vite.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "lint": "eslint .",
+    "lint": "npm run check:tokens && eslint .",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "check:tokens": "node scripts/check-tokens.mjs"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
     "@tanstack/react-query": "^5.62.7",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",

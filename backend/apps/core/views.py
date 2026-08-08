@@ -14,6 +14,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core import insights
 from apps.distribution.models import InTransitStock, StockOrder
 from apps.iam.models import License, User
 from apps.iam.scoping import organizations_visible_to
@@ -162,6 +163,11 @@ class DashboardView(APIView):
                 "payable_due": float(payable),
                 "licences_expiring": licences_expiring,
                 "org_count": len(org_ids),
+                # A single summed total told a group owner with four pharmacies
+                # nothing about which one earned it, and "today" with nothing to
+                # compare against told them nothing at all. See apps/core/insights.py.
+                **insights.performance(org_ids=org_ids),
+                "expiry_exposure": insights.expiry_exposure(org_ids=org_ids),
             }
         )
 
