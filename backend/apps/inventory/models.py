@@ -1326,3 +1326,82 @@ class DisposalLine(models.Model):
     @property
     def is_destroyed(self) -> bool:
         return self.destroyed_quantity > 0
+
+
+class BatchDocument(models.Model):
+    """Paperwork that belongs to a *lot*, not to a party.
+
+    The system held compliance documents for organizations, users and suppliers
+    and none at all for the things they trade. But the documents a regulator
+    asks for at an inspection are mostly per-batch: a Certificate of Analysis is
+    issued for a specific lot, and "we have a GMP certificate for the
+    manufacturer" is not an answer to "show me the CoA for this batch".
+
+    Kept deliberately small and attached to the batch. A generic attachment
+    table would let anything hang off anything and would answer the question
+    "what is missing for this lot?" much less directly.
+    """
+
+    class DocType(models.TextChoices):
+        CERTIFICATE_OF_ANALYSIS = "COA", "Certificate of Analysis"
+        MANUFACTURER_GMP = "GMP", "Manufacturer GMP certificate"
+        IMPORT_PERMIT = "IMPORT_PERMIT", "Import permit / authorisation"
+        BILL_OF_LADING = "BILL_OF_LADING", "Bill of lading"
+        CUSTOMS_DECLARATION = "CUSTOMS", "Customs declaration"
+        COLD_CHAIN_LOG = "COLD_CHAIN_LOG", "Cold-chain shipping log"
+        PROOF_OF_DESTRUCTION = "DESTRUCTION", "Proof of destruction"
+        RECALL_NOTICE = "RECALL_NOTICE", "Recall notice"
+        OTHER = "OTHER", "Other"
+
+    batch = models.ForeignKey(InventoryBatch, on_delete=models.CASCADE, related_name="documents")
+    doc_type = models.CharField(max_length=20, choices=DocType.choices)
+    document_number = models.CharField(max_length=100, blank=True, default="")
+    document_url = models.URLField(blank=True, default="")
+    issued_on = models.DateField(null=True, blank=True)
+    #: Who issued it — the manufacturer for a CoA, the regulator for a permit.
+    issued_by = models.CharField(max_length=255, blank=True, default="")
+    is_verified = models.BooleanField(default=False)
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    verified_at = models.DateTimeField(null=True, blank=True)
+    notes = models.CharField(max_length=255, blank=True, default="")
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["batch", "doc_type"])]
+        constraints = [
+            # One of each kind per lot. A batch with two Certificates of Analysis
+            # is a batch where nobody can say which one is current.
+            models.UniqueConstraint(
+                fields=["batch", "doc_type"],
+                condition=~models.Q(doc_type="OTHER"),
+                name="uniq_batch_document_kind",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.get_doc_type_display()} · {self.batch.batch_number}"
+
+
+#: What a lot cannot be released to sale without. A Certificate of Analysis is
+#: the batch-level quality evidence a regulator asks for first; the rest are
+#: situational and belong to the consignment that carried it.
+REQUIRED_BATCH_DOCUMENTS = (BatchDocument.DocType.CERTIFICATE_OF_ANALYSIS,)
+
+
+def missing_batch_documents(batch: InventoryBatch) -> list[str]:
+    """Which required documents this lot does not have on file, verified.
+
+    An unverified upload does not count. Somebody attaching a file is not the
+    same as somebody checking it is the right file for this lot, and quarantine
+    release is exactly where that distinction earns its keep.
+    """
+    held = set(batch.documents.filter(is_verified=True).values_list("doc_type", flat=True))
+    return [
+        BatchDocument.DocType(code).label for code in REQUIRED_BATCH_DOCUMENTS if code not in held
+    ]

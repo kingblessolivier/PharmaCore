@@ -38,6 +38,7 @@ from apps.inventory import (
     warehouse_services,
 )
 from apps.inventory.models import (
+    BatchDocument,
     BatchRecall,
     BinLocation,
     ConsignmentAgreement,
@@ -65,6 +66,7 @@ from apps.inventory.models import (
 from apps.inventory.serializers import (
     AggregateSerializer,
     ApplyPutawaySerializer,
+    BatchDocumentSerializer,
     BatchRecallSerializer,
     BinLocationSerializer,
     BuildTasksSerializer,
@@ -1332,3 +1334,35 @@ class InventoryOverviewView(APIView):
                 },
             }
         )
+
+
+class BatchDocumentViewSet(viewsets.ModelViewSet):
+    """A lot's paperwork.
+
+    Verification is a separate act from upload: attaching a file is not the same
+    as somebody checking it is the right file for this lot, and only the second
+    counts towards a batch being properly documented.
+    """
+
+    serializer_class = BatchDocumentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self) -> QuerySet[BatchDocument]:
+        qs = BatchDocument.objects.select_related("batch").filter(
+            batch__organization__in=organizations_visible_to(cast(User, self.request.user))
+        )
+        batch = self.request.query_params.get("batch")
+        return qs.filter(batch_id=int(batch)) if batch and batch.isdigit() else qs
+
+    def perform_create(self, serializer: BaseSerializer) -> None:
+        serializer.save(uploaded_by=self.request.user)
+
+    @action(detail=True, methods=["post"])
+    def verify(self, request: Request, pk: str | None = None) -> Response:
+        """Confirm this is the right document for this lot."""
+        document = self.get_object()
+        document.is_verified = True
+        document.verified_by = request.user
+        document.verified_at = timezone.now()
+        document.save(update_fields=["is_verified", "verified_by", "verified_at"])
+        return Response(self.get_serializer(document).data)

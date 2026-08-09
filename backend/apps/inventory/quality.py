@@ -26,7 +26,11 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.iam.audit import record_audit
-from apps.inventory.models import InventoryBatch, QualityCheck
+from apps.inventory.models import (
+    InventoryBatch,
+    QualityCheck,
+    missing_batch_documents,  # noqa: F401
+)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from apps.iam.models import User
@@ -87,6 +91,25 @@ def release(*, check: QualityCheck, user: User | None = None, notes: str = "") -
 
     batch = check.batch
     previous = batch.status
+
+    # Releasing a lot to sale is the moment its paperwork ought to exist: a
+    # Certificate of Analysis is issued for a specific batch, and "we hold a GMP
+    # certificate for the manufacturer" is not an answer to "show me the CoA for
+    # this one" at an inspection.
+    #
+    # This records the gap rather than refusing the release. Refusing is the
+    # stricter reading of GDP and is one line away — but switching it on before
+    # a pharmacy has loaded any CoAs would stop it releasing stock at all, and
+    # that is a decision for whoever runs the pharmacy, not a default. The gap
+    # is recorded on the check so it is visible and auditable in the meantime.
+    missing = missing_batch_documents(batch)
+    if missing:
+        shortfall = ", ".join(missing)
+        notes = (
+            f"{notes} (released without: {shortfall})".strip()
+            if notes
+            else (f"Released without: {shortfall}")
+        )
 
     check.status = QualityCheck.Status.PASSED
     if notes:

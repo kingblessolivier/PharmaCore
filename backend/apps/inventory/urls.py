@@ -4,6 +4,7 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from apps.inventory.views import (
+    BatchDocumentViewSet,
     BatchRecallViewSet,
     BinLocationViewSet,
     ConsignmentAgreementViewSet,
@@ -32,6 +33,7 @@ from apps.inventory.views import (
 )
 
 router = DefaultRouter()
+router.register("batch-documents", BatchDocumentViewSet, basename="batch-document")
 router.register("pharmacy-products", PharmacyProductViewSet, basename="pharmacy-product")
 router.register("batches", InventoryBatchViewSet, basename="batch")
 router.register("movements", StockMovementViewSet, basename="movement")

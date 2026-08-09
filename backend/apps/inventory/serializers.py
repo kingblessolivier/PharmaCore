@@ -11,6 +11,7 @@ from apps.catalog.models import Product, Supplier
 from apps.core.fields import QuantityAwareModelSerializer
 from apps.iam.models import Organization
 from apps.inventory.models import (
+    BatchDocument,
     BatchRecall,
     BinLocation,
     ConsignmentAgreement,
@@ -1131,3 +1132,31 @@ class CloseInvestigationSerializer(serializers.Serializer):
     root_cause = serializers.CharField(required=False, allow_blank=True)
     corrective_action = serializers.CharField(required=False, allow_blank=True)
     impact_assessment = serializers.CharField(required=False, allow_blank=True)
+
+
+class BatchDocumentSerializer(QuantityAwareModelSerializer):
+    """Paperwork for one lot: CoA, import permit, proof of destruction."""
+
+    doc_type_display = serializers.CharField(source="get_doc_type_display", read_only=True)
+    batch_number = serializers.CharField(source="batch.batch_number", read_only=True)
+
+    class Meta:
+        model = BatchDocument
+        fields = [
+            "id",
+            "batch",
+            "batch_number",
+            "doc_type",
+            "doc_type_display",
+            "document_number",
+            "document_url",
+            "issued_on",
+            "issued_by",
+            "is_verified",
+            "verified_by",
+            "verified_at",
+            "notes",
+            "uploaded_by",
+            "created_at",
+        ]
+        read_only_fields = ["verified_by", "verified_at", "uploaded_by", "created_at"]
