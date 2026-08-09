@@ -51,7 +51,9 @@ function UserModal({
   const [firstName, setFirstName] = useState(user?.first_name ?? "");
   const [lastName, setLastName] = useState(user?.last_name ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
-  const [department, setDepartment] = useState<string>(user?.department ? String(user.department) : "");
+  const [department, setDepartment] = useState<string>(
+    user?.department ? String(user.department) : "",
+  );
   const [selectedRoles, setSelectedRoles] = useState<string[]>(user?.roles ?? []);
   const [error, setError] = useState<string | null>(null);
 
@@ -117,13 +119,23 @@ function UserModal({
           required={!editing}
         />
         <div className="grid grid-cols-2 gap-3">
-          <TextField label="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-          <TextField label="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+          <TextField
+            label="First name"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+          />
+          <TextField
+            label="Last name"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <TextField label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium uppercase tracking-wide text-ink-500">Department</span>
+            <span className="text-xs font-medium uppercase tracking-wide text-ink-500">
+              Department
+            </span>
             <select
               className="rounded-md border border-line bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-600"
               value={department}

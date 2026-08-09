@@ -85,7 +85,7 @@ def inventory_expiry_exposure(
     ).exclude(status=InventoryBatch.Status.RECALLED)
 
     total = live.aggregate(
-        qty=Coalesce(Sum("quantity_available"), 0),
+        qty=Coalesce(Sum("quantity_available"), Decimal("0")),
         value=Coalesce(Sum(_batch_value_expression()), Decimal("0"), output_field=_MONEY),
     )
 
@@ -102,7 +102,7 @@ def inventory_expiry_exposure(
             window &= Q(expiry_date__gte=today)
 
         agg = live.filter(window).aggregate(
-            qty=Coalesce(Sum("quantity_available"), 0),
+            qty=Coalesce(Sum("quantity_available"), Decimal("0")),
             value=Coalesce(Sum(_batch_value_expression()), Decimal("0"), output_field=_MONEY),
         )
         value = _q(agg["value"])

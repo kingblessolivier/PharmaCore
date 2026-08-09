@@ -150,9 +150,7 @@ export function GrnWorkbenchPage() {
               <div className="text-form text-warning-900">
                 <span className="font-semibold">Check before posting.</span>{" "}
                 {coldChainFailed && (
-                  <>
-                    The cold chain or packaging was recorded as compromised on arrival.{" "}
-                  </>
+                  <>The cold chain or packaging was recorded as compromised on arrival. </>
                 )}
                 {shortDated.length > 0 && (
                   <>
@@ -366,16 +364,12 @@ export function GrnWorkbenchPage() {
                   <td className="text-ink-900">{line.product_name}</td>
                   <td className="font-mono text-micro text-ink-700">{line.batch_number}</td>
                   <td
-                    className={
-                      flags.shortDated ? "font-semibold text-warning-700" : "text-ink-700"
-                    }
+                    className={flags.shortDated ? "font-semibold text-warning-700" : "text-ink-700"}
                     title={flags.shortDated ? `Only ${daysUntil(line.expiry_date)} days left` : ""}
                   >
                     {shortDate(line.expiry_date)}
                   </td>
-                  <td className="text-right tabular-nums text-ink-600">
-                    {line.quantity_expected}
-                  </td>
+                  <td className="text-right tabular-nums text-ink-600">{line.quantity_expected}</td>
                   <td
                     className={`text-right tabular-nums ${
                       flags.overDelivered || flags.underDelivered

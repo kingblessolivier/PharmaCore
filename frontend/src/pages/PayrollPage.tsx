@@ -49,7 +49,6 @@ function NewRunDrawer({ orgId, onClose }: { orgId: number | null; onClose: () =>
   return (
     <Drawer
       title="Run payroll"
-      subtitle="Computes gross→net for every active employee using the statutory rates in force at period end."
       onClose={onClose}
       width="max-w-xl"
       footer={
@@ -94,8 +93,7 @@ function RunDrawer({ run, onClose }: { run: PayrollRun; onClose: () => void }) {
   const invalidate = () => void qc.invalidateQueries({ queryKey: ["payroll-runs"] });
 
   const submit = useMutation({
-    mutationFn: () =>
-      api<PayrollRun>(`/api/hr/payroll-runs/${run.id}/submit/`, { method: "POST" }),
+    mutationFn: () => api<PayrollRun>(`/api/hr/payroll-runs/${run.id}/submit/`, { method: "POST" }),
     onSuccess: invalidate,
   });
   const markPaid = useMutation({
@@ -112,8 +110,7 @@ function RunDrawer({ run, onClose }: { run: PayrollRun; onClose: () => void }) {
       cbhi: acc.cbhi + Number(r.cbhi),
       loans: acc.loans + Number(r.loans_advances),
       net: acc.net + Number(r.net_pay),
-      employer:
-        acc.employer + Number(r.pension_employer) + Number(r.maternity_employer),
+      employer: acc.employer + Number(r.pension_employer) + Number(r.maternity_employer),
     }),
     { gross: 0, paye: 0, rssb: 0, cbhi: 0, loans: 0, net: 0, employer: 0 },
   );
@@ -232,7 +229,11 @@ function RunDrawer({ run, onClose }: { run: PayrollRun; onClose: () => void }) {
               numeric: true,
               value: (r) => Number(r.loans_advances),
               render: (r) =>
-                Number(r.loans_advances) > 0 ? amount(r.loans_advances) : <span className="text-ink-400">—</span>,
+                Number(r.loans_advances) > 0 ? (
+                  amount(r.loans_advances)
+                ) : (
+                  <span className="text-ink-400">—</span>
+                ),
             },
             {
               key: "net_pay",
@@ -308,7 +309,7 @@ export function PayrollPage() {
   });
 
   const rows = data?.results ?? [];
-  const current = open ? rows.find((r) => r.id === open.id) ?? open : null;
+  const current = open ? (rows.find((r) => r.id === open.id) ?? open) : null;
 
   return (
     <div>
@@ -320,10 +321,6 @@ export function PayrollPage() {
           </Button>
         }
       />
-      <p className="mb-4 max-w-3xl text-sm text-ink-500">
-        Gross→net for every employee, computed from the statutory rates in force at period end. A
-        run is never self-approved; approving posts the payroll journal and publishes payslips.
-      </p>
 
       <DataGrid<PayrollRun>
         rows={rows}

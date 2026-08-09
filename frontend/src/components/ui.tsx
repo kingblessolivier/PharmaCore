@@ -53,10 +53,7 @@ export function TextField({
       {label && (
         <span className="text-micro font-medium uppercase tracking-wide text-ink-500">{label}</span>
       )}
-      <input
-        className={`field-control ${className}`}
-        {...props}
-      />
+      <input className={`field-control ${className}`} {...props} />
     </label>
   );
 }
@@ -72,10 +69,7 @@ export function SelectField({
       {label && (
         <span className="text-micro font-medium uppercase tracking-wide text-ink-500">{label}</span>
       )}
-      <select
-        className={`field-control ${className}`}
-        {...props}
-      >
+      <select className={`field-control ${className}`} {...props}>
         {children}
       </select>
     </label>
@@ -92,11 +86,7 @@ export function TextArea({
       {label && (
         <span className="text-micro font-medium uppercase tracking-wide text-ink-500">{label}</span>
       )}
-      <textarea
-        rows={2}
-        className={`field-control ${className}`}
-        {...props}
-      />
+      <textarea rows={2} className={`field-control ${className}`} {...props} />
     </label>
   );
 }

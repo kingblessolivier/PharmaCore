@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
+from decimal import Decimal
 from typing import Any
 
 from django.utils import timezone
 from rest_framework import serializers
 
 from apps.catalog.models import Product, Supplier
+from apps.core.fields import QuantityAwareModelSerializer
 from apps.iam.models import Organization
 from apps.inventory.models import (
     BatchRecall,
@@ -35,7 +38,15 @@ from apps.inventory.models import (
 )
 
 
-class WarehouseSerializer(serializers.ModelSerializer):
+def _total(values: Iterable[Any]) -> Decimal:
+    """Sum decimal stock quantities. `sum()` starting at int 0 types as int."""
+    out = Decimal(0)
+    for v in values:
+        out += Decimal(str(v))
+    return out
+
+
+class WarehouseSerializer(QuantityAwareModelSerializer):
     organization_name = serializers.CharField(source="organization.name", read_only=True)
     zones_count = serializers.SerializerMethodField()
     bins_count = serializers.SerializerMethodField()
@@ -68,7 +79,7 @@ class WarehouseSerializer(serializers.ModelSerializer):
         return BinLocation.objects.filter(zone__warehouse=obj).count()
 
 
-class StorageZoneSerializer(serializers.ModelSerializer):
+class StorageZoneSerializer(QuantityAwareModelSerializer):
     organization_name = serializers.CharField(source="organization.name", read_only=True)
     warehouse_name = serializers.CharField(source="warehouse.name", read_only=True, default=None)
     bins_count = serializers.SerializerMethodField()
@@ -95,7 +106,7 @@ class StorageZoneSerializer(serializers.ModelSerializer):
         return obj.bins.count()
 
 
-class BinLocationSerializer(serializers.ModelSerializer):
+class BinLocationSerializer(QuantityAwareModelSerializer):
     zone_name = serializers.CharField(source="zone.name", read_only=True)
 
     class Meta:
@@ -112,7 +123,7 @@ class BinLocationSerializer(serializers.ModelSerializer):
         ]
 
 
-class TemperatureSensorSerializer(serializers.ModelSerializer):
+class TemperatureSensorSerializer(QuantityAwareModelSerializer):
     zone_name = serializers.CharField(source="zone.name", read_only=True)
     calibration_state = serializers.CharField(read_only=True)
     latest_reading = serializers.SerializerMethodField()
@@ -153,7 +164,7 @@ class TemperatureSensorSerializer(serializers.ModelSerializer):
         }
 
 
-class SensorCalibrationSerializer(serializers.ModelSerializer):
+class SensorCalibrationSerializer(QuantityAwareModelSerializer):
     sensor_name = serializers.CharField(source="sensor.name", read_only=True)
     sensor_device_id = serializers.CharField(source="sensor.device_id", read_only=True)
     recorded_by_username = serializers.CharField(
@@ -184,7 +195,7 @@ class SensorCalibrationSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "recorded_by", "created_at"]
 
 
-class ExcursionInvestigationSerializer(serializers.ModelSerializer):
+class ExcursionInvestigationSerializer(QuantityAwareModelSerializer):
     sensor_name = serializers.CharField(source="sensor.name", read_only=True, default=None)
     zone_name = serializers.CharField(source="zone.name", read_only=True, default=None)
     opened_by_username = serializers.CharField(
@@ -255,7 +266,7 @@ class ExcursionInvestigationSerializer(serializers.ModelSerializer):
         ]
 
 
-class TemperatureLogSerializer(serializers.ModelSerializer):
+class TemperatureLogSerializer(QuantityAwareModelSerializer):
     sensor_name = serializers.CharField(source="sensor.name", read_only=True)
 
     class Meta:
@@ -271,7 +282,7 @@ class TemperatureLogSerializer(serializers.ModelSerializer):
         ]
 
 
-class QualityCheckSerializer(serializers.ModelSerializer):
+class QualityCheckSerializer(QuantityAwareModelSerializer):
     batch_number = serializers.CharField(source="batch.batch_number", read_only=True)
     product_name = serializers.SerializerMethodField()
     inspector_username = serializers.CharField(source="inspector.username", read_only=True)
@@ -298,7 +309,7 @@ class QualityCheckSerializer(serializers.ModelSerializer):
         return f"{obj.batch.product.generic_name} {obj.batch.product.strength}".strip()
 
 
-class BatchRecallSerializer(serializers.ModelSerializer):
+class BatchRecallSerializer(QuantityAwareModelSerializer):
     product_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -320,7 +331,7 @@ class BatchRecallSerializer(serializers.ModelSerializer):
         return f"{obj.product.generic_name} {obj.product.strength}".strip()
 
 
-class StockCountItemSerializer(serializers.ModelSerializer):
+class StockCountItemSerializer(QuantityAwareModelSerializer):
     product_name = serializers.SerializerMethodField()
     batch_number = serializers.CharField(source="batch.batch_number", read_only=True)
 
@@ -342,7 +353,7 @@ class StockCountItemSerializer(serializers.ModelSerializer):
         return f"{obj.batch.product.generic_name} {obj.batch.product.strength}".strip()
 
 
-class StockCountSerializer(serializers.ModelSerializer):
+class StockCountSerializer(QuantityAwareModelSerializer):
     counter_username = serializers.CharField(source="counter_user.username", read_only=True)
     approver_username = serializers.CharField(
         source="approver_user.username", read_only=True, default=None
@@ -368,7 +379,7 @@ class StockCountSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "counter_user", "started_at"]
 
 
-class StockDisposalSerializer(serializers.ModelSerializer):
+class StockDisposalSerializer(QuantityAwareModelSerializer):
     primary_witness_username = serializers.CharField(
         source="primary_witness.username", read_only=True
     )
@@ -392,7 +403,7 @@ class StockDisposalSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "primary_witness", "created_at"]
 
 
-class PharmacyProductSerializer(serializers.ModelSerializer):
+class PharmacyProductSerializer(QuantityAwareModelSerializer):
     product_name = serializers.SerializerMethodField()
     product_form = serializers.CharField(source="product.dosage_form", read_only=True)
     product_strength = serializers.CharField(source="product.strength", read_only=True)
@@ -468,7 +479,7 @@ class PharmacyProductSerializer(serializers.ModelSerializer):
         return f"{avg:.2f}" if avg is not None else None
 
 
-class InventoryBatchSerializer(serializers.ModelSerializer):
+class InventoryBatchSerializer(QuantityAwareModelSerializer):
     product_name = serializers.SerializerMethodField()
     days_to_expiry = serializers.SerializerMethodField()
     source_name = serializers.SerializerMethodField()
@@ -539,7 +550,7 @@ class IntakeSerializer(serializers.Serializer):
     storage_location = serializers.CharField(max_length=100, required=False, allow_blank=True)
 
 
-class StockMovementSerializer(serializers.ModelSerializer):
+class StockMovementSerializer(QuantityAwareModelSerializer):
     product_name = serializers.SerializerMethodField()
     created_by = serializers.CharField(source="created_by.username", read_only=True, default=None)
 
@@ -565,7 +576,7 @@ class StockMovementSerializer(serializers.ModelSerializer):
 # --- Replenishment ---------------------------------------------------------
 
 
-class ReorderRuleSerializer(serializers.ModelSerializer):
+class ReorderRuleSerializer(QuantityAwareModelSerializer):
     product_name = serializers.SerializerMethodField()
     warehouse_name = serializers.CharField(source="warehouse.name", read_only=True, default=None)
     preferred_supplier_name = serializers.CharField(
@@ -635,7 +646,7 @@ class ReorderRuleSerializer(serializers.ModelSerializer):
 # --- Serialisation & track-and-trace ---------------------------------------
 
 
-class SerialUnitSerializer(serializers.ModelSerializer):
+class SerialUnitSerializer(QuantityAwareModelSerializer):
     product_name = serializers.SerializerMethodField()
     parent_epc = serializers.CharField(source="parent.epc", read_only=True, default=None)
     children_count = serializers.SerializerMethodField()
@@ -678,7 +689,7 @@ class SerialUnitSerializer(serializers.ModelSerializer):
         return obj.children.count()
 
 
-class EpcisEventSerializer(serializers.ModelSerializer):
+class EpcisEventSerializer(QuantityAwareModelSerializer):
     created_by_username = serializers.CharField(
         source="created_by.username", read_only=True, default=None
     )
@@ -753,7 +764,7 @@ class ObserveSerializer(serializers.Serializer):
 # --- Consignment / VMI -----------------------------------------------------
 
 
-class ConsignmentAgreementSerializer(serializers.ModelSerializer):
+class ConsignmentAgreementSerializer(QuantityAwareModelSerializer):
     counterparty_name = serializers.CharField(read_only=True)
     owner_supplier_name = serializers.CharField(
         source="owner_supplier.name", read_only=True, default=None
@@ -821,7 +832,7 @@ class ConsignmentAgreementSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class ConsignmentConsumptionSerializer(serializers.ModelSerializer):
+class ConsignmentConsumptionSerializer(QuantityAwareModelSerializer):
     product_name = serializers.SerializerMethodField()
     agreement_no = serializers.CharField(source="agreement.agreement_no", read_only=True)
     settlement_no = serializers.CharField(
@@ -852,7 +863,7 @@ class ConsignmentConsumptionSerializer(serializers.ModelSerializer):
         return f"{obj.product.generic_name} {obj.product.strength}".strip()
 
 
-class ConsignmentSettlementSerializer(serializers.ModelSerializer):
+class ConsignmentSettlementSerializer(QuantityAwareModelSerializer):
     agreement_no = serializers.CharField(source="agreement.agreement_no", read_only=True)
     counterparty_name = serializers.CharField(source="agreement.counterparty_name", read_only=True)
     supplier_bill_no = serializers.CharField(
@@ -898,7 +909,7 @@ class SettleConsignmentSerializer(serializers.Serializer):
 # --- Put-away & wave picking -----------------------------------------------
 
 
-class PutawayRuleSerializer(serializers.ModelSerializer):
+class PutawayRuleSerializer(QuantityAwareModelSerializer):
     warehouse_name = serializers.CharField(source="warehouse.name", read_only=True, default=None)
     target_zone_name = serializers.CharField(
         source="target_zone.name", read_only=True, default=None
@@ -949,7 +960,7 @@ class PutawayRuleSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class PickTaskSerializer(serializers.ModelSerializer):
+class PickTaskSerializer(QuantityAwareModelSerializer):
     product_name = serializers.SerializerMethodField()
     zone_name = serializers.CharField(source="zone.name", read_only=True, default=None)
     bin_code = serializers.CharField(source="bin_location.bin_code", read_only=True, default=None)
@@ -986,7 +997,7 @@ class PickTaskSerializer(serializers.ModelSerializer):
         return f"{obj.product.generic_name} {obj.product.strength}".strip()
 
 
-class PickWaveSerializer(serializers.ModelSerializer):
+class PickWaveSerializer(QuantityAwareModelSerializer):
     warehouse_name = serializers.CharField(source="warehouse.name", read_only=True, default=None)
     zone_name = serializers.CharField(source="zone.name", read_only=True, default=None)
     assigned_to_username = serializers.CharField(
@@ -1027,7 +1038,7 @@ class PickWaveSerializer(serializers.ModelSerializer):
             "created_at",
         ]
 
-    def get_task_summary(self, obj: PickWave) -> dict[str, int]:
+    def get_task_summary(self, obj: PickWave) -> dict[str, Any]:
         tasks = list(obj.tasks.all())
         return {
             "total": len(tasks),
@@ -1035,8 +1046,8 @@ class PickWaveSerializer(serializers.ModelSerializer):
             "assigned": sum(1 for t in tasks if t.status == PickTask.Status.ASSIGNED),
             "picked": sum(1 for t in tasks if t.status == PickTask.Status.PICKED),
             "short": sum(1 for t in tasks if t.status == PickTask.Status.SHORT),
-            "units_requested": sum(t.quantity_requested for t in tasks),
-            "units_picked": sum(t.quantity_picked for t in tasks),
+            "units_requested": _total(t.quantity_requested for t in tasks),
+            "units_picked": _total(t.quantity_picked for t in tasks),
         }
 
 

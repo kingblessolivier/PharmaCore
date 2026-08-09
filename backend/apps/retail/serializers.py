@@ -5,6 +5,7 @@ from typing import Any
 
 from rest_framework import serializers
 
+from apps.core.fields import QuantityAwareModelSerializer
 from apps.retail.models import (
     TAX_RATES,
     ClinicalService,
@@ -21,7 +22,7 @@ from apps.retail.models import (
 )
 
 
-class PrescriptionItemSerializer(serializers.ModelSerializer):
+class PrescriptionItemSerializer(QuantityAwareModelSerializer):
     """What was prescribed. Without this the script records who, not what."""
 
     product_name = serializers.SerializerMethodField()
@@ -47,7 +48,7 @@ class PrescriptionItemSerializer(serializers.ModelSerializer):
         return f"{obj.product.generic_name} {obj.product.strength}".strip()
 
 
-class PrescriptionSerializer(serializers.ModelSerializer):
+class PrescriptionSerializer(QuantityAwareModelSerializer):
     organization_name = serializers.CharField(source="organization.name", read_only=True)
     items = PrescriptionItemSerializer(many=True, required=False)
     remaining_refills = serializers.IntegerField(read_only=True)
@@ -77,7 +78,7 @@ class PrescriptionSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "remaining_refills"]
 
 
-class ControlledSubstanceRegisterSerializer(serializers.ModelSerializer):
+class ControlledSubstanceRegisterSerializer(QuantityAwareModelSerializer):
     organization_name = serializers.CharField(source="organization.name", read_only=True)
     product_name = serializers.CharField(source="product.generic_name", read_only=True)
     logged_by_name = serializers.SerializerMethodField()
@@ -110,7 +111,7 @@ class ControlledSubstanceRegisterSerializer(serializers.ModelSerializer):
         return obj.logged_by.get_full_name() or obj.logged_by.username
 
 
-class POSPromotionSerializer(serializers.ModelSerializer):
+class POSPromotionSerializer(QuantityAwareModelSerializer):
     class Meta:
         model = POSPromotion
         fields = [
@@ -130,14 +131,14 @@ class POSPromotionSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at"]
 
 
-class ClinicalServiceSerializer(serializers.ModelSerializer):
+class ClinicalServiceSerializer(QuantityAwareModelSerializer):
     class Meta:
         model = ClinicalService
         fields = ["id", "service_code", "name", "category", "fee_amount", "is_active"]
         read_only_fields = ["id"]
 
 
-class ClinicalServiceRecordSerializer(serializers.ModelSerializer):
+class ClinicalServiceRecordSerializer(QuantityAwareModelSerializer):
     organization_name = serializers.CharField(source="organization.name", read_only=True)
     service_name = serializers.CharField(source="service.name", read_only=True)
     performed_by_name = serializers.SerializerMethodField()
@@ -168,7 +169,7 @@ class ClinicalServiceRecordSerializer(serializers.ModelSerializer):
         return obj.performed_by.get_full_name() or obj.performed_by.username
 
 
-class DrawerSessionSerializer(serializers.ModelSerializer):
+class DrawerSessionSerializer(QuantityAwareModelSerializer):
     cashier_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -206,7 +207,7 @@ class DrawerSessionSerializer(serializers.ModelSerializer):
         return u.get_full_name() or u.username
 
 
-class DispensingSerializer(serializers.ModelSerializer):
+class DispensingSerializer(QuantityAwareModelSerializer):
     sale_number = serializers.CharField(source="sale.sale_number", read_only=True)
     organization = serializers.IntegerField(source="sale.organization_id", read_only=True)
     dispensed_by_name = serializers.SerializerMethodField()
@@ -235,7 +236,7 @@ class DispensingSerializer(serializers.ModelSerializer):
         return u.get_full_name() or u.username
 
 
-class SaleItemSerializer(serializers.ModelSerializer):
+class SaleItemSerializer(QuantityAwareModelSerializer):
     product_name = serializers.SerializerMethodField()
     line_total = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     line_tax = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
@@ -269,14 +270,14 @@ class SaleItemSerializer(serializers.ModelSerializer):
         return f"{obj.product.generic_name} {obj.product.strength}".strip()
 
 
-class PaymentSerializer(serializers.ModelSerializer):
+class PaymentSerializer(QuantityAwareModelSerializer):
     class Meta:
         model = Payment
         fields = ["id", "method", "amount", "created_at"]
         read_only_fields = ["id", "created_at"]
 
 
-class SaleSerializer(serializers.ModelSerializer):
+class SaleSerializer(QuantityAwareModelSerializer):
     items = SaleItemSerializer(many=True)
     payments = PaymentSerializer(many=True, read_only=True)
     org_name = serializers.CharField(source="organization.name", read_only=True)
@@ -325,6 +326,7 @@ class SaleSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data: dict[str, Any]) -> Sale:
         from apps.inventory.models import PharmacyProduct
+        from apps.retail.lines import build_line
 
         items = validated_data.pop("items", [])
         sale = Sale.objects.create(**validated_data)
@@ -337,11 +339,12 @@ class SaleSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     f"'{product}' has no retail price at {sale.organization.name}."
                 )
-            SaleItem.objects.create(
+            build_line(
                 sale=sale,
                 product=product,
                 quantity=item["quantity"],
-                unit_price=listing.retail_price,
+                unit_code=item.get("unit"),
+                base_price=listing.retail_price,
                 tax_rate=TAX_RATES.get(product.tax_class, Decimal("0")),
             )
         return sale

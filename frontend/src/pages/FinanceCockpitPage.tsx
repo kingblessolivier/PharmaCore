@@ -175,10 +175,6 @@ export function FinanceCockpitPage() {
           </div>
         }
       />
-      <p className="mb-4 max-w-3xl text-sm text-ink-500">
-        What a pharmacy owner actually needs to know: is it profitable, is the cash cycle funded, is
-        the stock going to expire before it sells, and is the money invested earning its keep.
-      </p>
 
       {cockpit.isLoading && <EmptyChart message="Loading the ledger…" />}
 
@@ -194,7 +190,11 @@ export function FinanceCockpitPage() {
               hint={money(p.gross_profit)}
             />
             <Kpi label="Net profit" value={money(p.net_profit)} deltaPct={p.delta_pct.net_profit} />
-            <Kpi label="EBITDA" value={money(p.ebitda)} hint="before interest, tax & depreciation" />
+            <Kpi
+              label="EBITDA"
+              value={money(p.ebitda)}
+              hint="before interest, tax & depreciation"
+            />
             <Kpi
               label="Cash cycle"
               value={wc.computable ? `${num(wc.cash_conversion_cycle_days).toFixed(0)} d` : "—"}
@@ -223,14 +223,17 @@ export function FinanceCockpitPage() {
           )}
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            <ChartFrame
-              title="Where the money goes"
-              subtitle="Revenue less cost of sales and operating costs, for the period."
-            >
+            <ChartFrame title="Where the money goes">
               <Donut
                 slices={[
                   ...cogsAndOpex,
-                  { label: "Depreciation", value: num(p.ebitda) - num(p.net_profit) > 0 ? num(c.performance.ebitda) - num(p.net_profit) : 0 },
+                  {
+                    label: "Depreciation",
+                    value:
+                      num(p.ebitda) - num(p.net_profit) > 0
+                        ? num(c.performance.ebitda) - num(p.net_profit)
+                        : 0,
+                  },
                   { label: "Net profit", value: Math.max(0, num(p.net_profit)) },
                 ].filter((s) => s.value > 0)}
                 centreLabel="revenue"
@@ -239,10 +242,7 @@ export function FinanceCockpitPage() {
               />
             </ChartFrame>
 
-            <ChartFrame
-              title="Cash conversion cycle"
-              subtitle="Days of working capital the business has to fund out of its own pocket."
-            >
+            <ChartFrame title="Cash conversion cycle">
               {wc.computable ? (
                 <Waterfall
                   steps={[
@@ -258,10 +258,7 @@ export function FinanceCockpitPage() {
               <p className="mt-2 text-xs text-ink-600">{wc.interpretation}</p>
             </ChartFrame>
 
-            <ChartFrame
-              title="Gross margin by channel"
-              subtitle="Costed on the FEFO lot each sale was actually drawn from."
-            >
+            <ChartFrame title="Gross margin by channel">
               {channelBars.length ? (
                 <BarChart data={channelBars} valueFormat={(n) => `${n.toFixed(1)}%`} />
               ) : (
@@ -269,10 +266,7 @@ export function FinanceCockpitPage() {
               )}
             </ChartFrame>
 
-            <ChartFrame
-              title="Expiry exposure"
-              subtitle="Stock at cost, banded by how long it has left to sell."
-            >
+            <ChartFrame title="Expiry exposure">
               {expiryBars.length ? (
                 <BarChart data={expiryBars} valueFormat={(n) => amount(n)} />
               ) : (
@@ -337,7 +331,10 @@ export function FinanceCockpitPage() {
               </div>
             </Section>
 
-            <Section title="Break-even" hint="Fixed costs treated as fixed, stock cost as variable.">
+            <Section
+              title="Break-even"
+              hint="Fixed costs treated as fixed, stock cost as variable."
+            >
               <div className="flex flex-col gap-3 rounded-lg border border-line p-4">
                 <div className="flex items-baseline justify-between">
                   <span className="text-sm text-ink-700">Revenue needed</span>
@@ -359,9 +356,7 @@ export function FinanceCockpitPage() {
                   {be.margin_of_safety_pct === null ? (
                     <Badge tone="neutral">No contribution margin to model</Badge>
                   ) : be.is_above_break_even ? (
-                    <Badge tone="success">
-                      {pct(be.margin_of_safety_pct)} margin of safety
-                    </Badge>
+                    <Badge tone="success">{pct(be.margin_of_safety_pct)} margin of safety</Badge>
                   ) : (
                     <Badge tone="danger">Below break-even for this period</Badge>
                   )}
@@ -374,13 +369,16 @@ export function FinanceCockpitPage() {
           {c.retail_vs_wholesale.rows.some((r) => num(r.revenue) > 0) && (
             <ChartFrame
               title="Retail vs wholesale"
-              subtitle="A hybrid operator runs two businesses with different economics."
               legend={[
                 { label: "Retail (counter)", color: "var(--viz-s1)" },
                 { label: "Wholesale (B2B)", color: "var(--viz-s2)" },
               ]}
             >
-              <div className="flex h-6 overflow-hidden rounded-md" role="img" aria-label="Revenue mix">
+              <div
+                className="flex h-6 overflow-hidden rounded-md"
+                role="img"
+                aria-label="Revenue mix"
+              >
                 {c.retail_vs_wholesale.rows.map((r, i) => (
                   <div
                     key={r.channel}
@@ -420,7 +418,6 @@ export function FinanceCockpitPage() {
         <div className="mt-6 flex flex-col gap-4">
           <ChartFrame
             title="Revenue by branch"
-            subtitle="Group revenue split across the network."
             action={
               <span className="text-xs text-ink-500">
                 Group net {money(branches.data!.group_net_profit)}

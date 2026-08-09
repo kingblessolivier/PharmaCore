@@ -2,15 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, ShieldAlert } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DataGrid } from "../components/DataGrid";
-import {
-  Drawer,
-  ErrorNote,
-  Field,
-  Grid,
-  Input,
-  Section,
-  Select,
-} from "../components/RecordKit";
+import { Drawer, ErrorNote, Field, Grid, Input, Section, Select } from "../components/RecordKit";
 import { Badge, Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
 import { dateTime } from "../lib/format";
@@ -65,7 +57,6 @@ function EntryDrawer({ orgId, onClose }: { orgId: number | null; onClose: () => 
   return (
     <Drawer
       title="Manual register entry"
-      subtitle="Dispensing is written by the till. This is for receipts and witnessed disposals."
       width="max-w-2xl"
       onClose={onClose}
       footer={
@@ -228,11 +219,6 @@ export function ControlledSubstancesPage() {
           </Button>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        The statutory running-balance record. Dispensing is written automatically by the till at
-        the moment of sale — a register typed up afterwards drifts from the stock it is meant to
-        account for, and this is the document an inspector reads.
-      </p>
 
       {balances.length > 0 && (
         <div className="rounded-lg border border-line bg-surface-0 px-4 py-3">
@@ -293,9 +279,7 @@ export function ControlledSubstancesPage() {
             header: "Movement",
             value: (e) => e.movement_type,
             render: (e) => (
-              <Badge tone={MOVEMENT_TONE[e.movement_type]}>
-                {MOVEMENT_LABEL[e.movement_type]}
-              </Badge>
+              <Badge tone={MOVEMENT_TONE[e.movement_type]}>{MOVEMENT_LABEL[e.movement_type]}</Badge>
             ),
           },
           {

@@ -5,6 +5,7 @@ from typing import Any
 from django.db import transaction
 from rest_framework import serializers
 
+from apps.core.fields import QuantityAwareModelSerializer
 from apps.distribution.models import (
     BackorderLine,
     CustomerReturn,
@@ -26,14 +27,14 @@ from apps.distribution.models import (
 )
 
 
-class OrderPaymentSerializer(serializers.ModelSerializer):
+class OrderPaymentSerializer(QuantityAwareModelSerializer):
     class Meta:
         model = OrderPayment
         fields = ["id", "amount", "method", "reference", "paid_at"]
         read_only_fields = ["id", "paid_at"]
 
 
-class InTransitStockSerializer(serializers.ModelSerializer):
+class InTransitStockSerializer(QuantityAwareModelSerializer):
     product_name = serializers.SerializerMethodField()
     source_name = serializers.CharField(source="source_org.name", read_only=True)
     destination_name = serializers.CharField(source="destination_org.name", read_only=True)
@@ -62,14 +63,14 @@ class InTransitStockSerializer(serializers.ModelSerializer):
         return f"{obj.product.generic_name} {obj.product.strength}".strip()
 
 
-class ShipmentSerializer(serializers.ModelSerializer):
+class ShipmentSerializer(QuantityAwareModelSerializer):
     class Meta:
         model = Shipment
         fields = ["id", "driver_name", "vehicle_registration", "dispatched_at"]
         read_only_fields = fields
 
 
-class GRNLineSerializer(serializers.ModelSerializer):
+class GRNLineSerializer(QuantityAwareModelSerializer):
     product_name = serializers.SerializerMethodField()
     has_discrepancy = serializers.BooleanField(read_only=True)
 
@@ -92,7 +93,7 @@ class GRNLineSerializer(serializers.ModelSerializer):
         return f"{obj.product.generic_name} {obj.product.strength}".strip()
 
 
-class GRNSerializer(serializers.ModelSerializer):
+class GRNSerializer(QuantityAwareModelSerializer):
     lines = GRNLineSerializer(many=True, read_only=True)
     order_number = serializers.CharField(source="order.order_number", read_only=True)
 
@@ -111,7 +112,7 @@ class GRNSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class OrderItemSerializer(serializers.ModelSerializer):
+class OrderItemSerializer(QuantityAwareModelSerializer):
     product_name = serializers.SerializerMethodField()
     line_total = serializers.FloatField(read_only=True)
 
@@ -143,7 +144,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
         return f"{obj.product.generic_name} {obj.product.strength}".strip()
 
 
-class StockOrderSerializer(serializers.ModelSerializer):
+class StockOrderSerializer(QuantityAwareModelSerializer):
     items = OrderItemSerializer(many=True)
     depot_name = serializers.CharField(source="depot.name", read_only=True)
     retail_name = serializers.CharField(source="retail.name", read_only=True)
@@ -275,7 +276,7 @@ class StockOrderSerializer(serializers.ModelSerializer):
         return order
 
 
-class DepotProductListingSerializer(serializers.ModelSerializer):
+class DepotProductListingSerializer(QuantityAwareModelSerializer):
     product_name = serializers.CharField(source="product.generic_name", read_only=True)
     product_brand = serializers.CharField(source="product.brand_name", read_only=True)
     depot_name = serializers.CharField(source="depot.name", read_only=True)
@@ -350,7 +351,7 @@ class DepotProductListingSerializer(serializers.ModelSerializer):
         return self._availability(obj).reason
 
 
-class SalesRepresentativeSerializer(serializers.ModelSerializer):
+class SalesRepresentativeSerializer(QuantityAwareModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
     full_name = serializers.CharField(source="user.get_full_name", read_only=True)
 
@@ -372,7 +373,7 @@ class SalesRepresentativeSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at"]
 
 
-class JourneyPlanSerializer(serializers.ModelSerializer):
+class JourneyPlanSerializer(QuantityAwareModelSerializer):
     rep_username = serializers.CharField(source="rep.user.username", read_only=True)
     customer_name = serializers.CharField(source="customer_org.name", read_only=True)
 
@@ -391,7 +392,7 @@ class JourneyPlanSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at"]
 
 
-class SalesVisitLogSerializer(serializers.ModelSerializer):
+class SalesVisitLogSerializer(QuantityAwareModelSerializer):
     rep_username = serializers.CharField(source="rep.user.username", read_only=True)
     customer_name = serializers.CharField(source="customer_org.name", read_only=True)
 
@@ -413,7 +414,7 @@ class SalesVisitLogSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "visited_at"]
 
 
-class TenderContractSerializer(serializers.ModelSerializer):
+class TenderContractSerializer(QuantityAwareModelSerializer):
     depot_name = serializers.CharField(source="depot.name", read_only=True)
     client_name = serializers.CharField(source="client_org.name", read_only=True)
     product_name = serializers.CharField(source="product.generic_name", read_only=True)
@@ -441,7 +442,7 @@ class TenderContractSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "remaining_qty", "created_at"]
 
 
-class CustomerReturnLineSerializer(serializers.ModelSerializer):
+class CustomerReturnLineSerializer(QuantityAwareModelSerializer):
     product_name = serializers.CharField(source="product.generic_name", read_only=True)
     credit_amount = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
 
@@ -464,7 +465,7 @@ class CustomerReturnLineSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "restocked_batch", "credit_amount"]
 
 
-class CustomerReturnSerializer(serializers.ModelSerializer):
+class CustomerReturnSerializer(QuantityAwareModelSerializer):
     depot_name = serializers.CharField(source="depot.name", read_only=True)
     retail_name = serializers.CharField(source="retail.name", read_only=True)
     lines = CustomerReturnLineSerializer(many=True, required=False)
@@ -503,7 +504,7 @@ class CustomerReturnSerializer(serializers.ModelSerializer):
         return request
 
 
-class BackorderLineSerializer(serializers.ModelSerializer):
+class BackorderLineSerializer(QuantityAwareModelSerializer):
     product_name = serializers.CharField(source="product.generic_name", read_only=True)
     depot_name = serializers.CharField(source="depot.name", read_only=True)
     retail_name = serializers.CharField(source="retail.name", read_only=True)
@@ -541,7 +542,7 @@ class BackorderLineSerializer(serializers.ModelSerializer):
         ]
 
 
-class VanStockSerializer(serializers.ModelSerializer):
+class VanStockSerializer(QuantityAwareModelSerializer):
     product_name = serializers.CharField(source="product.generic_name", read_only=True)
     rep_name = serializers.CharField(source="rep.user.username", read_only=True)
 
@@ -553,7 +554,7 @@ class VanStockSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "quantity"]
 
 
-class VanStockMovementSerializer(serializers.ModelSerializer):
+class VanStockMovementSerializer(QuantityAwareModelSerializer):
     product_name = serializers.CharField(source="product.generic_name", read_only=True)
 
     class Meta:

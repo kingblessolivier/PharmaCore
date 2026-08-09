@@ -20,7 +20,11 @@ export function LoginPage() {
       await login(username, password);
       navigate("/");
     } catch (err) {
-      setError(err instanceof ApiError && err.status === 401 ? "Invalid username or password." : "Sign-in failed. Is the API running?");
+      setError(
+        err instanceof ApiError && err.status === 401
+          ? "Invalid username or password."
+          : "Sign-in failed. Is the API running?",
+      );
     } finally {
       setBusy(false);
     }
@@ -31,7 +35,13 @@ export function LoginPage() {
       <Card className="w-full max-w-sm p-7">
         <div className="mb-6 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-600">
-            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="white" strokeWidth={2.2}>
+            <svg
+              viewBox="0 0 24 24"
+              className="h-6 w-6"
+              fill="none"
+              stroke="white"
+              strokeWidth={2.2}
+            >
               <circle cx="7" cy="12" r="3" />
               <circle cx="17" cy="12" r="3" />
               <path d="M10 12h4" strokeLinecap="round" />

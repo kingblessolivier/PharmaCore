@@ -94,10 +94,7 @@ function BudgetDrawer({
   );
   const set = (patch: Partial<typeof form>) => setForm({ ...form, ...patch });
 
-  const total = useMemo(
-    () => lines.reduce((sum, l) => sum + Number(l.amount || 0), 0),
-    [lines],
-  );
+  const total = useMemo(() => lines.reduce((sum, l) => sum + Number(l.amount || 0), 0), [lines]);
 
   const save = useMutation({
     mutationFn: () =>
@@ -282,11 +279,6 @@ function BudgetDrawer({
           ]}
           footer={<TotalsRow span={4} label="Total planned" value={money(total)} strong />}
         />
-        <p className="mt-2 text-xs text-ink-500">
-          {/* The whole reason the model changed. */}
-          There is no actual column here. Actuals are read from posted journal lines, so a
-          variance cannot be edited by the person being measured.
-        </p>
       </Section>
     </Drawer>
   );
@@ -377,8 +369,8 @@ function VarianceView({ budget, onBack }: { budget: Budget; onBack: () => void }
         <div className="rounded-lg border border-warning-300 bg-warning-50 px-4 py-3 text-sm text-warning-800">
           <strong>{unbudgeted.length}</strong> account
           {unbudgeted.length === 1 ? " has" : "s have"} real spend with no budget at all —{" "}
-          {unbudgeted.map((r) => r.code).join(", ")}. These are usually the most useful rows in
-          a variance report.
+          {unbudgeted.map((r) => r.code).join(", ")}. These are usually the most useful rows in a
+          variance report.
         </div>
       )}
 
@@ -387,10 +379,7 @@ function VarianceView({ budget, onBack }: { budget: Budget; onBack: () => void }
           <div className="grid gap-4 lg:grid-cols-2">
             {/* Where the plan is being missed, worst first — the ranking is the
                 point, so an ordinal ramp rather than one flat hue. */}
-            <ChartFrame
-              title="Biggest variances"
-              subtitle="Adverse first. Overspending a cost and under-selling revenue both count against you."
-            >
+            <ChartFrame title="Biggest variances">
               <BarChart
                 data={[...data.rows]
                   .filter((r) => r.verdict === "ADVERSE")
@@ -406,10 +395,7 @@ function VarianceView({ budget, onBack }: { budget: Budget; onBack: () => void }
               />
             </ChartFrame>
 
-            <ChartFrame
-              title="Plan to actual"
-              subtitle="How the budget was consumed across the window."
-            >
+            <ChartFrame title="Plan to actual">
               <Waterfall
                 steps={[
                   { label: "Budget", value: Number(data.total_budget), isTotal: true },
@@ -486,11 +472,6 @@ function VarianceView({ budget, onBack }: { budget: Budget; onBack: () => void }
           },
         ]}
       />
-      <p className="text-xs text-ink-500">
-        {/* The direction rule is real domain logic, worth surfacing. */}
-        Under-spending a cost is favourable; under-selling revenue is not. The verdict is read
-        the right way round for each account rather than from the sign alone.
-      </p>
     </div>
   );
 }
@@ -541,10 +522,6 @@ export function BudgetsPage() {
           </Button>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        A budget is a document with a life: drafted, approved, then locked so the thing being
-        measured against stops moving. Actuals come from the ledger.
-      </p>
       <ErrorNote error={act.error} />
 
       {budgets.length === 0 && !isLoading ? (
@@ -586,9 +563,7 @@ export function BudgetsPage() {
               key: "status",
               header: "Status",
               value: (b) => b.status,
-              render: (b) => (
-                <StatusChip status={b.status} />
-              ),
+              render: (b) => <StatusChip status={b.status} />,
             },
             {
               key: "actions",

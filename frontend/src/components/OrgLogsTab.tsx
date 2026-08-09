@@ -74,7 +74,9 @@ export function OrgLogsTab({ organizationId }: { organizationId: number }) {
                   <td className="px-4 py-2.5">
                     {e.user ? <Badge>{e.user}</Badge> : <span className="text-ink-500">—</span>}
                   </td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-ink-500">{e.ip_address || "—"}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-ink-500">
+                    {e.ip_address || "—"}
+                  </td>
                 </tr>
               ))}
               {data.results.length === 0 && (

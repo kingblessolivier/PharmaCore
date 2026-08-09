@@ -465,12 +465,6 @@ export function GoodsReceiptsPage() {
   return (
     <div>
       <PageHeader title="Goods receipts (GRN)" />
-      <p className="mb-4 max-w-3xl text-sm text-ink-500">
-        Book a supplier delivery in against its purchase order. Batch and expiry are captured on
-        arrival, over- and under-delivery is recorded as it happened, and posting lands the stock —
-        in quarantine — with an immutable movement behind it. Start one from the order's
-        “Receive goods” action.
-      </p>
 
       <DataGrid<GoodsReceipt>
         rows={rows}

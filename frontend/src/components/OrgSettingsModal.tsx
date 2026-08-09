@@ -71,7 +71,11 @@ export function OrgSettingsModal({
       ) : (
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-3">
-            <SelectField label="Subscription plan" value={plan} onChange={(e) => setPlan(e.target.value)}>
+            <SelectField
+              label="Subscription plan"
+              value={plan}
+              onChange={(e) => setPlan(e.target.value)}
+            >
               {PLANS.map((p) => (
                 <option key={p} value={p}>
                   {title(p)}

@@ -235,7 +235,9 @@ function ContraindicationsSection({ productId }: { productId: number }) {
     <Card className="p-5">
       <div className="mb-3 flex items-center gap-2">
         <ShieldAlert className="h-4 w-4 text-amber-600" />
-        <h2 className="text-sm font-semibold text-ink-900">Contraindications & Clinical Cautions</h2>
+        <h2 className="text-sm font-semibold text-ink-900">
+          Contraindications & Clinical Cautions
+        </h2>
       </div>
       <ul className="mb-3 flex flex-col gap-2">
         {(items.data?.results ?? []).map((c) => (
@@ -246,7 +248,9 @@ function ContraindicationsSection({ productId }: { productId: number }) {
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-medium">{c.condition}</span>
-                {c.icd10_code && <span className="font-mono text-xs text-ink-500">[{c.icd10_code}]</span>}
+                {c.icd10_code && (
+                  <span className="font-mono text-xs text-ink-500">[{c.icd10_code}]</span>
+                )}
                 <Badge
                   tone={
                     c.severity === "CONTRAINDICATED"
@@ -270,7 +274,9 @@ function ContraindicationsSection({ productId }: { productId: number }) {
             </button>
           </li>
         ))}
-        {items.data?.results.length === 0 && <li className="text-sm text-ink-500">None added yet.</li>}
+        {items.data?.results.length === 0 && (
+          <li className="text-sm text-ink-500">None added yet.</li>
+        )}
       </ul>
       <form onSubmit={submit} className="flex flex-col gap-2">
         <div className="grid grid-cols-3 gap-2">
@@ -289,7 +295,9 @@ function ContraindicationsSection({ productId }: { productId: number }) {
           <SelectField
             label="Severity"
             value={severity}
-            onChange={(e) => setSeverity(e.target.value as "PRECAUTION" | "WARNING" | "CONTRAINDICATED")}
+            onChange={(e) =>
+              setSeverity(e.target.value as "PRECAUTION" | "WARNING" | "CONTRAINDICATED")
+            }
           >
             <option value="PRECAUTION">Precaution</option>
             <option value="WARNING">Warning</option>
@@ -358,7 +366,9 @@ function UomConversionsSection({ productId }: { productId: number }) {
 
   return (
     <Card className="p-5">
-      <h2 className="mb-3 text-sm font-semibold text-ink-900">Units of Measure & Increment Pricing</h2>
+      <h2 className="mb-3 text-sm font-semibold text-ink-900">
+        Units of Measure & Increment Pricing
+      </h2>
       <ul className="mb-3 flex flex-col gap-1">
         {(items.data?.results ?? []).map((u) => (
           <li
@@ -367,7 +377,9 @@ function UomConversionsSection({ productId }: { productId: number }) {
           >
             <span>
               <b className="font-medium">{u.unit_name}</b> ({u.conversion_factor} units per pack)
-              {u.price_per_unit && <span className="ml-2 font-mono text-ink-500">RWF {u.price_per_unit}</span>}
+              {u.price_per_unit && (
+                <span className="ml-2 font-mono text-ink-500">RWF {u.price_per_unit}</span>
+              )}
             </span>
             <button
               onClick={() => del.mutate(u.id)}
@@ -378,7 +390,9 @@ function UomConversionsSection({ productId }: { productId: number }) {
             </button>
           </li>
         ))}
-        {items.data?.results.length === 0 && <li className="text-sm text-ink-500">None added yet.</li>}
+        {items.data?.results.length === 0 && (
+          <li className="text-sm text-ink-500">None added yet.</li>
+        )}
       </ul>
       <form onSubmit={submit} className="flex items-end gap-2">
         <TextField
@@ -453,7 +467,9 @@ function FormulariesSection({ productId }: { productId: number }) {
 
   return (
     <Card className="p-5">
-      <h2 className="mb-3 text-sm font-semibold text-ink-900">Insurer Formularies & Reimbursable Coverage</h2>
+      <h2 className="mb-3 text-sm font-semibold text-ink-900">
+        Insurer Formularies & Reimbursable Coverage
+      </h2>
       <ul className="mb-3 flex flex-col gap-1">
         {(items.data?.results ?? []).map((f) => (
           <li
@@ -461,10 +477,15 @@ function FormulariesSection({ productId }: { productId: number }) {
             className="flex items-center justify-between rounded-md bg-surface-100 px-3 py-1.5 text-sm"
           >
             <span>
-              <b className="font-medium">{f.scheme_name}</b> · {f.is_covered ? "Covered" : "Not Covered"}
-              {f.copay_percentage && <span className="ml-2 font-mono text-ink-500">Co-pay: {f.copay_percentage}%</span>}
+              <b className="font-medium">{f.scheme_name}</b> ·{" "}
+              {f.is_covered ? "Covered" : "Not Covered"}
+              {f.copay_percentage && (
+                <span className="ml-2 font-mono text-ink-500">Co-pay: {f.copay_percentage}%</span>
+              )}
               {f.max_reimbursable_price && (
-                <span className="ml-2 font-mono text-ink-500">Max: RWF {f.max_reimbursable_price}</span>
+                <span className="ml-2 font-mono text-ink-500">
+                  Max: RWF {f.max_reimbursable_price}
+                </span>
               )}
             </span>
             <button
@@ -476,7 +497,9 @@ function FormulariesSection({ productId }: { productId: number }) {
             </button>
           </li>
         ))}
-        {items.data?.results.length === 0 && <li className="text-sm text-ink-500">None added yet.</li>}
+        {items.data?.results.length === 0 && (
+          <li className="text-sm text-ink-500">None added yet.</li>
+        )}
       </ul>
       <form onSubmit={submit} className="flex items-end gap-2">
         <TextField
@@ -509,7 +532,9 @@ function FormulariesSection({ productId }: { productId: number }) {
 function SubstitutesSection({ productId }: { productId: number }) {
   const qc = useQueryClient();
   const [subName, setSubName] = useState("");
-  const [subType, setSubType] = useState<"GENERIC_EQUIVALENT" | "THERAPEUTIC_ALTERNATIVE">("GENERIC_EQUIVALENT");
+  const [subType, setSubType] = useState<"GENERIC_EQUIVALENT" | "THERAPEUTIC_ALTERNATIVE">(
+    "GENERIC_EQUIVALENT",
+  );
 
   const items = useQuery({
     queryKey: ["product-substitutes", productId],
@@ -572,7 +597,9 @@ function SubstitutesSection({ productId }: { productId: number }) {
             </button>
           </li>
         ))}
-        {items.data?.results.length === 0 && <li className="text-sm text-ink-500">None added yet.</li>}
+        {items.data?.results.length === 0 && (
+          <li className="text-sm text-ink-500">None added yet.</li>
+        )}
       </ul>
       <form onSubmit={submit} className="flex items-end gap-2">
         <TextField
@@ -618,7 +645,7 @@ export function ProductDetailPage() {
   if (!product) return <p className="text-sm text-red-600">Product not found.</p>;
 
   return (
-    <div className="max-w-3xl">
+    <div>
       <button
         onClick={() => navigate("/products")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"

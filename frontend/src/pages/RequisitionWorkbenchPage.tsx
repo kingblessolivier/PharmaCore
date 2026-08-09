@@ -61,10 +61,9 @@ export function RequisitionWorkbenchPage() {
 
   const submit = useMutation({
     mutationFn: () =>
-      api<{ approval_id: number; message: string }>(
-        `/api/procurement/requisitions/${id}/submit/`,
-        { method: "POST" },
-      ),
+      api<{ approval_id: number; message: string }>(`/api/procurement/requisitions/${id}/submit/`, {
+        method: "POST",
+      }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["requisition", id] });
       void qc.invalidateQueries({ queryKey: ["requisitions"] });
@@ -133,11 +132,13 @@ export function RequisitionWorkbenchPage() {
               <Icon as={AlertTriangle} size="sm" className="mt-0.5 text-warning-700" />
               <div>
                 <span className="font-semibold">
-                  Approved, but {outstanding.length} line{outstanding.length > 1 ? "s have" : " has"}{" "}
-                  not been ordered.
+                  Approved, but {outstanding.length} line
+                  {outstanding.length > 1 ? "s have" : " has"} not been ordered.
                 </span>{" "}
                 {waitingDays !== null && waitingDays > 0 && (
-                  <>Approved {waitingDays} day{waitingDays > 1 ? "s" : ""} ago. </>
+                  <>
+                    Approved {waitingDays} day{waitingDays > 1 ? "s" : ""} ago.{" "}
+                  </>
                 )}
                 Nothing reaches the shelf until a purchase order is raised against it.
               </div>
@@ -184,7 +185,9 @@ export function RequisitionWorkbenchPage() {
                     <Badge tone={PRIORITY_TONE[req.priority]}>{req.priority.toLowerCase()}</Badge>
                   </Row>
                   <Row label="Needed by">
-                    <ReadOnly>{req.needed_by ? shortDate(req.needed_by) : "no date given"}</ReadOnly>
+                    <ReadOnly>
+                      {req.needed_by ? shortDate(req.needed_by) : "no date given"}
+                    </ReadOnly>
                   </Row>
                   <Row label="Preferred supplier">
                     <ReadOnly>{req.preferred_supplier_name ?? "none named"}</ReadOnly>

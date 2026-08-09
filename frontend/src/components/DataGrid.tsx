@@ -93,10 +93,7 @@ export function DataGrid<T>({
 
   useEffect(() => {
     if (!storageKey) return;
-    localStorage.setItem(
-      `grid:${storageKey}`,
-      JSON.stringify({ density, hidden: [...hidden] }),
-    );
+    localStorage.setItem(`grid:${storageKey}`, JSON.stringify({ density, hidden: [...hidden] }));
   }, [storageKey, density, hidden]);
 
   useEffect(() => {
@@ -155,9 +152,7 @@ export function DataGrid<T>({
     const head = visibleCols.map((c) => `"${c.header}"`).join(",");
     const body = sorted
       .map((r) =>
-        visibleCols
-          .map((c) => `"${cellText(valueOf(r, c)).replace(/"/g, '""')}"`)
-          .join(","),
+        visibleCols.map((c) => `"${cellText(valueOf(r, c)).replace(/"/g, '""')}"`).join(","),
       )
       .join("\n");
     const blob = new Blob([`${head}\n${body}`], { type: "text/csv;charset=utf-8;" });

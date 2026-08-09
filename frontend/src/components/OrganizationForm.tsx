@@ -117,9 +117,19 @@ export function OrganizationForm({
   return (
     <form onSubmit={submit} className="flex flex-col gap-4">
       <SectionLabel>Identity</SectionLabel>
-      <TextField label="Name" value={f.name} onChange={(e) => set("name", e.target.value)} required autoFocus />
+      <TextField
+        label="Name"
+        value={f.name}
+        onChange={(e) => set("name", e.target.value)}
+        required
+        autoFocus
+      />
       <div className="grid grid-cols-2 gap-3">
-        <SelectField label="Type" value={f.type} onChange={(e) => set("type", e.target.value as OrgType)}>
+        <SelectField
+          label="Type"
+          value={f.type}
+          onChange={(e) => set("type", e.target.value as OrgType)}
+        >
           <option value="RETAIL">Retail pharmacy</option>
           <option value="DEPOT">Depot (wholesale)</option>
           <option value="HQ">HQ</option>
@@ -165,8 +175,17 @@ export function OrganizationForm({
           onChange={(e) => set("contact_person", e.target.value)}
         />
         <TextField label="Phone" value={f.phone} onChange={(e) => set("phone", e.target.value)} />
-        <TextField label="Email" type="email" value={f.email} onChange={(e) => set("email", e.target.value)} />
-        <TextField label="Currency" value={f.currency} onChange={(e) => set("currency", e.target.value)} />
+        <TextField
+          label="Email"
+          type="email"
+          value={f.email}
+          onChange={(e) => set("email", e.target.value)}
+        />
+        <TextField
+          label="Currency"
+          value={f.currency}
+          onChange={(e) => set("currency", e.target.value)}
+        />
       </div>
       <TextField
         label="Logo URL"
@@ -192,8 +211,16 @@ export function OrganizationForm({
         onChange={(e) => set("address_line", e.target.value)}
       />
       <div className="grid grid-cols-2 gap-3">
-        <TextField label="Latitude" value={f.latitude} onChange={(e) => set("latitude", e.target.value)} />
-        <TextField label="Longitude" value={f.longitude} onChange={(e) => set("longitude", e.target.value)} />
+        <TextField
+          label="Latitude"
+          value={f.latitude}
+          onChange={(e) => set("latitude", e.target.value)}
+        />
+        <TextField
+          label="Longitude"
+          value={f.longitude}
+          onChange={(e) => set("longitude", e.target.value)}
+        />
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}

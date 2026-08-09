@@ -332,7 +332,7 @@ def _bogo_discount(sale: Sale) -> Decimal:
 # --------------------------------------------------------------------------- #
 
 
-def _running_balance(organization: Organization, product: Any) -> int | None:
+def _running_balance(organization: Organization, product: Any) -> Decimal | None:
     """The register's last balance for this product, or None if it has no history."""
     latest = (
         ControlledSubstanceRegister.objects.filter(organization=organization, product=product)
@@ -344,14 +344,14 @@ def _running_balance(organization: Organization, product: Any) -> int | None:
     return None
 
 
-def _on_hand(organization: Organization, product: Any) -> int:
+def _on_hand(organization: Organization, product: Any) -> Decimal:
     """Units physically in stock right now, across every batch."""
     from apps.inventory.models import InventoryBatch
 
     total = InventoryBatch.objects.filter(organization=organization, product=product).aggregate(
         total=Sum("quantity_available")
     )["total"]
-    return int(total or 0)
+    return Decimal(total or 0)
 
 
 @transaction.atomic
@@ -389,10 +389,13 @@ def record_controlled_dispensing(*, sale: Sale, user: User | None = None) -> lis
                 product=item.product,
                 batch_number=batch_number,
                 movement_type=ControlledSubstanceRegister.MovementType.DISPENSING,
-                quantity=item.quantity,
+                # Base units, not the unit sold. The statutory register has to
+                # balance against what is physically in the cabinet, so a box of
+                # 100 dispensed is 100 leaving the cabinet, never 1.
+                quantity=item.quantity_base or item.quantity,
                 # Never below zero: the register is a count of physical units.
                 running_balance=(
-                    max(previous - item.quantity, 0)
+                    max(previous - (item.quantity_base or item.quantity), Decimal(0))
                     if previous is not None
                     else _on_hand(sale.organization, item.product)
                 ),

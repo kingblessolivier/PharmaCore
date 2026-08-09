@@ -11,21 +11,13 @@ import {
 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Button,
-  Card,
-  ConfirmModal,
-  PageHeader,
-  SelectField,
-  TextField,
-} from "../components/ui";
+import { Button, Card, ConfirmModal, PageHeader, SelectField, TextField } from "../components/ui";
 import { DataGrid } from "../components/DataGrid";
 import { Drawer } from "../components/RecordKit";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { Paginated, PickTask, PickWave, Product, StorageZone, Warehouse } from "../lib/types";
 import { StatusChip } from "../components/Status";
-
 
 type Demand = { product: number; quantity: number; reference_type: string; reference_id: string };
 
@@ -162,8 +154,7 @@ export function PickWavesPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) =>
-      api<void>(`/api/inventory/pick-waves/${id}/`, { method: "DELETE" }),
+    mutationFn: (id: number) => api<void>(`/api/inventory/pick-waves/${id}/`, { method: "DELETE" }),
     onSuccess: () => {
       setDeleting(null);
       void qc.invalidateQueries({ queryKey: ["pick-waves"] });
@@ -193,11 +184,6 @@ export function PickWavesPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        A wave is a batch of orders released to the floor as one pass. Tasks are built FEFO —
-        soonest expiry first — then walk-ordered by aisle, shelf and bin. Releasing reserves the
-        stock, so two waves can never promise the same units.
-      </p>
 
       {error && (
         <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
@@ -269,7 +255,11 @@ export function PickWavesPage() {
               </span>
             ),
           },
-          { key: "assigned_to_username", header: "Picker", value: (w) => w.assigned_to_username ?? "—" },
+          {
+            key: "assigned_to_username",
+            header: "Picker",
+            value: (w) => w.assigned_to_username ?? "—",
+          },
           {
             key: "actions",
             header: "Actions",
@@ -402,8 +392,8 @@ export function PickWavesPage() {
         <Drawer title={`Build Tasks — ${building.wave_no}`} onClose={() => setBuilding(null)}>
           <div className="flex flex-col gap-4">
             <p className="text-sm text-ink-600">
-              Each demand line is split across as many batches as it takes, soonest expiry first.
-              A demand that cannot be fully covered still produces a short task for the gap.
+              Each demand line is split across as many batches as it takes, soonest expiry first. A
+              demand that cannot be fully covered still produces a short task for the gap.
             </p>
             {demands.map((d, i) => (
               <div key={i} className="grid grid-cols-[1fr_5rem] gap-2">
@@ -526,7 +516,10 @@ export function PickWavesPage() {
       )}
 
       {confirming && (
-        <Drawer title={`Confirm Pick — ${confirming.product_name}`} onClose={() => setConfirming(null)}>
+        <Drawer
+          title={`Confirm Pick — ${confirming.product_name}`}
+          onClose={() => setConfirming(null)}
+        >
           <div className="flex flex-col gap-4">
             <p className="text-sm text-ink-600">
               Requested {confirming.quantity_requested} from bin {confirming.bin_code ?? "—"}.

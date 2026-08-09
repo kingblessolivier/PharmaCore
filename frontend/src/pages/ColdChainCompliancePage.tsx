@@ -121,18 +121,15 @@ export function ColdChainCompliancePage() {
 
   const calibrateMutation = useMutation({
     mutationFn: () =>
-      api<SensorCalibration>(
-        `/api/inventory/temp-sensors/${calibrating!.id}/record_calibration/`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            ...calForm,
-            next_due_on: calForm.next_due_on || null,
-            deviation_celsius: calForm.deviation_celsius || null,
-            accuracy_celsius: calForm.accuracy_celsius || null,
-          }),
-        },
-      ),
+      api<SensorCalibration>(`/api/inventory/temp-sensors/${calibrating!.id}/record_calibration/`, {
+        method: "POST",
+        body: JSON.stringify({
+          ...calForm,
+          next_due_on: calForm.next_due_on || null,
+          deviation_celsius: calForm.deviation_celsius || null,
+          accuracy_celsius: calForm.accuracy_celsius || null,
+        }),
+      }),
     onSuccess: () => {
       setCalibrating(null);
       void qc.invalidateQueries({ queryKey: ["temp-sensors"] });
@@ -196,11 +193,6 @@ export function ColdChainCompliancePage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        GDP treats an uncalibrated reading as no reading at all. Every probe carries its own
-        identity, stated accuracy and certificate trail; every excursion is worked through to a
-        QA-signed disposition before the affected stock can move again.
-      </p>
 
       {(overdue > 0 || dueSoon > 0) && (
         <Card className="mb-4 border-amber-200 bg-amber-50 p-4 text-sm">
@@ -211,8 +203,8 @@ export function ColdChainCompliancePage() {
           <p className="mt-1 text-amber-800">
             {overdue > 0 && `${overdue} probe(s) overdue`}
             {overdue > 0 && dueSoon > 0 && " · "}
-            {dueSoon > 0 && `${dueSoon} due within 30 days`}. A reading from an out-of-date probe
-            is not evidence.
+            {dueSoon > 0 && `${dueSoon} due within 30 days`}. A reading from an out-of-date probe is
+            not evidence.
           </p>
         </Card>
       )}
@@ -254,7 +246,11 @@ export function ColdChainCompliancePage() {
           searchPlaceholder="Search by device, name, zone or manufacturer…"
           emptyMessage="No sensors on the register yet."
           columns={[
-            { key: "device_id", header: "Device ID", render: (s) => <span className="font-mono">{s.device_id}</span> },
+            {
+              key: "device_id",
+              header: "Device ID",
+              render: (s) => <span className="font-mono">{s.device_id}</span>,
+            },
             { key: "name", header: "Name" },
             { key: "zone_name", header: "Zone" },
             { key: "device_type", header: "Type", value: (s) => s.device_type.replace(/_/g, " ") },
@@ -264,18 +260,23 @@ export function ColdChainCompliancePage() {
               align: "right",
               value: (s) => (s.accuracy_celsius ? Number(s.accuracy_celsius) : -1),
               render: (s) => (
-                <span className="font-mono">{s.accuracy_celsius ? `±${s.accuracy_celsius} °C` : "—"}</span>
+                <span className="font-mono">
+                  {s.accuracy_celsius ? `±${s.accuracy_celsius} °C` : "—"}
+                </span>
               ),
             },
             {
               key: "latest_reading",
               header: "Latest Reading",
-              value: (s) => (s.latest_reading ? Number(s.latest_reading.temperature_celsius) : -999),
+              value: (s) =>
+                s.latest_reading ? Number(s.latest_reading.temperature_celsius) : -999,
               render: (s) =>
                 s.latest_reading ? (
                   <span
                     className={`font-mono ${
-                      s.latest_reading.excursion_status === "NORMAL" ? "" : "font-semibold text-red-600"
+                      s.latest_reading.excursion_status === "NORMAL"
+                        ? ""
+                        : "font-semibold text-red-600"
                     }`}
                   >
                     {s.latest_reading.temperature_celsius} °C
@@ -284,7 +285,11 @@ export function ColdChainCompliancePage() {
                   <span className="text-ink-400">no data</span>
                 ),
             },
-            { key: "calibration_due_date", header: "Cal. Due", value: (s) => s.calibration_due_date ?? "—" },
+            {
+              key: "calibration_due_date",
+              header: "Cal. Due",
+              value: (s) => s.calibration_due_date ?? "—",
+            },
             {
               key: "calibration_state",
               header: "Calibration",
@@ -301,7 +306,9 @@ export function ColdChainCompliancePage() {
               align: "center",
               value: (s) => (s.is_active ? "Yes" : "No"),
               render: (s) => (
-                <Badge tone={s.is_active ? "success" : "danger"}>{s.is_active ? "Yes" : "Withdrawn"}</Badge>
+                <Badge tone={s.is_active ? "success" : "danger"}>
+                  {s.is_active ? "Yes" : "Withdrawn"}
+                </Badge>
               ),
             },
             {
@@ -334,9 +341,17 @@ export function ColdChainCompliancePage() {
           searchPlaceholder="Search certificates by number, probe or lab…"
           emptyMessage="No calibration certificates filed yet."
           columns={[
-            { key: "certificate_no", header: "Certificate", render: (c) => <span className="font-mono">{c.certificate_no}</span> },
+            {
+              key: "certificate_no",
+              header: "Certificate",
+              render: (c) => <span className="font-mono">{c.certificate_no}</span>,
+            },
             { key: "sensor_name", header: "Probe" },
-            { key: "sensor_device_id", header: "Device", render: (c) => <span className="font-mono text-xs">{c.sensor_device_id}</span> },
+            {
+              key: "sensor_device_id",
+              header: "Device",
+              render: (c) => <span className="font-mono text-xs">{c.sensor_device_id}</span>,
+            },
             { key: "calibrated_on", header: "Calibrated" },
             { key: "next_due_on", header: "Next Due" },
             { key: "calibrated_by", header: "Lab", value: (c) => c.calibrated_by || "—" },
@@ -352,7 +367,11 @@ export function ColdChainCompliancePage() {
               header: "Result",
               align: "center",
               render: (c) => (
-                <Badge tone={c.result === "FAIL" ? "danger" : c.result === "ADJUSTED" ? "warning" : "success"}>
+                <Badge
+                  tone={
+                    c.result === "FAIL" ? "danger" : c.result === "ADJUSTED" ? "warning" : "success"
+                  }
+                >
                   {c.result}
                 </Badge>
               ),
@@ -371,9 +390,17 @@ export function ColdChainCompliancePage() {
           searchPlaceholder="Search investigations by reference, zone or disposition…"
           emptyMessage="No excursion investigations. Cold-chain has held."
           columns={[
-            { key: "reference_no", header: "Reference", render: (x) => <span className="font-mono">{x.reference_no}</span> },
+            {
+              key: "reference_no",
+              header: "Reference",
+              render: (x) => <span className="font-mono">{x.reference_no}</span>,
+            },
             { key: "zone_name", header: "Zone", value: (x) => x.zone_name ?? "—" },
-            { key: "started_at", header: "Started", value: (x) => x.started_at.replace("T", " ").slice(0, 16) },
+            {
+              key: "started_at",
+              header: "Started",
+              value: (x) => x.started_at.replace("T", " ").slice(0, 16),
+            },
             {
               key: "duration_minutes",
               header: "Duration",
@@ -387,7 +414,9 @@ export function ColdChainCompliancePage() {
               header: "Max °C",
               align: "right",
               value: (x) => (x.max_temp_celsius ? Number(x.max_temp_celsius) : 0),
-              render: (x) => <span className="font-mono font-semibold">{x.max_temp_celsius ?? "—"}</span>,
+              render: (x) => (
+                <span className="font-mono font-semibold">{x.max_temp_celsius ?? "—"}</span>
+              ),
             },
             {
               key: "mkt_celsius",
@@ -400,7 +429,9 @@ export function ColdChainCompliancePage() {
               key: "severity",
               header: "Severity",
               align: "center",
-              render: (x) => <Badge tone={SEVERITY_TONE[x.severity] ?? "neutral"}>{x.severity}</Badge>,
+              render: (x) => (
+                <Badge tone={SEVERITY_TONE[x.severity] ?? "neutral"}>{x.severity}</Badge>
+              ),
             },
             {
               key: "affected",
@@ -430,9 +461,7 @@ export function ColdChainCompliancePage() {
               key: "status",
               header: "Status",
               align: "center",
-              render: (x) => (
-                <StatusChip status={x.status} />
-              ),
+              render: (x) => <StatusChip status={x.status} />,
             },
             {
               key: "actions",
@@ -549,8 +578,8 @@ export function ColdChainCompliancePage() {
           <div className="flex flex-col gap-4">
             <p className="text-sm text-ink-600">
               The readings in the window give min/max, MKT and the reading count; every active lot
-              in the affected zone is attached. Auto-quarantine holds them immediately — stock
-              must stop moving while its fitness is unknown, not after the paperwork.
+              in the affected zone is attached. Auto-quarantine holds them immediately — stock must
+              stop moving while its fitness is unknown, not after the paperwork.
             </p>
             <SelectField
               label="Sensor"
@@ -614,7 +643,9 @@ export function ColdChainCompliancePage() {
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <div className="text-ink-500">Max temp</div>
-                  <div className="font-mono font-semibold">{closing.max_temp_celsius ?? "—"} °C</div>
+                  <div className="font-mono font-semibold">
+                    {closing.max_temp_celsius ?? "—"} °C
+                  </div>
                 </div>
                 <div>
                   <div className="text-ink-500">MKT</div>

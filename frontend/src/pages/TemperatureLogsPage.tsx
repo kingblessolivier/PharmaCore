@@ -66,7 +66,8 @@ export function TemperatureLogsPage() {
       readings: list.length,
       breaches: list.filter((l) => l.excursion_status !== "NORMAL").length,
       worstTemp: list.reduce(
-        (w, l) => (Math.abs(Number(l.temperature_celsius)) > Math.abs(w) ? Number(l.temperature_celsius) : w),
+        (w, l) =>
+          Math.abs(Number(l.temperature_celsius)) > Math.abs(w) ? Number(l.temperature_celsius) : w,
         Number(latest.temperature_celsius),
       ),
       breachRun: run,
@@ -152,10 +153,6 @@ export function TemperatureLogsPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="Temperature logs" />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Grouped by sensor, worst first. Cold-chain product fails on cumulative time out of range,
-        so a sensor breaching for six readings matters more than one that spiked once.
-      </p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tile label="Sensors reporting" value={sensors.length} />
@@ -203,16 +200,17 @@ export function TemperatureLogsPage() {
         <Drawer
           title={open.sensor_name}
           subtitle={`${open.readings} reading(s) held`}
-          badge={
-            <StatusChip status={open.latest.excursion_status} size="sm" />
-          }
+          badge={<StatusChip status={open.latest.excursion_status} size="sm" />}
           onClose={() => setOpen(null)}
         >
           <Section title="Current state">
             <Facts
               rows={[
                 ["Latest", `${open.latest.temperature_celsius}°C`],
-                ["Humidity", open.latest.humidity_percent ? `${open.latest.humidity_percent}%` : "—"],
+                [
+                  "Humidity",
+                  open.latest.humidity_percent ? `${open.latest.humidity_percent}%` : "—",
+                ],
                 ["Status", <StatusChip status={open.latest.excursion_status} />],
                 ["Recorded", dateTime(open.latest.recorded_at)],
                 ["Consecutive breaches", String(open.breachRun)],

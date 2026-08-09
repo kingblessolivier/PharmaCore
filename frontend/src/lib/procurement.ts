@@ -9,12 +9,7 @@ export type Money = string;
 
 // --- supplier master -------------------------------------------------------
 
-export type SupplierStanding =
-  | "PREFERRED"
-  | "APPROVED"
-  | "PROBATION"
-  | "SUSPENDED"
-  | "BLACKLISTED";
+export type SupplierStanding = "PREFERRED" | "APPROVED" | "PROBATION" | "SUSPENDED" | "BLACKLISTED";
 
 export interface SupplierLicence {
   id: number;
@@ -245,7 +240,13 @@ export interface QuoteComparisonRow {
   valid_until: string | null;
   supplier_score: string | null;
   supplier_standing: string | null;
-  lines: { product_id: number; product: string; quantity: number; unit_price: Money; line_total: Money }[];
+  lines: {
+    product_id: number;
+    product: string;
+    quantity: number;
+    unit_price: Money;
+    line_total: Money;
+  }[];
 }
 
 // --- purchase orders -------------------------------------------------------
@@ -357,7 +358,15 @@ export interface ImportConsignment {
   organization_name: string;
   supplier: number;
   supplier_name: string;
-  status: "DRAFT" | "PROFORMA" | "SHIPPED" | "ARRIVED" | "AT_CUSTOMS" | "CLEARED" | "LANDED" | "CANCELLED";
+  status:
+    | "DRAFT"
+    | "PROFORMA"
+    | "SHIPPED"
+    | "ARRIVED"
+    | "AT_CUSTOMS"
+    | "CLEARED"
+    | "LANDED"
+    | "CANCELLED";
   status_display: string;
   mode: string;
   incoterm: string;
@@ -544,7 +553,8 @@ export interface SupplierInvoice {
   po_number: string | null;
   receipt: number | null;
   grn_number: string | null;
-  status: "DRAFT" | "MATCHED" | "VARIANCE" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CANCELLED";
+  status:
+    "DRAFT" | "MATCHED" | "VARIANCE" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CANCELLED";
   status_display: string;
   invoice_date: string;
   due_date: string | null;
@@ -614,7 +624,7 @@ export interface ProcurementOverview {
   rfqs_open: number;
   suppliers_blacklisted: number;
   licences_expiring: number;
-  top_suppliers: { "supplier__name": string; orders: number }[];
+  top_suppliers: { supplier__name: string; orders: number }[];
 }
 
 // --- shared helpers --------------------------------------------------------
@@ -623,7 +633,17 @@ export interface ProcurementOverview {
 export { money, num, statusTone } from "./format";
 
 export const INCOTERMS = [
-  "EXW", "FCA", "FAS", "FOB", "CFR", "CIF", "CPT", "CIP", "DAP", "DPU", "DDP",
+  "EXW",
+  "FCA",
+  "FAS",
+  "FOB",
+  "CFR",
+  "CIF",
+  "CPT",
+  "CIP",
+  "DAP",
+  "DPU",
+  "DDP",
 ] as const;
 
 export const LANDED_COST_KINDS: { value: string; label: string; recoverable?: boolean }[] = [

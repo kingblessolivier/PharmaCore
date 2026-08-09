@@ -43,13 +43,7 @@ const STRATEGIES: { value: PutawayRule["strategy"]; label: string }[] = [
   { value: "BULK_THEN_PICK", label: "Bulk first, overflow to pick face" },
 ];
 
-const ZONE_TYPES: ZoneType[] = [
-  "AMBIENT",
-  "COLD_CHAIN",
-  "FREEZER",
-  "CONTROLLED_SAFE",
-  "HAZARDOUS",
-];
+const ZONE_TYPES: ZoneType[] = ["AMBIENT", "COLD_CHAIN", "FREEZER", "CONTROLLED_SAFE", "HAZARDOUS"];
 
 const BLANK = {
   name: "",
@@ -148,9 +142,7 @@ export function PutawayRulesPage() {
   const unbinnedQuery = useQuery({
     queryKey: ["batches", "unbinned", orgId],
     queryFn: () =>
-      api<Paginated<InventoryBatch>>(
-        `/api/inventory/batches/?organization=${orgId}&in_stock=1`,
-      ),
+      api<Paginated<InventoryBatch>>(`/api/inventory/batches/?organization=${orgId}&in_stock=1`),
     enabled: orgId > 0,
     select: (page) => page.results.filter((b) => b.bin_location === null),
   });
@@ -241,12 +233,6 @@ export function PutawayRulesPage() {
           </div>
         }
       />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        Where a received lot goes, decided by policy rather than by whoever is holding the
-        trolley. Rules are tried in priority order and the first match wins. When no rule
-        matches, the product&rsquo;s own label storage condition still decides — a cold-chain
-        product is never defaulted onto an ambient shelf.
-      </p>
 
       <DataGrid<PutawayRule>
         rows={rulesQuery.data?.results ?? []}
@@ -427,13 +413,9 @@ export function PutawayRulesPage() {
                 <p className="mt-2 text-xs text-ink-600">{suggestionQuery.data.reason}</p>
                 <div className="mt-3 flex flex-wrap gap-2 text-xs">
                   <Badge tone={suggestionQuery.data.storage_compliant ? "success" : "danger"}>
-                    {suggestionQuery.data.storage_compliant
-                      ? "Storage compliant"
-                      : "Not compliant"}
+                    {suggestionQuery.data.storage_compliant ? "Storage compliant" : "Not compliant"}
                   </Badge>
-                  <Badge tone="neutral">
-                    requires {suggestionQuery.data.required_zone_type}
-                  </Badge>
+                  <Badge tone="neutral">requires {suggestionQuery.data.required_zone_type}</Badge>
                 </div>
                 {suggestionQuery.data.warning && (
                   <div className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
@@ -571,9 +553,7 @@ export function PutawayRulesPage() {
                   <input
                     type="checkbox"
                     checked={form.match_cold_chain_only}
-                    onChange={(e) =>
-                      setForm({ ...form, match_cold_chain_only: e.target.checked })
-                    }
+                    onChange={(e) => setForm({ ...form, match_cold_chain_only: e.target.checked })}
                   />
                   Cold-chain products only
                 </label>
@@ -581,9 +561,7 @@ export function PutawayRulesPage() {
                   <input
                     type="checkbox"
                     checked={form.match_controlled_only}
-                    onChange={(e) =>
-                      setForm({ ...form, match_controlled_only: e.target.checked })
-                    }
+                    onChange={(e) => setForm({ ...form, match_controlled_only: e.target.checked })}
                   />
                   Controlled substances only
                 </label>

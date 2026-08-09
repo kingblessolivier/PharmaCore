@@ -151,9 +151,7 @@ export function InsuranceClaimsPage() {
       key: "status",
       header: "Status",
       value: (r) => r.status,
-      render: (r) => (
-        <StatusChip status={r.status} />
-      ),
+      render: (r) => <StatusChip status={r.status} />,
     },
     {
       key: "actions",
@@ -211,10 +209,6 @@ export function InsuranceClaimsPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="Claims" />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Sorted by how long is left to submit. A claim past its scheme's window is not late — it is
-        unrecoverable, so the deadline is the number that matters here.
-      </p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tile label="In the queue" value={rows.length} />
@@ -271,9 +265,7 @@ export function InsuranceClaimsPage() {
               </Button>
               <Button
                 onClick={() => decide.mutate(action)}
-                disabled={
-                  decide.isPending || ((isReverse || !accepted) && !reason.trim())
-                }
+                disabled={decide.isPending || ((isReverse || !accepted) && !reason.trim())}
               >
                 {decide.isPending
                   ? "Saving…"
@@ -392,7 +384,11 @@ function Tile({
   tone?: "danger" | "warning";
 }) {
   const colour =
-    tone === "danger" ? "text-danger-700" : tone === "warning" ? "text-warning-700" : "text-ink-900";
+    tone === "danger"
+      ? "text-danger-700"
+      : tone === "warning"
+        ? "text-warning-700"
+        : "text-ink-900";
   return (
     <div className="rounded-lg border border-line bg-surface-0 p-3">
       <div className="text-xs text-ink-500">{label}</div>

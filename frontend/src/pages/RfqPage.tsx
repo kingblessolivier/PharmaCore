@@ -74,9 +74,7 @@ function QuoteForm({ rfq, onDone }: { rfq: RequestForQuotation; onDone: () => vo
       (s, l) => s + num(l.unit_price) * Number(l.quantity_offered || 0),
       0,
     );
-    return (
-      goods + num(form.freight_amount) + num(form.other_charges) - num(form.discount_amount)
-    );
+    return goods + num(form.freight_amount) + num(form.other_charges) - num(form.discount_amount);
   }, [form]);
 
   const create = useMutation({
@@ -111,7 +109,10 @@ function QuoteForm({ rfq, onDone }: { rfq: RequestForQuotation; onDone: () => vo
       <ErrorNote error={create.error} />
       <Grid cols={4}>
         <Field label="Supplier" className="sm:col-span-2">
-          <SupplierSelect value={form.supplier} onChange={(id) => setForm({ ...form, supplier: id })} />
+          <SupplierSelect
+            value={form.supplier}
+            onChange={(id) => setForm({ ...form, supplier: id })}
+          />
         </Field>
         <Field label="Their reference">
           <Input
@@ -212,7 +213,10 @@ function QuoteForm({ rfq, onDone }: { rfq: RequestForQuotation; onDone: () => vo
               header: "Product",
               width: "44%",
               cell: (row, set) => (
-                <ProductPicker value={row.product || null} onChange={(id) => set({ product: id })} />
+                <ProductPicker
+                  value={row.product || null}
+                  onChange={(id) => set({ product: id })}
+                />
               ),
             },
             {
@@ -258,14 +262,22 @@ function QuoteForm({ rfq, onDone }: { rfq: RequestForQuotation; onDone: () => vo
             },
           ]}
           footer={
-            <TotalsRow span={3} label={`Quote total (${form.currency})`} value={total.toFixed(2)} strong />
+            <TotalsRow
+              span={3}
+              label={`Quote total (${form.currency})`}
+              value={total.toFixed(2)}
+              strong
+            />
           }
         />
       </div>
 
       <div className="mt-3">
         <Field label="Notes">
-          <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          <Textarea
+            value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+          />
         </Field>
       </div>
 
@@ -621,7 +633,7 @@ export function RfqPage() {
   });
 
   const rows = data?.results ?? [];
-  const current = open ? rows.find((r) => r.id === open.id) ?? open : null;
+  const current = open ? (rows.find((r) => r.id === open.id) ?? open) : null;
 
   return (
     <div>
@@ -633,10 +645,6 @@ export function RfqPage() {
           </Button>
         }
       />
-      <p className="mb-4 max-w-3xl text-sm text-ink-500">
-        One enquiry, several suppliers, one comparison table in RWF — including lead time, terms and
-        the supplier's own performance score. Awarding turns the winning quote into a draft PO.
-      </p>
 
       <DataGrid<RequestForQuotation>
         rows={rows}

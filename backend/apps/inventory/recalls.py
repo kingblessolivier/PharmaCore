@@ -22,6 +22,7 @@ quarantines unrelated stock, which is both a patient-safety event of its own
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
@@ -43,13 +44,13 @@ class Holder:
 
     organization_id: int
     organization_name: str
-    on_hand_units: int = 0
-    in_transit_units: int = 0
-    received_units: int = 0
-    dispensed_units: int = 0
+    on_hand_units: Decimal = Decimal(0)
+    in_transit_units: Decimal = Decimal(0)
+    received_units: Decimal = Decimal(0)
+    dispensed_units: Decimal = Decimal(0)
 
     @property
-    def total_units(self) -> int:
+    def total_units(self) -> Decimal:
         return self.on_hand_units + self.in_transit_units + self.received_units
 
 
@@ -64,16 +65,16 @@ class Trace:
     patients: list[dict[str, Any]] = field(default_factory=list)
 
     @property
-    def units_still_held(self) -> int:
-        return sum(h.on_hand_units for h in self.holders)
+    def units_still_held(self) -> Decimal:
+        return sum((h.on_hand_units for h in self.holders), Decimal(0))
 
     @property
-    def units_in_transit(self) -> int:
-        return sum(h.in_transit_units for h in self.holders)
+    def units_in_transit(self) -> Decimal:
+        return sum((h.in_transit_units for h in self.holders), Decimal(0))
 
     @property
-    def units_dispensed(self) -> int:
-        return sum(int(p["quantity"]) for p in self.patients)
+    def units_dispensed(self) -> Decimal:
+        return sum((Decimal(str(p["quantity"])) for p in self.patients), Decimal(0))
 
     @property
     def reached_patients(self) -> bool:

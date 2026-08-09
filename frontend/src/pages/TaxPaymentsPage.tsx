@@ -7,7 +7,6 @@ import { api } from "../lib/api";
 import { money, shortDate } from "../lib/format";
 import type { Paginated, TaxPayment } from "../lib/types";
 
-
 export function TaxPaymentsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["tax-payments"],
@@ -20,10 +19,6 @@ export function TaxPaymentsPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="RRA payments" />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Statutory payments made to the RRA and RSSB. Each one clears the matching liability
-        account, so what is left on those accounts is what is genuinely still owed.
-      </p>
 
       <div className="flex flex-wrap gap-6 rounded-lg border border-line bg-surface-0 px-4 py-3 text-sm">
         <span className="flex items-center gap-2 text-ink-600">

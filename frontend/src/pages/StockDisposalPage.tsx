@@ -135,15 +135,14 @@ export function StockDisposalPage() {
       key: "status",
       header: "Status",
       value: (d) => d.status,
-      render: (d) => (
-<StatusChip status={d.status} size="sm" />
-      ),
+      render: (d) => <StatusChip status={d.status} size="sm" />,
     },
     {
       key: "destroyed_at",
       header: "Destroyed",
       value: (d) => d.destroyed_at ?? "",
-      render: (d) => (d.destroyed_at ? shortDate(d.destroyed_at) : <span className="text-ink-400">—</span>),
+      render: (d) =>
+        d.destroyed_at ? shortDate(d.destroyed_at) : <span className="text-ink-400">—</span>,
     },
   ];
 
@@ -157,11 +156,6 @@ export function StockDisposalPage() {
           </Button>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Confirming a disposal removes the units from stock, records the movement and writes the
-        loss off. Because it is irreversible, a disposal must list what is being destroyed and name
-        two witnesses before it can be confirmed.
-      </p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Tile label="Awaiting destruction" value={waiting.length} />
@@ -192,9 +186,7 @@ export function StockDisposalPage() {
 
       {waiting.length > 0 && (
         <div>
-          <h2 className="mb-2 text-sm font-semibold text-ink-900">
-            Stock that cannot be sold
-          </h2>
+          <h2 className="mb-2 text-sm font-semibold text-ink-900">Stock that cannot be sold</h2>
           <p className="mb-2 text-xs text-ink-500">
             Expired, quarantined or recalled. Add these to a disposal to have them destroyed.
           </p>
@@ -379,7 +371,6 @@ export function StockDisposalPage() {
       {draft && (
         <Drawer
           title="New disposal"
-          subtitle="Record the destruction, its method, and who witnessed it."
           onClose={() => setDraft(null)}
           footer={
             <div className="flex justify-end gap-2">
@@ -428,9 +419,7 @@ export function StockDisposalPage() {
               <Field label="Second witness">
                 <Input
                   value={draft.secondary_witness_name}
-                  onChange={(e) =>
-                    setDraft({ ...draft, secondary_witness_name: e.target.value })
-                  }
+                  onChange={(e) => setDraft({ ...draft, secondary_witness_name: e.target.value })}
                   placeholder="Full name"
                 />
               </Field>

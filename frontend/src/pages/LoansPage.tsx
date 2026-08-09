@@ -65,7 +65,6 @@ function NewLoanDrawer({ orgId, onClose }: { orgId: number | null; onClose: () =
   return (
     <Drawer
       title="New loan or advance"
-      subtitle="The repayment schedule is laid out up front; payroll settles the next due installment each run."
       onClose={onClose}
       width="max-w-2xl"
       footer={
@@ -140,8 +139,8 @@ function NewLoanDrawer({ orgId, onClose }: { orgId: number | null; onClose: () =
         {monthly > 0 && (
           <p className="mt-3 rounded-md bg-surface-50 px-3 py-2 text-sm text-ink-700">
             Roughly <strong>{money(monthly)}</strong> deducted per run over{" "}
-            {form.installments_count} run(s). An employee on unpaid leave that month is skipped,
-            not charged — the installment rolls forward.
+            {form.installments_count} run(s). An employee on unpaid leave that month is skipped, not
+            charged — the installment rolls forward.
           </p>
         )}
       </Section>
@@ -162,7 +161,9 @@ export function LoansPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["loans", status],
     queryFn: () =>
-      api<Paginated<LoanAdvance>>(`/api/hr/loans/?page_size=300${status ? `&status=${status}` : ""}`),
+      api<Paginated<LoanAdvance>>(
+        `/api/hr/loans/?page_size=300${status ? `&status=${status}` : ""}`,
+      ),
   });
 
   const act = useMutation({
@@ -178,7 +179,7 @@ export function LoansPage() {
   });
 
   const rows = data?.results ?? [];
-  const current = open ? rows.find((l) => l.id === open.id) ?? open : null;
+  const current = open ? (rows.find((l) => l.id === open.id) ?? open) : null;
 
   return (
     <div>
@@ -190,10 +191,6 @@ export function LoansPage() {
           </Button>
         }
       />
-      <p className="mb-4 max-w-3xl text-sm text-ink-500">
-        Salary advances and staff loans, with a real amortisation schedule. Payroll deducts the next
-        due installment automatically and a fully repaid loan settles itself.
-      </p>
 
       <DataGrid<LoanAdvance>
         rows={rows}
@@ -266,7 +263,11 @@ export function LoansPage() {
             value: (l) => l.installments.filter((i) => i.is_overdue).length,
             render: (l) => {
               const n = l.installments.filter((i) => i.is_overdue).length;
-              return n > 0 ? <Badge tone="danger">{n}</Badge> : <span className="text-ink-400">—</span>;
+              return n > 0 ? (
+                <Badge tone="danger">{n}</Badge>
+              ) : (
+                <span className="text-ink-400">—</span>
+              );
             },
           },
           {

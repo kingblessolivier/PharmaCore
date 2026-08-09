@@ -25,8 +25,7 @@ export function GrnPage() {
 
   const grns = useQuery({
     queryKey: ["grn-list"],
-    queryFn: () =>
-      api<Paginated<GoodsReceivedNote>>("/api/distribution/grns/?page_size=300"),
+    queryFn: () => api<Paginated<GoodsReceivedNote>>("/api/distribution/grns/?page_size=300"),
   });
 
   const rows = grns.data?.results ?? [];
@@ -86,9 +85,7 @@ export function GrnPage() {
       key: "status",
       header: "Status",
       value: (g) => g.status,
-      render: (g) => (
-<StatusChip status={g.status} size="sm" />
-      ),
+      render: (g) => <StatusChip status={g.status} size="sm" />,
     },
     {
       key: "has_discrepancy",
@@ -116,11 +113,6 @@ export function GrnPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="Goods received notes" />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        The reception record that turns in-transit units into sellable stock. Every note is kept
-        whether or not it matched — a delivery that arrived short is exactly the one you need the
-        evidence for.
-      </p>
 
       {rows.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -230,9 +222,7 @@ export function GrnPage() {
                               <span className="text-ink-400">—</span>
                             ) : (
                               <span
-                                className={
-                                  variance < 0 ? "text-danger-700" : "text-warning-700"
-                                }
+                                className={variance < 0 ? "text-danger-700" : "text-warning-700"}
                               >
                                 {variance > 0 ? `+${variance}` : variance}
                               </span>

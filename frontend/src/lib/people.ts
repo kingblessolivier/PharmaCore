@@ -536,9 +536,24 @@ export interface PeopleOverview {
   filings_due: number;
   filings_overdue: number;
   alerts: {
-    contracts_expiring: { employee__id: number; employee__first_name: string; employee__last_name: string; end_date: string }[];
-    work_permits_expiring: { id: number; first_name: string; last_name: string; work_permit_expiry: string }[];
-    probations_ending: { id: number; first_name: string; last_name: string; probation_end: string }[];
+    contracts_expiring: {
+      employee__id: number;
+      employee__first_name: string;
+      employee__last_name: string;
+      end_date: string;
+    }[];
+    work_permits_expiring: {
+      id: number;
+      first_name: string;
+      last_name: string;
+      work_permit_expiry: string;
+    }[];
+    probations_ending: {
+      id: number;
+      first_name: string;
+      last_name: string;
+      probation_end: string;
+    }[];
     competencies_expiring: { employee__id: number; competency: string; valid_until: string }[];
     loans_overdue: number;
   };
@@ -546,15 +561,57 @@ export interface PeopleOverview {
 
 // --- option lists (mirror the server's TextChoices) ------------------------
 
-export const SALARY_COMPONENT_CODES: { value: string; label: string; pensionable: boolean; maternity: boolean; taxable: boolean }[] = [
+export const SALARY_COMPONENT_CODES: {
+  value: string;
+  label: string;
+  pensionable: boolean;
+  maternity: boolean;
+  taxable: boolean;
+}[] = [
   { value: "BASIC", label: "Basic salary", pensionable: true, maternity: true, taxable: true },
-  { value: "HOUSING", label: "Housing allowance", pensionable: true, maternity: true, taxable: true },
-  { value: "TRANSPORT", label: "Transport allowance", pensionable: true, maternity: false, taxable: true },
-  { value: "RESPONSIBILITY", label: "Responsibility allowance", pensionable: true, maternity: true, taxable: true },
-  { value: "COMMUNICATION", label: "Communication allowance", pensionable: true, maternity: true, taxable: true },
-  { value: "RISK", label: "Risk / hardship allowance", pensionable: true, maternity: true, taxable: true },
+  {
+    value: "HOUSING",
+    label: "Housing allowance",
+    pensionable: true,
+    maternity: true,
+    taxable: true,
+  },
+  {
+    value: "TRANSPORT",
+    label: "Transport allowance",
+    pensionable: true,
+    maternity: false,
+    taxable: true,
+  },
+  {
+    value: "RESPONSIBILITY",
+    label: "Responsibility allowance",
+    pensionable: true,
+    maternity: true,
+    taxable: true,
+  },
+  {
+    value: "COMMUNICATION",
+    label: "Communication allowance",
+    pensionable: true,
+    maternity: true,
+    taxable: true,
+  },
+  {
+    value: "RISK",
+    label: "Risk / hardship allowance",
+    pensionable: true,
+    maternity: true,
+    taxable: true,
+  },
   { value: "ACTING", label: "Acting allowance", pensionable: true, maternity: true, taxable: true },
-  { value: "PER_DIEM", label: "Per diem (non-taxable)", pensionable: false, maternity: false, taxable: false },
+  {
+    value: "PER_DIEM",
+    label: "Per diem (non-taxable)",
+    pensionable: false,
+    maternity: false,
+    taxable: false,
+  },
   { value: "OTHER", label: "Other allowance", pensionable: true, maternity: true, taxable: true },
 ];
 

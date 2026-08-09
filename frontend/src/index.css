@@ -38,7 +38,11 @@
   /* --- Ink: text and iconography, warm-neutral slate. ------------------ */
   --ink-300: #cbd5e1;
   --ink-400: #94a3b8;
-  --ink-500: #64748b;
+  /* Secondary text. Darkened from #64748b when the page behind it was deepened:
+     the old value measured 3.75:1 there, under the 4.5 AA floor, and secondary
+     text is exactly the text people already find hardest. 4.89:1 on the page,
+     6.20:1 on a card. */
+  --ink-500: #556274;
   --ink-600: #475569;
   --ink-700: #334155;
   --ink-800: #1e293b;
@@ -52,8 +56,15 @@
   --surface-50: #f8fafc;
   --surface-100: #f1f5f9;
   --surface-200: #e2e8f0;
-  --line-200: #e2e8f0;
-  --line-strong: #cbd5e1;
+  /* The page behind the cards. It is a step deeper than surface-100 because a
+     pure-white card on #f1f5f9 has a 1.03:1 edge — the card is technically
+     white and reads as nothing at all. At #e6ebf2 the white is unmistakably
+     white, which is the whole point of putting a document on a desk. */
+  --app-bg: #dee5ee;
+  /* Strong enough to draw the edge of a card against the page rather than
+     dissolving into it. */
+  --line-200: #d6dde7;
+  --line-strong: #b8c2d0;
 
   /* --- Status. Reserved: never reused as a chart series or a brand accent. */
   /* danger — money lost, stock expired, a regulation broken. */
@@ -134,8 +145,11 @@
     --surface-50: #131b26;
     --surface-100: #0f1722;
     --surface-200: #1d2836;
-    --line-200: #26303e;
-    --line-strong: #3a4655;
+    /* Dark works the other way round: the page is the darkest plane and the
+       card lifts off it, so the same separation is achieved by going down. */
+    --app-bg: #0a111a;
+    --line-200: #2b3646;
+    --line-strong: #3f4c5e;
 
     --danger-50: #2a1416;
     --danger-200: #7f1d1d;
@@ -267,7 +281,7 @@ select.field-control {
 
 body {
   margin: 0;
-  background: var(--surface-100);
+  background: var(--app-bg);
   color: var(--ink-900);
   font-family:
     "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;

@@ -111,10 +111,7 @@ function TaxCodeDrawer({
             </Select>
           </Field>
           <Field label="Class">
-            <Select
-              value={form.code}
-              onChange={(e) => set({ code: e.target.value as TaxClass })}
-            >
+            <Select value={form.code} onChange={(e) => set({ code: e.target.value as TaxClass })}>
               {(Object.keys(CLASS_HINT) as TaxClass[]).map((c) => (
                 <option key={c} value={c}>
                   Class {c}
@@ -209,10 +206,6 @@ export function TaxCodesPage() {
           </Button>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Rwanda VAT classes and their effective-dated rates. A rate change is a new period, so an
-        invoice raised last year keeps the rate it was actually charged at.
-      </p>
 
       {expired > 0 && (
         <div className="rounded-lg border border-warning-300 bg-warning-50 px-4 py-3 text-sm text-warning-800">

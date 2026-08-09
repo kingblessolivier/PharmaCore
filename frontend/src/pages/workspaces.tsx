@@ -46,7 +46,6 @@ export function TaxWorkspace() {
   return (
     <Workspace
       title="Tax & compliance"
-      subtitle="The VAT return, the fiscalisation record behind it, what has been paid to RRA, and the codes it is all derived from."
       tabs={[
         { id: "vat", label: "VAT return", element: <VatPage /> },
         { id: "ebm", label: "EBM audit", element: <TaxEbmPage /> },
@@ -62,7 +61,6 @@ export function ColdChainWorkspace() {
   return (
     <Workspace
       title="Cold chain"
-      subtitle="What the sensors recorded, and whether that keeps the cold chain compliant."
       tabs={[
         { id: "logs", label: "Temperature logs", element: <TemperatureLogsPage /> },
         { id: "compliance", label: "Compliance", element: <ColdChainCompliancePage /> },
@@ -76,7 +74,6 @@ export function ReferenceDataWorkspace() {
   return (
     <Workspace
       title="Reference data"
-      subtitle="The catalogue's supporting tables: who makes a medicine, what is in it, how it converts, what it interacts with and what may replace it."
       tabs={[
         { id: "manufacturers", label: "Manufacturers", element: <ManufacturersPage /> },
         { id: "ingredients", label: "Active ingredients", element: <IngredientsPage /> },
@@ -93,7 +90,6 @@ export function TimeWorkspace() {
   return (
     <Workspace
       title="Time & attendance"
-      subtitle="Who was rostered, who actually attended, and the approved timesheet payroll is allowed to read."
       tabs={[
         { id: "attendance", label: "Attendance", element: <AttendancePage /> },
         { id: "roster", label: "Shift rosters", element: <ShiftRosterPage /> },
@@ -108,7 +104,6 @@ export function StatutoryWorkspace() {
   return (
     <Workspace
       title="Statutory filings"
-      subtitle="PAYE, RSSB and CBHI returns, and the rates they are calculated from."
       tabs={[
         { id: "filings", label: "Filings", element: <StatutoryFilingsPage /> },
         { id: "rates", label: "Rates", element: <StatutoryRatesPage /> },
@@ -122,7 +117,6 @@ export function AccessWorkspace() {
   return (
     <Workspace
       title="Users & access"
-      subtitle="The people with accounts, and the permissions each role carries."
       tabs={[
         { id: "users", label: "Users", element: <UsersPage /> },
         { id: "permissions", label: "Role permissions", element: <PermissionMatrixPage /> },
@@ -131,13 +125,11 @@ export function AccessWorkspace() {
   );
 }
 
-
 /** Everything owed to us, and the escalating steps for getting it in. */
 export function ReceivablesWorkspace() {
   return (
     <Workspace
       title="Money in"
-      subtitle="What customers owe, how old it is, what has been sent to chase it, and how much credit each is allowed."
       tabs={[
         { id: "invoices", label: "Customer invoices", element: <ReceivablesPage /> },
         { id: "aging", label: "Aging", element: <FinancePage /> },
@@ -154,7 +146,6 @@ export function CashBankWorkspace() {
   return (
     <Workspace
       title="Cash & bank"
-      subtitle="The accounts and their cash book, and the reconciliation that proves the book against the statement."
       tabs={[
         { id: "accounts", label: "Accounts & cash book", element: <BankingPage /> },
         { id: "reconciliation", label: "Reconciliation", element: <BankReconciliationPage /> },
@@ -168,7 +159,6 @@ export function WarehouseSetupWorkspace() {
   return (
     <Workspace
       title="Warehouse setup"
-      subtitle="The premises, the zones and bins inside them, and the rules deciding where an incoming pallet goes."
       tabs={[
         { id: "warehouses", label: "Warehouses", element: <WarehousesPage /> },
         { id: "zones", label: "Zones & bins", element: <StorageZonesPage /> },

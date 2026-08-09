@@ -66,7 +66,9 @@ export function OrgMovementsTab({ organizationId }: { organizationId: number }) 
                   <td className="px-4 py-2.5">
                     <span className="font-medium">{m.product_name}</span>
                     {m.batch_number && (
-                      <span className="ml-1 font-mono text-xs text-ink-500">· {m.batch_number}</span>
+                      <span className="ml-1 font-mono text-xs text-ink-500">
+                        · {m.batch_number}
+                      </span>
                     )}
                   </td>
                   <td

@@ -43,7 +43,11 @@ export function Workspace({
         {subtitle && <p className="mt-0.5 text-form text-ink-500">{subtitle}</p>}
       </div>
 
-      <div role="tablist" aria-label={title} className="mb-4 flex gap-0.5 overflow-x-auto border-b border-line">
+      <div
+        role="tablist"
+        aria-label={title}
+        className="mb-4 flex gap-0.5 overflow-x-auto border-b border-line"
+      >
         {tabs.map((tab) => {
           const on = tab.id === active.id;
           return (

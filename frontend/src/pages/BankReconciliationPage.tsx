@@ -30,13 +30,7 @@ import { StatusChip } from "../components/Status";
 
 /* -------------------------------------------------------------------------- */
 
-function ImportDrawer({
-  accounts,
-  onClose,
-}: {
-  accounts: BankAccount[];
-  onClose: () => void;
-}) {
+function ImportDrawer({ accounts, onClose }: { accounts: BankAccount[]; onClose: () => void }) {
   const qc = useQueryClient();
   const [form, setForm] = useState({
     bank_account: accounts[0]?.id ?? 0,
@@ -70,7 +64,6 @@ function ImportDrawer({
   return (
     <Drawer
       title="Import a bank statement"
-      subtitle="The import refuses a file whose own arithmetic does not foot."
       width="max-w-3xl"
       onClose={onClose}
       footer={
@@ -222,8 +215,8 @@ function ExplainDrawer({
       <p className="mb-4 text-sm text-ink-600">
         {/* Bank charges and interest have no internal document — the statement is
             their only way into the books. */}
-        The books have no record of this line. Posting it here is how bank charges, interest
-        and direct debits reach the ledger at all.
+        The books have no record of this line. Posting it here is how bank charges, interest and
+        direct debits reach the ledger at all.
       </p>
       <Section title="Entry">
         <Facts
@@ -310,8 +303,7 @@ function StatementWorkspace({ statement }: { statement: BankStatement }) {
 
   const { data: lines = [], isLoading } = useQuery({
     queryKey: ["statement-lines", statement.id],
-    queryFn: () =>
-      api<BankStatementLine[]>(`/api/finance/bank-statements/${statement.id}/lines/`),
+    queryFn: () => api<BankStatementLine[]>(`/api/finance/bank-statements/${statement.id}/lines/`),
   });
   const { data: summary } = useQuery({
     queryKey: ["reconciliation-summary", statement.id],
@@ -396,8 +388,8 @@ function StatementWorkspace({ statement }: { statement: BankStatement }) {
                 {autoMatch.data.ambiguous > 0 && (
                   <>
                     {" · "}
-                    <strong>{autoMatch.data.ambiguous}</strong> left for you — more than one
-                    ledger line fits equally well
+                    <strong>{autoMatch.data.ambiguous}</strong> left for you — more than one ledger
+                    line fits equally well
                   </>
                 )}
               </span>
@@ -510,8 +502,7 @@ export function BankReconciliationPage() {
   const { data: accountData } = useQuery({
     queryKey: ["bank-accounts", orgId],
     enabled: orgId !== null,
-    queryFn: () =>
-      api<Paginated<BankAccount>>(`/api/finance/bank-accounts/?organization=${orgId}`),
+    queryFn: () => api<Paginated<BankAccount>>(`/api/finance/bank-accounts/?organization=${orgId}`),
   });
   const accounts = useMemo(() => accountData?.results ?? [], [accountData]);
 
@@ -553,11 +544,6 @@ export function BankReconciliationPage() {
           </Button>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Reconciliation compares what the bank says against what the books say. The difference
-        neither side explains is the point of the exercise — it is how a payment that left the
-        account without ever reaching the ledger gets found.
-      </p>
 
       {accounts.length === 0 ? (
         <Empty message="Add a bank, mobile-money or cash account first." />

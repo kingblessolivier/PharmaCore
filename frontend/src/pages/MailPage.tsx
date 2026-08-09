@@ -10,15 +10,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, Inbox, PenSquare, Send, Star, Trash2 } from "lucide-react";
 import { useState } from "react";
-import {
-  Drawer,
-  ErrorNote,
-  Field,
-  Grid,
-  Input,
-  Section,
-  Textarea,
-} from "../components/RecordKit";
+import { Drawer, ErrorNote, Field, Grid, Input, Section, Textarea } from "../components/RecordKit";
 import { Badge, Button, PageHeader, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import {
@@ -60,9 +52,8 @@ export function MailPage() {
 
   const people = useQuery({
     queryKey: ["mentionable-users"],
-    queryFn: () => api<Paginated<MentionableUser> | MentionableUser[]>(
-      "/api/workspace/mentionable-users",
-    ),
+    queryFn: () =>
+      api<Paginated<MentionableUser> | MentionableUser[]>("/api/workspace/mentionable-users"),
   });
 
   const thread = useQuery({
@@ -112,9 +103,7 @@ export function MailPage() {
 
   const rows = mail.data?.results ?? [];
   const summary = mail.data?.summary;
-  const contacts = Array.isArray(people.data)
-    ? people.data
-    : (people.data?.results ?? []);
+  const contacts = Array.isArray(people.data) ? people.data : (people.data?.results ?? []);
 
   return (
     <div className="space-y-4">
@@ -331,7 +320,6 @@ export function MailPage() {
       {composing && (
         <Drawer
           title="New message"
-          subtitle="Internal mail — reaches colleagues without provisioning a mailbox."
           onClose={() => setComposing(false)}
           footer={
             <div className="flex justify-end gap-2">

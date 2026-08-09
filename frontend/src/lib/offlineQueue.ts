@@ -84,7 +84,10 @@ export async function enqueue(sale: QueuedSale): Promise<void> {
 }
 
 export async function queued(): Promise<QueuedSale[]> {
-  const rows = await withStore<QueuedSale[]>("readonly", (s) => s.getAll() as IDBRequest<QueuedSale[]>);
+  const rows = await withStore<QueuedSale[]>(
+    "readonly",
+    (s) => s.getAll() as IDBRequest<QueuedSale[]>,
+  );
   return rows.sort((a, b) => a.queued_at.localeCompare(b.queued_at));
 }
 
@@ -113,9 +116,7 @@ export interface FlushResult {
  * order the shop actually traded in, and a later sale is not more important than
  * an earlier one that is stuck.
  */
-export async function flush(
-  post: (sale: QueuedSale) => Promise<unknown>,
-): Promise<FlushResult> {
+export async function flush(post: (sale: QueuedSale) => Promise<unknown>): Promise<FlushResult> {
   let synced = 0;
   let failed = 0;
 

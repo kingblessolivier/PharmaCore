@@ -26,12 +26,7 @@ import {
 } from "../components/Workbench";
 import { api } from "../lib/api";
 import type { SupplierProfile } from "../lib/procurement";
-import {
-  LicencesTab,
-  PerformanceTab,
-  PriceAgreementsTab,
-  TermsTab,
-} from "./SupplierMasterPage";
+import { LicencesTab, PerformanceTab, PriceAgreementsTab, TermsTab } from "./SupplierMasterPage";
 
 const STANDING_TONE: Record<string, string> = {
   PREFERRED: "success",

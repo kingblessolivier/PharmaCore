@@ -18,7 +18,9 @@ export function SubstitutesPage() {
   const [productId, setProductId] = useState<number>(0);
   const [subName, setSubName] = useState("");
   const [subStrength, setSubStrength] = useState("");
-  const [subType, setSubType] = useState<"GENERIC_EQUIVALENT" | "THERAPEUTIC_ALTERNATIVE">("GENERIC_EQUIVALENT");
+  const [subType, setSubType] = useState<"GENERIC_EQUIVALENT" | "THERAPEUTIC_ALTERNATIVE">(
+    "GENERIC_EQUIVALENT",
+  );
   const [notes, setNotes] = useState("");
 
   const { data, isLoading } = useQuery({
@@ -67,7 +69,8 @@ export function SubstitutesPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api<void>(`/api/catalog/product-substitutes/${id}/`, { method: "DELETE" }),
+    mutationFn: (id: number) =>
+      api<void>(`/api/catalog/product-substitutes/${id}/`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["product-substitutes"] }),
   });
 
@@ -121,9 +124,6 @@ export function SubstitutesPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        Full CRUD management for bioequivalent generic substitutes and therapeutic alternatives.
-      </p>
 
       <div className="mb-4 flex items-center gap-2 rounded-md border border-line bg-surface-0 px-3 py-2">
         <input

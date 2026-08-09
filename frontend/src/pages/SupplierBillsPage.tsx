@@ -20,7 +20,6 @@ import { useDefaultOrg } from "../lib/recordData";
 import type { Paginated, Supplier, SupplierBill } from "../lib/types";
 import { StatusChip } from "../components/Status";
 
-
 const METHODS: [string, string][] = [
   ["BANK_TRANSFER", "Bank transfer"],
   ["MOBILE_MONEY", "Mobile money"],
@@ -180,9 +179,7 @@ function BillDrawer({ bill, onClose }: { bill: SupplierBill; onClose: () => void
     <Drawer
       title={`${bill.bill_number} · ${bill.supplier_name}`}
       subtitle={bill.due_date ? `Due ${shortDate(bill.due_date)}` : "No due date"}
-      badge={
-<StatusChip status={isOverdue(bill) ? "OVERDUE" : bill.status} />
-      }
+      badge={<StatusChip status={isOverdue(bill) ? "OVERDUE" : bill.status} />}
       width="max-w-2xl"
       onClose={onClose}
       footer={
@@ -373,9 +370,7 @@ export function SupplierBillsPage() {
             key: "status",
             header: "Status",
             value: (b) => (isOverdue(b) ? "OVERDUE" : b.status),
-            render: (b) => (
-<StatusChip status={isOverdue(b) ? "OVERDUE" : b.status} size="sm" />
-            ),
+            render: (b) => <StatusChip status={isOverdue(b) ? "OVERDUE" : b.status} size="sm" />,
           },
         ]}
       />

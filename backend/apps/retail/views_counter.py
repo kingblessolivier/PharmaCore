@@ -16,6 +16,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from apps.catalog.models import Product
 from apps.core.lookups import lookup_pk
 from apps.iam.models import Organization, User
 from apps.iam.permissions import HasPermission
@@ -28,6 +29,7 @@ from apps.retail.counter import (
     clear_promotion,
     resolve_barcode,
 )
+from apps.retail.lines import build_line
 from apps.retail.models import ClinicalServiceRecord, Sale
 
 
@@ -260,7 +262,6 @@ class OfflineSyncViewSet(viewsets.ViewSet):
         """Replay one queued sale. Safe to call repeatedly with the same key."""
         from decimal import Decimal
 
-        from apps.retail.models import SaleItem
         from apps.retail.services import complete_sale
 
         organization = _org(request)
@@ -310,11 +311,12 @@ class OfflineSyncViewSet(viewsets.ViewSet):
             sale.sale_number = f"SALE-{sale.pk:06d}"
             sale.save(update_fields=["sale_number"])
         for line in lines:
-            SaleItem.objects.create(
+            build_line(
                 sale=sale,
-                product_id=line["product"],
-                quantity=int(line["quantity"]),
-                unit_price=Decimal(str(line["unit_price"])),
+                product=Product.objects.get(pk=line["product"]),
+                quantity=line["quantity"],
+                unit_code=line.get("unit"),
+                base_price=Decimal(str(line["unit_price"])),
                 tax_rate=Decimal(str(line.get("tax_rate", "0"))),
             )
 

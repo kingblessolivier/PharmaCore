@@ -15,7 +15,9 @@ export function StorageZonesPage() {
   const [creatingBin, setCreatingBin] = useState(false);
 
   const [zoneName, setZoneName] = useState("");
-  const [zoneType, setZoneType] = useState<"AMBIENT" | "COLD_CHAIN" | "FREEZER" | "CONTROLLED_SAFE" | "HAZARDOUS">("AMBIENT");
+  const [zoneType, setZoneType] = useState<
+    "AMBIENT" | "COLD_CHAIN" | "FREEZER" | "CONTROLLED_SAFE" | "HAZARDOUS"
+  >("AMBIENT");
   const [tempMin, setTempMin] = useState("15.00");
   const [tempMax, setTempMax] = useState("25.00");
 
@@ -71,7 +73,8 @@ export function StorageZonesPage() {
   });
 
   const deleteZoneMutation = useMutation({
-    mutationFn: (id: number) => api<void>(`/api/inventory/storage-zones/${id}/`, { method: "DELETE" }),
+    mutationFn: (id: number) =>
+      api<void>(`/api/inventory/storage-zones/${id}/`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["storage-zones"] }),
   });
 
@@ -107,9 +110,6 @@ export function StorageZonesPage() {
           </div>
         }
       />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        Climate-controlled storage zones (Ambient, Cold Room 2–8°C, Freezer, Safe) and bin locations.
-      </p>
 
       <div className="flex flex-col gap-6">
         <div>
@@ -188,7 +188,9 @@ export function StorageZonesPage() {
             storageKey="bin-locations"
             exportName="bin-locations"
             searchPlaceholder="Search bins by code, zone, aisle or shelf…"
-            emptyMessage={'No bin locations created yet. Click "Add Bin Location" to configure one.'}
+            emptyMessage={
+              'No bin locations created yet. Click "Add Bin Location" to configure one.'
+            }
             columns={[
               {
                 key: "bin_code",

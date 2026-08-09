@@ -49,16 +49,39 @@ function CompanyModal({ company, onClose }: { company?: Company; onClose: () => 
   return (
     <Drawer title={editing ? `Edit ${company!.name}` : "Add company"} onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <TextField label="Company name" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
-        <TextField label="Legal name (optional)" value={legalName} onChange={(e) => setLegalName(e.target.value)} />
+        <TextField
+          label="Company name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+          autoFocus
+        />
+        <TextField
+          label="Legal name (optional)"
+          value={legalName}
+          onChange={(e) => setLegalName(e.target.value)}
+        />
         <div className="grid grid-cols-2 gap-3">
           <TextField label="TIN (RRA)" value={tin} onChange={(e) => setTin(e.target.value)} />
-          <TextField label="Registration no. (RDB)" value={reg} onChange={(e) => setReg(e.target.value)} />
+          <TextField
+            label="Registration no. (RDB)"
+            value={reg}
+            onChange={(e) => setReg(e.target.value)}
+          />
         </div>
-        <TextField label="Contact person" value={contact} onChange={(e) => setContact(e.target.value)} />
+        <TextField
+          label="Contact person"
+          value={contact}
+          onChange={(e) => setContact(e.target.value)}
+        />
         <div className="grid grid-cols-2 gap-3">
           <TextField label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          <TextField label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <TextField
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
         </div>
         {error && <p className="text-sm text-danger">{error}</p>}
         <div className="flex justify-end gap-2">
@@ -167,7 +190,10 @@ function BranchesModal({ company, onClose }: { company: Company; onClose: () => 
                   ))}
                 </SelectField>
               </div>
-              <Button disabled={!assignId || assign.isPending} onClick={() => assign.mutate(Number(assignId))}>
+              <Button
+                disabled={!assignId || assign.isPending}
+                onClick={() => assign.mutate(Number(assignId))}
+              >
                 Attach
               </Button>
             </div>
@@ -198,10 +224,6 @@ export function CompaniesPage() {
           </Button>
         }
       />
-      <p className="mb-4 -mt-2 text-sm text-ink-500">
-        A company is the legal business that owns one or more branches. A single pharmacy is one
-        company with one branch; a chain is a company with an HQ and several branches.
-      </p>
 
       <DataGrid<Company>
         rows={companies.data?.results ?? []}
@@ -222,8 +244,18 @@ export function CompaniesPage() {
             ),
           },
           { key: "tin", header: "TIN", value: (c) => c.tin || "—" },
-          { key: "registration_number", header: "Reg no.", value: (c) => c.registration_number || "—" },
-          { key: "branch_count", header: "Branches", align: "right", numeric: true, value: (c) => c.branch_count },
+          {
+            key: "registration_number",
+            header: "Reg no.",
+            value: (c) => c.registration_number || "—",
+          },
+          {
+            key: "branch_count",
+            header: "Branches",
+            align: "right",
+            numeric: true,
+            value: (c) => c.branch_count,
+          },
           {
             key: "is_active",
             header: "Status",
@@ -254,7 +286,6 @@ export function CompaniesPage() {
           },
         ]}
       />
-
 
       {adding && <CompanyModal onClose={() => setAdding(false)} />}
       {editing && <CompanyModal company={editing} onClose={() => setEditing(null)} />}

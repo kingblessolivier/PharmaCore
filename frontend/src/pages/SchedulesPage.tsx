@@ -72,7 +72,6 @@ const KIND_LABEL: Record<ScheduleKind, string> = {
   ACCRUAL: "Accrual",
 };
 
-
 /* -------------------------------------------------------------------------- */
 
 function NewScheduleDrawer({
@@ -124,7 +123,6 @@ function NewScheduleDrawer({
   return (
     <Drawer
       title="New schedule"
-      subtitle="Spread a cost across the months it belongs to."
       width="max-w-2xl"
       onClose={onClose}
       footer={
@@ -352,9 +350,7 @@ function ScheduleDrawer({
                 <span className="flex items-center gap-3">
                   <span className="tabular-nums text-ink-900">{money(run.amount)}</span>
                   <span className="text-xs text-ink-500">{run.entry_number}</span>
-                  {run.reversal_number && (
-                    <Badge tone="info">reversed {run.reversal_number}</Badge>
-                  )}
+                  {run.reversal_number && <Badge tone="info">reversed {run.reversal_number}</Badge>}
                 </span>
               </li>
             ))}
@@ -449,10 +445,6 @@ export function SchedulesPage() {
           </div>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        A cost belongs to the months it was incurred in, not the month it was billed. Without
-        these, insurance paid annually wrecks one month and flatters eleven.
-      </p>
       <ErrorNote error={run.error} />
 
       {summary && (
@@ -481,17 +473,14 @@ export function SchedulesPage() {
       {run.data && (
         <div className="rounded-lg border border-line bg-surface-0 px-4 py-2 text-sm text-ink-600">
           Posted {run.data.runs} month{run.data.runs === 1 ? "" : "s"}, totalling{" "}
-          {money(run.data.total)}. Missed months post to the month they belong to, not as a lump
-          in the current period.
+          {money(run.data.total)}. Missed months post to the month they belong to, not as a lump in
+          the current period.
         </div>
       )}
 
       {schedules.filter((s) => Number(s.remaining) > 0).length > 0 && (
         <VizRoot>
-          <ChartFrame
-            title="Still to release"
-            subtitle="What is sitting in prepayments and accruals, waiting to hit the P&L."
-          >
+          <ChartFrame title="Still to release">
             <BarChart
               data={schedules
                 .filter((s) => Number(s.remaining) > 0)
@@ -564,9 +553,7 @@ export function SchedulesPage() {
             key: "status",
             header: "Status",
             value: (s) => s.status,
-            render: (s) => (
-<StatusChip status={s.status} />
-            ),
+            render: (s) => <StatusChip status={s.status} />,
           },
         ]}
       />

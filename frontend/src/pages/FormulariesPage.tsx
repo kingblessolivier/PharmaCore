@@ -70,7 +70,8 @@ export function FormulariesPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api<void>(`/api/catalog/formulary-items/${id}/`, { method: "DELETE" }),
+    mutationFn: (id: number) =>
+      api<void>(`/api/catalog/formulary-items/${id}/`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["formulary-items"] }),
   });
 
@@ -126,9 +127,6 @@ export function FormulariesPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        Full CRUD management for RSSB / RAMA, CBHI, MMI, and private insurer formularies and co-pay rules.
-      </p>
 
       <div className="mb-4 flex items-center gap-2 rounded-md border border-line bg-surface-0 px-3 py-2">
         <input

@@ -123,9 +123,7 @@ export function DunningPage() {
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {Object.entries(LEVEL).map(([key, meta]) => (
           <Card key={key} className="p-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-ink-500">
-              {meta.label}
-            </p>
+            <p className="text-xs font-medium uppercase tracking-wide text-ink-500">{meta.label}</p>
             <p className="mt-1 text-lg font-semibold tabular-nums">{byLevel(key)}</p>
             <p className="text-xs text-ink-500">{meta.blurb}</p>
           </Card>

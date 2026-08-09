@@ -123,7 +123,8 @@ export function DepotListingsPage() {
       numeric: true,
       align: "right",
       value: (r) => r.buffer_qty,
-      render: (r) => (r.buffer_qty > 0 ? <span className="tabular-nums">{r.buffer_qty}</span> : "—"),
+      render: (r) =>
+        r.buffer_qty > 0 ? <span className="tabular-nums">{r.buffer_qty}</span> : "—",
     },
     {
       key: "stock_on_hand",
@@ -141,9 +142,7 @@ export function DepotListingsPage() {
       render: (r) => (
         <div className="text-right">
           <div className="tabular-nums text-ink-900">{r.available_now}</div>
-          {r.availability_note && (
-            <div className="text-xs text-ink-500">{r.availability_note}</div>
-          )}
+          {r.availability_note && <div className="text-xs text-ink-500">{r.availability_note}</div>}
         </div>
       ),
     },
@@ -184,9 +183,6 @@ export function DepotListingsPage() {
           </Button>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        What you put on the market. Stock you hold but do not publish stays invisible to buyers.
-      </p>
 
       {coverage && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -249,131 +245,127 @@ export function DepotListingsPage() {
       />
 
       {draft && (
-      <Drawer
-        onClose={() => setDraft(null)}
-        title={draft?.id ? "Edit offer" : "Offer a product"}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setDraft(null)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => draft && save.mutate(draft)}
-              disabled={save.isPending || !draft?.product}
-            >
-              {save.isPending ? "Saving…" : "Save offer"}
-            </Button>
-          </>
-        }
-      >
-        {draft && (
-          <>
-            <Section title="Product & price">
-              <Grid>
-                <Field label="Product">
-                  <ProductPicker
-                    value={draft.product}
-                    onChange={(id) => setDraft({ ...draft, product: id })}
-                    disabled={Boolean(draft.id)}
-                  />
-                </Field>
-                <Field label="Price per unit">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={draft.price_per_unit}
-                    onChange={(e) => setDraft({ ...draft, price_per_unit: e.target.value })}
-                  />
-                </Field>
-              </Grid>
-            </Section>
+        <Drawer
+          onClose={() => setDraft(null)}
+          title={draft?.id ? "Edit offer" : "Offer a product"}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setDraft(null)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => draft && save.mutate(draft)}
+                disabled={save.isPending || !draft?.product}
+              >
+                {save.isPending ? "Saving…" : "Save offer"}
+              </Button>
+            </>
+          }
+        >
+          {draft && (
+            <>
+              <Section title="Product & price">
+                <Grid>
+                  <Field label="Product">
+                    <ProductPicker
+                      value={draft.product}
+                      onChange={(id) => setDraft({ ...draft, product: id })}
+                      disabled={Boolean(draft.id)}
+                    />
+                  </Field>
+                  <Field label="Price per unit">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={draft.price_per_unit}
+                      onChange={(e) => setDraft({ ...draft, price_per_unit: e.target.value })}
+                    />
+                  </Field>
+                </Grid>
+              </Section>
 
-            <Section
-              title="How much to offer"
-              hint="The quantity you publish, and how much you keep back for yourself."
-            >
-              <Grid>
-                <Field label="Offered quantity">
-                  <Input
-                    type="number"
-                    min={0}
-                    value={draft.offered_qty}
-                    onChange={(e) => setDraft({ ...draft, offered_qty: e.target.value })}
-                  />
-                </Field>
-                <Field
-                  label="Hold back"
-                  hint="Reserved for your own use. Buyers can never reach it."
-                >
-                  <Input
-                    type="number"
-                    min={0}
-                    value={draft.buffer_qty}
-                    onChange={(e) => setDraft({ ...draft, buffer_qty: e.target.value })}
-                  />
-                </Field>
-                <Field label="Minimum order">
-                  <Input
-                    type="number"
-                    min={1}
-                    value={draft.min_order_qty}
-                    onChange={(e) => setDraft({ ...draft, min_order_qty: e.target.value })}
-                  />
-                </Field>
-              </Grid>
-            </Section>
-
-            <Section title="Who may buy it">
-              <Grid>
-                <Field
-                  label="Customer segment"
-                  hint="ALL, an organisation type (RETAIL), or a district you deliver to."
-                >
-                  <Input
-                    value={draft.customer_segment}
-                    onChange={(e) =>
-                      setDraft({ ...draft, customer_segment: e.target.value.toUpperCase() })
-                    }
-                  />
-                </Field>
-                <Field label="Visibility">
-                  <Select
-                    value={draft.is_published ? "yes" : "no"}
-                    onChange={(e) => setDraft({ ...draft, is_published: e.target.value === "yes" })}
+              <Section
+                title="How much to offer"
+                hint="The quantity you publish, and how much you keep back for yourself."
+              >
+                <Grid>
+                  <Field label="Offered quantity">
+                    <Input
+                      type="number"
+                      min={0}
+                      value={draft.offered_qty}
+                      onChange={(e) => setDraft({ ...draft, offered_qty: e.target.value })}
+                    />
+                  </Field>
+                  <Field
+                    label="Hold back"
+                    hint="Reserved for your own use. Buyers can never reach it."
                   >
-                    <option value="yes">On sale — buyers can see and order it</option>
-                    <option value="no">Withheld — invisible to buyers</option>
-                  </Select>
-                </Field>
-              </Grid>
-              {!draft.is_published && (
-                <p className="mt-2 text-xs text-ink-500">
-                  Withheld listings keep their settings. Buyers see nothing at all — not the price,
-                  not that you hold it.
-                </p>
-              )}
-            </Section>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={draft.buffer_qty}
+                      onChange={(e) => setDraft({ ...draft, buffer_qty: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Minimum order">
+                    <Input
+                      type="number"
+                      min={1}
+                      value={draft.min_order_qty}
+                      onChange={(e) => setDraft({ ...draft, min_order_qty: e.target.value })}
+                    />
+                  </Field>
+                </Grid>
+              </Section>
 
-            <Section title="What buyers will see">
-              <Facts
-                rows={[
-                  ["Published price", money(draft.price_per_unit)],
-                  ["Offered", draft.is_published ? `${draft.offered_qty} unit(s)` : "Nothing"],
-                  ["Minimum order", `${draft.min_order_qty} unit(s)`],
-                ]}
-              />
-              <p className="mt-2 text-xs text-ink-500">
-                Buyers are capped at the smaller of your offered quantity and what you actually
-                hold, after the held-back amount. They never see your real stock level.
-              </p>
-            </Section>
+              <Section title="Who may buy it">
+                <Grid>
+                  <Field
+                    label="Customer segment"
+                    hint="ALL, an organisation type (RETAIL), or a district you deliver to."
+                  >
+                    <Input
+                      value={draft.customer_segment}
+                      onChange={(e) =>
+                        setDraft({ ...draft, customer_segment: e.target.value.toUpperCase() })
+                      }
+                    />
+                  </Field>
+                  <Field label="Visibility">
+                    <Select
+                      value={draft.is_published ? "yes" : "no"}
+                      onChange={(e) =>
+                        setDraft({ ...draft, is_published: e.target.value === "yes" })
+                      }
+                    >
+                      <option value="yes">On sale — buyers can see and order it</option>
+                      <option value="no">Withheld — invisible to buyers</option>
+                    </Select>
+                  </Field>
+                </Grid>
+                {!draft.is_published && (
+                  <p className="mt-2 text-xs text-ink-500">
+                    Withheld listings keep their settings. Buyers see nothing at all — not the
+                    price, not that you hold it.
+                  </p>
+                )}
+              </Section>
 
-            {save.isError && (
-              <ErrorNote error={save.error} />
-            )}
-          </>
-        )}
-      </Drawer>
+              <Section title="What buyers will see">
+                <Facts
+                  rows={[
+                    ["Published price", money(draft.price_per_unit)],
+                    ["Offered", draft.is_published ? `${draft.offered_qty} unit(s)` : "Nothing"],
+                    ["Minimum order", `${draft.min_order_qty} unit(s)`],
+                  ]}
+                />
+              </Section>
+
+              {save.isError && <ErrorNote error={save.error} />}
+            </>
+          )}
+        </Drawer>
       )}
     </div>
   );

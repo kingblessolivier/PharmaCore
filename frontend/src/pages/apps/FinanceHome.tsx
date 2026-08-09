@@ -1,27 +1,15 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  BookOpen,
-  CreditCard,
-  FileBarChart,
-  Landmark,
-  ScrollText,
-  Wallet,
-} from "lucide-react";
+import { Wallet } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import type { AccountingPeriod, FinancePerformance, Paginated, VatReturn } from "../../lib/types";
 import type { CloseReadiness, MoneyMap, MoneySourceRow, PeriodTask } from "../../lib/finance";
-import {
-  AppHeader,
-  SectionCard,
-  SectionGrid,
-  StatTile,
-  WorkQueue,
-} from "../../components/AppHome";
+import { AppHeader, StatTile, WorkQueue } from "../../components/AppHome";
 import { useModuleWork } from "../../lib/modulework";
 import { Spinner } from "../../components/ui";
+import { ModuleInsights } from "../../components/ModuleInsights";
 
 const money = (n: string | number) =>
   Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
@@ -41,11 +29,16 @@ function periodFor(preset: PeriodPreset, customStart: string, customEnd: string)
   const quarterStart = iso(new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1));
   const ytdStart = iso(new Date(now.getFullYear(), 0, 1));
   switch (preset) {
-    case "this-month": return { start: monthStart, end: today };
-    case "last-month": return { start: lastMonthStart, end: lastMonthEnd };
-    case "this-quarter": return { start: quarterStart, end: today };
-    case "ytd": return { start: ytdStart, end: today };
-    case "custom": return { start: customStart, end: customEnd };
+    case "this-month":
+      return { start: monthStart, end: today };
+    case "last-month":
+      return { start: lastMonthStart, end: lastMonthEnd };
+    case "this-quarter":
+      return { start: quarterStart, end: today };
+    case "ytd":
+      return { start: ytdStart, end: today };
+    case "custom":
+      return { start: customStart, end: customEnd };
   }
 }
 
@@ -234,7 +227,7 @@ function CloseReadinessPanel({ orgId, start, end }: { orgId: number; start: stri
   });
 
   return (
-    <Panel title="Month-end" subtitle="Whether the books for this period are finished">
+    <Panel title="Month-end">
       {period === undefined ? (
         <p className="text-sm text-ink-500">
           No close started for this period yet. Open{" "}
@@ -302,7 +295,10 @@ export function FinanceHome() {
   const [preset, setPreset] = useState<PeriodPreset>("this-month");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
-  const period = useMemo(() => periodFor(preset, customStart, customEnd), [preset, customStart, customEnd]);
+  const period = useMemo(
+    () => periodFor(preset, customStart, customEnd),
+    [preset, customStart, customEnd],
+  );
 
   const perfQ = useQuery({
     queryKey: ["fin-performance", orgId, period.start, period.end],
@@ -327,36 +323,37 @@ export function FinanceHome() {
 
   return (
     <div>
-      <AppHeader
-        icon={Wallet}
-        hue="#15803D"
-        title="Finance"
-        subtitle="How much is invested, how the business is performing, who owes you, and whether cash is safe."
-      />
+      <AppHeader icon={Wallet} hue="#15803D" title="Finance" />
 
       <WorkQueue items={work.items} loading={work.loading} />
 
       {/* Period switcher — the leader's cockpit can compare across windows. */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium uppercase tracking-wide text-ink-500">Period</span>
-        {(["this-month", "last-month", "this-quarter", "ytd", "custom"] as PeriodPreset[]).map((p) => (
-          <button
-            key={p}
-            type="button"
-            onClick={() => setPreset(p)}
-            className={`rounded-md border px-2.5 py-1 text-xs ${
-              preset === p
-                ? "border-emerald-700 bg-emerald-700 text-white"
-                : "border-line bg-surface-0 text-ink-700 hover:bg-surface-50"
-            }`}
-          >
-            {p === "this-month" ? "This month"
-              : p === "last-month" ? "Last month"
-              : p === "this-quarter" ? "This quarter"
-              : p === "ytd" ? "YTD"
-              : "Custom"}
-          </button>
-        ))}
+        {(["this-month", "last-month", "this-quarter", "ytd", "custom"] as PeriodPreset[]).map(
+          (p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPreset(p)}
+              className={`rounded-md border px-2.5 py-1 text-xs ${
+                preset === p
+                  ? "border-emerald-700 bg-emerald-700 text-white"
+                  : "border-line bg-surface-0 text-ink-700 hover:bg-surface-50"
+              }`}
+            >
+              {p === "this-month"
+                ? "This month"
+                : p === "last-month"
+                  ? "Last month"
+                  : p === "this-quarter"
+                    ? "This quarter"
+                    : p === "ytd"
+                      ? "YTD"
+                      : "Custom"}
+            </button>
+          ),
+        )}
         {preset === "custom" && (
           <div className="flex items-center gap-2">
             <input
@@ -430,9 +427,7 @@ export function FinanceHome() {
             <StatTile
               label="Stock turns"
               value={p.stock_turns ? `${Number(p.stock_turns).toFixed(1)}× / yr` : "—"}
-              hint={
-                p.gmroi ? `GMROI ${Number(p.gmroi).toFixed(0)}%` : "Target: 13–18×/yr"
-              }
+              hint={p.gmroi ? `GMROI ${Number(p.gmroi).toFixed(0)}%` : "Target: 13–18×/yr"}
             />
           </div>
 
@@ -501,68 +496,16 @@ export function FinanceHome() {
         <CloseReadinessPanel orgId={orgId} start={period.start} end={period.end} />
       </div>
 
-      <SectionGrid>
-        <SectionCard
-          icon={FileBarChart}
-          title="Financial statements"
-          description="P&L, balance sheet, cash flow, trial balance, group consolidation, period close."
-          to="/finance/statements"
+      <div>
+        <h2 className="mb-3 text-base font-semibold tracking-tight text-ink-900">
+          How the business is performing
+        </h2>
+        <ModuleInsights
+          module="finance"
+          trendTitle="Revenue, expenses and what is left — 12 months"
+          trendSubtitle="Read off the same posted lines as the totals above."
         />
-        <SectionCard
-          icon={CreditCard}
-          title="Receivables & payables"
-          description="Aged balances by trading partner — current, 1–30, 31–60, 61–90, 90+."
-          to="/finance/aging"
-        />
-        <SectionCard
-          icon={BookOpen}
-          title="Chart of accounts"
-          description="Ledger accounts with live balances, grouped by statement section."
-          to="/finance/accounts"
-        />
-        <SectionCard
-          icon={ScrollText}
-          title="Journal"
-          description="Balanced double-entry postings — auto-posted from settlement, or entered manually."
-          to="/finance/journal"
-        />
-        <SectionCard
-          icon={Wallet}
-          title="Customer credit"
-          description="Limits, terms, and holds — changes are approval-gated, never immediate."
-          to="/finance/credit"
-        />
-        <SectionCard
-          icon={CreditCard}
-          title="Supplier bills (AP)"
-          description="Record supplier invoices and payments — posts straight to the ledger."
-          to="/finance/payables"
-        />
-        <SectionCard
-          icon={Landmark}
-          title="Banking & cash"
-          description="Bank/MoMo/cash accounts, cash-book, reconciliation, and a cash-flow forecast."
-          to="/finance/banking"
-        />
-        <SectionCard
-          icon={BookOpen}
-          title="Fixed assets"
-          description="Fixed asset register, useful life tracking, and straight-line depreciation schedules."
-          to="/finance/assets"
-        />
-        <SectionCard
-          icon={ScrollText}
-          title="VAT return (Rwanda)"
-          description="Per-class Output / Input / withholding with a CSV draft for the RRA e-Tax filing."
-          to="/finance/tax"
-        />
-        <SectionCard
-          icon={FileBarChart}
-          title="Budgets & variance"
-          description="Departmental cost centre budget allocations vs actual GL spend tracking."
-          to="/finance/budgets"
-        />
-      </SectionGrid>
+      </div>
     </div>
   );
 }

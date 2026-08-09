@@ -55,7 +55,8 @@ export function Comments({
   });
 
   const strike = useMutation({
-    mutationFn: (id: number) => api<Comment>(`/api/workspace/comments/${id}/strike/`, { method: "POST" }),
+    mutationFn: (id: number) =>
+      api<Comment>(`/api/workspace/comments/${id}/strike/`, { method: "POST" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
   });
 
@@ -76,17 +77,24 @@ export function Comments({
           <li key={c.id} className="rounded-md bg-surface-100 px-3 py-2 text-sm">
             <div className="mb-0.5 flex items-center justify-between">
               <span className="font-medium text-ink-900">{c.author_name ?? "—"}</span>
-              <span className="text-[11px] text-ink-500">{new Date(c.created_at).toLocaleString()}</span>
+              <span className="text-[11px] text-ink-500">
+                {new Date(c.created_at).toLocaleString()}
+              </span>
             </div>
             <p className={c.is_struck ? "text-ink-500 line-through" : "text-ink-700"}>{c.body}</p>
             {!c.is_struck && (
-              <button onClick={() => strike.mutate(c.id)} className="mt-0.5 text-[11px] text-ink-500 hover:text-red-600">
+              <button
+                onClick={() => strike.mutate(c.id)}
+                className="mt-0.5 text-[11px] text-ink-500 hover:text-red-600"
+              >
                 strike
               </button>
             )}
           </li>
         ))}
-        {comments.data?.results.length === 0 && <li className="text-sm text-ink-500">No comments yet.</li>}
+        {comments.data?.results.length === 0 && (
+          <li className="text-sm text-ink-500">No comments yet.</li>
+        )}
       </ul>
 
       <form onSubmit={submit} className="flex flex-col gap-2 border-t border-line pt-3">
@@ -117,7 +125,11 @@ export function Comments({
           <div className="flex items-center gap-2">
             {mentions.length > 0 && (
               <span className="text-xs text-brand-700">
-                notifying {mentions.map((id) => users.data?.find((u) => u.id === id)?.username).filter(Boolean).join(", ")}
+                notifying{" "}
+                {mentions
+                  .map((id) => users.data?.find((u) => u.id === id)?.username)
+                  .filter(Boolean)
+                  .join(", ")}
               </span>
             )}
             <Button type="submit" disabled={add.isPending}>

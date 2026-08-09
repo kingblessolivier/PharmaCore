@@ -87,9 +87,6 @@ export function IngredientsPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        Full CRUD management for International Nonproprietary Names (INN) active ingredients.
-      </p>
 
       <DataGrid<ActiveIngredient>
         rows={data?.results ?? []}

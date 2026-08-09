@@ -61,7 +61,6 @@ function InitiateDrawer({ orgId, onClose }: { orgId: number | null; onClose: () 
   return (
     <Drawer
       title="Start an exit"
-      subtitle="Lays out the clearance checklist. Blocked while an open payroll run still references the employee."
       onClose={onClose}
       width="max-w-2xl"
       footer={
@@ -130,7 +129,11 @@ function InitiateDrawer({ orgId, onClose }: { orgId: number | null; onClose: () 
 
 /* -------------------------------------------------------------------------- */
 
-function ClearanceList({ items, onToggle, busy }: {
+function ClearanceList({
+  items,
+  onToggle,
+  busy,
+}: {
   items: ChecklistItem[];
   onToggle: (id: number) => void;
   busy: boolean;
@@ -148,7 +151,9 @@ function ClearanceList({ items, onToggle, busy }: {
             className="h-4 w-4 accent-brand-600"
           />
           <div className="min-w-0 flex-1">
-            <div className={`text-sm ${item.is_done ? "text-ink-500 line-through" : "text-ink-900"}`}>
+            <div
+              className={`text-sm ${item.is_done ? "text-ink-500 line-through" : "text-ink-900"}`}
+            >
               {item.label}
             </div>
             <div className="text-xs text-ink-500">{item.category_display}</div>
@@ -198,7 +203,7 @@ export function OffboardingPage() {
   });
 
   const rows = data?.results ?? [];
-  const current = open ? rows.find((t) => t.id === open.id) ?? open : null;
+  const current = open ? (rows.find((t) => t.id === open.id) ?? open) : null;
   const settlement = current?.settlement;
 
   return (
@@ -211,10 +216,6 @@ export function OffboardingPage() {
           </Button>
         }
       />
-      <p className="mb-4 max-w-3xl text-sm text-ink-500">
-        Notice, clearance and the final settlement the Labour Code requires. Approving computes
-        leave encashment and pro-rata pay, recovers outstanding loans and de-provisions the login.
-      </p>
 
       <DataGrid<Termination>
         rows={rows}
@@ -340,8 +341,8 @@ export function OffboardingPage() {
 
           {current.status === "DRAFT" && (
             <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              Approving computes the final settlement, marks the employee terminated and
-              deactivates their login. It cannot be approved by the employee themselves.
+              Approving computes the final settlement, marks the employee terminated and deactivates
+              their login. It cannot be approved by the employee themselves.
             </div>
           )}
 
@@ -413,7 +414,8 @@ export function OffboardingPage() {
                 </div>
                 <p className="mt-2 text-xs text-ink-500">
                   Computed {settlement.computed_on}
-                  {settlement.paid_on && ` · paid ${settlement.paid_on} (${settlement.payment_method})`}
+                  {settlement.paid_on &&
+                    ` · paid ${settlement.paid_on} (${settlement.payment_method})`}
                 </p>
               </>
             )}

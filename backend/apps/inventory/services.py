@@ -24,7 +24,7 @@ def receive_intake(
     product: Product,
     batch_number: str,
     expiry_date: date,
-    quantity: int,
+    quantity: Decimal | int,
     manufacture_date: date | None = None,
     wholesale_cost: Decimal | None = None,
     storage_location: str = "",
@@ -91,7 +91,7 @@ def receive_intake(
 
 
 def _movement(
-    batch: InventoryBatch, mtype: str, delta: int, reason: str, user: User | None
+    batch: InventoryBatch, mtype: str, delta: Decimal | int, reason: str, user: User | None
 ) -> None:
     StockMovement.objects.create(
         organization=batch.organization,

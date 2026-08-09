@@ -15,7 +15,9 @@ export function PriceListsPage() {
   const [editing, setEditing] = useState<PriceList | null>(null);
 
   const [name, setName] = useState("");
-  const [listType, setListType] = useState<"WHOLESALE" | "RETAIL" | "PROMOTIONAL" | "CONTRACT">("RETAIL");
+  const [listType, setListType] = useState<"WHOLESALE" | "RETAIL" | "PROMOTIONAL" | "CONTRACT">(
+    "RETAIL",
+  );
   const [isActive, setIsActive] = useState(true);
 
   const { data, isLoading } = useQuery({
@@ -94,9 +96,6 @@ export function PriceListsPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        Full CRUD management for effective-dated retail, wholesale, contract, and promotional price lists.
-      </p>
 
       <DataGrid<PriceList>
         rows={data?.results ?? []}

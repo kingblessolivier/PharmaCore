@@ -141,13 +141,13 @@ def _generate_grn_and_invoice(grn: GoodsReceivedNote, user: User | None) -> None
 @dataclass
 class ItemAllocation:
     order_item: OrderItem
-    approved: int
-    reserved: int  # how much stock we could actually hold (≤ approved)
+    approved: Decimal | int
+    reserved: Decimal  # how much stock we could actually hold (≤ approved)
 
 
 def _reserve_item(item: OrderItem, depot_id: int, user: User | None) -> ItemAllocation:
     """Reserve up to the approved quantity from the depot's FEFO batches."""
-    remaining = item.quantity_approved
+    remaining = Decimal(item.quantity_approved)
     batches = (
         InventoryBatch.objects.select_for_update()
         .filter(
@@ -161,7 +161,7 @@ def _reserve_item(item: OrderItem, depot_id: int, user: User | None) -> ItemAllo
         )
         .order_by("expiry_date", "batch_number")  # FEFO
     )
-    reserved = 0
+    reserved = Decimal(0)
     for batch in batches:
         if remaining <= 0:
             break
@@ -201,7 +201,7 @@ def release_order_reservations(*, order: StockOrder) -> None:
     """Release every hold this order placed (e.g. on cancel)."""
     for res in order.reservations.select_related("batch").select_for_update():
         batch = res.batch
-        batch.quantity_reserved = max(0, batch.quantity_reserved - res.quantity)
+        batch.quantity_reserved = max(Decimal(0), batch.quantity_reserved - res.quantity)
         batch.save(update_fields=["quantity_reserved", "updated_at"])
         res.delete()
 
@@ -218,12 +218,12 @@ def dispatch_order(
         vehicle_registration=vehicle_registration,
         dispatched_by=user,
     )
-    shipped: dict[int, int] = defaultdict(int)
+    shipped: dict[int, Decimal] = defaultdict(lambda: Decimal(0))
     for res in order.reservations.select_related("batch", "order_item").select_for_update():
         batch = res.batch
         # Reserved stock physically leaves the depot: reduce both counters.
         batch.quantity_available -= res.quantity
-        batch.quantity_reserved = max(0, batch.quantity_reserved - res.quantity)
+        batch.quantity_reserved = max(Decimal(0), batch.quantity_reserved - res.quantity)
         batch.save(update_fields=["quantity_available", "quantity_reserved", "updated_at"])
         StockMovement.objects.create(
             organization=order.depot,
@@ -260,7 +260,7 @@ def dispatch_order(
         res.delete()
 
     for item in order.items.all():
-        item.quantity_shipped = shipped.get(item.pk, 0)
+        item.quantity_shipped = shipped.get(item.pk, Decimal(0))
         item.save(update_fields=["quantity_shipped"])
         # A tender is drawn down by what actually ships, not what was ordered —
         # otherwise a cancelled or short line silently consumes committed volume.
@@ -272,7 +272,7 @@ def dispatch_order(
     return shipment
 
 
-def _draw_down_tender(*, order: StockOrder, item: OrderItem, quantity: int) -> None:
+def _draw_down_tender(*, order: StockOrder, item: OrderItem, quantity: Decimal | int) -> None:
     """Consume committed volume on the tender contract this line was priced under."""
     if quantity <= 0:
         return
@@ -282,7 +282,7 @@ def _draw_down_tender(*, order: StockOrder, item: OrderItem, quantity: int) -> N
     if contract is None:
         return
     remaining = contract.total_committed_qty - contract.drawn_qty
-    contract.drawn_qty += min(quantity, max(0, remaining))
+    contract.drawn_qty += min(Decimal(quantity), max(Decimal(0), Decimal(remaining)))
     contract.save(update_fields=["drawn_qty"])
 
 
@@ -365,7 +365,7 @@ def finalize_grn(
 ) -> GoodsReceivedNote:
     """Finalize a GRN: write good stock into retail inventory (TRANSFER_IN), record
     discrepancies, and move the order to DELIVERED / PARTIALLY_RECEIVED."""
-    received_per_item: dict[int, int] = defaultdict(int)
+    received_per_item: dict[int, Decimal] = defaultdict(lambda: Decimal(0))
     any_discrepancy = False
     for line in grn.lines.select_related("order_item", "product").all():
         data = lines_data.get(line.pk, {})
@@ -373,7 +373,7 @@ def finalize_grn(
         line.quantity_damaged = int(data.get("quantity_damaged", 0))
         line.save(update_fields=["quantity_received", "quantity_damaged"])
 
-        good = max(0, line.quantity_received - line.quantity_damaged)
+        good = max(Decimal(0), line.quantity_received - line.quantity_damaged)
         if good > 0:
             receive_intake(
                 organization=grn.retail,

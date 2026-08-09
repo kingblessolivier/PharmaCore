@@ -24,8 +24,7 @@ export function ResetPasswordModal({
         body: JSON.stringify({ password }),
       }),
     onSuccess: () => setDone(true),
-    onError: (e) =>
-      setError(e instanceof ApiError ? e.message : "Could not reset the password."),
+    onError: (e) => setError(e instanceof ApiError ? e.message : "Could not reset the password."),
   });
 
   function submit() {

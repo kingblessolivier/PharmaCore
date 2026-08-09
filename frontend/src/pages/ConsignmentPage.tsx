@@ -25,7 +25,6 @@ import type {
 } from "../lib/types";
 import { StatusChip } from "../components/Status";
 
-
 const BLANK = {
   agreement_no: "",
   direction: "SUPPLIER_OWNED" as ConsignmentAgreement["direction"],
@@ -190,12 +189,6 @@ export function ConsignmentPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        Stock that is not where its owner is. <strong>Supplier-owned</strong> sits in our
-        warehouse and we owe for it only as it is consumed; <strong>customer-held</strong> sits
-        at a customer and stays ours until they use it. Location and ownership are tracked
-        apart, which is the whole point.
-      </p>
 
       <DataGrid<ConsignmentAgreement>
         rows={agreementsQuery.data?.results ?? []}
@@ -320,12 +313,28 @@ export function ConsignmentPage() {
         emptyMessage="No settlements raised yet."
         initialDensity="compact"
         columns={[
-          { key: "settlement_no", header: "Settlement", render: (s) => <span className="font-mono">{s.settlement_no}</span> },
+          {
+            key: "settlement_no",
+            header: "Settlement",
+            render: (s) => <span className="font-mono">{s.settlement_no}</span>,
+          },
           { key: "agreement_no", header: "Agreement" },
           { key: "counterparty_name", header: "Counterparty" },
           { key: "period", header: "Period", value: (s) => `${s.period_start} → ${s.period_end}` },
-          { key: "lines_count", header: "Lines", align: "right", numeric: true, value: (s) => s.lines_count },
-          { key: "total_quantity", header: "Units", align: "right", numeric: true, value: (s) => s.total_quantity },
+          {
+            key: "lines_count",
+            header: "Lines",
+            align: "right",
+            numeric: true,
+            value: (s) => s.lines_count,
+          },
+          {
+            key: "total_quantity",
+            header: "Units",
+            align: "right",
+            numeric: true,
+            value: (s) => s.total_quantity,
+          },
           {
             key: "total_value",
             header: "Value",
@@ -338,9 +347,7 @@ export function ConsignmentPage() {
             key: "status",
             header: "Status",
             align: "center",
-            render: (s) => (
-              <StatusChip status={s.status} />
-            ),
+            render: (s) => <StatusChip status={s.status} />,
           },
           { key: "supplier_bill_no", header: "AP Bill", value: (s) => s.supplier_bill_no ?? "—" },
         ]}
@@ -473,9 +480,7 @@ export function ConsignmentPage() {
                 label="Payment Terms (days)"
                 type="number"
                 value={String(form.payment_terms_days)}
-                onChange={(e) =>
-                  setForm({ ...form, payment_terms_days: Number(e.target.value) })
-                }
+                onChange={(e) => setForm({ ...form, payment_terms_days: Number(e.target.value) })}
               />
               <TextField
                 label="Currency"
@@ -515,8 +520,8 @@ export function ConsignmentPage() {
             )}
             <p className="text-sm text-ink-600">
               Rolls every unsettled consumption in the period into one settlement. For
-              supplier-owned stock this is where we finally owe the supplier — an AP bill is
-              raised and posted to the GL.
+              supplier-owned stock this is where we finally owe the supplier — an AP bill is raised
+              and posted to the GL.
             </p>
             <div className="grid grid-cols-2 gap-3">
               <TextField
@@ -610,9 +615,7 @@ export function ConsignmentPage() {
               </div>
             ))}
             {(consumptionsQuery.data?.results ?? []).length === 0 && (
-              <p className="text-sm text-ink-500">
-                Nothing consumed under this agreement yet.
-              </p>
+              <p className="text-sm text-ink-500">Nothing consumed under this agreement yet.</p>
             )}
           </div>
         </Drawer>

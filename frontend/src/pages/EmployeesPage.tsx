@@ -93,7 +93,6 @@ function NewEmployeeDrawer({ orgId, onClose }: { orgId: number | null; onClose: 
   return (
     <Drawer
       title="New employee"
-      subtitle="The identity and start date. Contract, pay structure and onboarding follow on the record."
       onClose={onClose}
       width="max-w-3xl"
       footer={
@@ -117,13 +116,19 @@ function NewEmployeeDrawer({ orgId, onClose }: { orgId: number | null; onClose: 
             <Input value={form.first_name} onChange={(e) => set({ first_name: e.target.value })} />
           </Field>
           <Field label="Middle name">
-            <Input value={form.middle_name} onChange={(e) => set({ middle_name: e.target.value })} />
+            <Input
+              value={form.middle_name}
+              onChange={(e) => set({ middle_name: e.target.value })}
+            />
           </Field>
           <Field label="Last name">
             <Input value={form.last_name} onChange={(e) => set({ last_name: e.target.value })} />
           </Field>
           <Field label="National ID">
-            <Input value={form.national_id} onChange={(e) => set({ national_id: e.target.value })} />
+            <Input
+              value={form.national_id}
+              onChange={(e) => set({ national_id: e.target.value })}
+            />
           </Field>
           <Field label="Gender">
             <Select value={form.gender} onChange={(e) => set({ gender: e.target.value })}>
@@ -168,7 +173,10 @@ function NewEmployeeDrawer({ orgId, onClose }: { orgId: number | null; onClose: 
             />
           </Field>
           <Field label="RSSB number">
-            <Input value={form.rssb_number} onChange={(e) => set({ rssb_number: e.target.value })} />
+            <Input
+              value={form.rssb_number}
+              onChange={(e) => set({ rssb_number: e.target.value })}
+            />
           </Field>
           <Field label="TIN">
             <Input value={form.tin} onChange={(e) => set({ tin: e.target.value })} />
@@ -273,7 +281,10 @@ function ProfileTab({ employee }: { employee: Employee }) {
             <Input value={form.last_name} onChange={(e) => set({ last_name: e.target.value })} />
           </Field>
           <Field label="National ID">
-            <Input value={form.national_id} onChange={(e) => set({ national_id: e.target.value })} />
+            <Input
+              value={form.national_id}
+              onChange={(e) => set({ national_id: e.target.value })}
+            />
           </Field>
           <Field label="Passport">
             <Input
@@ -401,7 +412,10 @@ function ProfileTab({ employee }: { employee: Employee }) {
       <Section title="Statutory registration">
         <Grid cols={4}>
           <Field label="RSSB number">
-            <Input value={form.rssb_number} onChange={(e) => set({ rssb_number: e.target.value })} />
+            <Input
+              value={form.rssb_number}
+              onChange={(e) => set({ rssb_number: e.target.value })}
+            />
           </Field>
           <Field label="TIN (RRA)">
             <Input
@@ -490,7 +504,10 @@ function ProfileTab({ employee }: { employee: Employee }) {
             />
           </Field>
           <Field label="MoMo number">
-            <Input value={form.momo_number} onChange={(e) => set({ momo_number: e.target.value })} />
+            <Input
+              value={form.momo_number}
+              onChange={(e) => set({ momo_number: e.target.value })}
+            />
           </Field>
         </Grid>
       </Section>
@@ -522,8 +539,7 @@ function ContractTab({ employee }: { employee: Employee }) {
 
   const contracts = useQuery({
     queryKey: ["contracts", employee.id],
-    queryFn: () =>
-      api<Paginated<EmploymentContract>>(`/api/hr/contracts/?employee=${employee.id}`),
+    queryFn: () => api<Paginated<EmploymentContract>>(`/api/hr/contracts/?employee=${employee.id}`),
     select: (r) => r.results,
   });
 
@@ -555,7 +571,10 @@ function ContractTab({ employee }: { employee: Employee }) {
           <ErrorNote error={issue.error} />
           <Grid cols={3}>
             <Field label="Type">
-              <Select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
+              <Select
+                value={form.kind}
+                onChange={(e) => setForm({ ...form, kind: e.target.value })}
+              >
                 {CONTRACT_KINDS.map(([v, l]) => (
                   <option key={v} value={v}>
                     {l}
@@ -590,7 +609,10 @@ function ContractTab({ employee }: { employee: Employee }) {
               />
             </Field>
             <Field label="Step">
-              <Input value={form.step} onChange={(e) => setForm({ ...form, step: e.target.value })} />
+              <Input
+                value={form.step}
+                onChange={(e) => setForm({ ...form, step: e.target.value })}
+              />
             </Field>
             <Field label="Probation (months)">
               <Input
@@ -975,8 +997,7 @@ function PayTab({ employee }: { employee: Employee }) {
 function LeaveTab({ employee }: { employee: Employee }) {
   const balances = useQuery({
     queryKey: ["leave-balances", employee.id],
-    queryFn: () =>
-      api<Paginated<LeaveBalance>>(`/api/hr/leave-balances/?employee=${employee.id}`),
+    queryFn: () => api<Paginated<LeaveBalance>>(`/api/hr/leave-balances/?employee=${employee.id}`),
     select: (r) => r.results,
   });
 
@@ -1128,7 +1149,7 @@ export function EmployeesPage() {
   });
 
   const rows = data?.results ?? [];
-  const current = open ? rows.find((e) => e.id === open.id) ?? open : null;
+  const current = open ? (rows.find((e) => e.id === open.id) ?? open) : null;
 
   const tabs: [Tab, string, typeof UserCog][] = [
     ["profile", "Profile", UserCog],
@@ -1148,10 +1169,6 @@ export function EmployeesPage() {
           </Button>
         }
       />
-      <p className="mb-4 max-w-3xl text-sm text-ink-500">
-        The people master everything hangs off — contracts, itemised pay structure, leave balances,
-        training and competencies. Open a row to work on the record.
-      </p>
 
       <DataGrid<Employee>
         rows={rows}
@@ -1215,7 +1232,9 @@ export function EmployeesPage() {
             key: "employment_type",
             header: "Type",
             value: (e) => e.employment_type,
-            render: (e) => <span className="text-ink-600">{e.employment_type.replace("_", " ")}</span>,
+            render: (e) => (
+              <span className="text-ink-600">{e.employment_type.replace("_", " ")}</span>
+            ),
           },
           { key: "hire_date", header: "Hired", value: (e) => e.hire_date },
           {
@@ -1257,7 +1276,9 @@ export function EmployeesPage() {
                   ["Left on", shortDate(current.end_date)],
                   [
                     "Reason",
-                    String((current as unknown as Record<string, string>).termination_reason || "—"),
+                    String(
+                      (current as unknown as Record<string, string>).termination_reason || "—",
+                    ),
                   ],
                   [
                     "Rehire",

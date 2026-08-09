@@ -151,11 +151,6 @@ export function BatchRecallsPage() {
           </Button>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        A recall is scoped to one medicine's batch — never the batch number alone, because two
-        manufacturers reuse the same strings and freezing on that would withdraw unrelated
-        medicine from sale. Opening a recall shows where every unit went.
-      </p>
 
       {live.length > 0 && (
         <div className="flex items-start gap-2 rounded-lg border border-danger-200 bg-danger-50 p-3">
@@ -236,16 +231,13 @@ export function BatchRecallsPage() {
             <TraceView trace={trace.data} />
           ) : null}
 
-          {(freeze.isError || close.isError) && (
-            <ErrorNote error={freeze.error ?? close.error} />
-          )}
+          {(freeze.isError || close.isError) && <ErrorNote error={freeze.error ?? close.error} />}
         </Drawer>
       )}
 
       {draft && (
         <Drawer
           title="Raise a recall"
-          subtitle="Scoped to one medicine and one batch."
           onClose={() => setDraft(null)}
           footer={
             <div className="flex justify-end gap-2">

@@ -45,10 +45,7 @@ export function ExpiryPage() {
 
   const expired = rows.filter((b) => daysLeft(b.expiry_date) < 0);
   const units = rows.reduce((s, b) => s + b.quantity_available, 0);
-  const value = rows.reduce(
-    (s, b) => s + Number(b.wholesale_cost ?? 0) * b.quantity_available,
-    0,
-  );
+  const value = rows.reduce((s, b) => s + Number(b.wholesale_cost ?? 0) * b.quantity_available, 0);
 
   const columns: Column<InventoryBatch>[] = [
     {
@@ -103,9 +100,7 @@ export function ExpiryPage() {
       key: "status",
       header: "Status",
       value: (b) => b.status,
-      render: (b) => (
-        <StatusChip status={b.status} />
-      ),
+      render: (b) => <StatusChip status={b.status} />,
     },
   ];
 
@@ -131,10 +126,6 @@ export function ExpiryPage() {
           </div>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Every batch that will expire inside the window, soonest first. Expiry is only actionable
-        per batch — sell it through, move it where it will sell, or destroy it.
-      </p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tile label={`Batches within ${horizon} days`} value={rows.length} />
@@ -187,7 +178,11 @@ function Tile({
   tone?: "danger" | "warning";
 }) {
   const colour =
-    tone === "danger" ? "text-danger-700" : tone === "warning" ? "text-warning-700" : "text-ink-900";
+    tone === "danger"
+      ? "text-danger-700"
+      : tone === "warning"
+        ? "text-warning-700"
+        : "text-ink-900";
   return (
     <div className="rounded-lg border border-line bg-surface-0 p-3">
       <div className="text-xs text-ink-500">{label}</div>

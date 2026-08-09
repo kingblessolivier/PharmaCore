@@ -57,7 +57,6 @@ function GenerateDrawer({ orgId, onClose }: { orgId: number | null; onClose: () 
   return (
     <Drawer
       title="Generate a statutory return"
-      subtitle="Aggregates the period's approved payroll and cross-checks it against the GL sub-ledger."
       onClose={onClose}
       width="max-w-xl"
       footer={
@@ -118,7 +117,9 @@ export function StatutoryFilingsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["filings", kind],
     queryFn: () =>
-      api<Paginated<StatutoryFiling>>(`/api/hr/filings/?page_size=200${kind ? `&kind=${kind}` : ""}`),
+      api<Paginated<StatutoryFiling>>(
+        `/api/hr/filings/?page_size=200${kind ? `&kind=${kind}` : ""}`,
+      ),
   });
 
   const act = useMutation({
@@ -134,7 +135,7 @@ export function StatutoryFilingsPage() {
   });
 
   const rows = data?.results ?? [];
-  const current = open ? rows.find((f) => f.id === open.id) ?? open : null;
+  const current = open ? (rows.find((f) => f.id === open.id) ?? open) : null;
   const lines = current?.payload?.lines ?? [];
 
   return (
@@ -147,10 +148,6 @@ export function StatutoryFilingsPage() {
           </Button>
         }
       />
-      <p className="mb-4 max-w-3xl text-sm text-ink-500">
-        PAYE, RSSB, CBHI, VAT and the annual PIT summary — generated from the payroll register and
-        reconciled to the general ledger before anything is filed with RRA or RSSB.
-      </p>
 
       <DataGrid<StatutoryFiling>
         rows={rows}
@@ -297,7 +294,10 @@ export function StatutoryFilingsPage() {
                 ["Employer contribution", money(current.employer_contribution)],
                 ["Amount due", money(current.amount_due)],
                 ["GL sub-ledger", money(current.gl_balance_at_generation)],
-                ["Sub-ledger accounts", (current.payload?.sub_ledger_accounts ?? []).join(", ") || "—"],
+                [
+                  "Sub-ledger accounts",
+                  (current.payload?.sub_ledger_accounts ?? []).join(", ") || "—",
+                ],
                 ["Authority reference", current.authority_reference || "—"],
                 ["Filed on", current.filed_on ?? "—"],
               ]}

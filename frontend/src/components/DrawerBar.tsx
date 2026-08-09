@@ -53,7 +53,9 @@ function OpenModal({ orgId, onClose }: { orgId: number; onClose: () => void }) {
 
 function Row({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
   return (
-    <div className={`flex justify-between ${strong ? "font-semibold text-ink-900" : "text-ink-700"}`}>
+    <div
+      className={`flex justify-between ${strong ? "font-semibold text-ink-900" : "text-ink-700"}`}
+    >
       <span>{label}</span>
       <span>RWF {value}</span>
     </div>
@@ -115,14 +117,18 @@ function CashUpModal({ session, onClose }: { session: DrawerSession; onClose: ()
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5 rounded-lg border border-line bg-surface-50 p-3 text-sm">
           <Row label="Opening float" value={money(r?.opening_float)} />
-          <Row label={`Cash taken (${r?.sales_count ?? 0} sales)`} value={money(r?.cash_payments)} />
+          <Row
+            label={`Cash taken (${r?.sales_count ?? 0} sales)`}
+            value={money(r?.cash_payments)}
+          />
           <Row label="Change given" value={`-${money(r?.change_given)}`} />
           <Row label="Cash refunds" value={`-${money(r?.cash_refunds)}`} />
           <div className="my-1 border-t border-line" />
           <Row label="Expected in drawer" value={money(r?.expected_cash)} strong />
           {Number(r?.noncash_payments ?? 0) > 0 && (
             <p className="pt-1 text-xs text-ink-500">
-              Plus RWF {money(r?.noncash_payments)} taken by mobile money / card (not in the drawer).
+              Plus RWF {money(r?.noncash_payments)} taken by mobile money / card (not in the
+              drawer).
             </p>
           )}
         </div>
@@ -146,7 +152,11 @@ function CashUpModal({ session, onClose }: { session: DrawerSession; onClose: ()
                 : `Short by RWF ${money(Math.abs(overShort))}.`}
           </p>
         )}
-        <TextField label="Notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <TextField
+          label="Notes (optional)"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
@@ -198,7 +208,9 @@ export function DrawerBar({ orgId }: { orgId: number | null }) {
           <div className="flex items-center gap-2 text-sm">
             <Lock className="h-4 w-4 text-ink-400" />
             <span className="font-medium text-ink-700">Till closed</span>
-            <span className="text-ink-500">— open a drawer to start counting cash for this shift.</span>
+            <span className="text-ink-500">
+              — open a drawer to start counting cash for this shift.
+            </span>
           </div>
           <Button onClick={() => setOpening(true)}>
             <Unlock className="h-4 w-4" /> Open drawer

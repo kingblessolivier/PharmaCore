@@ -67,7 +67,8 @@ function DocumentsModal({ user, onClose }: { user: UserAdmin; onClose: () => voi
     onError: (e) => setError(e instanceof ApiError ? e.message : "Could not add the document."),
   });
   const verify = useMutation({
-    mutationFn: (id: number) => api<UserDocument>(`/api/user-documents/${id}/verify/`, { method: "POST" }),
+    mutationFn: (id: number) =>
+      api<UserDocument>(`/api/user-documents/${id}/verify/`, { method: "POST" }),
     onSuccess: () => void refresh(),
   });
   const remove = useMutation({
@@ -145,8 +146,17 @@ function DocumentsModal({ user, onClose }: { user: UserAdmin; onClose: () => voi
                 </option>
               ))}
             </SelectField>
-            <TextField label="Document number" value={number} onChange={(e) => setNumber(e.target.value)} />
-            <TextField label="Expiry (optional)" type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
+            <TextField
+              label="Document number"
+              value={number}
+              onChange={(e) => setNumber(e.target.value)}
+            />
+            <TextField
+              label="Expiry (optional)"
+              type="date"
+              value={expiry}
+              onChange={(e) => setExpiry(e.target.value)}
+            />
             <div className="flex items-end">
               <Button onClick={() => add.mutate()} disabled={add.isPending}>
                 <Plus className="h-4 w-4" /> Add
@@ -182,7 +192,9 @@ function UserModal({
   const [firstName, setFirstName] = useState(user?.first_name ?? "");
   const [lastName, setLastName] = useState(user?.last_name ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
-  const [organization, setOrganization] = useState(user?.organization ? String(user.organization) : "");
+  const [organization, setOrganization] = useState(
+    user?.organization ? String(user.organization) : "",
+  );
   const [selectedRoles, setSelectedRoles] = useState<string[]>(user?.roles ?? []);
   const [reportsTo, setReportsTo] = useState(user?.reports_to ? String(user.reports_to) : "");
   const [approvalLimit, setApprovalLimit] = useState(user?.approval_limit ?? "");
@@ -215,7 +227,9 @@ function UserModal({
       onClose();
     },
     onError: (err) =>
-      setError(err instanceof ApiError ? `Could not save: ${err.message}` : "Could not save the user."),
+      setError(
+        err instanceof ApiError ? `Could not save: ${err.message}` : "Could not save the user.",
+      ),
   });
 
   function submit(e: FormEvent) {
@@ -251,8 +265,16 @@ function UserModal({
           required={!editing}
         />
         <div className="grid grid-cols-2 gap-3">
-          <TextField label="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-          <TextField label="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+          <TextField
+            label="First name"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+          />
+          <TextField
+            label="Last name"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <TextField label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
@@ -297,9 +319,8 @@ function UserModal({
           />
         </div>
         <p className="-mt-2 text-micro text-ink-500">
-          Anything above the limit escalates to the person named above, and up from there
-          until someone is both permitted and within limit. You cannot grant a limit
-          higher than your own.
+          Anything above the limit escalates to the person named above, and up from there until
+          someone is both permitted and within limit. You cannot grant a limit higher than your own.
         </p>
 
         <div>
@@ -381,7 +402,10 @@ function ActivityModal({ userId, onClose }: { userId: number; onClose: () => voi
           {perf.data && (
             <div className="grid grid-cols-5 gap-2">
               {PERF.map(([k, label]) => (
-                <div key={k} className="rounded-lg border border-line bg-surface-0 px-2 py-2 text-center">
+                <div
+                  key={k}
+                  className="rounded-lg border border-line bg-surface-0 px-2 py-2 text-center"
+                >
                   <div className="text-lg font-semibold text-ink-900">{perf.data![k]}</div>
                   <div className="text-[11px] uppercase tracking-wide text-ink-500">{label}</div>
                 </div>
@@ -390,7 +414,10 @@ function ActivityModal({ userId, onClose }: { userId: number; onClose: () => voi
           )}
           <div className="flex flex-wrap gap-2">
             {Object.entries(data.counts).map(([action, n]) => (
-              <span key={action} className="rounded-md bg-surface-100 px-2 py-1 text-xs text-ink-700">
+              <span
+                key={action}
+                className="rounded-md bg-surface-100 px-2 py-1 text-xs text-ink-700"
+              >
                 {action} · <span className="font-semibold">{n}</span>
               </span>
             ))}
@@ -487,11 +514,6 @@ export function UsersPage() {
           </Button>
         }
       />
-      <p className="mb-4 -mt-2 text-sm text-ink-500">
-        Create and manage staff across every branch. Use <strong>View as</strong> to see the
-        system exactly as a user does (audited), and <strong>Activity</strong> to review what
-        they have been doing.
-      </p>
 
       <DataGrid<UserAdmin>
         rows={users.data?.results ?? []}
@@ -502,7 +524,11 @@ export function UsersPage() {
         searchPlaceholder="Search users by name, PF number, role…"
         emptyMessage="No users yet."
         columns={[
-          { key: "username", header: "Username", render: (u) => <span className="font-medium">{u.username}</span> },
+          {
+            key: "username",
+            header: "Username",
+            render: (u) => <span className="font-medium">{u.username}</span>,
+          },
           { key: "pf_number", header: "PF no.", value: (u) => u.pf_number || "—" },
           {
             key: "name",

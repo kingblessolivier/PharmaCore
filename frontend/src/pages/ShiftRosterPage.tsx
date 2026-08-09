@@ -102,7 +102,6 @@ function ShiftDrawer({
   return (
     <Drawer
       title={shift ? `Edit shift · ${shift.date}` : "Schedule a shift"}
-      subtitle="Every shift flagged pharmacist-required needs a licensed pharmacist on duty."
       onClose={onClose}
       width="max-w-2xl"
       footer={
@@ -130,10 +129,7 @@ function ShiftDrawer({
             <Input type="date" value={form.date} onChange={(e) => set({ date: e.target.value })} />
           </Field>
           <Field label="Pattern" hint={SHIFT_HOURS[form.shift_type]}>
-            <Select
-              value={form.shift_type}
-              onChange={(e) => set({ shift_type: e.target.value })}
-            >
+            <Select value={form.shift_type} onChange={(e) => set({ shift_type: e.target.value })}>
               {SHIFTS.map(([v, l, h]) => (
                 <option key={v} value={v}>
                   {l} ({h})
@@ -182,10 +178,7 @@ function WeekView({
   onPick: (date: string) => void;
   onEdit: (shift: ShiftRoster) => void;
 }) {
-  const days = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => addDays(anchor, i)),
-    [anchor],
-  );
+  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(anchor, i)), [anchor]);
   const byId = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
 
   return (
@@ -324,11 +317,6 @@ export function ShiftRosterPage() {
           </Button>
         }
       />
-      <p className="mb-4 max-w-3xl text-sm text-ink-500">
-        Credential-based scheduling: a day flagged pharmacist-required is only covered if someone
-        rostered on it holds a professional licence. Uncovered days are called out rather than left
-        for an inspector to find.
-      </p>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="flex gap-1 rounded-md border border-line bg-surface-0 p-0.5">
@@ -479,9 +467,7 @@ export function ShiftRosterPage() {
           onClose={() => setAdding(null)}
         />
       )}
-      {editing && (
-        <ShiftDrawer shift={editing} orgId={orgId} onClose={() => setEditing(null)} />
-      )}
+      {editing && <ShiftDrawer shift={editing} orgId={orgId} onClose={() => setEditing(null)} />}
       {deleting && (
         <ConfirmModal
           title="Delete shift"

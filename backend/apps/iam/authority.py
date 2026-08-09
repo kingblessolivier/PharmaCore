@@ -106,6 +106,11 @@ def _seed_default_rules() -> None:
         ("finance.journal", "finance.manage", "Manual journal", "amount"),
         ("procurement.purchase_order", "order.approve", "Purchase order", "total"),
         ("procurement.requisition", "order.approve", "Requisition", "total"),
+        # Raised by procurement.services.RES_SUPPLIER_INVOICE on a price or
+        # quantity variance. It was raising approvals without a rule, so deciding
+        # one needed `organization.manage` — the safe fallback, but it meant only
+        # an administrator could clear an invoice variance.
+        ("procurement.supplier_invoice", "order.approve", "Supplier invoice", "total"),
         ("distribution.stock_order", "order.approve", "Stock order", "total"),
         ("inventory.stock_adjustment", "inventory.adjust", "Stock adjustment", "value"),
         ("inventory.disposal", "inventory.adjust", "Stock disposal", "value"),

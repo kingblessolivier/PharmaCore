@@ -52,12 +52,6 @@ export function StatutoryRatesPage() {
       </button>
 
       <PageHeader title="Statutory rates (PAYE / RSSB / CBHI)" />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        The versioned rate table the payroll engine reads from. Rates are data
-        — a new Finance Law becomes a new row with a later <code>effective_from</code>,
-        never a code change. The engine always picks the row whose effective date
-        covers the payroll period.
-      </p>
 
       {ratesQ.isLoading && (
         <div className="flex justify-center py-10">
@@ -75,7 +69,9 @@ export function StatutoryRatesPage() {
                 <div className="mb-2 flex items-center gap-2">
                   <BookOpen className="h-4 w-4 text-ink-500" />
                   <h2 className="text-sm font-semibold text-ink-900">{key.replace(/_/g, " ")}</h2>
-                  <Badge tone="neutral">{rows.length} row{rows.length === 1 ? "" : "s"}</Badge>
+                  <Badge tone="neutral">
+                    {rows.length} row{rows.length === 1 ? "" : "s"}
+                  </Badge>
                 </div>
                 <p className="mb-3 text-xs text-ink-500">{TYPE_BLURB[key] ?? ""}</p>
                 <div className="overflow-hidden rounded-md border border-line">
@@ -116,8 +112,8 @@ export function StatutoryRatesPage() {
           {Object.keys(grouped).length === 0 && (
             <Card>
               <p className="py-6 text-center text-sm text-ink-500">
-                No statutory rates configured yet — payroll cannot compute deductions until
-                at least the PAYE bracket and the RSSB pension rows are present.
+                No statutory rates configured yet — payroll cannot compute deductions until at least
+                the PAYE bracket and the RSSB pension rows are present.
               </p>
             </Card>
           )}

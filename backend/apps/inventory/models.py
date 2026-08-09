@@ -166,9 +166,12 @@ class InventoryBatch(models.Model):
     manufacture_date = models.DateField(null=True, blank=True)
     expiry_date = models.DateField()
     # Unsigned at the DB level → can never go negative.
-    quantity_available = models.PositiveIntegerField(default=0)
+    #: On hand, in the product's BASE unit. Decimal because a legitimately
+    #: split tablet leaves half of one behind, and an integer column would
+    #: round that remainder into existence or out of it.
+    quantity_available = models.DecimalField(max_digits=16, decimal_places=3, default=0)
     # Held for approved orders (not yet dispatched). Free-to-allocate = available - reserved.
-    quantity_reserved = models.PositiveIntegerField(default=0)
+    quantity_reserved = models.DecimalField(max_digits=16, decimal_places=3, default=0)
     wholesale_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     # What the *selling* entity paid, when this lot came from another member of
     # the group. `wholesale_cost` is the transfer price and carries the seller's
@@ -1181,8 +1184,8 @@ class PickTask(models.Model):
     bin_location = models.ForeignKey(
         BinLocation, null=True, blank=True, on_delete=models.SET_NULL, related_name="pick_tasks"
     )
-    quantity_requested = models.PositiveIntegerField()
-    quantity_picked = models.PositiveIntegerField(default=0)
+    quantity_requested = models.DecimalField(max_digits=16, decimal_places=3)
+    quantity_picked = models.DecimalField(max_digits=16, decimal_places=3, default=0)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     picker = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -1227,7 +1230,11 @@ class StockMovement(models.Model):
     )
     batch_number = models.CharField(max_length=100, blank=True, default="")
     movement_type = models.CharField(max_length=30, choices=Type.choices)
-    quantity_delta = models.IntegerField()  # signed: +intake, -sale/wastage
+    #: Signed movement in BASE units: +intake, -sale/wastage. Decimal because
+    #: the shelf itself is now decimal — a legitimately split tablet moves half
+    #: a unit, and an integer ledger could not record the movement that a
+    #: decimal balance had already made.
+    quantity_delta = models.DecimalField(max_digits=16, decimal_places=3)
     reference_type = models.CharField(max_length=50, blank=True, default="")
     reference_id = models.CharField(max_length=64, blank=True, default="")
     reason = models.CharField(max_length=255, blank=True, default="")
@@ -1241,7 +1248,7 @@ class StockMovement(models.Model):
         indexes = [models.Index(fields=["organization", "product", "occurred_at"])]
 
     def __str__(self) -> str:
-        return f"{self.movement_type} {self.quantity_delta:+d} · {self.product}"
+        return f"{self.movement_type} {self.quantity_delta:+} · {self.product}"
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         if not self._state.adding:

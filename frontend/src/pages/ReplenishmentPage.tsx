@@ -100,8 +100,7 @@ export function ReplenishmentPage() {
 
   const suggestionsQuery = useQuery({
     queryKey: ["reorder-suggestions", orgId],
-    queryFn: () =>
-      api<SuggestedOrder[]>(`/api/inventory/reorder-rules/suggestions/${orgQuery}`),
+    queryFn: () => api<SuggestedOrder[]>(`/api/inventory/reorder-rules/suggestions/${orgQuery}`),
     enabled: orgId > 0 && tab === "suggestions",
   });
 
@@ -119,8 +118,7 @@ export function ReplenishmentPage() {
 
   const expiryQuery = useQuery({
     queryKey: ["near-expiry", orgId],
-    queryFn: () =>
-      api<NearExpiryRow[]>(`/api/inventory/reorder-rules/near_expiry/${orgQuery}`),
+    queryFn: () => api<NearExpiryRow[]>(`/api/inventory/reorder-rules/near_expiry/${orgQuery}`),
     enabled: orgId > 0 && tab === "expiry",
   });
 
@@ -141,9 +139,7 @@ export function ReplenishmentPage() {
   const saveMutation = useMutation({
     mutationFn: () =>
       api<ReorderRule>(
-        editing
-          ? `/api/inventory/reorder-rules/${editing.id}/`
-          : "/api/inventory/reorder-rules/",
+        editing ? `/api/inventory/reorder-rules/${editing.id}/` : "/api/inventory/reorder-rules/",
         {
           method: editing ? "PATCH" : "POST",
           body: JSON.stringify({ ...form, organization: orgId }),
@@ -224,11 +220,6 @@ export function ReplenishmentPage() {
           </div>
         }
       />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        Min/max, reorder point and par level are the levers a buyer turns. Recompute sets them
-        from observed demand — lead-time cover plus safety stock sized to the service level.
-        Rules marked <strong>manual</strong> keep their hand-set numbers.
-      </p>
 
       {recomputed && (
         <Card className="mb-4 border-brand-200 bg-brand-50 p-4 text-sm">
@@ -278,7 +269,11 @@ export function ReplenishmentPage() {
               value: (r) => `${r.abc_class}${r.xyz_class}`,
               render: (r) =>
                 r.abc_class ? (
-                  <Badge tone={r.abc_class === "A" ? "success" : r.abc_class === "B" ? "warning" : "neutral"}>
+                  <Badge
+                    tone={
+                      r.abc_class === "A" ? "success" : r.abc_class === "B" ? "warning" : "neutral"
+                    }
+                  >
                     {r.abc_class}
                     {r.xyz_class}
                   </Badge>
@@ -286,7 +281,13 @@ export function ReplenishmentPage() {
                   <span className="text-ink-400">—</span>
                 ),
             },
-            { key: "on_hand", header: "On Hand", align: "right", numeric: true, value: (r) => r.on_hand },
+            {
+              key: "on_hand",
+              header: "On Hand",
+              align: "right",
+              numeric: true,
+              value: (r) => r.on_hand,
+            },
             {
               key: "reorder_point",
               header: "Reorder Point",
@@ -299,17 +300,37 @@ export function ReplenishmentPage() {
                 </span>
               ),
             },
-            { key: "max_level", header: "Max", align: "right", numeric: true, value: (r) => r.max_level },
-            { key: "safety_stock", header: "Safety", align: "right", numeric: true, value: (r) => r.safety_stock },
+            {
+              key: "max_level",
+              header: "Max",
+              align: "right",
+              numeric: true,
+              value: (r) => r.max_level,
+            },
+            {
+              key: "safety_stock",
+              header: "Safety",
+              align: "right",
+              numeric: true,
+              value: (r) => r.safety_stock,
+            },
             {
               key: "avg_daily_demand",
               header: "Daily Demand",
               align: "right",
               numeric: true,
               value: (r) => Number(r.avg_daily_demand),
-              render: (r) => <span className="font-mono">{Number(r.avg_daily_demand).toFixed(2)}</span>,
+              render: (r) => (
+                <span className="font-mono">{Number(r.avg_daily_demand).toFixed(2)}</span>
+              ),
             },
-            { key: "lead_time_days", header: "Lead (d)", align: "right", numeric: true, value: (r) => r.lead_time_days },
+            {
+              key: "lead_time_days",
+              header: "Lead (d)",
+              align: "right",
+              numeric: true,
+              value: (r) => r.lead_time_days,
+            },
             {
               key: "is_auto_calculated",
               header: "Mode",
@@ -367,9 +388,27 @@ export function ReplenishmentPage() {
               align: "center",
               render: (s) => <Badge tone={URGENCY_TONE[s.urgency] ?? "neutral"}>{s.urgency}</Badge>,
             },
-            { key: "free_stock", header: "Free Stock", align: "right", numeric: true, value: (s) => s.free_stock },
-            { key: "reserved", header: "Reserved", align: "right", numeric: true, value: (s) => s.reserved },
-            { key: "reorder_point", header: "ROP", align: "right", numeric: true, value: (s) => s.reorder_point },
+            {
+              key: "free_stock",
+              header: "Free Stock",
+              align: "right",
+              numeric: true,
+              value: (s) => s.free_stock,
+            },
+            {
+              key: "reserved",
+              header: "Reserved",
+              align: "right",
+              numeric: true,
+              value: (s) => s.reserved,
+            },
+            {
+              key: "reorder_point",
+              header: "ROP",
+              align: "right",
+              numeric: true,
+              value: (s) => s.reorder_point,
+            },
             {
               key: "days_of_cover",
               header: "Cover (d)",
@@ -384,7 +423,9 @@ export function ReplenishmentPage() {
               align: "right",
               numeric: true,
               value: (s) => s.suggested_quantity,
-              render: (s) => <span className="font-mono font-semibold">{s.suggested_quantity}</span>,
+              render: (s) => (
+                <span className="font-mono font-semibold">{s.suggested_quantity}</span>
+              ),
             },
             {
               key: "estimated_cost",
@@ -463,19 +504,43 @@ export function ReplenishmentPage() {
           emptyMessage="Nothing is sitting idle. Every lot has moved recently."
           columns={[
             { key: "product_name", header: "Product" },
-            { key: "batch_number", header: "Batch", render: (r) => <span className="font-mono">{r.batch_number}</span> },
+            {
+              key: "batch_number",
+              header: "Batch",
+              render: (r) => <span className="font-mono">{r.batch_number}</span>,
+            },
             {
               key: "category",
               header: "Classification",
               align: "center",
               render: (r) => (
-                <Badge tone={r.category === "DEAD" ? "danger" : r.category === "NEVER_MOVED" ? "danger" : "warning"}>
+                <Badge
+                  tone={
+                    r.category === "DEAD"
+                      ? "danger"
+                      : r.category === "NEVER_MOVED"
+                        ? "danger"
+                        : "warning"
+                  }
+                >
                   {r.category.replace("_", " ")}
                 </Badge>
               ),
             },
-            { key: "days_idle", header: "Days Idle", align: "right", numeric: true, value: (r) => r.days_idle },
-            { key: "quantity_available", header: "Qty", align: "right", numeric: true, value: (r) => r.quantity_available },
+            {
+              key: "days_idle",
+              header: "Days Idle",
+              align: "right",
+              numeric: true,
+              value: (r) => r.days_idle,
+            },
+            {
+              key: "quantity_available",
+              header: "Qty",
+              align: "right",
+              numeric: true,
+              value: (r) => r.quantity_available,
+            },
             {
               key: "capital_tied",
               header: "Capital Tied Up",
@@ -484,7 +549,11 @@ export function ReplenishmentPage() {
               value: (r) => Number(r.capital_tied),
               render: (r) => <span className="font-mono font-semibold">{r.capital_tied}</span>,
             },
-            { key: "last_moved_on", header: "Last Moved", value: (r) => r.last_moved_on ?? "never" },
+            {
+              key: "last_moved_on",
+              header: "Last Moved",
+              value: (r) => r.last_moved_on ?? "never",
+            },
             { key: "expiry_date", header: "Expires" },
           ]}
         />
@@ -501,7 +570,11 @@ export function ReplenishmentPage() {
           emptyMessage="Nothing is approaching expiry inside the horizon."
           columns={[
             { key: "product_name", header: "Product" },
-            { key: "batch_number", header: "Batch", render: (r) => <span className="font-mono">{r.batch_number}</span> },
+            {
+              key: "batch_number",
+              header: "Batch",
+              render: (r) => <span className="font-mono">{r.batch_number}</span>,
+            },
             {
               key: "days_to_expiry",
               header: "Days Left",
@@ -514,7 +587,13 @@ export function ReplenishmentPage() {
                 </span>
               ),
             },
-            { key: "quantity_available", header: "Qty", align: "right", numeric: true, value: (r) => r.quantity_available },
+            {
+              key: "quantity_available",
+              header: "Qty",
+              align: "right",
+              numeric: true,
+              value: (r) => r.quantity_available,
+            },
             {
               key: "sell_through_days",
               header: "Sell-through (d)",
@@ -556,7 +635,10 @@ export function ReplenishmentPage() {
       )}
 
       {(creating || editing) && (
-        <Drawer title={editing ? `Edit ${editing.product_name}` : "Add Reorder Rule"} onClose={close}>
+        <Drawer
+          title={editing ? `Edit ${editing.product_name}` : "Add Reorder Rule"}
+          onClose={close}
+        >
           <form onSubmit={submit} className="flex flex-col gap-4">
             {error && (
               <div className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>

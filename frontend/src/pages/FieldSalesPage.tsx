@@ -167,12 +167,7 @@ export function FieldSalesPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Field sales & reps"
-      />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Territory performance against target, and the stock each rep is carrying.
-      </p>
+      <PageHeader title="Field sales & reps" />
 
       {reps.data?.results.length === 0 && !reps.isLoading ? (
         <Empty message="No sales reps Add a rep to plan journeys, load a van and track commission." />
@@ -190,130 +185,125 @@ export function FieldSalesPage() {
       )}
 
       <p className="text-xs text-ink-500">
-        Sold and commission count orders that were not cancelled, over the current month.
-        Conversion is the share of visits that produced an order.
+        Sold and commission count orders that were not cancelled, over the current month. Conversion
+        is the share of visits that produced an order.
       </p>
 
       {vanRep && (
-      <Drawer
-        onClose={() => setVanRep(null)}
-        title={vanRep ? `${vanRep.full_name || vanRep.username}'s van` : ""}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setVanRep(null)}>
-              Close
-            </Button>
-            <Button
-              onClick={() => move.mutate()}
-              disabled={move.isPending || !product || !batch || !quantity}
-            >
-              {move.isPending
-                ? "Recording…"
-                : verb === "load"
-                  ? "Load onto van"
-                  : verb === "sell"
-                    ? "Record sale"
-                    : "Return to depot"}
-            </Button>
-          </>
-        }
-      >
-        {vanRep && (
-          <>
-            <Section title="On the van now">
-              {manifest.data && (
-                <>
-                  <Facts
-                rows={[
-                  ["Units aboard", String(manifest.data.units_on_van)],
-                  ["Loaded", String(manifest.data.units_loaded)],
-                  ["Sold", String(manifest.data.units_sold)],
-                  ["Returned", String(manifest.data.units_returned)],
-                ]}
-              />
-                  <div
-                    className={
-                      "mt-2 flex items-start gap-2 rounded-md p-2.5 text-xs " +
-                      (manifest.data.reconciles
-                        ? "bg-success-50 text-success-800"
-                        : "bg-danger-50 text-danger-800")
-                    }
-                  >
-                    {manifest.data.reconciles ? (
-                      <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    ) : (
-                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    )}
-                    <span>
-                      {manifest.data.reconciles
-                        ? "The van reconciles — everything loaded is either aboard, sold or back at the depot."
-                        : "The van does not reconcile. Stock has left the depot that cannot be accounted for."}
-                    </span>
-                  </div>
-
-                  {manifest.data.lines.length > 0 && (
-                    <div className="mt-3 divide-y divide-line">
-                      {manifest.data.lines.map((l) => (
-                        <div
-                          key={`${l.product}-${l.batch_number}`}
-                          className="flex items-baseline justify-between gap-2 py-1.5 text-sm"
-                        >
-                          <span className="min-w-0 truncate text-ink-800">{l.product_name}</span>
-                          <span className="shrink-0 text-xs text-ink-500">{l.batch_number}</span>
-                          <span className="shrink-0 tabular-nums text-ink-900">{l.quantity}</span>
-                        </div>
-                      ))}
+        <Drawer
+          onClose={() => setVanRep(null)}
+          title={vanRep ? `${vanRep.full_name || vanRep.username}'s van` : ""}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setVanRep(null)}>
+                Close
+              </Button>
+              <Button
+                onClick={() => move.mutate()}
+                disabled={move.isPending || !product || !batch || !quantity}
+              >
+                {move.isPending
+                  ? "Recording…"
+                  : verb === "load"
+                    ? "Load onto van"
+                    : verb === "sell"
+                      ? "Record sale"
+                      : "Return to depot"}
+              </Button>
+            </>
+          }
+        >
+          {vanRep && (
+            <>
+              <Section title="On the van now">
+                {manifest.data && (
+                  <>
+                    <Facts
+                      rows={[
+                        ["Units aboard", String(manifest.data.units_on_van)],
+                        ["Loaded", String(manifest.data.units_loaded)],
+                        ["Sold", String(manifest.data.units_sold)],
+                        ["Returned", String(manifest.data.units_returned)],
+                      ]}
+                    />
+                    <div
+                      className={
+                        "mt-2 flex items-start gap-2 rounded-md p-2.5 text-xs " +
+                        (manifest.data.reconciles
+                          ? "bg-success-50 text-success-800"
+                          : "bg-danger-50 text-danger-800")
+                      }
+                    >
+                      {manifest.data.reconciles ? (
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      ) : (
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      )}
+                      <span>
+                        {manifest.data.reconciles
+                          ? "The van reconciles — everything loaded is either aboard, sold or back at the depot."
+                          : "The van does not reconcile. Stock has left the depot that cannot be accounted for."}
+                      </span>
                     </div>
-                  )}
-                </>
-              )}
-            </Section>
 
-            <Section title="Move stock">
-              <Grid>
-                <Field label="Action">
-                  <Select
-                    value={verb}
-                    onChange={(e) => setVerb(e.target.value as typeof verb)}
-                  >
-                    <option value="load">Load from depot</option>
-                    <option value="sell">Sell from van</option>
-                    <option value="return">Return to depot</option>
-                  </Select>
-                </Field>
-                <Field label="Product">
-                  <ProductPicker value={product} onChange={setProduct} />
-                </Field>
-                <Field label="Batch">
-                  <Input
-                    value={batch}
-                    onChange={(e) => setBatch(e.target.value)}
-                    placeholder="Batch number"
-                  />
-                </Field>
-                <Field label="Quantity">
-                  <Input
-                    type="number"
-                    min={1}
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                  />
-                </Field>
-              </Grid>
-              <p className="mt-2 text-xs text-ink-500">
-                {verb === "load"
-                  ? "Loading takes the units out of depot stock — the depot no longer counts what the van is carrying."
-                  : verb === "sell"
-                    ? "The goods already left the depot when they were loaded, so a sale only reduces the van."
-                    : "Returning puts unsold units back into depot stock at the end of the round."}
-              </p>
-              {move.isError && (
-                <ErrorNote error={move.error} />
-              )}
-            </Section>
-          </>
-        )}
-      </Drawer>
+                    {manifest.data.lines.length > 0 && (
+                      <div className="mt-3 divide-y divide-line">
+                        {manifest.data.lines.map((l) => (
+                          <div
+                            key={`${l.product}-${l.batch_number}`}
+                            className="flex items-baseline justify-between gap-2 py-1.5 text-sm"
+                          >
+                            <span className="min-w-0 truncate text-ink-800">{l.product_name}</span>
+                            <span className="shrink-0 text-xs text-ink-500">{l.batch_number}</span>
+                            <span className="shrink-0 tabular-nums text-ink-900">{l.quantity}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </Section>
+
+              <Section title="Move stock">
+                <Grid>
+                  <Field label="Action">
+                    <Select value={verb} onChange={(e) => setVerb(e.target.value as typeof verb)}>
+                      <option value="load">Load from depot</option>
+                      <option value="sell">Sell from van</option>
+                      <option value="return">Return to depot</option>
+                    </Select>
+                  </Field>
+                  <Field label="Product">
+                    <ProductPicker value={product} onChange={setProduct} />
+                  </Field>
+                  <Field label="Batch">
+                    <Input
+                      value={batch}
+                      onChange={(e) => setBatch(e.target.value)}
+                      placeholder="Batch number"
+                    />
+                  </Field>
+                  <Field label="Quantity">
+                    <Input
+                      type="number"
+                      min={1}
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                    />
+                  </Field>
+                </Grid>
+                <p className="mt-2 text-xs text-ink-500">
+                  {verb === "load"
+                    ? "Loading takes the units out of depot stock — the depot no longer counts what the van is carrying."
+                    : verb === "sell"
+                      ? "The goods already left the depot when they were loaded, so a sale only reduces the van."
+                      : "Returning puts unsold units back into depot stock at the end of the round."}
+                </p>
+                {move.isError && <ErrorNote error={move.error} />}
+              </Section>
+            </>
+          )}
+        </Drawer>
       )}
     </div>
   );

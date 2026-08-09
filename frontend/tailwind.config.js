@@ -45,6 +45,18 @@ export default {
         // document on one screen, large enough to read all day.
         micro: ["11px", { lineHeight: "16px" }],
         form: ["13px", { lineHeight: "18px" }],
+
+        // Tailwind's defaults are a website scale — 14px body, 24px headings —
+        // and at 100% zoom that reads as oversized next to a real ERP. These
+        // override the defaults so every existing `text-sm` / `text-2xl` in the
+        // app tightens at once, rather than needing 200 files edited.
+        xs: ["11px", { lineHeight: "16px" }],
+        sm: ["12.5px", { lineHeight: "18px" }],
+        base: ["13.5px", { lineHeight: "20px" }],
+        lg: ["15px", { lineHeight: "22px" }],
+        xl: ["17px", { lineHeight: "24px" }],
+        "2xl": ["20px", { lineHeight: "28px" }],
+        "3xl": ["24px", { lineHeight: "32px" }],
       },
       fontFamily: {
         // "Inter Variable" is the family name @fontsource-variable/inter

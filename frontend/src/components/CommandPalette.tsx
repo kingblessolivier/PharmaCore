@@ -28,7 +28,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
   const products = useQuery({
     queryKey: ["palette-products", query],
-    queryFn: () => api<Paginated<Product>>(`/api/catalog/products/?search=${encodeURIComponent(query)}`),
+    queryFn: () =>
+      api<Paginated<Product>>(`/api/catalog/products/?search=${encodeURIComponent(query)}`),
     enabled: query.length >= 2,
   });
   const orgs = useQuery({
@@ -45,8 +46,20 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       { id: "n-sup", label: "Suppliers", icon: Truck, run: () => go("/suppliers") },
     ];
     const actions: Command[] = [
-      { id: "a-org", label: "Register organization", hint: "action", icon: Plus, run: () => go("/organizations") },
-      { id: "a-med", label: "New medicine", hint: "action", icon: Plus, run: () => go("/products") },
+      {
+        id: "a-org",
+        label: "Register organization",
+        hint: "action",
+        icon: Plus,
+        run: () => go("/organizations"),
+      },
+      {
+        id: "a-med",
+        label: "New medicine",
+        hint: "action",
+        icon: Plus,
+        run: () => go("/products"),
+      },
     ];
     const base = [...nav, ...actions].filter((c) => !q || c.label.toLowerCase().includes(q));
 
@@ -54,17 +67,21 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       ? (orgs.data?.results ?? [])
           .filter((o) => o.name.toLowerCase().includes(q))
           .slice(0, 5)
-          .map((o) => ({ id: `o-${o.id}`, label: o.name, hint: "organization", icon: Building2, run: () => go(`/organizations/${o.id}`) }))
+          .map((o) => ({
+            id: `o-${o.id}`,
+            label: o.name,
+            hint: "organization",
+            icon: Building2,
+            run: () => go(`/organizations/${o.id}`),
+          }))
       : [];
-    const productMatches: Command[] = (products.data?.results ?? [])
-      .slice(0, 6)
-      .map((p) => ({
-        id: `p-${p.id}`,
-        label: `${p.generic_name} ${p.strength}`.trim(),
-        hint: "medicine",
-        icon: Pill,
-        run: () => go(`/products/${p.id}`),
-      }));
+    const productMatches: Command[] = (products.data?.results ?? []).slice(0, 6).map((p) => ({
+      id: `p-${p.id}`,
+      label: `${p.generic_name} ${p.strength}`.trim(),
+      hint: "medicine",
+      icon: Pill,
+      run: () => go(`/products/${p.id}`),
+    }));
 
     return [...base, ...orgMatches, ...productMatches];
   }, [query, orgs.data, products.data]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -87,7 +104,10 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[1400] flex items-start justify-center bg-black/30 p-4 pt-[12vh]" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[1400] flex items-start justify-center bg-black/30 p-4 pt-[12vh]"
+      onClick={onClose}
+    >
       <div
         className="w-full max-w-lg overflow-hidden rounded-xl border border-line bg-surface-0 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -102,7 +122,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             placeholder="Search or run a command…"
             className="w-full bg-transparent py-3 text-sm outline-none"
           />
-          <kbd className="rounded border border-line px-1.5 font-mono text-[10px] text-ink-500">esc</kbd>
+          <kbd className="rounded border border-line px-1.5 font-mono text-[10px] text-ink-500">
+            esc
+          </kbd>
         </div>
         <ul className="max-h-80 overflow-y-auto p-1.5">
           {commands.map((c, i) => (

@@ -14,22 +14,55 @@
 /* -------------------------------------------------------------------------- */
 
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, Clock, ShieldCheck, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  BadgeCheck,
+  Banknote,
+  CalendarClock,
+  Clock,
+  HandCoins,
+  PackageMinus,
+  ShieldCheck,
+  TrendingUp,
+  TriangleAlert,
+  Truck,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import { BarChart, ChartFrame, LineTrend, VizRoot } from "../components/Charts";
+import { ModuleInsights } from "../components/ModuleInsights";
 import { Badge, Card, PageHeader, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { money, shortDate } from "../lib/format";
+import { money } from "../lib/format";
+
+/** "27 Jul" — a full locale date repeated fourteen times is a smear. */
+function dayLabel(iso: string) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
 import type { DashboardSummary, MyWork, WorkItem } from "../lib/types";
 
+/** A headline figure with the glyph for what it measures.
+ *
+ * The tiles were four unlabelled text blocks in a row, which reads as a wall of
+ * numbers: you have to parse each caption to find the one you came for. A
+ * glyph is found before it is read, so the eye lands on the right tile first
+ * and the caption only confirms it. The tone tints the glyph, never the label,
+ * so colour stays a second signal rather than the only one. */
 function Tile({
+  icon: Icon,
   label,
   value,
   hint,
   tone,
   to,
 }: {
+  icon: LucideIcon;
   label: string;
   value: string | number;
   hint?: string;
@@ -44,10 +77,25 @@ function Tile({
         : tone === "good"
           ? "text-success-700"
           : "text-ink-900";
+  const chip =
+    tone === "danger"
+      ? "bg-danger-50 text-danger-700"
+      : tone === "warning"
+        ? "bg-warning-50 text-warning-700"
+        : tone === "good"
+          ? "bg-success-50 text-success-700"
+          : "bg-surface-100 text-ink-600";
   const inner = (
     <Card className="h-full p-4 transition-colors hover:border-brand-300">
-      <div className="text-xs text-ink-500">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums ${colour}`}>{value}</div>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-xs text-ink-500">{label}</div>
+          <div className={`mt-1 text-2xl font-semibold tabular-nums ${colour}`}>{value}</div>
+        </div>
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${chip}`}>
+          <Icon className="h-4 w-4" aria-hidden />
+        </span>
+      </div>
       {hint && <div className="mt-0.5 text-xs text-ink-500">{hint}</div>}
     </Card>
   );
@@ -144,8 +192,8 @@ function WorkPanel({ work }: { work: MyWork }) {
             <Clock className="h-4 w-4 text-warning-600" /> Not yours to decide
           </div>
           <p className="mt-1 text-xs text-ink-500">
-            Visible to you, above your authority. Named here so they do not sit in a shared
-            queue while everyone assumes someone else is handling them.
+            Visible to you, above your authority. Named here so they do not sit in a shared queue
+            while everyone assumes someone else is handling them.
           </p>
           <ul className="mt-2">
             {needs_escalation.slice(0, 5).map((item) => (
@@ -165,8 +213,8 @@ function WorkPanel({ work }: { work: MyWork }) {
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>
                 {my_team.breaching.length} request
-                {my_team.breaching.length > 1 ? "s" : ""} from your team has passed its
-                agreed response time.
+                {my_team.breaching.length > 1 ? "s" : ""} from your team has passed its agreed
+                response time.
               </span>
             </div>
           )}
@@ -203,7 +251,7 @@ const BAND_LABELS: Record<string, string> = {
   within_90: "61–90 days",
 };
 
-export function DashboardPage() {
+function BusinessDashboard() {
   const { user } = useAuth();
   const summary = useQuery({
     queryKey: ["dashboard"],
@@ -220,7 +268,7 @@ export function DashboardPage() {
 
   const branches = d.by_branch ?? [];
   const trend = (d.trend ?? []).map((point) => ({
-    label: shortDate(point.date),
+    label: dayLabel(point.date),
     values: [point.revenue],
   }));
   const bands = (d.expiry_exposure?.bands ?? []).filter((b) => b.value > 0);
@@ -235,17 +283,13 @@ export function DashboardPage() {
     <div className="space-y-5">
       <div>
         <PageHeader title={`Good day${user?.first_name ? `, ${user.first_name}` : ""}`} />
-        <p className="-mt-2 text-sm text-ink-500">
-          {d.org_count > 1
-            ? `${d.org_count} organizations · today, with the last 14 days for context`
-            : "Today, with the last 14 days for context"}
-        </p>
       </div>
 
       {work.data && <WorkPanel work={work.data} />}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Tile
+          icon={Banknote}
           label="Revenue today"
           value={money(d.today?.revenue ?? 0)}
           hint={
@@ -256,18 +300,21 @@ export function DashboardPage() {
           tone={diff >= 0 ? "good" : "warning"}
         />
         <Tile
+          icon={TrendingUp}
           label="Gross margin today"
           value={money(d.today?.margin ?? 0)}
           hint={`${d.today?.margin_pct ?? 0}% of revenue`}
           tone={(d.today?.margin_pct ?? 0) < 15 ? "warning" : "good"}
         />
         <Tile
+          icon={HandCoins}
           label="Owed to us"
           value={money(d.receivable_due)}
           to="/finance/aging"
           hint="customer invoices outstanding"
         />
         <Tile
+          icon={CalendarClock}
           label="Stock at risk"
           value={money(d.expiry_exposure?.total_at_risk ?? 0)}
           to="/catalog/expiry"
@@ -278,18 +325,12 @@ export function DashboardPage() {
 
       <VizRoot>
         <div className="grid gap-3 lg:grid-cols-2">
-          <ChartFrame
-            title="Revenue, last 14 days"
-            subtitle="A single day's takings cannot be judged on its own."
-          >
+          <ChartFrame title="Revenue, last 14 days">
             <LineTrend points={trend} seriesNames={["Revenue"]} valueFormat={money} />
           </ChartFrame>
 
           {branches.length > 1 ? (
-            <ChartFrame
-              title="Today by branch"
-              subtitle="Which pharmacy earned it — the question a group total cannot answer."
-            >
+            <ChartFrame title="Today by branch">
               <BarChart
                 data={branches.map((b) => ({
                   label: b.name,
@@ -300,10 +341,7 @@ export function DashboardPage() {
               />
             </ChartFrame>
           ) : (
-            <ChartFrame
-              title="Stock at risk by expiry band"
-              subtitle="Banded because the action differs: sell through, move, or write off."
-            >
+            <ChartFrame title="Stock at risk by expiry band">
               <BarChart
                 data={bands.map((b) => ({
                   label: BAND_LABELS[b.band] ?? b.band,
@@ -318,22 +356,40 @@ export function DashboardPage() {
         </div>
       </VizRoot>
 
+      {/* Everything above is the counter and the day. This is the rest of the
+          business — stock, insurers, money owed — assembled from whatever this
+          person is entitled to see. */}
+      <div>
+        <h2 className="mb-3 text-base font-semibold tracking-tight text-ink-900">
+          Across the business
+        </h2>
+        <ModuleInsights module="overview" />
+      </div>
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Tile
+          icon={PackageMinus}
           label="Low stock lines"
           value={d.low_stock.count}
           to="/catalog/low-stock"
           tone={d.low_stock.count > 0 ? "warning" : undefined}
         />
         <Tile
+          icon={TriangleAlert}
           label="Expired on the shelf"
           value={d.expired.count}
           hint={`${d.expired.units.toLocaleString()} units`}
           to="/catalog/expiry"
           tone={d.expired.count > 0 ? "danger" : undefined}
         />
-        <Tile label="Units in transit" value={d.in_transit_units.toLocaleString()} to="/distribution/in-transit" />
         <Tile
+          icon={Truck}
+          label="Units in transit"
+          value={d.in_transit_units.toLocaleString()}
+          to="/distribution/in-transit"
+        />
+        <Tile
+          icon={BadgeCheck}
           label="Licences expiring"
           value={d.licences_expiring}
           hint="within 60 days"
@@ -361,4 +417,16 @@ export function DashboardPage() {
       )}
     </div>
   );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The landing page: the trading day, then the rest of the business.           */
+/*                                                                             */
+/* The system-level view (users, estate, licences, activity) is a different    */
+/* question with a different audience, so it keeps its own page at /admin      */
+/* rather than being stacked underneath this one.                              */
+/* -------------------------------------------------------------------------- */
+
+export function DashboardPage() {
+  return <BusinessDashboard />;
 }

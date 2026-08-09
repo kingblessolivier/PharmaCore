@@ -25,7 +25,12 @@ import {
 import { Badge, Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
 import { shortDate } from "../lib/format";
-import { checkEligibility, type InsuranceScheme, type MemberPolicy, type Quote } from "../lib/insurance";
+import {
+  checkEligibility,
+  type InsuranceScheme,
+  type MemberPolicy,
+  type Quote,
+} from "../lib/insurance";
 import type { Paginated } from "../lib/types";
 import { StatusChip } from "../components/Status";
 
@@ -166,11 +171,6 @@ export function InsuranceMembersPage() {
           </div>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        The co-payment shown is what this member actually pays. In Rwanda the rate belongs to the
-        person, not the scheme — an Ubudehe category 1 household is fully subsidised on the same
-        scheme where others pay 10%.
-      </p>
 
       {expired.length > 0 && (
         <div className="rounded-lg border border-warning-200 bg-warning-50 p-3 text-sm text-warning-900">
@@ -194,7 +194,6 @@ export function InsuranceMembersPage() {
       {checking && (
         <Drawer
           title="Check a card"
-          subtitle="Asked before dispensing — an expired card found at claim time is a debt already incurred."
           onClose={() => {
             setChecking(false);
             setQuote(null);

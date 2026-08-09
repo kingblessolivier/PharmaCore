@@ -21,7 +21,10 @@ import type {
  * outstanding from what is actually late — the total alone hides that. */
 function overdue(row: ArAgingRow): number {
   return (
-    Number(row.days_1_30) + Number(row.days_31_60) + Number(row.days_61_90) + Number(row.days_90_plus)
+    Number(row.days_1_30) +
+    Number(row.days_31_60) +
+    Number(row.days_61_90) +
+    Number(row.days_90_plus)
   );
 }
 
@@ -63,10 +66,6 @@ export function CustomerStatementPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="Customer statements" />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        What each customer owes and how old it is, then the full transaction history behind any
-        one balance.
-      </p>
 
       {totals && (
         <div className="flex flex-wrap gap-x-8 gap-y-2 rounded-lg border border-line bg-surface-0 px-4 py-3 text-sm">
@@ -182,10 +181,7 @@ export function CustomerStatementPage() {
       <Section title="Statement of account">
         <div className="mb-3 flex flex-wrap items-end gap-3">
           <Field label="Customer">
-            <Select
-              value={customer}
-              onChange={(e) => setCustomer(Number(e.target.value) || "")}
-            >
+            <Select value={customer} onChange={(e) => setCustomer(Number(e.target.value) || "")}>
               <option value="">— choose a customer —</option>
               {(orgData?.results ?? []).map((o) => (
                 <option key={o.id} value={o.id}>

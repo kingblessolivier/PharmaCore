@@ -31,7 +31,7 @@ export function PurchaseOrdersPage() {
     queryKey: ["orders", statusFilter],
     queryFn: () =>
       api<Paginated<StockOrder>>(
-        `/api/distribution/orders/${statusFilter ? `?status=${statusFilter}` : ""}`
+        `/api/distribution/orders/${statusFilter ? `?status=${statusFilter}` : ""}`,
       ),
   });
 
@@ -91,9 +91,6 @@ export function PurchaseOrdersPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        B2B stock procurement between wholesale depots and retail branches with automated FEFO approval & receipt stock landing.
-      </p>
 
       <DataGrid<StockOrder>
         rows={ordersQuery.data?.results ?? []}
@@ -133,7 +130,9 @@ export function PurchaseOrdersPage() {
               return (
                 <span
                   className="whitespace-nowrap text-ink-700"
-                  title={(o.items ?? []).map((i) => `${i.product_name} × ${i.quantity_ordered}`).join("\n")}
+                  title={(o.items ?? [])
+                    .map((i) => `${i.product_name} × ${i.quantity_ordered}`)
+                    .join("\n")}
                 >
                   {n} {n === 1 ? "line" : "lines"}
                   {units ? ` · ${units.toLocaleString()} u` : ""}
@@ -155,17 +154,13 @@ export function PurchaseOrdersPage() {
             key: "status",
             header: "Order Status",
             value: (o) => o.status,
-            render: (o) => (
-              <StatusChip status={o.status} />
-            ),
+            render: (o) => <StatusChip status={o.status} />,
           },
           {
             key: "payment_status",
             header: "Payment",
             value: (o) => o.payment_status,
-            render: (o) => (
-              <StatusChip status={o.payment_status} />
-            ),
+            render: (o) => <StatusChip status={o.payment_status} />,
           },
           {
             key: "actions",
@@ -215,11 +210,7 @@ export function PurchaseOrdersPage() {
       />
 
       {payingOrderId && (
-        <Drawer
-          title="Record settlement payment"
-          subtitle="What the buying pharmacy has paid against this order."
-          onClose={() => setPayingOrderId(null)}
-        >
+        <Drawer title="Record settlement payment" onClose={() => setPayingOrderId(null)}>
           <form onSubmit={submitPay} className="flex flex-col gap-4">
             <TextField
               label="Payment Amount (RWF)"
@@ -277,7 +268,10 @@ export function PurchaseOrdersPage() {
             />
           </Section>
 
-          <Section title="Lines being supplied" hint="Priced from the depot's storefront — an awarded tender price overrides it.">
+          <Section
+            title="Lines being supplied"
+            hint="Priced from the depot's storefront — an awarded tender price overrides it."
+          >
             {(viewing.items ?? []).length === 0 ? (
               <Empty message="Nothing on this order could be supplied — see what was recorded as demand below." />
             ) : (
@@ -300,7 +294,9 @@ export function PurchaseOrdersPage() {
                         <td className="px-3 py-2 text-right tabular-nums">{i.quantity_ordered}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{i.quantity_shipped}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{i.quantity_received}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{money(i.price_per_unit)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {money(i.price_per_unit)}
+                        </td>
                         <td className="px-3 py-2 text-right tabular-nums">{money(i.line_total)}</td>
                       </tr>
                     ))}

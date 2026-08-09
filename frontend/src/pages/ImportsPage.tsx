@@ -288,8 +288,7 @@ function OrdersSection({ consignment }: { consignment: ImportConsignment }) {
 
   const { data: orders } = useQuery({
     queryKey: ["purchase-orders", "import-attachable"],
-    queryFn: () =>
-      api<Paginated<PurchaseOrder>>("/api/procurement/orders/?page_size=200"),
+    queryFn: () => api<Paginated<PurchaseOrder>>("/api/procurement/orders/?page_size=200"),
     select: (r) => r.results,
   });
 
@@ -495,7 +494,9 @@ function ConsignmentDrawer({
     <Drawer
       title={consignment ? consignment.reference : "New import consignment"}
       badge={
-        consignment && <StatusBadge status={consignment.status} label={consignment.status_display} />
+        consignment && (
+          <StatusBadge status={consignment.status} label={consignment.status_display} />
+        )
       }
       subtitle={
         consignment
@@ -580,7 +581,10 @@ function ConsignmentDrawer({
             </Select>
           </Field>
           <Field label="Incoterm">
-            <Select value={draft.incoterm ?? ""} onChange={(e) => set({ incoterm: e.target.value })}>
+            <Select
+              value={draft.incoterm ?? ""}
+              onChange={(e) => set({ incoterm: e.target.value })}
+            >
               <option value="">—</option>
               {INCOTERMS.map((i) => (
                 <option key={i} value={i}>
@@ -709,10 +713,18 @@ function ConsignmentDrawer({
             />
           </Field>
           <Field label="ETD">
-            <Input type="date" value={draft.etd ?? ""} onChange={(e) => set({ etd: e.target.value })} />
+            <Input
+              type="date"
+              value={draft.etd ?? ""}
+              onChange={(e) => set({ etd: e.target.value })}
+            />
           </Field>
           <Field label="ETA">
-            <Input type="date" value={draft.eta ?? ""} onChange={(e) => set({ eta: e.target.value })} />
+            <Input
+              type="date"
+              value={draft.eta ?? ""}
+              onChange={(e) => set({ eta: e.target.value })}
+            />
           </Field>
         </Grid>
       </Section>
@@ -843,7 +855,9 @@ function ConsignmentDrawer({
                         <td className="px-2.5 py-2 text-right tabular-nums">
                           {money(a.goods_unit_cost)}
                         </td>
-                        <td className="px-2.5 py-2 text-right tabular-nums">{money(a.allocated)}</td>
+                        <td className="px-2.5 py-2 text-right tabular-nums">
+                          {money(a.allocated)}
+                        </td>
                         <td className="px-2.5 py-2 text-right font-semibold tabular-nums">
                           {money(a.landed_unit_cost)}
                         </td>
@@ -877,7 +891,7 @@ export function ImportsPage() {
   });
 
   const rows = data?.results ?? [];
-  const current = open ? rows.find((c) => c.id === open.id) ?? open : null;
+  const current = open ? (rows.find((c) => c.id === open.id) ?? open) : null;
 
   return (
     <div>
@@ -889,11 +903,6 @@ export function ImportsPage() {
           </Button>
         }
       />
-      <p className="mb-4 max-w-3xl text-sm text-ink-500">
-        Proforma, bill of lading, customs declaration and clearing — plus every cost of getting the
-        goods here. Allocating spreads freight, duty, insurance and fees into each line's unit cost,
-        so margin is measured against what the stock actually cost you.
-      </p>
 
       <DataGrid<ImportConsignment>
         rows={rows}

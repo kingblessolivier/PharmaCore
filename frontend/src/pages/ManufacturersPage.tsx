@@ -50,7 +50,8 @@ export function ManufacturersPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api<void>(`/api/catalog/manufacturers/${id}/`, { method: "DELETE" }),
+    mutationFn: (id: number) =>
+      api<void>(`/api/catalog/manufacturers/${id}/`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["manufacturers"] }),
   });
 
@@ -95,9 +96,6 @@ export function ManufacturersPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        Full CRUD management for pharmaceutical manufacturing companies and GMP compliance status.
-      </p>
 
       <DataGrid<Manufacturer>
         rows={data?.results ?? []}

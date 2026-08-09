@@ -127,19 +127,36 @@ class SaleItem(models.Model):
 
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT)
-    quantity = models.PositiveIntegerField()
-    returned_quantity = models.PositiveIntegerField(default=0)  # units given back by the customer
+    #: What the customer asked for, in `unit`. A box of 100 is quantity 1, not
+    #: 100 — the document has to keep saying what was actually sold.
+    quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    #: Which unit that number counts. Null only for lines written before units
+    #: existed, which were all implicitly in the product's base unit.
+    unit = models.ForeignKey(
+        "catalog.ProductUnit", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    #: The same amount in base units. Denormalised deliberately: allocation,
+    #: valuation, stock checks and every report run on this, and computing it
+    #: on read means each of those paths can get the conversion subtly wrong in
+    #: its own way. Written once, in one place.
+    quantity_base = models.DecimalField(max_digits=16, decimal_places=3, default=0)
+    returned_quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0)
     unit_price = models.DecimalField(max_digits=14, decimal_places=2)  # VAT-inclusive snapshot
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # e.g. 18.00
 
     class Meta:
         ordering = ["id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0), name="sale_item_quantity_is_positive"
+            )
+        ]
 
     def __str__(self) -> str:
         return f"{self.product} ×{self.quantity}"
 
     @property
-    def returnable(self) -> int:
+    def returnable(self) -> Decimal:
         return self.quantity - self.returned_quantity
 
     @property
@@ -166,7 +183,8 @@ class SaleBatchAllocation(models.Model):
     batch = models.ForeignKey(
         "inventory.InventoryBatch", on_delete=models.PROTECT, related_name="sale_allocations"
     )
-    quantity = models.PositiveIntegerField()
+    #: Drawn from the batch in BASE units, never in the unit the line was sold in.
+    quantity = models.DecimalField(max_digits=16, decimal_places=3)
 
     class Meta:
         ordering = ["id"]
@@ -200,7 +218,7 @@ class SaleReturn(models.Model):
 class SaleReturnItem(models.Model):
     sale_return = models.ForeignKey(SaleReturn, on_delete=models.CASCADE, related_name="items")
     sale_item = models.ForeignKey(SaleItem, on_delete=models.PROTECT, related_name="return_items")
-    quantity = models.PositiveIntegerField()
+    quantity = models.DecimalField(max_digits=16, decimal_places=3)
     refund_amount = models.DecimalField(max_digits=14, decimal_places=2)
 
     class Meta:
@@ -401,8 +419,10 @@ class ControlledSubstanceRegister(models.Model):
     product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT)
     batch_number = models.CharField(max_length=100)
     movement_type = models.CharField(max_length=20, choices=MovementType.choices)
-    quantity = models.IntegerField()
-    running_balance = models.PositiveIntegerField()
+    # The statutory register has to balance against what is physically in the
+    # cabinet, so it holds the same decimal base units the shelf does.
+    quantity = models.DecimalField(max_digits=16, decimal_places=3)
+    running_balance = models.DecimalField(max_digits=16, decimal_places=3)
     patient_name = models.CharField(max_length=150, blank=True, default="")
     prescriber_name = models.CharField(max_length=150, blank=True, default="")
     witness_name = models.CharField(max_length=150, blank=True, default="")

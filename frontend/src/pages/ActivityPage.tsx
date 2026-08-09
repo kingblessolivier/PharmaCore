@@ -44,16 +44,14 @@ export function ActivityPage() {
         action={
           <Button
             variant="secondary"
-            onClick={() => void downloadFile(`/api/audit-logs/export/${qs ? `?${qs}` : ""}`, "audit-log.csv")}
+            onClick={() =>
+              void downloadFile(`/api/audit-logs/export/${qs ? `?${qs}` : ""}`, "audit-log.csv")
+            }
           >
             <Download className="h-4 w-4" /> Export CSV
           </Button>
         }
       />
-      <p className="mb-4 -mt-2 text-sm text-ink-500">
-        The immutable audit trail — every login, create, update, delete, and view-as across the
-        system. Filter to see what a specific user or branch has been doing.
-      </p>
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-6">
         <SelectField label="Branch" value={org} onChange={(e) => setOrg(e.target.value)}>
@@ -72,10 +70,30 @@ export function ActivityPage() {
             </option>
           ))}
         </SelectField>
-        <TextField label="Action" value={action} onChange={(e) => setAction(e.target.value)} placeholder="e.g. LOGIN" />
-        <TextField label="Entity" value={entity} onChange={(e) => setEntity(e.target.value)} placeholder="e.g. user" />
-        <TextField label="Since" type="date" value={since} onChange={(e) => setSince(e.target.value)} />
-        <TextField label="Until" type="date" value={until} onChange={(e) => setUntil(e.target.value)} />
+        <TextField
+          label="Action"
+          value={action}
+          onChange={(e) => setAction(e.target.value)}
+          placeholder="e.g. LOGIN"
+        />
+        <TextField
+          label="Entity"
+          value={entity}
+          onChange={(e) => setEntity(e.target.value)}
+          placeholder="e.g. user"
+        />
+        <TextField
+          label="Since"
+          type="date"
+          value={since}
+          onChange={(e) => setSince(e.target.value)}
+        />
+        <TextField
+          label="Until"
+          type="date"
+          value={until}
+          onChange={(e) => setUntil(e.target.value)}
+        />
       </div>
 
       <DataGrid<AuditLogEntry>
