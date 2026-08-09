@@ -24,7 +24,16 @@ footer instead, where it belongs.
 <meta charset="utf-8">
 <title>{{ doc_number }}</title>
 <style>
-  @page { margin: 1.4cm 1.4cm 2.2cm 1.4cm; }
+  @page {
+    margin: 1.4cm 1.4cm 2.4cm 1.4cm;
+    /* A repeating frame, so the issuer and the page count appear on every
+       sheet. A multi-page document whose pages cannot be told apart, or whose
+       reader cannot see that page 4 of 10 is missing, is not a record. */
+    @frame page_footer {
+      -pdf-frame-content: page-footer;
+      bottom: 1.1cm; left: 1.4cm; width: 18.2cm; height: 1cm;
+    }
+  }
   body { font-family: Helvetica, Arial, sans-serif; font-size: 9.5pt; color: #111827; }
 
   /* Header ---------------------------------------------------------------- */
@@ -82,6 +91,28 @@ footer instead, where it belongs.
   }
   .warn { color: #b45309; font-weight: bold; }
 
+  /* Signatures ------------------------------------------------------------ */
+  /* A handover document is only evidence once two people have signed it, so
+     the space to do that is part of the document rather than something a
+     printer is expected to leave room for. */
+  .sig { margin-top: 14pt; }
+  .sig th {
+    background: #f3f4f6; color: #374151; font-size: 8pt; font-weight: bold;
+    text-transform: uppercase; letter-spacing: 0.3pt;
+    padding: 4pt 6pt; text-align: left; border: 0.5pt solid #d1d5db;
+  }
+  .sig td {
+    border: 0.5pt solid #d1d5db; padding: 4pt 6pt; font-size: 8.5pt;
+    height: 24pt; vertical-align: bottom; color: #6b7280;
+  }
+  .sig .rowlabel {
+    background: #f9fafb; color: #374151; font-weight: bold;
+    width: 20%; vertical-align: middle;
+  }
+  .page-footer {
+    font-size: 7.5pt; color: #9ca3af; border-top: 0.5pt solid #e5e7eb; padding-top: 3pt;
+  }
+
   /* Footer ---------------------------------------------------------------- */
   .footer {
     margin-top: 16pt; border-top: 0.5pt solid #d1d5db;
@@ -91,6 +122,20 @@ footer instead, where it belongs.
 </style>
 </head>
 <body>
+
+  <div id="page-footer">
+    <table class="page-footer">
+      <tr>
+        <td style="width:45%; border:none; padding:0;">{{ organization.name }}</td>
+        <td style="width:35%; border:none; padding:0;" class="center">
+          {% if organization.address_line %}{{ organization.address_line }}{% endif %}{% if organization.district %}{% if organization.address_line %}, {% endif %}{{ organization.district }}{% endif %}
+        </td>
+        <td style="width:20%; border:none; padding:0;" class="right">
+          <pdf:pagenumber> of <pdf:pagecount>
+        </td>
+      </tr>
+    </table>
+  </div>
 
   {% comment %}
   One table, two columns: who issued this on the left, what it is on the right.

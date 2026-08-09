@@ -1,21 +1,147 @@
 {% extends "documents/base.html" %}
+{% comment %}
+A goods receipt note, laid out the way the trade lays one out.
+
+What it is *for* drives the shape: it is the moment custody passes, so it has
+to record who handed over, who accepted, and whether what arrived matched what
+was sent. The previous version had the lines and none of that — no supplier, no
+order reference, no unit, no value, no remarks, and nowhere for the two people
+present to sign. A goods receipt nobody signed is a list, not evidence.
+
+Two things are kept that a general-purpose GRN would not have, because this is
+medicine: **batch and expiry on every line**. Traceability to the lot is the
+whole basis of a recall, and a receipt without it cannot support one.
+{% endcomment %}
+
+{% block title %}GOODS RECEIPT NOTE{% endblock %}
+
+{% block docmeta %}
+  <b>{{ grn_number|default:doc_number }}</b><br>
+  {{ received_at|date:"d M Y"|default:generated_at|date:"d M Y" }}<br>
+  {% if has_discrepancy %}
+    <span class="warn">DISCREPANCIES: YES</span>
+  {% else %}
+    Discrepancies: none
+  {% endif %}
+{% endblock %}
+
 {% block content %}
+
+<p class="muted" style="margin:0 0 6pt 0;">To be completed when goods are received.</p>
+
 <table class="parties">
   <tr>
-    <td style="width:50%"><div class="plabel">Received by (pharmacy)</div>{{ retail_name }}</td>
-    <td style="width:50%"><div class="plabel">From (depot)</div>{{ depot_name }}</td>
+    <td style="width:50%">
+      <div class="plabel">Received from</div>
+      <div class="party">
+        <b>{% firstof supplier_name depot_name "the supplier" %}</b>
+        {% if supplier_address %}<br>{{ supplier_address }}{% endif %}
+        {% if supplier_phone %}<br>Tel {{ supplier_phone }}{% endif %}
+        {% if supplier_tin %}<br>TIN {{ supplier_tin }}{% endif %}
+      </div>
+    </td>
+    <td style="width:50%">
+      <div class="plabel">Received into</div>
+      <div class="party">
+        <b>{% firstof retail_name organization.name "this branch" %}</b>
+        {% if store_name %}<br>Store: {{ store_name }}{% endif %}
+        {% if order_number %}<br>Against order <b>{{ order_number }}</b>{% endif %}
+        {% if delivery_note_number %}<br>Delivery note {{ delivery_note_number }}{% endif %}
+      </div>
+    </td>
   </tr>
 </table>
-<table>
-  <tr><th>#</th><th>Product</th><th>Batch</th><th>Expiry</th><th class="right">Expected</th><th class="right">Received</th><th class="right">Damaged</th></tr>
-  {% for l in lines %}
+
+<table class="lines">
   <tr>
-    <td>{{ forloop.counter }}</td><td>{{ l.name }}</td><td>{{ l.batch }}</td><td>{{ l.expiry }}</td>
-    <td class="right">{{ l.expected }}</td><td class="right">{{ l.received }}</td>
-    <td class="right {% if l.damaged %}warn{% endif %}">{{ l.damaged }}</td>
+    <th style="width:4%">Item</th>
+    <th>Description</th>
+    <th style="width:13%">Batch</th>
+    <th style="width:9%">Expiry</th>
+    <th style="width:11%">Unit</th>
+    <th style="width:8%" class="right">Ordered</th>
+    <th style="width:8%" class="right">Received</th>
+    <th style="width:8%" class="right">Damaged</th>
+    {% if show_values %}<th style="width:13%" class="right">Value</th>{% endif %}
   </tr>
+  {% for l in lines %}
+  <tr{% if forloop.counter|divisibleby:2 %} class="alt"{% endif %}>
+    <td>{{ forloop.counter }}</td>
+    <td>
+      {{ l.name }}
+      {% if l.unit_label and l.base_quantity %}
+        <div class="sub">{{ l.base_quantity }} {{ l.base_unit|default:"units" }} in total</div>
+      {% endif %}
+    </td>
+    <td>{{ l.batch|default:"&mdash;" }}</td>
+    <td>{{ l.expiry|date:"m/Y"|default:"&mdash;" }}</td>
+    <td>{{ l.unit_label|default:"&mdash;" }}</td>
+    <td class="right">{{ l.expected }}</td>
+    {% comment %}
+    A received figure that differs from what was expected is the reason this
+    document exists, so it is marked rather than left for the reader to
+    compare two columns and notice.
+    {% endcomment %}
+    <td class="right{% if l.expected != l.received %} warn{% endif %}">{{ l.received }}</td>
+    <td class="right{% if l.damaged %} warn{% endif %}">{{ l.damaged|default:"0" }}</td>
+    {% if show_values %}<td class="right">{{ l.value|default:"&mdash;" }}</td>{% endif %}
+  </tr>
+  {% empty %}
+  <tr><td colspan="9" class="muted">No lines recorded on this receipt.</td></tr>
   {% endfor %}
 </table>
-{% if has_discrepancy %}<p class="warn">Discrepancy recorded — received quantities differ from the shipment manifest.</p>{% endif %}
-<p class="muted">Records exactly what arrived. Retained for Good Distribution Practice traceability.</p>
+
+{% if show_values and total %}
+<table class="totals">
+  <tr class="grand">
+    <td class="lbl">Value received ({{ currency|default:"RWF" }})</td>
+    <td class="val">{{ total }}</td>
+  </tr>
+</table>
+{% endif %}
+
+{% if has_discrepancy %}
+<p class="warn" style="margin-top:8pt;">
+  Discrepancy recorded — the quantities received differ from the shipment manifest.
+  Do not pay this delivery in full until the difference is resolved with the supplier.
+</p>
+{% endif %}
+
+<div class="note">
+  <b>Remarks</b><br>
+  {{ remarks|default:"&nbsp;" }}<br>&nbsp;<br>&nbsp;
+</div>
+
+{% comment %}
+The handover itself. Both sides sign: the driver states what they delivered,
+the storekeeper states what they accepted, and the two signatures are what make
+a later dispute about a short delivery answerable.
+{% endcomment %}
+<table class="sig">
+  <tr>
+    <th style="width:20%">&nbsp;</th>
+    <th style="width:40%">Delivered by</th>
+    <th style="width:40%">Received by</th>
+  </tr>
+  <tr>
+    <td class="rowlabel">Name in print</td>
+    <td>{{ delivered_by_name|default:"" }}</td>
+    <td>{{ received_by_name|default:"" }}</td>
+  </tr>
+  <tr>
+    <td class="rowlabel">Signature</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td class="rowlabel">Date</td>
+    <td>{% if delivered_on %}{{ delivered_on|date:"d M Y" }}{% endif %}</td>
+    <td>{% if received_at %}{{ received_at|date:"d M Y" }}{% endif %}</td>
+  </tr>
+</table>
+
+<p class="muted" style="margin-top:8pt;">
+  Records exactly what arrived, against batch and expiry. Retained for Good Distribution
+  Practice traceability and as the basis of any recall.
+</p>
 {% endblock %}

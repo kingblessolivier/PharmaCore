@@ -1,17 +1,128 @@
 {% extends "documents/base.html" %}
+{% comment %}
+The document that travels with the goods.
+
+It is the other half of the goods receipt: the driver carries this, the
+storekeeper signs it, and the signed copy comes back as proof of delivery. So
+it needs the same handover block — a delivery note nobody signed proves the
+lorry left, not that the goods arrived.
+
+It is also what a transport inspector asks for at a roadblock, which is why the
+consignment summary (how many packages, what they weigh, whether any of it is
+cold chain) sits near the top rather than being left to be counted off the
+lines.
+{% endcomment %}
+
+{% block title %}DELIVERY NOTE{% endblock %}
+
+{% block docmeta %}
+  <b>{{ note_number|default:doc_number }}</b><br>
+  Dispatched {{ dispatched_at|date:"d M Y"|default:generated_at|date:"d M Y" }}<br>
+  {% if order_number %}Order {{ order_number }}{% endif %}
+{% endblock %}
+
 {% block content %}
+
 <table class="parties">
   <tr>
-    <td style="width:34%"><div class="plabel">From (depot)</div>{{ from_name }}</td>
-    <td style="width:34%"><div class="plabel">To (pharmacy)</div>{{ to_name }}</td>
-    <td style="width:32%"><div class="plabel">Transport</div>Driver: {{ driver|default:"—" }}<br>Vehicle: {{ vehicle|default:"—" }}</td>
+    <td style="width:34%">
+      <div class="plabel">Consigned from</div>
+      <div class="party">
+        <b>{% firstof from_name organization.name "the depot" %}</b>
+        {% if from_address %}<br>{{ from_address }}{% endif %}
+        {% if from_phone %}<br>Tel {{ from_phone }}{% endif %}
+      </div>
+    </td>
+    <td style="width:34%">
+      <div class="plabel">Deliver to</div>
+      <div class="party">
+        <b>{% firstof to_name "the buyer" %}</b>
+        {% if to_address %}<br>{{ to_address }}{% endif %}
+        {% if to_phone %}<br>Tel {{ to_phone }}{% endif %}
+      </div>
+    </td>
+    <td style="width:32%">
+      <div class="plabel">Transport</div>
+      <div class="party">
+        Driver: <b>{{ driver|default:"&mdash;" }}</b><br>
+        Vehicle: {{ vehicle|default:"&mdash;" }}
+        {% if packages %}<br>Packages: {{ packages }}{% endif %}
+        {% if gross_weight %}<br>Weight: {{ gross_weight }}{% endif %}
+      </div>
+    </td>
   </tr>
 </table>
-<table>
-  <tr><th>#</th><th>Product</th><th>Batch</th><th>Expiry</th><th class="right">Qty</th></tr>
+
+{% if cold_chain %}
+<p class="warn" style="margin-top:8pt;">
+  COLD CHAIN CONSIGNMENT — keep at the stated temperature throughout. Record the temperature
+  on hand-over; a break in the chain must be reported before the goods are put away.
+</p>
+{% endif %}
+
+<table class="lines">
+  <tr>
+    <th style="width:4%">Item</th>
+    <th>Description</th>
+    <th style="width:14%">Batch</th>
+    <th style="width:10%">Expiry</th>
+    <th style="width:14%">Unit</th>
+    <th style="width:10%" class="right">Qty</th>
+  </tr>
   {% for l in lines %}
-  <tr><td>{{ forloop.counter }}</td><td>{{ l.name }}</td><td>{{ l.batch }}</td><td>{{ l.expiry }}</td><td class="right">{{ l.qty }}</td></tr>
+  <tr{% if forloop.counter|divisibleby:2 %} class="alt"{% endif %}>
+    <td>{{ forloop.counter }}</td>
+    <td>
+      {{ l.name }}
+      {% if l.unit_label and l.base_quantity %}
+        <div class="sub">{{ l.base_quantity }} {{ l.base_unit|default:"units" }} in total</div>
+      {% endif %}
+    </td>
+    <td>{{ l.batch|default:"&mdash;" }}</td>
+    <td>{{ l.expiry|date:"m/Y"|default:"&mdash;" }}</td>
+    <td>{{ l.unit_label|default:"&mdash;" }}</td>
+    <td class="right">{{ l.qty }}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="6" class="muted">No lines on this consignment.</td></tr>
   {% endfor %}
 </table>
-<p class="muted">Accompanies the shipment in transit. Proof of cargo for transport regulators.</p>
+
+<div class="note">
+  <b>Condition on arrival</b> — note anything short, damaged or out of temperature here
+  before signing.<br>
+  {{ remarks|default:"&nbsp;" }}<br>&nbsp;
+</div>
+
+{% comment %}
+Signed on arrival. This is the copy that comes back as proof of delivery, so
+the receiver's signature is the point of the whole document.
+{% endcomment %}
+<table class="sig">
+  <tr>
+    <th style="width:20%">&nbsp;</th>
+    <th style="width:40%">Delivered by (driver)</th>
+    <th style="width:40%">Received by</th>
+  </tr>
+  <tr>
+    <td class="rowlabel">Name in print</td>
+    <td>{{ driver|default:"" }}</td>
+    <td>{{ received_by_name|default:"" }}</td>
+  </tr>
+  <tr>
+    <td class="rowlabel">Signature</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td class="rowlabel">Date &amp; time</td>
+    <td>{% if dispatched_at %}{{ dispatched_at|date:"d M Y H:i" }}{% endif %}</td>
+    <td>&nbsp;</td>
+  </tr>
+</table>
+
+<p class="muted" style="margin-top:8pt;">
+  Accompanies the shipment in transit and is proof of cargo for transport regulators.
+  Signing accepts the quantities listed, subject to anything noted above.
+</p>
 {% endblock %}

@@ -16,6 +16,7 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
+from apps.catalog.models import Product
 from apps.distribution.models import (
     GoodsReceivedNote,
     GRNLine,
@@ -90,17 +91,37 @@ def _generate_delivery_note(order: StockOrder, shipment: Shipment, user: User | 
             "batch": si.batch_number,
             "expiry": si.expiry_date,
             "qty": si.quantity,
+            "unit_label": si.order_item.unit_label if si.order_item_id else "",
+            "base_quantity": si.quantity,
+            "base_unit": _base_unit_label(si.product),
         }
-        for si in shipment.items.select_related("product").all()
+        for si in shipment.items.select_related("product", "order_item", "order_item__unit").all()
     ]
+    consignor = invoicing.party(order.depot)
+    consignee = invoicing.party(order.retail)
+    # A cold-chain consignment has to be labelled as one on the paperwork that
+    # travels with it, because the person who decides whether to put it in a
+    # cold box is reading this, not the catalogue.
+    cold_chain = any(
+        si.product.storage_condition in (Product.Storage.COLD_CHAIN, Product.Storage.FROZEN)
+        for si in shipment.items.select_related("product").all()
+    )
     generate_document(
         organization=order.depot,
         doc_type=DocType.DELIVERY_NOTE,
         context={
-            "from_name": order.depot.name,
-            "to_name": order.retail.name,
+            "from_name": consignor["name"],
+            "from_address": consignor.get("address", ""),
+            "from_phone": consignor.get("phone", ""),
+            "to_name": consignee["name"],
+            "to_address": consignee.get("address", ""),
+            "to_phone": consignee.get("phone", ""),
             "driver": shipment.driver_name,
             "vehicle": shipment.vehicle_registration,
+            "dispatched_at": shipment.dispatched_at,
+            "order_number": order.order_number,
+            "packages": len(lines),
+            "cold_chain": cold_chain,
             "lines": lines,
         },
         reference_type="stock_order",
@@ -111,24 +132,64 @@ def _generate_delivery_note(order: StockOrder, shipment: Shipment, user: User | 
 
 def _generate_grn_and_invoice(grn: GoodsReceivedNote, user: User | None) -> None:
     order = grn.order
+    # A goods receipt is the moment custody passes, so the document has to
+    # carry who it came from, what it was ordered against, and — because this
+    # is medicine — the batch and expiry of every line. Without those a recall
+    # cannot be traced back through it.
+    supplier = invoicing.party(order.depot)
+    shipment = grn.shipment
+    grn_lines = []
+    receipt_value = Decimal("0")
+    for line in grn.lines.select_related("product", "order_item", "order_item__unit").all():
+        item = line.order_item
+        unit_label = item.unit_label if item else ""
+        price = Decimal(str(item.price_per_unit)) if item else Decimal("0")
+        value = price * Decimal(str(line.quantity_received))
+        receipt_value += value
+        grn_lines.append(
+            {
+                "name": _product_label(line.product),
+                "batch": line.batch_number,
+                "expiry": line.expiry_date,
+                "unit_label": unit_label,
+                "base_quantity": line.quantity_received,
+                "base_unit": _base_unit_label(line.product),
+                "expected": line.quantity_expected,
+                "received": line.quantity_received,
+                "damaged": line.quantity_damaged,
+                "value": invoicing.money(value),
+            }
+        )
+
     generate_document(
         organization=grn.retail,
         doc_type=DocType.GRN,
         context={
+            "grn_number": grn.grn_number,
             "retail_name": grn.retail.name,
             "depot_name": order.depot.name,
+            "supplier_name": supplier["name"],
+            "supplier_address": supplier.get("address", ""),
+            "supplier_phone": supplier.get("phone", ""),
+            "supplier_tin": supplier.get("tin", ""),
+            "order_number": order.order_number,
+            "received_at": grn.received_at,
             "has_discrepancy": grn.has_discrepancy,
-            "lines": [
-                {
-                    "name": _product_label(line.product),
-                    "batch": line.batch_number,
-                    "expiry": line.expiry_date,
-                    "expected": line.quantity_expected,
-                    "received": line.quantity_received,
-                    "damaged": line.quantity_damaged,
-                }
-                for line in grn.lines.select_related("product").all()
-            ],
+            # Named on the document rather than left blank: the two signatures
+            # are what make a later dispute about a short delivery answerable,
+            # and whoever signs should be the person the system already knows
+            # handed over and accepted.
+            "delivered_by_name": shipment.driver_name if shipment else "",
+            "delivered_on": shipment.dispatched_at if shipment else None,
+            "received_by_name": (
+                grn.received_by.get_full_name() or grn.received_by.username
+                if grn.received_by
+                else ""
+            ),
+            "show_values": True,
+            "total": invoicing.money(receipt_value),
+            "currency": grn.retail.currency or "RWF",
+            "lines": grn_lines,
         },
         reference_type="grn",
         reference_id=str(grn.pk),
