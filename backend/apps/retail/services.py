@@ -82,16 +82,29 @@ def _fefo_consume(item: SaleItem, org_id: int, user: User | None) -> None:
     Expired batches (expiry date already passed) are never sold — they are skipped
     entirely, so a lot that lapsed yesterday cannot leave the counter."""
     remaining = item.quantity_base or item.quantity
-    batches = (
-        InventoryBatch.objects.select_for_update()
-        .filter(
-            organization_id=org_id,
-            product=item.product,
-            status=InventoryBatch.Status.ACTIVE,
-            expiry_date__gte=timezone.localdate(),  # never sell expired stock
+    today = timezone.localdate()
+    batches = [
+        batch
+        for batch in (
+            InventoryBatch.objects.select_for_update()
+            .filter(
+                organization_id=org_id,
+                product=item.product,
+                status=InventoryBatch.Status.ACTIVE,
+                expiry_date__gte=today,  # never sell expired stock
+            )
+            .order_by("expiry_date", "batch_number")
         )
-        .order_by("expiry_date", "batch_number")  # FEFO
-    )
+        # A broken pack runs on its own, shorter clock: a split portion is held
+        # to a 90-day stability window, so a loose remainder can sit inside the
+        # printed expiry and outside its own. Sorting on the printed date alone
+        # would hand exactly that one over.
+        if batch.effective_expiry >= today
+    ]
+    # FEFO on the date that actually governs, and an already-open pack is
+    # exhausted before another is broken — which is what a real counter does,
+    # and the opposite of what pure FEFO on the printed date would say.
+    batches.sort(key=lambda b: (b.effective_expiry, not b.is_broken_pack, b.batch_number))
     available = sum((max(Decimal(0), _free(b)) for b in batches), Decimal(0))
     if available < remaining:
         raise InsufficientStock(_product_label(item.product), remaining, available)
@@ -103,7 +116,14 @@ def _fefo_consume(item: SaleItem, org_id: int, user: User | None) -> None:
         if take <= 0:
             continue
         batch.quantity_available -= take
-        batch.save(update_fields=["quantity_available", "updated_at"])
+        fields = ["quantity_available", "updated_at"]
+        # Selling a fraction breaks the pack. From here the remainder runs on
+        # the 90-day split-stability clock and can no longer be returned to the
+        # supplier or transferred sealed.
+        if batch.opened_at is None and take != take.to_integral_value():
+            batch.opened_at = today
+            fields.append("opened_at")
+        batch.save(update_fields=fields)
         SaleBatchAllocation.objects.create(sale_item=item, batch=batch, quantity=take)
         StockMovement.objects.create(
             organization_id=org_id,

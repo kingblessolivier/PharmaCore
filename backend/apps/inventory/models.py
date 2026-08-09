@@ -5,6 +5,7 @@ EPCIS, consignment/VMI and wave picking. See docs/02-data-model.md & 06-workflow
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import Any
 
 from django.conf import settings
@@ -167,6 +168,14 @@ class InventoryBatch(models.Model):
     batch_number = models.CharField(max_length=100)
     manufacture_date = models.DateField(null=True, blank=True)
     expiry_date = models.DateField()
+    #: When this pack was first broken into for a loose sale.
+    #:
+    #: A split portion does not inherit the sealed pack's life. Regulatory
+    #: guidance holds a split tablet to a **90-day** stability window at 25°C /
+    #: 60% RH, so a loose remainder can be inside the batch's printed expiry and
+    #: outside its own — and FEFO, sorting on the printed date, would hand it
+    #: over. See docs/development/medicine-chain-import-to-patient.md §7.3.
+    opened_at = models.DateField(null=True, blank=True)
     # Unsigned at the DB level → can never go negative.
     #: On hand, in the product's BASE unit. Decimal because a legitimately
     #: split tablet leaves half of one behind, and an integer column would
@@ -235,6 +244,30 @@ class InventoryBatch(models.Model):
 
     def __str__(self) -> str:
         return f"{self.product} · {self.batch_number} (exp {self.expiry_date})"
+
+    #: Days a split portion stays good for once the pack is broken.
+    SPLIT_STABILITY_DAYS = 90
+
+    @property
+    def is_broken_pack(self) -> bool:
+        """Has this pack been opened for loose sale?
+
+        A broken pack cannot be returned to the supplier or transferred as a
+        sealed pack, and it expires on its own clock.
+        """
+        return self.opened_at is not None
+
+    @property
+    def effective_expiry(self) -> date:
+        """The date this stock actually stops being dispensable.
+
+        For a sealed pack that is the printed expiry. For a broken one it is
+        whichever comes first: the printed expiry, or 90 days from the day it
+        was opened.
+        """
+        if self.opened_at is None:
+            return self.expiry_date
+        return min(self.expiry_date, self.opened_at + timedelta(days=self.SPLIT_STABILITY_DAYS))
 
 
 class TemperatureSensor(models.Model):
