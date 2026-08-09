@@ -133,40 +133,45 @@ invoice, and a buyer's auditor looks for exactly those words.
     <th style="width:18%">&nbsp;</th>
   </tr>
   <tr>
-    <td class="contfirst">
+    {% comment %}
+    Widths on every cell, not just the header — this renderer sizes a column
+    from the cells, so an empty one collapses the whole block to a strip.
+    {% endcomment %}
+    <td class="contfirst" style="width:58%">
       {% if notes %}{{ notes }}<br>&nbsp;<br>{% endif %}
-      {% if terms_conditions %}<b>Terms &amp; conditions.</b> {{ terms_conditions }}{% endif %}
+      {% if terms_conditions %}<b>Terms &amp; conditions.</b> {{ terms_conditions }}
+      {% elif not notes %}&nbsp;{% endif %}
     </td>
-    <td class="right">Sub total</td>
-    <td class="right">{% firstof subtotal "&mdash;" %}</td>
+    <td class="right" style="width:24%">Sub total</td>
+    <td class="right" style="width:18%">{% firstof subtotal "&mdash;" %}</td>
   </tr>
   {% for band in vat_bands %}
   <tr>
-    <td class="cont">&nbsp;</td>
-    <td class="right">VAT {{ band.rate }} on {{ band.taxable }}</td>
-    <td class="right">{{ band.amount }}</td>
+    <td class="cont" style="width:58%">&nbsp;</td>
+    <td class="right" style="width:24%">VAT {{ band.rate }} on {{ band.taxable }}</td>
+    <td class="right" style="width:18%">{{ band.amount }}</td>
   </tr>
   {% empty %}
   <tr>
-    <td class="cont">&nbsp;</td>
-    <td class="right">Tax</td>
-    <td class="right">{% firstof tax_total "&mdash;" %}</td>
+    <td class="cont" style="width:58%">&nbsp;</td>
+    <td class="right" style="width:24%">Tax</td>
+    <td class="right" style="width:18%">{% firstof tax_total "&mdash;" %}</td>
   </tr>
   {% endfor %}
   <tr>
-    <td class="cont">&nbsp;</td>
-    <td class="right grandcell">Total ({{ currency|default:"RWF" }})</td>
-    <td class="right grandcell">{% firstof total "&mdash;" %}</td>
+    <td class="cont" style="width:58%">&nbsp;</td>
+    <td class="right grandcell" style="width:24%">Total ({{ currency|default:"RWF" }})</td>
+    <td class="right grandcell" style="width:18%">{% firstof total "&mdash;" %}</td>
   </tr>
   <tr>
-    <td class="cont">&nbsp;</td>
-    <td class="right">Amount paid</td>
-    <td class="right">{{ amount_paid|default:"0.00" }}</td>
+    <td class="cont" style="width:58%">&nbsp;</td>
+    <td class="right" style="width:24%">Amount paid</td>
+    <td class="right" style="width:18%">{{ amount_paid|default:"0.00" }}</td>
   </tr>
   <tr>
-    <td class="contlast">&nbsp;</td>
-    <td class="right grandcell">Balance due</td>
-    <td class="right grandcell">{% firstof balance total %}</td>
+    <td class="contlast" style="width:58%">&nbsp;</td>
+    <td class="right grandcell" style="width:24%">Balance due</td>
+    <td class="right grandcell" style="width:18%">{% firstof balance total %}</td>
   </tr>
 </table>
 
