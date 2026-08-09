@@ -5,7 +5,7 @@
 # Data model reference
 
 
-**181 entities across 13 apps.**
+**183 entities across 13 apps.**
 
 Every persisted entity in the system, generated from the Django model registry.
 For how a domain hangs together and which invariants matter, read
@@ -55,6 +55,7 @@ Table `catalog_activeingredient`.
 | `id` | BigAuto | unique |
 | `name` | Char(255) | unique |
 | `atc_code` | Char(10) |  |
+| `created_at` | DateTime | optional |
 
 
 ### `FormularyItem`
@@ -92,7 +93,7 @@ Table `catalog_manufacturer`.
 
 ### `PriceList`
 
-A named price list (Wholesale, Retail, Promotional, Contract).
+A named price list (Wholesale, Retail, Promotional, Contract). ``organization`` is what makes the list *someone's*. Without it every active list applied to every pharmacy in the system, so one shop running a weekend promotion silently repriced its competitors and the depot. Null means a group-wide list set by HQ, which is a real and useful case — a chain running one price across its branches — so the field is nullable rather than required.
 
 Table `catalog_pricelist`.
 
@@ -100,6 +101,7 @@ Table `catalog_pricelist`.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `id` | BigAuto | unique |
+| `organization` | FK → iam.Organization | optional · on delete: cascade · Whose list this is. Empty means group-wide (set by HQ). |
 | `name` | Char(255) |  |
 | `list_type` | Char(20) | one of: WHOLESALE, RETAIL, PROMOTIONAL, CONTRACT |
 | `effective_from` | DateTime | optional |
@@ -138,7 +140,7 @@ Table `catalog_product`.
 | `reorder_level` | PositiveInteger |  |
 | `reorder_quantity` | PositiveInteger |  |
 | `rra_item_code` | Char(50) |  |
-| `image_url` | Char(200) |  |
+| `image_url` | Char(500) |  |
 | `leaflet_url` | Char(200) |  |
 | `min_temp_c` | Decimal(4,1) | optional |
 | `max_temp_c` | Decimal(4,1) | optional |
@@ -146,9 +148,15 @@ Table `catalog_product`.
 | `is_essential` | Boolean |  |
 | `rxnorm_id` | Char(50) |  |
 | `lifecycle_status` | Char(30) | one of: ACTIVE, DISCONTINUED, OBSOLETE, PENDING_APPROVAL |
+| `divisibility` | PositiveSmallInteger |  |
+| `split_note` | Char(255) |  |
 | `is_active` | Boolean |  |
 | `created_at` | DateTime |  |
 | `updated_at` | DateTime |  |
+
+**Invariants**
+
+- `product_divisibility_is_a_real_split` — check (AND: ('divisibility__in', (1, 2, 3, 4)))
 
 
 ### `ProductBarcode`
@@ -223,6 +231,7 @@ Table `catalog_productinteraction`.
 | `severity` | Char(20) | one of: MINOR, MODERATE, MAJOR |
 | `effect` | Text |  |
 | `management` | Text |  |
+| `created_at` | DateTime | optional |
 
 **Invariants**
 
@@ -267,6 +276,37 @@ Table `catalog_productsubstitute`.
 **Invariants**
 
 - `uniq_product_substitute` — unique on (product, substitute_product)
+
+
+### `ProductUnit`
+
+One level of a product's packaging chain. A medicine is not counted in one unit; it is counted in a chain of them, and each party in the trade transacts at a different link. An importer buys a carton, a depot picks a case, a pharmacy shelves a pack, a counter sells a strip, and a patient swallows a tablet. Those are the same goods measured five ways, and a system that stores a bare number has thrown away which one was meant — so a depot shipping "10" and a pharmacy receiving "10" can agree on the number and disagree by a factor of a hundred. Every level states its size in **base units**, never in the level above, so a conversion is one multiplication and cannot compound rounding through the chain.
+
+Table `catalog_productunit`.
+
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | BigAuto | unique |
+| `product` | FK → catalog.Product | on delete: cascade |
+| `code` | Char(20) | one of: TABLET, CAPSULE, SACHET, SUPPOSITORY, BOTTLE, TUBE … |
+| `name` | Char(100) |  |
+| `factor_to_base` | Decimal(14,3) |  |
+| `level` | PositiveSmallInteger |  |
+| `is_base` | Boolean |  |
+| `is_purchase_default` | Boolean |  |
+| `is_sale_default` | Boolean |  |
+| `barcode` | Char(64) |  |
+| `price` | Decimal(14,2) | optional |
+
+**Invariants**
+
+- `uniq_product_unit_code` — unique on (product, code)
+- `uniq_product_base_unit` — unique on (product) where (AND: ('is_base', True))
+- `uniq_product_purchase_unit` — unique on (product) where (AND: ('is_purchase_default', True))
+- `uniq_product_sale_unit` — unique on (product) where (AND: ('is_sale_default', True))
+- `product_unit_factor_is_positive` — check (AND: ('factor_to_base__gt', 0))
+- `product_base_unit_factor_is_one` — check (OR: (NOT (AND: ('is_base', True))), ('factor_to_base', 1))
 
 
 ### `ProductUomConversion`
@@ -322,8 +362,8 @@ Table `distribution_backorderline`.
 | `retail` | FK → iam.Organization | on delete: cascade |
 | `product` | FK → catalog.Product | on delete: protect |
 | `order` | FK → distribution.StockOrder | optional · on delete: set_null |
-| `quantity` | PositiveInteger |  |
-| `quantity_fulfilled` | PositiveInteger |  |
+| `quantity` | Decimal(16,3) |  |
+| `quantity_fulfilled` | Decimal(16,3) |  |
 | `status` | Char(12) | one of: OPEN, SOURCING, FULFILLED, CANCELLED |
 | `origin` | Char(12) | one of: UNLISTED, WITHDRAWN, SHORT, SEGMENT, REQUEST |
 | `note` | Char(255) |  |
@@ -392,6 +432,10 @@ Table `distribution_depotproductlisting`.
 | `is_published` | Boolean |  |
 | `customer_segment` | Char(50) |  |
 | `min_order_qty` | PositiveInteger |  |
+| `order_multiple` | PositiveInteger |  |
+| `image_url` | Char(500) |  |
+| `image_verified_by` | FK → iam.User | optional · on delete: set_null |
+| `image_verified_at` | DateTime | optional |
 | `updated_at` | DateTime |  |
 | `created_at` | DateTime |  |
 
@@ -413,9 +457,9 @@ Table `distribution_grnline`.
 | `product` | FK → catalog.Product | on delete: protect |
 | `batch_number` | Char(100) |  |
 | `expiry_date` | Date |  |
-| `quantity_expected` | PositiveInteger |  |
-| `quantity_received` | PositiveInteger |  |
-| `quantity_damaged` | PositiveInteger |  |
+| `quantity_expected` | Decimal(16,3) |  |
+| `quantity_received` | Decimal(16,3) |  |
+| `quantity_damaged` | Decimal(16,3) |  |
 
 
 ### `GoodsReceivedNote`
@@ -454,7 +498,7 @@ Table `distribution_intransitstock`.
 | `product` | FK → catalog.Product | on delete: protect |
 | `batch_number` | Char(100) |  |
 | `expiry_date` | Date |  |
-| `quantity` | PositiveInteger |  |
+| `quantity` | Decimal(16,3) |  |
 | `driver_name` | Char(150) |  |
 | `vehicle_plate` | Char(50) |  |
 | `dispatched_at` | DateTime |  |
@@ -488,9 +532,9 @@ Table `distribution_orderitem`.
 | `order` | FK → distribution.StockOrder | on delete: cascade |
 | `product` | FK → catalog.Product | on delete: protect |
 | `quantity_ordered` | PositiveInteger |  |
-| `quantity_approved` | PositiveInteger |  |
-| `quantity_shipped` | PositiveInteger |  |
-| `quantity_received` | PositiveInteger |  |
+| `quantity_approved` | Decimal(16,3) |  |
+| `quantity_shipped` | Decimal(16,3) |  |
+| `quantity_received` | Decimal(16,3) |  |
 | `price_per_unit` | Decimal(14,2) |  |
 
 
@@ -525,7 +569,7 @@ Table `distribution_reservation`.
 | `order` | FK → distribution.StockOrder | on delete: cascade |
 | `order_item` | FK → distribution.OrderItem | on delete: cascade |
 | `batch` | FK → inventory.InventoryBatch | on delete: protect |
-| `quantity` | PositiveInteger |  |
+| `quantity` | Decimal(16,3) |  |
 | `created_at` | DateTime |  |
 
 
@@ -601,7 +645,7 @@ Table `distribution_shipmentitem`.
 | `product` | FK → catalog.Product | on delete: protect |
 | `batch_number` | Char(100) |  |
 | `expiry_date` | Date |  |
-| `quantity` | PositiveInteger |  |
+| `quantity` | Decimal(16,3) |  |
 
 
 ### `StockOrder`
@@ -642,8 +686,8 @@ Table `distribution_tendercontract`.
 | `client_org` | FK → iam.Organization | on delete: cascade |
 | `product` | FK → catalog.Product | on delete: cascade |
 | `contract_price` | Decimal(14,2) |  |
-| `total_committed_qty` | PositiveInteger |  |
-| `drawn_qty` | PositiveInteger |  |
+| `total_committed_qty` | Decimal(16,3) |  |
+| `drawn_qty` | Decimal(16,3) |  |
 | `valid_until` | Date |  |
 | `is_active` | Boolean |  |
 | `created_at` | DateTime |  |
@@ -901,6 +945,7 @@ Table `finance_bankstatementline`.
 | `external_id` | Char(120) |  |
 | `status` | Char(12) | one of: UNMATCHED, MATCHED, EXPLAINED, IGNORED |
 | `note` | Char(255) |  |
+| `created_at` | DateTime | optional |
 
 **Invariants**
 
@@ -1716,7 +1761,7 @@ Table `hr_employee`.
 | `rssb_number` | Char(30) |  |
 | `gender` | Char(10) | M / F / Other — used for headcount reporting and pension scheme flags. |
 | `dob` | Date | optional · Date of birth — drives annual-leave entitlement (Law 66/2018 §55: 25 days if ≥55y). |
-| `photo` | Char(200) | URL of the employee's profile photo (badge). |
+| `photo` | Char(500) | URL of the employee's profile photo (badge). |
 | `probation_end` | Date | optional · Last day of the probation period (auto-confirmation trigger). |
 | `contract_end` | Date | optional · End date of a fixed-term contract (CDD); blank for permanent (CDI). |
 | `pay_group` | Char(20) | Salary band — pharmacist, technician, cashier, driver, manager. Drives default salary structure. |
@@ -2354,6 +2399,7 @@ Table `hr_statutoryrate`.
 | `rate_pct` | Decimal(5,3) |  |
 | `effective_from` | Date |  |
 | `effective_to` | Date | optional |
+| `created_at` | DateTime | optional |
 
 
 ### `Termination`
@@ -2513,7 +2559,7 @@ Table `iam_company`.
 | `contact_person` | Char(150) |  |
 | `phone` | Char(20) |  |
 | `email` | Char(254) |  |
-| `logo_url` | Char(200) |  |
+| `logo_url` | Char(500) |  |
 | `currency` | Char(3) |  |
 | `is_active` | Boolean |  |
 | `created_at` | DateTime |  |
@@ -2601,7 +2647,7 @@ Table `iam_organization`.
 | `contact_person` | Char(150) |  |
 | `phone` | Char(20) |  |
 | `email` | Char(254) |  |
-| `logo_url` | Char(200) |  |
+| `logo_url` | Char(500) |  |
 | `currency` | Char(3) |  |
 | `province` | Char(100) |  |
 | `district` | Char(100) |  |
@@ -2656,6 +2702,7 @@ Table `iam_permission`.
 | `action` | Char(40) |  |
 | `code` | Char(80) | unique |
 | `description` | Char(200) |  |
+| `created_at` | DateTime | optional |
 
 **Invariants**
 
@@ -2675,6 +2722,7 @@ Table `iam_role`.
 | `code` | Char(50) | unique |
 | `name` | Char(100) |  |
 | `description` | Text |  |
+| `approval_limit` | Decimal(14,2) | optional · Default approval ceiling in RWF for this role. Empty means unlimited — reserve that for SYS_ADMIN. |
 | `created_at` | DateTime |  |
 | `permissions` | M2M → iam.Permission |  |
 
@@ -2708,6 +2756,7 @@ Table `iam_user`.
 | `tin` | Char(30) | Rwanda Revenue Authority Tax Identification Number — printed on annual PIT summaries. |
 | `payroll_email` | Char(254) | Optional secondary email where payslips/PDFs are delivered, in addition to the login email. |
 | `reports_to` | FK → iam.User | optional · on delete: set_null · The user's supervisor — used for senior oversight and approval escalation. |
+| `approval_limit` | Decimal(14,2) | optional · Personal approval ceiling in RWF, overriding this user's roles. Leave empty to use the highest limit among their roles. |
 | `groups` | M2M → auth.Group | The groups this user belongs to. A user will get all permissions granted to each of their groups. |
 | `user_permissions` | M2M → auth.Permission | Specific permissions for this user. |
 | `roles` | M2M → iam.Role |  |
@@ -2740,6 +2789,34 @@ Table `iam_userdocument`.
 
 
 ## Inventory — batches, warehousing, cold chain and traceability
+
+
+### `BatchDocument`
+
+Paperwork that belongs to a *lot*, not to a party. The system held compliance documents for organizations, users and suppliers and none at all for the things they trade. But the documents a regulator asks for at an inspection are mostly per-batch: a Certificate of Analysis is issued for a specific lot, and "we have a GMP certificate for the manufacturer" is not an answer to "show me the CoA for this batch". Kept deliberately small and attached to the batch. A generic attachment table would let anything hang off anything and would answer the question "what is missing for this lot?" much less directly.
+
+Table `inventory_batchdocument`.
+
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | BigAuto | unique |
+| `batch` | FK → inventory.InventoryBatch | on delete: cascade |
+| `doc_type` | Char(20) | one of: COA, GMP, IMPORT_PERMIT, BILL_OF_LADING, CUSTOMS, COLD_CHAIN_LOG … |
+| `document_number` | Char(100) |  |
+| `document_url` | Char(200) |  |
+| `issued_on` | Date | optional |
+| `issued_by` | Char(255) |  |
+| `is_verified` | Boolean |  |
+| `verified_by` | FK → iam.User | optional · on delete: set_null |
+| `verified_at` | DateTime | optional |
+| `notes` | Char(255) |  |
+| `uploaded_by` | FK → iam.User | optional · on delete: set_null |
+| `created_at` | DateTime |  |
+
+**Invariants**
+
+- `uniq_batch_document_kind` — unique on (batch, doc_type) where (NOT (AND: ('doc_type', 'OTHER')))
 
 
 ### `BatchRecall`
@@ -2962,8 +3039,9 @@ Table `inventory_inventorybatch`.
 | `batch_number` | Char(100) |  |
 | `manufacture_date` | Date | optional |
 | `expiry_date` | Date |  |
-| `quantity_available` | PositiveInteger |  |
-| `quantity_reserved` | PositiveInteger |  |
+| `opened_at` | Date | optional |
+| `quantity_available` | Decimal(16,3) |  |
+| `quantity_reserved` | Decimal(16,3) |  |
 | `wholesale_cost` | Decimal(14,2) | optional |
 | `origin_unit_cost` | Decimal(14,2) | optional |
 | `storage_location` | Char(100) |  |
@@ -2997,6 +3075,9 @@ Table `inventory_pharmacyproduct`.
 | `retail_price` | Decimal(14,2) | optional |
 | `wholesale_price` | Decimal(14,2) | optional |
 | `min_stock_level` | PositiveInteger |  |
+| `image_url` | Char(500) |  |
+| `image_verified_by` | FK → iam.User | optional · on delete: set_null |
+| `image_verified_at` | DateTime | optional |
 | `is_active` | Boolean |  |
 | `created_at` | DateTime |  |
 | `updated_at` | DateTime |  |
@@ -3024,8 +3105,8 @@ Table `inventory_picktask`.
 | `expiry_date` | Date | optional |
 | `zone` | FK → inventory.StorageZone | optional · on delete: set_null |
 | `bin_location` | FK → inventory.BinLocation | optional · on delete: set_null |
-| `quantity_requested` | PositiveInteger |  |
-| `quantity_picked` | PositiveInteger |  |
+| `quantity_requested` | Decimal(16,3) |  |
+| `quantity_picked` | Decimal(16,3) |  |
 | `status` | Char(10) | one of: PENDING, ASSIGNED, PICKED, SHORT, CANCELLED |
 | `picker` | FK → iam.User | optional · on delete: set_null |
 | `reference_type` | Char(50) |  |
@@ -3284,7 +3365,7 @@ Table `inventory_stockmovement`.
 | `batch` | FK → inventory.InventoryBatch | optional · on delete: set_null |
 | `batch_number` | Char(100) |  |
 | `movement_type` | Char(30) | one of: INTAKE, TRANSFER_IN, TRANSFER_OUT, SALE, RETURN, WASTAGE … |
-| `quantity_delta` | Integer |  |
+| `quantity_delta` | Decimal(16,3) |  |
 | `reference_type` | Char(50) |  |
 | `reference_id` | Char(64) |  |
 | `reason` | Char(255) |  |
@@ -3445,9 +3526,9 @@ Table `procurement_goodsreceiptline`.
 | `batch_number` | Char(100) |  |
 | `manufacture_date` | Date | optional |
 | `expiry_date` | Date |  |
-| `quantity_expected` | PositiveInteger |  |
-| `quantity_received` | PositiveInteger |  |
-| `quantity_rejected` | PositiveInteger |  |
+| `quantity_expected` | Decimal(14,3) |  |
+| `quantity_received` | Decimal(14,3) |  |
+| `quantity_rejected` | Decimal(14,3) |  |
 | `rejection_reason` | Char(25) | one of: GOOD, DAMAGED, SHORT_DATED, WRONG_ITEM, TEMPERATURE_ABUSED |
 | `rejection_note` | Char(255) |  |
 | `unit_cost` | Decimal(14,2) | Landed unit cost in RWF, snapshotted when the receipt is posted. |
@@ -3611,10 +3692,12 @@ Table `procurement_purchaseorderline`.
 | `order` | FK → procurement.PurchaseOrder | on delete: cascade |
 | `product` | FK → catalog.Product | on delete: protect |
 | `description` | Char(255) |  |
-| `quantity_ordered` | PositiveInteger |  |
-| `quantity_received` | PositiveInteger |  |
-| `quantity_rejected` | PositiveInteger |  |
-| `quantity_invoiced` | PositiveInteger |  |
+| `quantity_ordered` | Decimal(14,3) |  |
+| `quantity_received` | Decimal(14,3) |  |
+| `quantity_rejected` | Decimal(14,3) |  |
+| `quantity_invoiced` | Decimal(14,3) |  |
+| `unit` | FK → catalog.ProductUnit | optional · on delete: protect |
+| `quantity_base` | Decimal(16,3) |  |
 | `unit_price` | Decimal(14,2) |  |
 | `discount_pct` | Decimal(5,2) |  |
 | `tax_rate_pct` | Decimal(5,2) |  |
@@ -3700,9 +3783,9 @@ Table `procurement_requisitionline`.
 | `id` | BigAuto | unique |
 | `requisition` | FK → procurement.PurchaseRequisition | on delete: cascade |
 | `product` | FK → catalog.Product | on delete: protect |
-| `quantity` | PositiveInteger |  |
-| `quantity_approved` | PositiveInteger |  |
-| `quantity_ordered` | PositiveInteger |  |
+| `quantity` | Decimal(14,3) |  |
+| `quantity_approved` | Decimal(14,3) |  |
+| `quantity_ordered` | Decimal(14,3) |  |
 | `estimated_unit_cost` | Decimal(14,2) |  |
 | `notes` | Char(255) |  |
 
@@ -4004,6 +4087,7 @@ Table `retail_clinicalservice`.
 | `category` | Char(30) | one of: VACCINATION, SCREENING, CONSULTATION, PROCEDURE |
 | `fee_amount` | Decimal(14,2) |  |
 | `is_active` | Boolean |  |
+| `created_at` | DateTime | optional |
 
 
 ### `ClinicalServiceRecord`
@@ -4042,8 +4126,8 @@ Table `retail_controlledsubstanceregister`.
 | `product` | FK → catalog.Product | on delete: protect |
 | `batch_number` | Char(100) |  |
 | `movement_type` | Char(20) | one of: RECEIPT, DISPENSING, DISPOSAL |
-| `quantity` | Integer |  |
-| `running_balance` | PositiveInteger |  |
+| `quantity` | Decimal(16,3) |  |
+| `running_balance` | Decimal(16,3) |  |
 | `patient_name` | Char(150) |  |
 | `prescriber_name` | Char(150) |  |
 | `witness_name` | Char(150) |  |
@@ -4102,7 +4186,7 @@ Table `retail_drawersession`.
 
 ### `POSPromotion`
 
-Retail promotional campaigns & coupon engine. ROADMAP '6. Retail (POS)'.
+Retail promotional campaigns & coupon engine. ROADMAP '6. Retail (POS)'. Scoped by ``organization`` for the same reason as ``catalog.PriceList``: a code created anywhere used to work everywhere. ``code`` was also globally unique, so two branches could not both run a "WEEKEND10" — the second was rejected as a duplicate. Uniqueness is now per organization.
 
 Table `retail_pospromotion`.
 
@@ -4110,7 +4194,8 @@ Table `retail_pospromotion`.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `id` | BigAuto | unique |
-| `code` | Char(50) | unique |
+| `organization` | FK → iam.Organization | optional · on delete: cascade · Whose promotion this is. Empty means group-wide (set by HQ). |
+| `code` | Char(50) |  |
 | `name` | Char(150) |  |
 | `promo_type` | Char(20) | one of: PERCENT, FLAT, BOGO |
 | `discount_value` | Decimal(14,2) |  |
@@ -4121,6 +4206,11 @@ Table `retail_pospromotion`.
 | `times_redeemed` | PositiveInteger |  |
 | `is_active` | Boolean |  |
 | `created_at` | DateTime |  |
+
+**Invariants**
+
+- `uniq_promo_code_per_org` — unique on (organization, code) where (AND: ('organization__isnull', False))
+- `uniq_group_wide_promo_code` — unique on (code) where (AND: ('organization__isnull', True))
 
 
 ### `Payment`
@@ -4230,7 +4320,7 @@ Table `retail_salebatchallocation`.
 | `id` | BigAuto | unique |
 | `sale_item` | FK → retail.SaleItem | on delete: cascade |
 | `batch` | FK → inventory.InventoryBatch | on delete: protect |
-| `quantity` | PositiveInteger |  |
+| `quantity` | Decimal(16,3) |  |
 
 
 ### `SaleItem`
@@ -4245,10 +4335,16 @@ Table `retail_saleitem`.
 | `id` | BigAuto | unique |
 | `sale` | FK → retail.Sale | on delete: cascade |
 | `product` | FK → catalog.Product | on delete: protect |
-| `quantity` | PositiveInteger |  |
-| `returned_quantity` | PositiveInteger |  |
+| `quantity` | Decimal(14,3) |  |
+| `unit` | FK → catalog.ProductUnit | optional · on delete: protect |
+| `quantity_base` | Decimal(16,3) |  |
+| `returned_quantity` | Decimal(14,3) |  |
 | `unit_price` | Decimal(14,2) |  |
 | `tax_rate` | Decimal(5,2) |  |
+
+**Invariants**
+
+- `sale_item_quantity_is_positive` — check (AND: ('quantity__gt', 0))
 
 
 ### `SaleReturn`
@@ -4279,7 +4375,7 @@ Table `retail_salereturnitem`.
 | `id` | BigAuto | unique |
 | `sale_return` | FK → retail.SaleReturn | on delete: cascade |
 | `sale_item` | FK → retail.SaleItem | on delete: protect |
-| `quantity` | PositiveInteger |  |
+| `quantity` | Decimal(16,3) |  |
 | `refund_amount` | Decimal(14,2) |  |
 
 
@@ -4319,6 +4415,7 @@ Table `workspace_maillabel`.
 | `user` | FK → iam.User | on delete: cascade |
 | `name` | Char(60) |  |
 | `colour` | Char(20) |  |
+| `created_at` | DateTime | optional |
 
 **Invariants**
 
