@@ -305,6 +305,11 @@ export type TaxClass = "A" | "B" | "C" | "D";
 
 export interface Product {
   id: number;
+  /** How finely one base unit may be split when dispensing: 1 whole, 2 halves,
+   *  4 quarters. Opt-in per product — a score line is not authority to split. */
+  divisibility?: number;
+  /** Shown when a split is refused, so the refusal explains itself. */
+  split_note?: string;
   generic_name: string;
   brand_name: string;
   manufacturer: number | null;
@@ -1138,6 +1143,26 @@ export interface ProductSubstitute {
   substitute_type: "GENERIC_EQUIVALENT" | "THERAPEUTIC_ALTERNATIVE";
   bioequivalence_rating: string;
   notes: string;
+}
+
+/** One level of a product's packaging chain.
+ *
+ * Every level states its size in BASE units, never in the level above, so a
+ * conversion is one multiply and cannot compound rounding through the chain. */
+export interface ProductUnit {
+  id: number;
+  product: number;
+  code: string;
+  code_display: string;
+  name: string;
+  factor_to_base: string;
+  level: number;
+  is_base: boolean;
+  is_purchase_default: boolean;
+  is_sale_default: boolean;
+  /** Under GS1 each packaging level carries its own GTIN. */
+  barcode: string;
+  price: string | null;
 }
 
 export interface ProductUomConversion {

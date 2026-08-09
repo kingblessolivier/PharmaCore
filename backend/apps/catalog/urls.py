@@ -14,6 +14,7 @@ from apps.catalog.views import (
     ProductInteractionViewSet,
     ProductPriceViewSet,
     ProductSubstituteViewSet,
+    ProductUnitViewSet,
     ProductUomConversionViewSet,
     ProductViewSet,
     SupplierViewSet,
@@ -39,6 +40,7 @@ router.register(
 router.register("price-lists", PriceListViewSet, basename="price-list")
 router.register("product-prices", ProductPriceViewSet, basename="product-price")
 router.register("formulary-items", FormularyItemViewSet, basename="formulary-item")
+router.register("product-units", ProductUnitViewSet, basename="product-unit")
 router.register(
     "product-uom-conversions", ProductUomConversionViewSet, basename="product-uom-conversion"
 )
