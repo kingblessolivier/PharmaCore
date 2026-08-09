@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ClipboardList,
+  KeyRound,
   TriangleAlert,
   CreditCard,
   Eye,
@@ -59,6 +60,7 @@ import { useAuth } from "../lib/auth";
 import { can } from "../lib/roles";
 import { applyTheme, storedTheme, type Theme } from "../lib/theme";
 import type { AppNotification, Organization, Paginated } from "../lib/types";
+import { ChangePasswordModal } from "./ChangePasswordModal";
 import { CommandPalette } from "./CommandPalette";
 
 function BrandMark() {
@@ -648,6 +650,7 @@ function ViewAsBanner() {
 export function AppShell() {
   const { user, logout } = useAuth();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
 
   /* Collapse the sidebar to its glyphs. Remembered, because this is a working
      preference rather than a per-visit one: somebody who wants the width back
@@ -766,6 +769,16 @@ export function AppShell() {
               </span>
             ))}
           </div>
+          {/* Next to Sign out, which is where somebody looks for it. There was
+              no way to change your own password at all: the only route out of
+              one a colleague had seen was to ask an admin to reset it. */}
+          <button
+            onClick={() => setPasswordOpen(true)}
+            title="Change your password"
+            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-ink-700 hover:bg-surface-100"
+          >
+            <KeyRound className="h-4 w-4" /> Password
+          </button>
           <button
             onClick={logout}
             className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-ink-700 hover:bg-surface-100"
@@ -856,6 +869,7 @@ export function AppShell() {
       </div>
 
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
+      {passwordOpen && <ChangePasswordModal onClose={() => setPasswordOpen(false)} />}
     </div>
   );
 }

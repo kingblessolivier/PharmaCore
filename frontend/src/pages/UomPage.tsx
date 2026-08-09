@@ -123,8 +123,8 @@ export function UomPage() {
             <div className="flex items-start gap-2 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-900">
               <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               <span>
-                No single unit recorded yet. Start with the smallest amount you can dispense —
-                one tablet, one bottle, one vial — then add the boxes and cartons.
+                No single unit recorded yet. Start with the smallest amount you can dispense — one
+                tablet, one bottle, one vial — then add the boxes and cartons.
               </span>
             </div>
           )}

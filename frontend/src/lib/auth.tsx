@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { api, getToken, setToken } from "./api";
+import { api, getToken, setRefreshToken, setSessionLostHandler, setToken } from "./api";
 import type { Me } from "./types";
 
 // While an admin is "viewing-as" a user, we stash the admin's own token here and
@@ -46,10 +46,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(await api<Me>("/api/auth/me"));
     } catch {
       setToken(null);
+      setRefreshToken(null);
       setUser(null);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  /* When renewal fails, the api client says so and the app returns to the sign-in
+     screen. Without this the user sat on a dead page watching every request
+     fail, which reads as the system being broken rather than as being signed
+     out. */
+  useEffect(() => {
+    setSessionLostHandler(() => setUser(null));
+    return () => setSessionLostHandler(null);
   }, []);
 
   useEffect(() => {
@@ -64,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       localStorage.removeItem(ADMIN_STASH_KEY);
       setToken(tokens.access);
+      setRefreshToken(tokens.refresh);
       setLoading(true);
       await loadMe();
     },
@@ -73,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     localStorage.removeItem(ADMIN_STASH_KEY);
     setToken(null);
+    setRefreshToken(null);
     setUser(null);
   }, []);
 
