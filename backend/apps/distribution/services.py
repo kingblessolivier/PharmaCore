@@ -238,9 +238,14 @@ def _generate_grn_and_invoice(grn: GoodsReceivedNote, user: User | None) -> None
             invoice_date=order.created_at,
             due_date=order.payment_due_date,
             payment_terms=(
-                f"Due {order.payment_due_date:%d %b %Y}."
-                if order.payment_due_date
-                else "Due on delivery."
+                f"{order.payment_due_date:%d %b %Y}" if order.payment_due_date else "On delivery"
+            ),
+            # Balance due, not just the total. A customer paying in stages
+            # needs the invoice to say what is still owed on it, and a single
+            # "total" answers a different question.
+            amount_paid=invoicing.money(order.amount_paid),
+            balance=invoicing.money(
+                Decimal(str(net_total + vat_total)) - Decimal(str(order.amount_paid))
             ),
             notes=order.notes,
         ),

@@ -1386,6 +1386,8 @@ export interface GoodsReceivedNote {
   has_discrepancy: boolean;
   received_at: string;
   lines: GRNLine[];
+  /** The receipt note itself — generated when the delivery is booked in. */
+  document: { doc_number: string; generated_at: string; download_url: string } | null;
 }
 
 export interface FixedAsset {

@@ -10,7 +10,7 @@
 /* -------------------------------------------------------------------------- */
 
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText } from "lucide-react";
 import { useState } from "react";
 import { DataGrid, type Column } from "../components/DataGrid";
 import { Drawer, Empty, Facts, Section } from "../components/RecordKit";
@@ -19,8 +19,13 @@ import { api } from "../lib/api";
 import { dateTime, shortDate } from "../lib/format";
 import type { GoodsReceivedNote, Paginated } from "../lib/types";
 import { StatusChip } from "../components/Status";
+import {
+  DocumentPreview,
+  type PreviewableDocument,
+} from "../components/DocumentPreview";
 
 export function GrnPage() {
+  const [preview, setPreview] = useState<PreviewableDocument | null>(null);
   const [open, setOpen] = useState<GoodsReceivedNote | null>(null);
 
   const grns = useQuery({
@@ -47,6 +52,31 @@ export function GrnPage() {
       render: (g) => <span className="font-medium text-ink-900">{g.grn_number}</span>,
     },
     { key: "order_number", header: "Against order", value: (g) => g.order_number },
+    {
+      /* The receipt note itself. It has been generated, numbered and hashed
+         the moment the delivery was booked in, and nothing could open it —
+         the third document in this system with that same gap. */
+      key: "document",
+      header: "Document",
+      sortable: false,
+      value: (g) => g.document?.doc_number ?? "",
+      render: (g) =>
+        g.document ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setPreview(g.document);
+            }}
+            className="inline-flex items-center gap-1 text-xs text-brand-600 hover:underline"
+          >
+            <FileText className="h-3.5 w-3.5" aria-hidden />
+            {g.document.doc_number}
+          </button>
+        ) : (
+          <span className="text-xs text-ink-500">not generated</span>
+        ),
+    },
     {
       key: "lines",
       header: "Lines",
@@ -249,6 +279,7 @@ export function GrnPage() {
           )}
         </Drawer>
       )}
+      {preview && <DocumentPreview document={preview} onClose={() => setPreview(null)} />}
     </div>
   );
 }

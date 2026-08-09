@@ -643,6 +643,18 @@ class PurchaseOrder(models.Model):
         help_text="Units of RWF per 1 unit of the order currency.",
     )
     incoterm = models.CharField(max_length=3, choices=Incoterm.choices, blank=True, default="")
+    #: How the goods travel — the carrier or the mode, not the cost.
+    #:
+    #: Distinct from the incoterm, which says who bears the risk and where it
+    #: passes. A supplier reading "DAP" still does not know whether to book a
+    #: courier, put it on a bus, or wait for our own truck, and that is the
+    #: one instruction a purchase order has to give them about carriage.
+    ship_via = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Carrier or mode — e.g. DHL, own vehicle, Volcano bus.",
+    )
     payment_terms_days = models.PositiveIntegerField(default=30)
     payment_terms_note = models.CharField(max_length=255, blank=True, default="")
     freight_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)

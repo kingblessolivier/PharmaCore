@@ -194,10 +194,18 @@ class TestTheTaxInvoiceCarriesWhatTheLawWants:
             name="Kigali Central Pharmacy", type="RETAIL", tin="99887766", district="Nyarugenge"
         )
 
-    def test_it_names_itself_a_tax_invoice(
+    def test_it_names_itself_an_invoice_and_a_tax_invoice(
         self, issuer: Organization, customer: Organization
     ) -> None:
-        assert "TAX INVOICE" in self._render(issuer, customer)
+        """Both, and for different readers.
+
+        The heading is INVOICE, as the supplied layout has it. The statutory
+        designation still has to appear somewhere, because a buyer's auditor
+        looks for the words "tax invoice" before allowing an input-VAT claim.
+        """
+        html = self._render(issuer, customer)
+        assert "INVOICE" in html
+        assert "tax invoice for VAT purposes" in html
 
     def test_both_parties_carry_a_tin(self, issuer: Organization, customer: Organization) -> None:
         # Without the customer's TIN a VAT-registered buyer cannot reclaim the
@@ -221,9 +229,9 @@ class TestTheTaxInvoiceCarriesWhatTheLawWants:
         self, issuer: Organization, customer: Organization
     ) -> None:
         html = self._render(issuer, customer)
-        assert "Total excluding VAT" in html
+        assert "Sub total" in html
         assert "5,000,000.00" in html
-        assert "VAT at 18%" in html
+        assert "VAT 18%" in html
         assert "900,000.00" in html
         assert "5,900,000.00" in html
 
@@ -378,3 +386,234 @@ class TestEveryPageIsIdentifiable:
         assert "Fadhil Pharmacy" in html
         pdf = render_pdf(html)
         assert pdf.decode("latin-1", "ignore").count("/Type /Page") > 1, "should span pages"
+
+
+class TestDocumentsAreBlackOnWhite:
+    """No colour anywhere.
+
+    A document has to survive a cheap laser printer, a fax, a photocopy and a
+    scan back into a compliance file, and every one of those turns a colour
+    into an unreadable grey. Structure is carried by rules and weight instead,
+    which is how printed commercial forms have always done it — and it is why
+    a warning here is bold and underlined rather than red.
+    """
+
+    def test_the_shared_stylesheet_uses_only_black(self) -> None:
+        css = (TEMPLATE_DIR / "base.html").read_text(encoding="utf-8")
+        css = css[css.index("<style>") : css.index("</style>")]
+        colours = {c.lower() for c in re.findall(r"#[0-9a-fA-F]{3,6}", css)}
+        assert colours <= {
+            "#000",
+            "#000000",
+            "#fff",
+            "#ffffff",
+        }, f"colour would not survive a photocopier: {sorted(colours)}"
+
+    @pytest.mark.parametrize(
+        "template",
+        sorted(p.name for p in TEMPLATE_DIR.glob("*.html") if p.name != "base.html"),
+    )
+    def test_no_document_introduces_a_colour(self, template: str) -> None:
+        markup = (TEMPLATE_DIR / template).read_text(encoding="utf-8")
+        colours = {c.lower() for c in re.findall(r"#[0-9a-fA-F]{3,6}", markup)}
+        assert colours <= {
+            "#000",
+            "#000000",
+            "#fff",
+            "#ffffff",
+        }, f"{template} introduces {sorted(colours)}"
+
+
+class TestThePurchaseOrderMatchesTheForm:
+    def _render(self, issuer: Organization) -> str:
+        return render_to_string(
+            "documents/purchase_order.html",
+            {
+                "organization": issuer,
+                "doc_number": "PO-2026-00042",
+                "doc_type_label": "Purchase Order",
+                "generated_at": timezone.now(),
+                "po_number": "PO-2026-00042",
+                "order_date": date(2026, 8, 9),
+                "seller_name": "Ecomed Ltd",
+                "seller_contact": "Jean Bosco",
+                "seller_phone": "0788111222",
+                "seller_tin": "109876543",
+                "buyer_name": issuer.name,
+                "buyer_contact": "A. Uwase",
+                "deliver_to_address": "Main store, Gatsibo",
+                "requisition_number": "REQ-2026-00125",
+                "ship_via": "Volcano bus",
+                "incoterm": "DAP",
+                "payment_terms_days": 30,
+                "subtotal": "2,250,000.00",
+                "tax_total": "405,000.00",
+                "freight_amount": "0.00",
+                "other_charges": "0.00",
+                "discount_amount": "0.00",
+                "total": "2,655,000.00",
+                "currency": "RWF",
+                "notes": "Deliver before noon.",
+                "lines": [
+                    {
+                        "item_number": "AMOX-500",
+                        "name": "Amoxicillin 500mg",
+                        "qty": "15",
+                        "unit_label": "Carton of 24 boxes",
+                        "base_quantity": "36,000",
+                        "base_unit": "tablets",
+                        "price": "150,000.00",
+                        "total": "2,250,000.00",
+                    }
+                ],
+            },
+        )
+
+    @pytest.mark.parametrize(
+        "element",
+        [
+            "PURCHASE ORDER",
+            "PO-2026-00042",
+            "Vendor",
+            "Ship to",
+            "Requisition #",
+            "Ship via",
+            "F.O.B.",
+            "Shipping terms",
+            "Item #",
+            "AMOX-500",
+            "Carton of 24 boxes",
+            "Comments or special instructions",
+            "Subtotal",
+            "Shipping",
+            "Other",
+            "Total (RWF)",
+            "please contact",
+        ],
+    )
+    def test_the_form_carries_every_block(self, issuer: Organization, element: str) -> None:
+        assert element in self._render(issuer)
+
+    def test_ship_via_is_not_the_incoterm(self, issuer: Organization) -> None:
+        """Two different facts that were one field.
+
+        The incoterm says who bears the risk and where it passes. A supplier
+        reading "DAP" still does not know whether to book a courier, put it on
+        a bus, or wait for our own truck — which is the one instruction about
+        carriage a purchase order has to give.
+        """
+        html = self._render(issuer)
+        assert "DAP" in html
+        assert "Volcano bus" in html
+
+    def test_the_grid_continues_past_the_last_item(self, issuer: Organization) -> None:
+        # A printed order form rules its lines to the bottom so the totals sit
+        # in the same place on every copy, and so there is no blank gap under
+        # the last line for somebody to add one.
+        html = self._render(issuer)
+        assert html.count('class="blank"') > 0
+
+    def test_a_full_order_draws_no_filler(self, issuer: Organization) -> None:
+        from django.template import Context, Template
+
+        rendered = Template(
+            "{% load documents %}{% for _ in lines|blank_rows:12 %}.{% endfor %}"
+        ).render(Context({"lines": list(range(12))}))
+        assert rendered == ""
+
+
+class TestTotalsBlocksUseTheFullPageWidth:
+    """A layout test, because a text test passed while the page was broken.
+
+    The totals block was rendering every figure — the text was in the PDF —
+    but squeezed into a strip down the left of the page with the money column
+    clipped to nothing. Asserting the figures are *present* said it was fine.
+    Only their position tells the truth.
+
+    The cause was `rowspan`: this renderer emits the text of a spanned cell but
+    cannot compute the column widths around it.
+    """
+
+    @staticmethod
+    def _positions(template: str, context: dict, tokens: set[str]) -> tuple[dict, float]:
+        import io
+
+        from pypdf import PdfReader
+
+        page = PdfReader(io.BytesIO(render_pdf(render_to_string(template, context)))).pages[0]
+        hits: dict[str, float] = {}
+
+        def visit(text, cm, tm, font, size):  # noqa: ANN001, ANN202
+            stripped = text.strip()
+            if stripped in tokens:
+                hits.setdefault(stripped, cm[4] + tm[4])
+
+        page.extract_text(visitor_text=visit)
+        return hits, float(page.mediabox.width)
+
+    def test_no_template_uses_rowspan(self) -> None:
+        offenders = [
+            path.name
+            for path in TEMPLATE_DIR.glob("*.html")
+            if re.search(r"<t[dh][^>]*\browspan\s*=", path.read_text(encoding="utf-8"))
+        ]
+        assert offenders == [], (
+            "rowspan collapses the column widths in xhtml2pdf — continue a cell "
+            f"with suppressed borders instead. Found in: {offenders}"
+        )
+
+    def test_the_purchase_order_totals_reach_the_right_margin(self, issuer: Organization) -> None:
+        tokens = {"Deliver before noon.", "Subtotal", "45,000.00", "58,100.00"}
+        hits, width = self._positions(
+            "documents/purchase_order.html",
+            {
+                "organization": issuer,
+                "doc_number": "PO-1",
+                "doc_type_label": "Purchase Order",
+                "generated_at": timezone.now(),
+                "po_number": "PO-1",
+                "order_date": date(2026, 8, 9),
+                "seller_name": "Ecomed Ltd",
+                "buyer_name": issuer.name,
+                "subtotal": "45,000.00",
+                "tax_total": "8,100.00",
+                "freight_amount": "5,000.00",
+                "other_charges": "0.00",
+                "discount_amount": "0.00",
+                "total": "58,100.00",
+                "currency": "RWF",
+                "notes": "Deliver before noon.",
+                "lines": [],
+            },
+            tokens,
+        )
+        missing = tokens - set(hits)
+        assert not missing, f"figures never reached the page: {sorted(missing)}"
+        assert hits["Deliver before noon."] < width * 0.2, "comments belong on the left"
+        assert (
+            hits["58,100.00"] > width * 0.65
+        ), "the money column collapsed to the left — the table is not using the page"
+
+    def test_the_invoice_totals_reach_the_right_margin(self, issuer: Organization) -> None:
+        tokens = {"Sub total", "2,227.00", "Balance due"}
+        hits, width = self._positions(
+            "documents/tax_invoice.html",
+            {
+                "organization": issuer,
+                "doc_number": "INV-1",
+                "doc_type_label": "Invoice",
+                "generated_at": timezone.now(),
+                "invoice_number": "INV-1",
+                "buyer_name": "A Customer",
+                "subtotal": "2,227.00",
+                "tax_total": "111.35",
+                "total": "2,338.35",
+                "vat_bands": [],
+                "currency": "RWF",
+                "lines": [],
+            },
+            tokens,
+        )
+        missing = tokens - set(hits)
+        assert not missing, f"figures never reached the page: {sorted(missing)}"
+        assert hits["2,227.00"] > width * 0.65

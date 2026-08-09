@@ -97,6 +97,28 @@ class GRNLineSerializer(QuantityAwareModelSerializer):
 class GRNSerializer(QuantityAwareModelSerializer):
     lines = GRNLineSerializer(many=True, read_only=True)
     order_number = serializers.CharField(source="order.order_number", read_only=True)
+    #: The receipt note itself. Generated, numbered and hashed the moment the
+    #: delivery is booked in — and, like the purchase order and the B2B order
+    #: before it, reachable by nothing. The third time this pattern has turned
+    #: up: the document is produced correctly and no screen can open it.
+    document = serializers.SerializerMethodField()
+
+    def get_document(self, obj: GoodsReceivedNote) -> dict[str, Any] | None:
+        from apps.documents.models import Document
+
+        record = (
+            Document.objects.filter(reference_type="grn", reference_id=str(obj.pk))
+            .order_by("-generated_at")
+            .first()
+        )
+        if record is None:
+            return None
+        return {
+            "doc_number": record.doc_number,
+            "generated_at": record.generated_at,
+            # The authenticated endpoint, never the raw media path.
+            "download_url": f"/api/documents/{record.pk}/download/",
+        }
 
     class Meta:
         model = GoodsReceivedNote
@@ -109,6 +131,7 @@ class GRNSerializer(QuantityAwareModelSerializer):
             "has_discrepancy",
             "received_at",
             "lines",
+            "document",
         ]
         read_only_fields = fields
 

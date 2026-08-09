@@ -24,101 +24,103 @@ footer instead, where it belongs.
 <meta charset="utf-8">
 <title>{{ doc_number }}</title>
 <style>
+  /* Black on white, no fills.
+     A document has to survive a cheap laser printer, a fax, a photocopy and a
+     scan back into a compliance file, and every one of those turns a colour
+     into an unreadable grey. Structure is carried by rules and weight
+     instead — which is how printed commercial forms have always done it. */
   @page {
-    margin: 1.4cm 1.4cm 2.4cm 1.4cm;
+    size: A4 portrait;
+    margin: 1.3cm 1.3cm 2.2cm 1.3cm;
     /* A repeating frame, so the issuer and the page count appear on every
-       sheet. A multi-page document whose pages cannot be told apart, or whose
-       reader cannot see that page 4 of 10 is missing, is not a record. */
+       sheet. A reader has to be able to see that page 4 of 10 is missing. */
     @frame page_footer {
       -pdf-frame-content: page-footer;
-      bottom: 1.1cm; left: 1.4cm; width: 18.2cm; height: 1cm;
+      bottom: 0.9cm; left: 1.3cm; width: 18.4cm; height: 1cm;
     }
   }
-  body { font-family: Helvetica, Arial, sans-serif; font-size: 9.5pt; color: #111827; }
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 9pt; color: #000; }
 
   /* Header ---------------------------------------------------------------- */
-  .issuer-name { color: #0d9488; font-size: 15pt; font-weight: bold; }
-  .issuer-detail { color: #4b5563; font-size: 8pt; line-height: 1.35; }
-  .doc-title { font-size: 16pt; font-weight: bold; color: #111827; letter-spacing: 0.5pt; }
-  .doc-meta { font-size: 8.5pt; color: #4b5563; line-height: 1.4; }
-  .rule { border-bottom: 1.5pt solid #0d9488; margin: 6pt 0 10pt 0; }
+  .issuer-name { font-size: 13pt; font-weight: bold; }
+  .issuer-detail { font-size: 8pt; line-height: 1.35; }
+  .doc-title { font-size: 20pt; font-weight: bold; letter-spacing: 1pt; }
+  .doc-meta { font-size: 8.5pt; line-height: 1.45; }
+  .rule { border-bottom: 1pt solid #000; margin: 6pt 0 10pt 0; }
   .head td { border: none; padding: 0; vertical-align: top; }
 
   /* Party blocks ---------------------------------------------------------- */
-  .parties td { border: none; vertical-align: top; padding: 0 8pt 0 0; }
+  .parties { margin-top: 4pt; }
+  .parties td { border: none; vertical-align: top; padding: 0 6pt 0 0; }
+  .parties td.last { padding-right: 0; }
+  /* The label sits in a ruled bar rather than a filled one: reversed-out
+     white-on-black survives a photocopier badly and costs toner. */
   .plabel {
-    font-size: 7.5pt; color: #6b7280; text-transform: uppercase;
-    letter-spacing: 0.4pt; padding-bottom: 2pt;
+    font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5pt;
+    border: 0.75pt solid #000; border-bottom: none; padding: 3pt 5pt;
   }
-  .party {
-    border: 0.5pt solid #e5e7eb; background: #f9fafb;
-    padding: 5pt 7pt; font-size: 9pt; line-height: 1.4;
-  }
-  .party b { font-size: 9.5pt; }
+  .party { border: 0.75pt solid #000; padding: 4pt 5pt; font-size: 8.5pt; line-height: 1.4; }
+  .party b { font-size: 9pt; }
 
   /* Line tables ----------------------------------------------------------- */
   table { width: 100%; border-collapse: collapse; }
-  .lines { margin-top: 10pt; }
+  .lines { margin-top: 9pt; }
   .lines th {
-    background: #0f766e; color: #ffffff; font-size: 8pt; font-weight: bold;
-    text-transform: uppercase; letter-spacing: 0.3pt;
-    padding: 5pt 6pt; text-align: left; border: none;
+    font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.4pt;
+    padding: 4pt 5pt; text-align: left; border: 0.75pt solid #000;
   }
   .lines td {
-    padding: 5pt 6pt; font-size: 9pt; text-align: left;
-    border-bottom: 0.5pt solid #e5e7eb;
+    padding: 4pt 5pt; font-size: 8.5pt; text-align: left; border: 0.5pt solid #000;
   }
-  .lines tr.alt td { background: #f9fafb; }
-  .sub { color: #6b7280; font-size: 7.5pt; }
+  /* Ruled continuation rows, so the grid does not stop at the last item and
+     leave a gap somebody can write an extra line into. */
+  .lines td.blank { height: 13pt; }
+  /* A cell continued down several rows without rowspan — this renderer emits
+     spanned text but cannot size the columns around it, so the money column
+     collapses to nothing. Suppressing the internal borders reads as one tall
+     box while every row keeps its full complement of cells. */
+  .lines td.contfirst { border-bottom: none; height: 84pt; vertical-align: top; }
+  .lines td.cont { border-top: none; border-bottom: none; }
+  .lines td.contlast { border-top: none; }
+  .sub { font-size: 7.5pt; }
 
   /* Totals ---------------------------------------------------------------- */
-  .totals td {
-    border: none; padding: 3pt 6pt; font-size: 9pt;
-  }
-  .totals .lbl { color: #4b5563; text-align: right; }
+  .totals td { border: none; padding: 2.5pt 5pt; font-size: 9pt; }
+  .totals .lbl { text-align: right; }
   .totals .val { text-align: right; width: 26%; }
   .totals .grand td {
-    border-top: 1pt solid #0f766e; font-size: 11pt; font-weight: bold;
-    color: #0f766e; padding-top: 5pt;
+    border-top: 0.75pt solid #000; font-size: 11pt; font-weight: bold; padding-top: 4pt;
   }
+  .grandcell { font-size: 11pt; font-weight: bold; border: 1pt solid #000; }
 
   .right { text-align: right; }
   .center { text-align: center; }
-  .muted { color: #6b7280; font-size: 8pt; }
-  .note {
-    margin-top: 10pt; border: 0.5pt solid #e5e7eb; background: #f9fafb;
-    padding: 6pt 8pt; font-size: 8.5pt; color: #374151;
-  }
-  .warn { color: #b45309; font-weight: bold; }
+  .muted { font-size: 8pt; }
+  .note { margin-top: 9pt; border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 8.5pt; }
+  /* Emphasis without colour: a warning is stated in bold and in words. A
+     reader photocopying this must not lose the fact that it was a warning. */
+  .warn { font-weight: bold; text-decoration: underline; }
 
   /* Signatures ------------------------------------------------------------ */
-  /* A handover document is only evidence once two people have signed it, so
-     the space to do that is part of the document rather than something a
-     printer is expected to leave room for. */
-  .sig { margin-top: 14pt; }
+  .sig { margin-top: 12pt; }
   .sig th {
-    background: #f3f4f6; color: #374151; font-size: 8pt; font-weight: bold;
-    text-transform: uppercase; letter-spacing: 0.3pt;
-    padding: 4pt 6pt; text-align: left; border: 0.5pt solid #d1d5db;
+    font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.4pt;
+    padding: 4pt 5pt; text-align: left; border: 0.75pt solid #000;
   }
   .sig td {
-    border: 0.5pt solid #d1d5db; padding: 4pt 6pt; font-size: 8.5pt;
-    height: 24pt; vertical-align: bottom; color: #6b7280;
+    border: 0.5pt solid #000; padding: 4pt 5pt; font-size: 8.5pt;
+    height: 24pt; vertical-align: bottom;
   }
-  .sig .rowlabel {
-    background: #f9fafb; color: #374151; font-weight: bold;
-    width: 20%; vertical-align: middle;
-  }
-  .page-footer {
-    font-size: 7.5pt; color: #9ca3af; border-top: 0.5pt solid #e5e7eb; padding-top: 3pt;
-  }
+  .sig .rowlabel { font-weight: bold; width: 20%; vertical-align: middle; }
 
-  /* Footer ---------------------------------------------------------------- */
-  .footer {
-    margin-top: 16pt; border-top: 0.5pt solid #d1d5db;
-    padding-top: 5pt; font-size: 7.5pt; color: #6b7280;
+  .page-footer { font-size: 7.5pt; border-top: 0.5pt solid #000; padding-top: 3pt; }
+
+  /* The DATE / PO # box in a document's top-right corner. */
+  .metakey {
+    font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.4pt;
+    border: 0.75pt solid #000; padding: 3pt 5pt; width: 38%; text-align: left;
   }
-  .footer td { border: none; padding: 0; vertical-align: top; }
+  .metaval { border: 0.75pt solid #000; border-left: none; padding: 3pt 5pt; text-align: left; }
 </style>
 </head>
 <body>
@@ -183,7 +185,7 @@ footer instead, where it belongs.
           Document reference <b>{{ doc_number }}</b>, generated {{ generated_at|date:"d M Y H:i" }}.
           {% endblock %}
           {% if qr %}<br>Registered and tamper-evident — scan to verify against the system of record.{% endif %}
-          <br><span style="color:#9ca3af;">Produced with PharmaCore by Medlink.</span>
+          <br>Produced with PharmaCore by Medlink.
         </td>
         <td class="right">
           {% comment %}
