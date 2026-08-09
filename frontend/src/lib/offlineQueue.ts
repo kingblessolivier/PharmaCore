@@ -44,6 +44,8 @@ export interface QueuedSale {
   /** The card the cover was quoted against, so the sale and the claim the
    *  scheme settles can be reconciled rather than matched up by hand later. */
   member_number?: string;
+  /** Why a basket with a major interaction was dispensed anyway. */
+  screening_override?: string;
   total: string;
   queued_at: string;
   /** Attempts so far — surfaced so a stuck sale is visible, not silently retried. */
