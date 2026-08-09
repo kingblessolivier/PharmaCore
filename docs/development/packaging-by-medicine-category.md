@@ -155,8 +155,9 @@ different margins and different cash cycles.
 6. Purchasing in packs and cases; converting on receipt (procurement lines are still
    dimensionless — only sales lines carry a unit today)
 7. `order_multiple` is stored but **not enforced** at order entry
-8. `counter-sync` is defined as an action but **not routed** — found while testing; the offline
-   queue's drain endpoint returns 404
+8. ~~`counter-sync` is not routed~~ — **withdrawn, this was wrong.** The endpoint is
+   `offline-sync` at `/api/retail/offline/sync/`, it is registered, and the till calls exactly
+   that. My test used the wrong URL and I reported the 404 as a product defect.
 
 **Needing your decision**
 

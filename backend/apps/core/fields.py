@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any
+from typing import Any, TypeVar
 
+from django.db.models import Model
 from rest_framework import serializers
+
+#: The model a serializer is bound to, so subclasses keep django-stubs' generics.
+_M = TypeVar("_M", bound=Model)
 
 
 class QuantityField(serializers.DecimalField):
@@ -40,7 +44,7 @@ class QuantityField(serializers.DecimalField):
         return int(number) if number == number.to_integral_value() else number
 
 
-class QuantityAwareModelSerializer(serializers.ModelSerializer):
+class QuantityAwareModelSerializer(serializers.ModelSerializer[_M]):
     """A ModelSerializer that renders stock quantities as numbers.
 
     The project's convention is that a decimal with **3 places is a quantity**

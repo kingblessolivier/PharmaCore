@@ -15,6 +15,7 @@ from typing import Any, cast
 
 from rest_framework import serializers
 
+from apps.core.fields import QuantityAwareModelSerializer
 from apps.procurement.models import (
     GoodsReceipt,
     GoodsReceiptLine,
@@ -70,7 +71,7 @@ class _NestedLinesMixin:
 # ---------------------------------------------------------------------------
 
 
-class SupplierLicenceSerializer(serializers.ModelSerializer[SupplierLicence]):
+class SupplierLicenceSerializer(QuantityAwareModelSerializer[SupplierLicence]):
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
     kind_display = serializers.CharField(source="get_kind_display", read_only=True)
     is_expired = serializers.BooleanField(read_only=True)
@@ -105,7 +106,7 @@ class SupplierLicenceSerializer(serializers.ModelSerializer[SupplierLicence]):
         read_only_fields = ["verified_by", "verified_at", "created_at"]
 
 
-class SupplierPriceAgreementSerializer(serializers.ModelSerializer[SupplierPriceAgreement]):
+class SupplierPriceAgreementSerializer(QuantityAwareModelSerializer[SupplierPriceAgreement]):
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
     product_name = serializers.CharField(source="product.__str__", read_only=True)
     organization_name = serializers.CharField(
@@ -139,7 +140,7 @@ class SupplierPriceAgreementSerializer(serializers.ModelSerializer[SupplierPrice
         read_only_fields = ["created_at", "updated_at"]
 
 
-class SupplierEvaluationSerializer(serializers.ModelSerializer[SupplierEvaluation]):
+class SupplierEvaluationSerializer(QuantityAwareModelSerializer[SupplierEvaluation]):
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
     rated_by_name = serializers.CharField(source="rated_by.username", read_only=True, default=None)
 
@@ -168,7 +169,7 @@ class SupplierEvaluationSerializer(serializers.ModelSerializer[SupplierEvaluatio
         read_only_fields = fields
 
 
-class SupplierProfileSerializer(serializers.ModelSerializer[SupplierProfile]):
+class SupplierProfileSerializer(QuantityAwareModelSerializer[SupplierProfile]):
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
     supplier_tin = serializers.CharField(source="supplier.tin", read_only=True)
     supplier_email = serializers.CharField(source="supplier.email", read_only=True)
@@ -257,7 +258,7 @@ class SupplierProfileSerializer(serializers.ModelSerializer[SupplierProfile]):
 # ---------------------------------------------------------------------------
 
 
-class RequisitionLineSerializer(serializers.ModelSerializer[RequisitionLine]):
+class RequisitionLineSerializer(QuantityAwareModelSerializer[RequisitionLine]):
     product_name = serializers.CharField(source="product.__str__", read_only=True)
     estimated_total = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     quantity_outstanding = serializers.IntegerField(read_only=True)
@@ -280,7 +281,7 @@ class RequisitionLineSerializer(serializers.ModelSerializer[RequisitionLine]):
 
 
 class PurchaseRequisitionSerializer(
-    _NestedLinesMixin, serializers.ModelSerializer[PurchaseRequisition]
+    _NestedLinesMixin, QuantityAwareModelSerializer[PurchaseRequisition]
 ):
     line_model = RequisitionLine
     parent_fk = "requisition"
@@ -345,7 +346,7 @@ class PurchaseRequisitionSerializer(
 # ---------------------------------------------------------------------------
 
 
-class RFQLineSerializer(serializers.ModelSerializer[RFQLine]):
+class RFQLineSerializer(QuantityAwareModelSerializer[RFQLine]):
     product_name = serializers.CharField(source="product.__str__", read_only=True)
 
     class Meta:
@@ -353,7 +354,7 @@ class RFQLineSerializer(serializers.ModelSerializer[RFQLine]):
         fields = ["id", "product", "product_name", "quantity", "specification"]
 
 
-class SupplierQuoteLineSerializer(serializers.ModelSerializer[SupplierQuoteLine]):
+class SupplierQuoteLineSerializer(QuantityAwareModelSerializer[SupplierQuoteLine]):
     product_name = serializers.CharField(source="product.__str__", read_only=True)
     line_total = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
 
@@ -372,7 +373,7 @@ class SupplierQuoteLineSerializer(serializers.ModelSerializer[SupplierQuoteLine]
         ]
 
 
-class SupplierQuoteSerializer(_NestedLinesMixin, serializers.ModelSerializer[SupplierQuote]):
+class SupplierQuoteSerializer(_NestedLinesMixin, QuantityAwareModelSerializer[SupplierQuote]):
     line_model = SupplierQuoteLine
     parent_fk = "quote"
 
@@ -416,7 +417,7 @@ class SupplierQuoteSerializer(_NestedLinesMixin, serializers.ModelSerializer[Sup
 
 
 class RequestForQuotationSerializer(
-    _NestedLinesMixin, serializers.ModelSerializer[RequestForQuotation]
+    _NestedLinesMixin, QuantityAwareModelSerializer[RequestForQuotation]
 ):
     line_model = RFQLine
     parent_fk = "rfq"
@@ -462,7 +463,7 @@ class RequestForQuotationSerializer(
 # ---------------------------------------------------------------------------
 
 
-class PurchaseOrderLineSerializer(serializers.ModelSerializer[PurchaseOrderLine]):
+class PurchaseOrderLineSerializer(QuantityAwareModelSerializer[PurchaseOrderLine]):
     product_name = serializers.CharField(source="product.__str__", read_only=True)
     net_unit_price = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     line_subtotal = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
@@ -508,7 +509,7 @@ class PurchaseOrderLineSerializer(serializers.ModelSerializer[PurchaseOrderLine]
         ]
 
 
-class PurchaseOrderSerializer(_NestedLinesMixin, serializers.ModelSerializer[PurchaseOrder]):
+class PurchaseOrderSerializer(_NestedLinesMixin, QuantityAwareModelSerializer[PurchaseOrder]):
     line_model = PurchaseOrderLine
     parent_fk = "order"
 
@@ -626,7 +627,7 @@ class PurchaseOrderSerializer(_NestedLinesMixin, serializers.ModelSerializer[Pur
 # ---------------------------------------------------------------------------
 
 
-class LandedCostComponentSerializer(serializers.ModelSerializer[LandedCostComponent]):
+class LandedCostComponentSerializer(QuantityAwareModelSerializer[LandedCostComponent]):
     kind_display = serializers.CharField(source="get_kind_display", read_only=True)
     amount_base = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
 
@@ -651,7 +652,7 @@ class LandedCostComponentSerializer(serializers.ModelSerializer[LandedCostCompon
         read_only_fields = ["created_at"]
 
 
-class ImportConsignmentSerializer(serializers.ModelSerializer[ImportConsignment]):
+class ImportConsignmentSerializer(QuantityAwareModelSerializer[ImportConsignment]):
     costs = LandedCostComponentSerializer(many=True, read_only=True)
     organization_name = serializers.CharField(source="organization.name", read_only=True)
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
@@ -738,7 +739,7 @@ class ImportConsignmentSerializer(serializers.ModelSerializer[ImportConsignment]
 # ---------------------------------------------------------------------------
 
 
-class GoodsReceiptLineSerializer(serializers.ModelSerializer[GoodsReceiptLine]):
+class GoodsReceiptLineSerializer(QuantityAwareModelSerializer[GoodsReceiptLine]):
     product_name = serializers.CharField(source="product.__str__", read_only=True)
     variance = serializers.IntegerField(read_only=True)
     is_over_delivery = serializers.BooleanField(read_only=True)
@@ -772,7 +773,7 @@ class GoodsReceiptLineSerializer(serializers.ModelSerializer[GoodsReceiptLine]):
         read_only_fields = ["batch"]
 
 
-class GoodsReceiptSerializer(_NestedLinesMixin, serializers.ModelSerializer[GoodsReceipt]):
+class GoodsReceiptSerializer(_NestedLinesMixin, QuantityAwareModelSerializer[GoodsReceipt]):
     line_model = GoodsReceiptLine
     parent_fk = "receipt"
 
@@ -859,7 +860,7 @@ class GoodsReceiptSerializer(_NestedLinesMixin, serializers.ModelSerializer[Good
 # ---------------------------------------------------------------------------
 
 
-class SupplierInvoiceLineSerializer(serializers.ModelSerializer[SupplierInvoiceLine]):
+class SupplierInvoiceLineSerializer(QuantityAwareModelSerializer[SupplierInvoiceLine]):
     product_name = serializers.CharField(source="product.__str__", read_only=True, default=None)
     net_unit_price = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     line_subtotal = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
@@ -885,7 +886,7 @@ class SupplierInvoiceLineSerializer(serializers.ModelSerializer[SupplierInvoiceL
         ]
 
 
-class SupplierNoteSerializer(serializers.ModelSerializer[SupplierNote]):
+class SupplierNoteSerializer(QuantityAwareModelSerializer[SupplierNote]):
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
     organization_name = serializers.CharField(source="organization.name", read_only=True)
     kind_display = serializers.CharField(source="get_kind_display", read_only=True)
@@ -932,7 +933,7 @@ class SupplierNoteSerializer(serializers.ModelSerializer[SupplierNote]):
         ]
 
 
-class SupplierInvoiceSerializer(_NestedLinesMixin, serializers.ModelSerializer[SupplierInvoice]):
+class SupplierInvoiceSerializer(_NestedLinesMixin, QuantityAwareModelSerializer[SupplierInvoice]):
     line_model = SupplierInvoiceLine
     parent_fk = "invoice"
 

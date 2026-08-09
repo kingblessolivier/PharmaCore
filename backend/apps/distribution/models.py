@@ -509,8 +509,8 @@ class BackorderLine(models.Model):
         on_delete=models.SET_NULL,
         related_name="backorders",
     )
-    quantity = models.PositiveIntegerField()
-    quantity_fulfilled = models.PositiveIntegerField(default=0)
+    quantity = models.DecimalField(max_digits=16, decimal_places=3)
+    quantity_fulfilled = models.DecimalField(max_digits=16, decimal_places=3, default=0)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
     origin = models.CharField(max_length=12, choices=Origin.choices, default=Origin.SHORT)
     note = models.CharField(max_length=255, blank=True, default="")
@@ -541,8 +541,8 @@ class BackorderLine(models.Model):
         return f"{self.quantity}× {self.product} wanted by {self.retail.name}"
 
     @property
-    def quantity_outstanding(self) -> int:
-        return max(0, self.quantity - self.quantity_fulfilled)
+    def quantity_outstanding(self) -> Decimal:
+        return max(Decimal(0), self.quantity - self.quantity_fulfilled)
 
     @property
     def is_open(self) -> bool:

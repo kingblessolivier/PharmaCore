@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 from django.conf import settings
 from django.db import models
@@ -436,9 +437,9 @@ class RequisitionLine(models.Model):
         PurchaseRequisition, on_delete=models.CASCADE, related_name="lines"
     )
     product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
-    quantity = models.PositiveIntegerField()
-    quantity_approved = models.PositiveIntegerField(default=0)
-    quantity_ordered = models.PositiveIntegerField(default=0)
+    quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    quantity_approved = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    quantity_ordered = models.DecimalField(max_digits=14, decimal_places=3, default=0)
     estimated_unit_cost = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     notes = models.CharField(max_length=255, blank=True, default="")
 
@@ -453,8 +454,8 @@ class RequisitionLine(models.Model):
         return _q(self.estimated_unit_cost * self.quantity)
 
     @property
-    def quantity_outstanding(self) -> int:
-        return max(0, (self.quantity_approved or self.quantity) - self.quantity_ordered)
+    def quantity_outstanding(self) -> Decimal:
+        return max(Decimal(0), (self.quantity_approved or self.quantity) - self.quantity_ordered)
 
 
 # ---------------------------------------------------------------------------
@@ -740,12 +741,12 @@ class PurchaseOrder(models.Model):
 
     # --- progress ----------------------------------------------------------
     @property
-    def quantity_ordered(self) -> int:
-        return sum(ln.quantity_ordered for ln in self.lines.all())
+    def quantity_ordered(self) -> Decimal:
+        return sum((ln.quantity_ordered for ln in self.lines.all()), Decimal(0))
 
     @property
-    def quantity_received(self) -> int:
-        return sum(ln.quantity_received for ln in self.lines.all())
+    def quantity_received(self) -> Decimal:
+        return sum((ln.quantity_received for ln in self.lines.all()), Decimal(0))
 
     @property
     def received_pct(self) -> Decimal:
@@ -776,10 +777,22 @@ class PurchaseOrderLine(models.Model):
     order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name="lines")
     product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
     description = models.CharField(max_length=255, blank=True, default="")
-    quantity_ordered = models.PositiveIntegerField()
-    quantity_received = models.PositiveIntegerField(default=0)
-    quantity_rejected = models.PositiveIntegerField(default=0)
-    quantity_invoiced = models.PositiveIntegerField(default=0)
+    #: Quantities as the supplier states them, in `unit`. A line reading 10 is
+    #: ten cartons when the trade is in cartons — the document has to keep
+    #: saying what was actually ordered.
+    quantity_ordered = models.DecimalField(max_digits=14, decimal_places=3)
+    quantity_received = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    quantity_rejected = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    quantity_invoiced = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    #: Which packaging level those numbers count. Null on lines written before
+    #: units existed, which were all implicitly in the product's base unit.
+    unit = models.ForeignKey(
+        "catalog.ProductUnit", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    #: `quantity_ordered` in base units. Stock, valuation and landed cost all run
+    #: on this — a carton received has to reach the shelf as the tablets it holds.
+    quantity_base = models.DecimalField(max_digits=16, decimal_places=3, default=0)
+    #: Price for one of `unit`, i.e. the price of a carton when buying cartons.
     unit_price = models.DecimalField(max_digits=14, decimal_places=2)
     discount_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     tax_rate_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
@@ -821,17 +834,45 @@ class PurchaseOrderLine(models.Model):
         return _q(self.line_subtotal + self.line_tax)
 
     @property
-    def quantity_outstanding(self) -> int:
-        return max(0, self.quantity_ordered - self.quantity_received)
+    def quantity_outstanding(self) -> Decimal:
+        return max(Decimal(0), self.quantity_ordered - self.quantity_received)
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Keep the base amount in step with the quantity and the unit.
+
+        Denormalised on purpose: stock intake, valuation and landed-cost
+        allocation all read it, and computing it at each of those sites is how
+        three of them end up rounding differently.
+        """
+        self.quantity_base = self.quantity_ordered_base
+        super().save(*args, **kwargs)
+
+    @property
+    def pack_factor(self) -> Decimal:
+        """How many base units one ordered unit holds — 1 unless bought in packs."""
+        return Decimal(self.unit.factor_to_base) if self.unit is not None else Decimal(1)
+
+    @property
+    def quantity_ordered_base(self) -> Decimal:
+        """What was ordered, in the unit the shelf counts."""
+        return _q(Decimal(self.quantity_ordered) * self.pack_factor)
 
     @property
     def base_unit_cost(self) -> Decimal:
-        """Goods-only unit cost in RWF, before landed costs are added."""
-        return _q(self.net_unit_price * self.order.exchange_rate)
+        """Goods-only cost of **one base unit** in RWF, before landed costs.
+
+        Divided by the pack factor deliberately. `unit_price` is the price of
+        what was bought — a carton when buying cartons — and stock is valued per
+        tablet. Carrying the carton price onto the shelf overstates inventory by
+        the pack factor and makes every margin derived from it wrong.
+        """
+        per_ordered_unit = self.net_unit_price * self.order.exchange_rate
+        factor = self.pack_factor or Decimal(1)
+        return _q(per_ordered_unit / factor)
 
     @property
     def effective_unit_cost(self) -> Decimal:
-        """What one unit costs us on the shelf — landed if allocated, else goods-only."""
+        """What one base unit costs us on the shelf — landed if allocated, else goods-only."""
         return self.landed_unit_cost if self.landed_unit_cost is not None else self.base_unit_cost
 
 
@@ -1091,12 +1132,12 @@ class GoodsReceipt(models.Model):
         return self.grn_number or f"GRN#{self.pk}"
 
     @property
-    def total_received(self) -> int:
-        return sum(ln.quantity_received for ln in self.lines.all())
+    def total_received(self) -> Decimal:
+        return sum((ln.quantity_received for ln in self.lines.all()), Decimal(0))
 
     @property
-    def total_rejected(self) -> int:
-        return sum(ln.quantity_rejected for ln in self.lines.all())
+    def total_rejected(self) -> Decimal:
+        return sum((ln.quantity_rejected for ln in self.lines.all()), Decimal(0))
 
     @property
     def goods_value_base(self) -> Decimal:
@@ -1125,9 +1166,9 @@ class GoodsReceiptLine(models.Model):
     batch_number = models.CharField(max_length=100)
     manufacture_date = models.DateField(null=True, blank=True)
     expiry_date = models.DateField()
-    quantity_expected = models.PositiveIntegerField(default=0)
-    quantity_received = models.PositiveIntegerField(default=0)
-    quantity_rejected = models.PositiveIntegerField(default=0)
+    quantity_expected = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    quantity_received = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    quantity_rejected = models.DecimalField(max_digits=14, decimal_places=3, default=0)
     rejection_reason = models.CharField(
         max_length=25, choices=Condition.choices, blank=True, default=""
     )
@@ -1162,7 +1203,7 @@ class GoodsReceiptLine(models.Model):
         return f"{self.product} · {self.batch_number} ×{self.quantity_received}"
 
     @property
-    def variance(self) -> int:
+    def variance(self) -> Decimal:
         """Signed over/under delivery against what the PO line expected."""
         return self.quantity_received - self.quantity_expected
 
