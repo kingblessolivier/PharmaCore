@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ClipboardList,
+  TriangleAlert,
   CreditCard,
   Eye,
   FileText,
@@ -523,6 +524,7 @@ const NAV: NavGroup[] = [
     items: [
       { to: "/finance", label: "Home", icon: Wallet, end: true },
       { to: "/finance/cockpit", label: "Performance cockpit", icon: BarChart3 },
+      { to: "/finance/risk", label: "Risk & cash cycle", icon: TriangleAlert },
     ],
   },
   {
