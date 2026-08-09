@@ -116,12 +116,15 @@ class OrderItemSerializer(QuantityAwareModelSerializer):
     product_name = serializers.SerializerMethodField()
     line_total = serializers.FloatField(read_only=True)
 
+    product_image = serializers.CharField(source="product.image_url", read_only=True, default="")
+
     class Meta:
         model = OrderItem
         fields = [
             "id",
             "product",
             "product_name",
+            "product_image",
             "quantity_ordered",
             "quantity_approved",
             "quantity_shipped",
@@ -288,6 +291,27 @@ class DepotProductListingSerializer(QuantityAwareModelSerializer):
     stock_on_hand = serializers.SerializerMethodField()
     availability_note = serializers.SerializerMethodField()
 
+    image = serializers.SerializerMethodField()
+    image_is_trusted = serializers.BooleanField(read_only=True)
+    pack_units = serializers.SerializerMethodField()
+
+    def get_image(self, obj: DepotProductListing) -> str:
+        """The depot's own photograph, or the catalogue's."""
+        return obj.image_url or obj.product.image_url or ""
+
+    def get_pack_units(self, obj: DepotProductListing) -> list[dict[str, Any]]:
+        """The levels this medicine is packed in, smallest first."""
+        return [
+            {
+                "code": unit.code,
+                "label": unit.name or unit.get_code_display(),
+                "factor_to_base": str(unit.factor_to_base),
+                "is_base": unit.is_base,
+                "is_purchase_default": unit.is_purchase_default,
+            }
+            for unit in sorted(obj.product.units.all(), key=lambda u: u.level)
+        ]
+
     class Meta:
         model = DepotProductListing
         fields = [
@@ -307,6 +331,15 @@ class DepotProductListingSerializer(QuantityAwareModelSerializer):
             "is_published",
             "customer_segment",
             "min_order_qty",
+            "order_multiple",
+            # A buyer browsing a storefront of text alone cannot tell one white
+            # box from another. `image` falls back to the catalogue picture when
+            # the depot has not photographed its own stock.
+            "image",
+            "image_is_trusted",
+            # How it is packed, so a pharmacy orders a case knowing it holds 24
+            # boxes of 100 rather than guessing what "1" means.
+            "pack_units",
             "updated_at",
             "created_at",
         ]

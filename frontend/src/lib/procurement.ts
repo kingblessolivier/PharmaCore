@@ -286,9 +286,17 @@ export interface PurchaseOrderLine {
   notes?: string;
 }
 
+/** The PDF the supplier was actually sent, once the order has gone out. */
+export interface OrderDocument {
+  doc_number: string;
+  generated_at: string;
+  download_url: string;
+}
+
 export interface PurchaseOrder {
   id: number;
   po_number: string;
+  document: OrderDocument | null;
   organization: number;
   organization_name: string;
   supplier: number;

@@ -115,6 +115,23 @@ class StorefrontView(APIView):
                 "available": r.available,
                 "offered_qty": r.listing.offered_qty,
                 "min_order_qty": r.listing.min_order_qty,
+                "order_multiple": r.listing.order_multiple,
+                # The depot's own photograph, falling back to the catalogue's. A
+                # buyer browsing text alone cannot tell one white box from
+                # another, and an unverified picture is flagged rather than
+                # presented as fact.
+                "image": r.listing.image_url or r.listing.product.image_url or "",
+                "image_is_trusted": r.listing.image_is_trusted,
+                # How it is packed, so ordering "1" is not a guess.
+                "pack_units": [
+                    {
+                        "code": u.code,
+                        "label": u.name or u.get_code_display(),
+                        "factor_to_base": str(u.factor_to_base),
+                        "is_base": u.is_base,
+                    }
+                    for u in sorted(r.listing.product.units.all(), key=lambda x: x.level)
+                ],
                 "customer_segment": r.listing.customer_segment,
                 "is_published": r.listing.is_published,
                 # Only ever populated in the depot's own view.

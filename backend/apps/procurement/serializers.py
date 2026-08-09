@@ -473,6 +473,19 @@ class PurchaseOrderLineSerializer(QuantityAwareModelSerializer[PurchaseOrderLine
     base_unit_cost = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     effective_unit_cost = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
 
+    unit_code = serializers.CharField(source="unit.code", read_only=True, default="")
+    unit_label = serializers.SerializerMethodField()
+    pack_factor = serializers.DecimalField(
+        max_digits=14, decimal_places=3, read_only=True, coerce_to_string=False
+    )
+    product_image = serializers.CharField(source="product.image_url", read_only=True, default="")
+
+    def get_unit_label(self, obj: PurchaseOrderLine) -> str:
+        """What a buyer calls it — 'Carton of 24 boxes', not 'CARTON'."""
+        if obj.unit is None:
+            return ""
+        return obj.unit.name or obj.unit.get_code_display()
+
     class Meta:
         model = PurchaseOrderLine
         fields = [
@@ -484,6 +497,14 @@ class PurchaseOrderLineSerializer(QuantityAwareModelSerializer[PurchaseOrderLine
             "quantity_received",
             "quantity_rejected",
             "quantity_invoiced",
+            # The unit the numbers above are counted in. Ten of something is
+            # ten cartons or ten tablets, and the line has to say which.
+            "unit",
+            "unit_code",
+            "unit_label",
+            "pack_factor",
+            "quantity_base",
+            "product_image",
             "unit_price",
             "discount_pct",
             "tax_rate_pct",
@@ -514,6 +535,12 @@ class PurchaseOrderSerializer(_NestedLinesMixin, QuantityAwareModelSerializer[Pu
     parent_fk = "order"
 
     lines = PurchaseOrderLineSerializer(many=True, required=False)
+    #: The PDF sent to the supplier, once the order has been sent.
+    #:
+    #: The document was being generated, numbered, hashed and stored, and no
+    #: screen could reach it — so the one artefact the supplier actually
+    #: receives was the one thing the buyer could not open again.
+    document = serializers.SerializerMethodField()
     organization_name = serializers.CharField(source="organization.name", read_only=True)
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
     deliver_to_name = serializers.CharField(source="deliver_to.name", read_only=True, default=None)
@@ -538,6 +565,22 @@ class PurchaseOrderSerializer(_NestedLinesMixin, QuantityAwareModelSerializer[Pu
     can_receive = serializers.BooleanField(read_only=True)
     receipt_count = serializers.IntegerField(source="receipts.count", read_only=True)
 
+    def get_document(self, obj: PurchaseOrder) -> dict[str, Any] | None:
+        from apps.documents.models import Document
+
+        record = (
+            Document.objects.filter(reference_type="purchase_order", reference_id=str(obj.pk))
+            .order_by("-generated_at")
+            .first()
+        )
+        if record is None:
+            return None
+        return {
+            "doc_number": record.doc_number,
+            "generated_at": record.generated_at,
+            "download_url": record.file.url if record.file else "",
+        }
+
     class Meta:
         model = PurchaseOrder
         fields = [
@@ -546,6 +589,7 @@ class PurchaseOrderSerializer(_NestedLinesMixin, QuantityAwareModelSerializer[Pu
             "organization",
             "organization_name",
             "supplier",
+            "document",
             "supplier_name",
             "status",
             "status_display",

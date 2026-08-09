@@ -125,7 +125,59 @@ export function B2BOrderingPortalPage() {
   );
 
   const columns: Column<StorefrontRow>[] = [
-    { key: "product_name", header: "Product", value: (r) => r.product_name },
+    {
+      key: "product_name",
+      header: "Product",
+      value: (r) => r.product_name,
+      render: (r) => (
+        <div className="flex items-center gap-3">
+          {r.image ? (
+            <img
+              src={r.image}
+              alt=""
+              className="h-9 w-9 shrink-0 rounded-md border border-line object-contain"
+              onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+            />
+          ) : (
+            <div className="h-9 w-9 shrink-0 rounded-md border border-line bg-surface-100" />
+          )}
+          <div className="min-w-0">
+            <div className="truncate text-ink-900">{r.product_name}</div>
+            {/* An unverified photo is flagged rather than presented as fact —
+                a buyer trusts a picture, and a wrong one sells the wrong
+                medicine. */}
+            {r.image && !r.image_is_trusted && (
+              <div className="text-[11px] text-warning-700">photo not verified</div>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      /* How it is packed. Ordering "1" from a depot that trades in cartons is
+         2,400 tablets, and a buyer guessing is how a pharmacy ends up with a
+         year of stock. */
+      key: "pack",
+      header: "Sold in",
+      value: (r) => (r.pack_units ?? []).map((u) => u.label).join(", "),
+      render: (r) => {
+        const units = r.pack_units ?? [];
+        if (units.length === 0) return <span className="text-ink-500">—</span>;
+        const base = units.find((u) => u.is_base);
+        const biggest = units[units.length - 1];
+        return (
+          <span className="text-xs text-ink-600">
+            {biggest.label}
+            {base && biggest.code !== base.code && (
+              <span className="text-ink-500">
+                {" "}
+                = {Number(biggest.factor_to_base).toLocaleString()} {base.label.toLowerCase()}
+              </span>
+            )}
+          </span>
+        );
+      },
+    },
     {
       key: "price",
       header: "Price",
@@ -149,10 +201,19 @@ export function B2BOrderingPortalPage() {
     },
     {
       key: "min_order_qty",
-      header: "Min order",
-      numeric: true,
-      align: "right",
+      header: "Order rules",
       value: (r) => r.min_order_qty,
+      render: (r) => (
+        <span className="text-xs text-ink-600">
+          min {r.min_order_qty}
+          {/* A case is not opened to fill an order, so a depot shipping by the
+              case sells 5 or 10, never 7. Saying so here stops a buyer
+              placing a quantity that will be silently rounded down. */}
+          {(r.order_multiple ?? 1) > 1 && (
+            <span className="text-ink-500"> · in {r.order_multiple}s</span>
+          )}
+        </span>
+      ),
     },
     {
       key: "act",

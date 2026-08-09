@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, PackageCheck, Plus, Send, ShieldCheck, XCircle } from "lucide-react";
+import { Ban, FileText, PackageCheck, Plus, Send, ShieldCheck, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DataGrid } from "../components/DataGrid";
@@ -774,6 +774,29 @@ export function SupplierOrdersPage() {
                 )}
               </div>
             ),
+          },
+          {
+            /* The PDF the supplier received. It was generated, numbered, hashed
+               and stored, and no screen could reach it — so the one artefact
+               the supplier holds was the one thing the buyer could not open. */
+            key: "document",
+            header: "Document",
+            value: (o) => o.document?.doc_number ?? "",
+            render: (o) =>
+              o.document ? (
+                <a
+                  href={o.document.download_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-1 text-xs text-brand-600 hover:underline"
+                >
+                  <FileText className="h-3.5 w-3.5" aria-hidden />
+                  {o.document.doc_number}
+                </a>
+              ) : (
+                <span className="text-xs text-ink-500">not sent yet</span>
+              ),
           },
           {
             key: "flags",

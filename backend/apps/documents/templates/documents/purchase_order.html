@@ -1,17 +1,102 @@
 {% extends "documents/base.html" %}
+{# A purchase order is an offer to buy, so it has to carry everything the
+   supplier needs to accept it and ship against it: who to invoice, where to
+   deliver, what terms, and — the part that was missing — what unit each
+   quantity is counted in. "10" means ten cartons or ten tablets, and a supplier
+   guessing wrong sends 24,000 tablets or ten. #}
 {% block content %}
+
 <table class="parties">
   <tr>
-    <td style="width:50%"><div class="plabel">Buyer (pharmacy)</div>{{ buyer_name }}</td>
-    <td style="width:50%"><div class="plabel">Seller (depot)</div>{{ seller_name }}</td>
+    <td style="width:50%">
+      <div class="plabel">Vendor</div>
+      <b>{{ seller_name }}</b>
+      {% if seller_contact %}<br>{{ seller_contact }}{% endif %}
+      {% if seller_address %}<br>{{ seller_address }}{% endif %}
+      {% if seller_phone %}<br>Tel {{ seller_phone }}{% endif %}
+      {% if seller_email %}<br>{{ seller_email }}{% endif %}
+    </td>
+    <td style="width:50%">
+      <div class="plabel">Deliver to</div>
+      <b>{{ deliver_to_name|default:buyer_name }}</b>
+      {% if deliver_to_address %}<br>{{ deliver_to_address }}{% endif %}
+      {% if buyer_phone %}<br>Tel {{ buyer_phone }}{% endif %}
+    </td>
   </tr>
 </table>
-<table>
-  <tr><th>#</th><th>Product</th><th class="right">Qty</th><th class="right">Unit price</th><th class="right">Line total</th></tr>
-  {% for l in lines %}
-  <tr><td>{{ forloop.counter }}</td><td>{{ l.name }}</td><td class="right">{{ l.qty }}</td><td class="right">{{ l.price }}</td><td class="right">{{ l.total }}</td></tr>
-  {% endfor %}
-  <tr><td colspan="4" class="right"><b>Total (RWF)</b></td><td class="right"><b>{{ total }}</b></td></tr>
+
+<table style="margin-top:10pt;">
+  <tr>
+    <th>Our reference</th>
+    <th>Order date</th>
+    <th>Expected</th>
+    <th>Payment terms</th>
+    <th>Incoterm</th>
+  </tr>
+  <tr>
+    <td>{{ po_number }}</td>
+    <td>{{ order_date|date:"d M Y" }}</td>
+    <td>{% if expected_delivery %}{{ expected_delivery|date:"d M Y" }}{% else %}&mdash;{% endif %}</td>
+    <td>{% if payment_terms_days %}{{ payment_terms_days }} days{% else %}On delivery{% endif %}</td>
+    <td>{{ incoterm|default:"&mdash;" }}</td>
+  </tr>
 </table>
-<p class="muted">This purchase order is a legal offer to buy the goods listed above.</p>
+
+<table style="margin-top:10pt;">
+  <tr>
+    <th style="width:5%">#</th>
+    <th>Description</th>
+    <th class="right" style="width:11%">Qty</th>
+    <th style="width:16%">Unit</th>
+    <th class="right" style="width:13%">Unit price</th>
+    <th class="right" style="width:14%">Line total</th>
+  </tr>
+  {% for l in lines %}
+  <tr>
+    <td>{{ forloop.counter }}</td>
+    <td>
+      {{ l.name }}
+      {# What the quantity converts to on the shelf. A carton is only useful to
+         a stock controller once it is stated in the units they count. #}
+      {% if l.unit_label and l.base_quantity %}
+        <div class="muted">{{ l.base_quantity }} {{ l.base_unit }} in total</div>
+      {% endif %}
+    </td>
+    <td class="right">{{ l.qty }}</td>
+    <td>{{ l.unit_label|default:"&mdash;" }}</td>
+    <td class="right">{{ l.price }}</td>
+    <td class="right">{{ l.total }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+{# Flat, not nested. A totals table inside a table cell left the renderer
+   computing a negative width and producing no page at all. #}
+<table style="margin-top:8pt;">
+  <tr><th colspan="2">Summary</th></tr>
+  <tr><td>Subtotal</td><td class="right">{{ subtotal }}</td></tr>
+  {% if discount_amount and discount_amount != "0.00" %}
+  <tr><td>Discount</td><td class="right">&minus;{{ discount_amount }}</td></tr>
+  {% endif %}
+  <tr><td>Tax</td><td class="right">{{ tax_total }}</td></tr>
+  <tr><td>Freight</td><td class="right">{{ freight_amount }}</td></tr>
+  {% if other_charges and other_charges != "0.00" %}
+  <tr><td>Other charges</td><td class="right">{{ other_charges }}</td></tr>
+  {% endif %}
+  <tr>
+    <td><b>Total ({{ currency|default:"RWF" }})</b></td>
+    <td class="right"><b>{{ total }}</b></td>
+  </tr>
+</table>
+
+<div style="margin-top:10pt;">
+  <div class="plabel">Comments or special instructions</div>
+  <div style="border:0.5pt solid #cbd5e1; min-height:46pt; padding:5pt;">{{ notes|default:"" }}</div>
+</div>
+
+<p class="muted" style="margin-top:10pt;">
+  This purchase order is a legal offer to buy the goods listed above on the terms stated.
+  Quote <b>{{ po_number }}</b> on your invoice and on every delivery note.
+  {% if terms %}<br>{{ terms }}{% endif %}
+</p>
 {% endblock %}
