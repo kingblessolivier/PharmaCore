@@ -39,6 +39,7 @@ from django.utils import timezone
 from apps.approvals import registry
 from apps.approvals.models import ApprovalRequest
 from apps.approvals.services import request_approval
+from apps.catalog.units import normalise
 from apps.documents.models import DocType, Document
 from apps.documents.services import generate_document
 from apps.finance.models import Account, JournalLine, SupplierBill
@@ -286,7 +287,7 @@ def refresh_supplier_scores(
     ).select_related("order")
 
     on_time = late = 0
-    received_units = rejected_units = 0
+    received_units = rejected_units = Decimal(0)
     orders_seen: set[int] = set()
     for receipt in receipts.prefetch_related("lines"):
         orders_seen.add(receipt.order_id)
@@ -964,6 +965,12 @@ def _grni_account(organization: Organization) -> tuple[dict[str, Account], Accou
     return accounts, grni
 
 
+def _to_base(order_line: Any, quantity: Any) -> Decimal:
+    """Restate a quantity stated in the order's trading unit as base units."""
+    factor = Decimal(order_line.unit.factor_to_base) if order_line.unit_id else Decimal(1)
+    return (Decimal(str(quantity)) * factor).quantize(Decimal("0.001"))
+
+
 @transaction.atomic
 def build_receipt_draft(
     *,
@@ -1055,12 +1062,18 @@ def post_goods_receipt(*, receipt: GoodsReceipt, user: User) -> GoodsReceipt:
     for line in lines:
         if line.quantity_received > 0:
             unit_cost = line.unit_cost or line.order_line.effective_unit_cost
+            # The delivery note counts what the supplier shipped — twenty
+            # cartons — and the shelf counts tablets. Converting here, once, is
+            # the whole point of the order line carrying a unit: putting the
+            # carton count on the shelf understates stock by the pack factor,
+            # and nothing downstream could ever detect it.
+            received_base = _to_base(line.order_line, line.quantity_received)
             batch = receive_intake(
                 organization=receipt.organization,
                 product=line.product,
                 batch_number=line.batch_number,
                 expiry_date=line.expiry_date,
-                quantity=line.quantity_received,
+                quantity=received_base,
                 manufacture_date=line.manufacture_date,
                 wholesale_cost=unit_cost,
                 storage_location=line.storage_location,
@@ -1306,9 +1319,12 @@ def run_three_way_match(*, invoice: SupplierInvoice, user: User | None = None) -
         entry: dict[str, Any] = {
             "line": line.pk,
             "product": str(line.product or order_line.product),
-            "invoiced_qty": str(line.quantity),
-            "received_qty": str(received),
-            "ordered_qty": str(order_line.quantity_ordered),
+            # Quantities read as a person would write them: 60, not 60.000. The
+            # trailing zeros are storage precision, and on a variance report they
+            # invite the reader to look for a fraction that was never there.
+            "invoiced_qty": normalise(line.quantity),
+            "received_qty": normalise(received),
+            "ordered_qty": normalise(order_line.quantity_ordered),
             "invoiced_price": str(line.net_unit_price),
             "order_price": str(order_line.net_unit_price),
             "issue": "OK",

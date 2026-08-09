@@ -907,8 +907,11 @@ def test_three_way_match_flags_quantity_and_price_variance(
     assert body["match_result"] == "QTY_AND_PRICE"
     assert body["status"] == "VARIANCE"
     detail = body["match_detail"][0]
+    # Quantities read as a person writes them. `invoiced_qty` asserted "100.00"
+    # before — a count formatted like money, which invites the reader of a
+    # variance report to look for a fraction that was never there.
     assert detail["received_qty"] == "60"
-    assert detail["invoiced_qty"] == "100.00"
+    assert detail["invoiced_qty"] == "100"
 
     # A variance cannot be pushed for approval without someone owning it.
     resp = client.post(f"/api/procurement/invoices/{invoice['id']}/submit/", {}, format="json")

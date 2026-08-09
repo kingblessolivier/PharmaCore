@@ -194,11 +194,11 @@ def raise_requisition_from_demand(
     if not lines:
         raise DemandError("There is no open demand to source.")
 
-    wanted: dict[int, int] = {}
+    wanted: dict[int, Decimal] = {}
     for line in lines:
         outstanding = line.quantity_outstanding
         if outstanding > 0:
-            wanted[line.product_id] = wanted.get(line.product_id, 0) + outstanding
+            wanted[line.product_id] = wanted.get(line.product_id, Decimal(0)) + outstanding
     if not wanted:
         raise DemandError("Every matching demand line is already fulfilled.")
 
@@ -266,7 +266,7 @@ def _last_known_cost(depot_id: int, product_id: int) -> Decimal:
 
 @transaction.atomic
 def settle_backorders_for(
-    *, depot: Organization | int, product: Product | int, quantity: int
+    *, depot: Organization | int, product: Product | int, quantity: Decimal | int
 ) -> list[BackorderLine]:
     """Allocate newly-arrived stock to whoever has been waiting longest.
 
