@@ -10,7 +10,6 @@ import { DepartmentsPage } from "./pages/DepartmentsPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OrganizationDetailPage } from "./pages/OrganizationDetailPage";
-import { OrdersPage } from "./pages/OrdersPage";
 import { PosPage } from "./pages/PosPage";
 import { ProductDetailPage } from "./pages/ProductDetailPage";
 import { ProductsPage } from "./pages/ProductsPage";
@@ -296,7 +295,6 @@ function App() {
               <Route path="/products" element={forPharmacy(<ProductsPage />)} />
               <Route path="/products/:id" element={forPharmacy(<ProductDetailPage />)} />
               <Route path="/suppliers" element={adminOnly(<SuppliersPage />)} />
-              <Route path="/orders" element={forPharmacy(<OrdersPage />)} />
               <Route path="/pos" element={<PosPage />} />
               <Route path="/finance" element={forFinance(<FinanceHome />)} />
               <Route path="/finance/cockpit" element={forFinance(<FinanceCockpitPage />)} />
