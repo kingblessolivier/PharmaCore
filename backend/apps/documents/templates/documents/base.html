@@ -1,69 +1,151 @@
 <!doctype html>
-<html>
+{% comment %}
+The frame every generated document sits in.
+
+Two things to know before editing:
+
+1. Comments here MUST be {% comment %} tags, never {# … #}. Django's hash
+   comment is single-line only — a multi-line one is not a comment at all, it
+   is literal text, and six of them were being printed at the top of every
+   document that this system has issued.
+
+2. The renderer (xhtml2pdf) computes column widths up front and cannot cope
+   with a table nested inside a table cell: it ends up with a negative
+   available width and produces no page at all. One level of table is safe.
+   Do not nest.
+
+The pharmacy issues the document, so the pharmacy's identity leads it. This
+used to head every page "PharmaCore by Medlink" — the name of the software,
+which is not a party to anything the document says. The generator signs the
+footer instead, where it belongs.
+{% endcomment %}
+<html lang="en">
 <head>
 <meta charset="utf-8">
+<title>{{ doc_number }}</title>
 <style>
-  @page { margin: 1.6cm; }
-  body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: #111827; }
-  .brand { color: #0d9488; font-size: 17pt; font-weight: bold; }
-  .header { border-bottom: 2pt solid #0d9488; padding-bottom: 6pt; margin-bottom: 12pt; }
-  .title { font-size: 14pt; font-weight: bold; margin-top: 4pt; }
-  .muted { color: #64748b; font-size: 8.5pt; }
-  table { width: 100%; border-collapse: collapse; margin-top: 8pt; }
-  th, td { border-bottom: 0.5pt solid #e2e8f0; padding: 4pt 6pt; text-align: left; font-size: 9pt; }
-  th { background: #f1f5f9; color: #334155; }
+  @page { margin: 1.4cm 1.4cm 2.2cm 1.4cm; }
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 9.5pt; color: #111827; }
+
+  /* Header ---------------------------------------------------------------- */
+  .issuer-name { color: #0d9488; font-size: 15pt; font-weight: bold; }
+  .issuer-detail { color: #4b5563; font-size: 8pt; line-height: 1.35; }
+  .doc-title { font-size: 16pt; font-weight: bold; color: #111827; letter-spacing: 0.5pt; }
+  .doc-meta { font-size: 8.5pt; color: #4b5563; line-height: 1.4; }
+  .rule { border-bottom: 1.5pt solid #0d9488; margin: 6pt 0 10pt 0; }
+  .head td { border: none; padding: 0; vertical-align: top; }
+
+  /* Party blocks ---------------------------------------------------------- */
+  .parties td { border: none; vertical-align: top; padding: 0 8pt 0 0; }
+  .plabel {
+    font-size: 7.5pt; color: #6b7280; text-transform: uppercase;
+    letter-spacing: 0.4pt; padding-bottom: 2pt;
+  }
+  .party {
+    border: 0.5pt solid #e5e7eb; background: #f9fafb;
+    padding: 5pt 7pt; font-size: 9pt; line-height: 1.4;
+  }
+  .party b { font-size: 9.5pt; }
+
+  /* Line tables ----------------------------------------------------------- */
+  table { width: 100%; border-collapse: collapse; }
+  .lines { margin-top: 10pt; }
+  .lines th {
+    background: #0f766e; color: #ffffff; font-size: 8pt; font-weight: bold;
+    text-transform: uppercase; letter-spacing: 0.3pt;
+    padding: 5pt 6pt; text-align: left; border: none;
+  }
+  .lines td {
+    padding: 5pt 6pt; font-size: 9pt; text-align: left;
+    border-bottom: 0.5pt solid #e5e7eb;
+  }
+  .lines tr.alt td { background: #f9fafb; }
+  .sub { color: #6b7280; font-size: 7.5pt; }
+
+  /* Totals ---------------------------------------------------------------- */
+  .totals td {
+    border: none; padding: 3pt 6pt; font-size: 9pt;
+  }
+  .totals .lbl { color: #4b5563; text-align: right; }
+  .totals .val { text-align: right; width: 26%; }
+  .totals .grand td {
+    border-top: 1pt solid #0f766e; font-size: 11pt; font-weight: bold;
+    color: #0f766e; padding-top: 5pt;
+  }
+
   .right { text-align: right; }
-  .parties td { border: none; vertical-align: top; }
-  .plabel { font-size: 8pt; color: #64748b; text-transform: uppercase; }
-  .footer { margin-top: 22pt; border-top: 0.5pt solid #cbd5e1; padding-top: 6pt; font-size: 8pt; color: #64748b; }
+  .center { text-align: center; }
+  .muted { color: #6b7280; font-size: 8pt; }
+  .note {
+    margin-top: 10pt; border: 0.5pt solid #e5e7eb; background: #f9fafb;
+    padding: 6pt 8pt; font-size: 8.5pt; color: #374151;
+  }
   .warn { color: #b45309; font-weight: bold; }
+
+  /* Footer ---------------------------------------------------------------- */
+  .footer {
+    margin-top: 16pt; border-top: 0.5pt solid #d1d5db;
+    padding-top: 5pt; font-size: 7.5pt; color: #6b7280;
+  }
+  .footer td { border: none; padding: 0; vertical-align: top; }
 </style>
 </head>
 <body>
-  {# The pharmacy issues the document, so the pharmacy's identity leads it.
-     This used to head every document with "PharmaCore by Medlink" — the name of
-     the software, which is not a party to anything the document says. A supplier
-     receiving a purchase order needs to see who is ordering, under which TIN and
-     which licence. The generator now signs the footer instead, where it
-     belongs. #}
-  {# No table here on purpose. The renderer (xhtml2pdf) computes column widths
-     up front, and a header table nested above the footer table left it with a
-     negative available width and no page at all. Stacked blocks are boring and
-     they render. #}
-  <div class="header">
-    {% if organization.logo_url %}
-    <img src="{{ organization.logo_url }}" alt="{{ organization.name }}" style="max-height:48pt;"><br>
-    {% endif %}
-    <div class="brand">{{ organization.name }}</div>
-    <div class="muted">
-      {% if organization.address_line %}{{ organization.address_line }}{% endif %}{% if organization.district %}, {{ organization.district }}{% endif %}{% if organization.phone %} &middot; Tel {{ organization.phone }}{% endif %}{% if organization.email %} &middot; {{ organization.email }}{% endif %}
-    </div>
-    <div class="muted">
-      {% if organization.tin %}TIN {{ organization.tin }}{% endif %}{% if organization.rwanda_fda_license_no %} &middot; FDA {{ organization.rwanda_fda_license_no }}{% endif %}
-    </div>
-    <div class="title">{% block title %}{{ doc_type_label }}{% endblock %}</div>
-    <div class="muted">No. <b>{{ doc_number }}</b> &middot; {{ generated_at|date:"d M Y H:i" }}</div>
-  </div>
+
+  {% comment %}
+  One table, two columns: who issued this on the left, what it is on the right.
+  That is the arrangement every commercial document uses, and it is why the
+  reader can find the invoice number without reading the page.
+  {% endcomment %}
+  <table class="head">
+    <tr>
+      <td style="width:58%">
+        {% if organization.logo_url %}
+          <img src="{{ organization.logo_url }}" alt="{{ organization.name }}" style="max-height:42pt;"><br>
+        {% endif %}
+        <div class="issuer-name">{{ organization.name }}</div>
+        <div class="issuer-detail">
+          {% if organization.address_line %}{{ organization.address_line }}<br>{% endif %}
+          {% if organization.district %}{{ organization.district }}{% if organization.province %}, {{ organization.province }}{% endif %}<br>{% endif %}
+          {% if organization.phone %}Tel {{ organization.phone }}{% endif %}
+          {% if organization.email %}{% if organization.phone %} &middot; {% endif %}{{ organization.email }}{% endif %}
+          {% if organization.tin or organization.rwanda_fda_license_no %}<br>{% endif %}
+          {% if organization.tin %}TIN {{ organization.tin }}{% endif %}
+          {% if organization.rwanda_fda_license_no %}{% if organization.tin %} &middot; {% endif %}FDA {{ organization.rwanda_fda_license_no }}{% endif %}
+        </div>
+      </td>
+      <td style="width:42%" class="right">
+        <div class="doc-title">{% block title %}{{ doc_type_label|upper }}{% endblock %}</div>
+        <div class="doc-meta">
+          {% block docmeta %}
+          <b>{{ doc_number }}</b><br>
+          {{ generated_at|date:"d M Y" }}
+          {% endblock %}
+        </div>
+      </td>
+    </tr>
+  </table>
+  <div class="rule"></div>
 
   {% block content %}{% endblock %}
 
   <div class="footer">
     <table>
       <tr>
-        <td style="width: 78%; border: none;">
-          Issued by <b>{{ organization.name }}</b> &middot; document {{ doc_number }}.<br>
-          Produced with PharmaCore by Medlink.
-          {% if qr %}<br>
-          This document is registered and tamper-evident. Scan the QR code to verify its
-          authenticity against the system of record.
-          {% endif %}
+        <td style="width: 80%">
+          {% block footer_note %}
+          Issued by <b>{{ organization.name }}</b>{% if organization.tin %}, TIN {{ organization.tin }}{% endif %}.
+          Document reference <b>{{ doc_number }}</b>, generated {{ generated_at|date:"d M Y H:i" }}.
+          {% endblock %}
+          {% if qr %}<br>Registered and tamper-evident — scan to verify against the system of record.{% endif %}
+          <br><span style="color:#9ca3af;">Produced with PharmaCore by Medlink.</span>
         </td>
-        {# Guarded: an unguarded src renders an empty image box and makes the
-           renderer complain on every document that has no QR to show. The
-           promise about scanning it is guarded with it, so the page never
-           tells a reader to scan something that is not there. #}
-        <td style="border: none; text-align: right;">
-          {% if qr %}<img src="{{ qr }}" alt="Verification QR code" style="width: 66pt; height: 66pt;">{% endif %}
+        <td class="right">
+          {% comment %}
+          Guarded: an unguarded src renders an empty image box and makes the
+          renderer complain on every document that has no QR to show.
+          {% endcomment %}
+          {% if qr %}<img src="{{ qr }}" alt="Verification QR code" style="width: 58pt; height: 58pt;">{% endif %}
         </td>
       </tr>
     </table>

@@ -27,6 +27,7 @@ from apps.distribution.models import (
     ShipmentItem,
     StockOrder,
 )
+from apps.documents import invoicing
 from apps.documents.models import DocType, Document
 from apps.documents.services import generate_document
 from apps.iam.models import User
@@ -133,24 +134,55 @@ def _generate_grn_and_invoice(grn: GoodsReceivedNote, user: User | None) -> None
         reference_id=str(grn.pk),
         user=user,
     )
+    # Built through the shared assembler so this invoice and the one finance
+    # raises say the same things in the same places — they were building
+    # different context dictionaries for the same template.
+    invoice_lines = []
+    net_total = Decimal("0")
+    vat_total = Decimal("0")
+    for i in order.items.select_related("product", "unit").all():
+        rate = invoicing.TAX_CLASS_RATES.get(str(i.product.tax_class).upper(), Decimal("0"))
+        net = Decimal(str(i.line_total))
+        vat = (net * rate / 100).quantize(Decimal("0.01"))
+        net_total += net
+        vat_total += vat
+        invoice_lines.append(
+            {
+                "name": _product_label(i.product),
+                "tax_class": i.product.tax_class,
+                "tax_rate": rate,
+                "tax_amount": vat,
+                "net": net,
+                "qty": i.quantity_shipped or i.quantity_ordered,
+                "unit_label": i.unit_label,
+                "base_quantity": i.quantity_base or i.quantity_ordered,
+                "base_unit": _base_unit_label(i.product),
+                "price": invoicing.money(i.price_per_ordered_unit),
+                "total": invoicing.money(net),
+            }
+        )
+
     generate_document(
         organization=order.depot,
         doc_type=DocType.TAX_INVOICE,
-        context={
-            "seller_name": order.depot.name,
-            "buyer_name": order.retail.name,
-            "total": order.total_amount,
-            "lines": [
-                {
-                    "name": _product_label(i.product),
-                    "tax_class": i.product.tax_class,
-                    "qty": i.quantity_shipped or i.quantity_ordered,
-                    "price": i.price_per_unit,
-                    "total": i.line_total,
-                }
-                for i in order.items.select_related("product").all()
-            ],
-        },
+        context=invoicing.invoice_context(
+            seller=order.depot,
+            buyer=order.retail,
+            lines=invoice_lines,
+            subtotal=net_total,
+            tax_total=vat_total,
+            total=net_total + vat_total,
+            currency=order.depot.currency or "RWF",
+            invoice_number=order.order_number,
+            invoice_date=order.created_at,
+            due_date=order.payment_due_date,
+            payment_terms=(
+                f"Due {order.payment_due_date:%d %b %Y}."
+                if order.payment_due_date
+                else "Due on delivery."
+            ),
+            notes=order.notes,
+        ),
         reference_type="stock_order",
         reference_id=str(order.pk),
         user=user,
