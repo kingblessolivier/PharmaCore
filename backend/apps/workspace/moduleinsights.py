@@ -718,6 +718,153 @@ def _admin(org_ids: list[int]) -> dict[str, Any]:
     }
 
 
+def _overview(user: Any, org_ids: list[int]) -> dict[str, Any]:
+    """The landing page's figures - the business across every subsystem.
+
+    Unlike the nine module builders this one is not gated as a whole, because
+    everybody lands here. Each section is gated individually instead, so the
+    page assembles itself from whatever this person is entitled to see: a
+    cashier gets the counter, an accountant gets the money, an owner gets both.
+    A section nobody may see is absent rather than empty.
+    """
+    from apps.catalog.models import Product
+    from apps.insurance.models import Claim
+    from apps.inventory.models import InventoryBatch
+    from apps.retail.models import Payment, Sale, SaleItem
+
+    today = timezone.localdate()
+    start = today - timedelta(days=13)
+    tiles: list[dict[str, Any]] = []
+    donuts: list[dict[str, Any]] = []
+    bars: list[dict[str, Any]] = []
+
+    may_sell = user.has_permission("sale.create") or user.has_permission("sale.view")
+    may_stock = user.has_permission("inventory.view")
+    may_money = user.has_permission("finance.view")
+    may_claim = user.has_permission("insurance.view")
+
+    if may_sell:
+        sold = SaleItem.objects.filter(
+            sale__organization_id__in=org_ids,
+            sale__status=Sale.Status.COMPLETED,
+            sale__completed_at__date__gte=start,
+        )
+        # What actually moves off the shelf. Ranked by units rather than value,
+        # because this answers "what must never run out", which is a question
+        # about volume, not about margin.
+        movers = (
+            sold.values("product__generic_name")
+            .annotate(n=Sum("quantity"))
+            .filter(n__gt=0)
+            .order_by("-n")[:8]
+        )
+        if movers:
+            bars.append(
+                {
+                    "title": "Moving fastest",
+                    "subtitle": "Units dispensed in 14 days - what must never run out",
+                    "data": [
+                        {"label": row["product__generic_name"] or "—", "value": row["n"]}
+                        for row in movers
+                    ],
+                }
+            )
+        tender = (
+            Payment.objects.filter(
+                sale__organization_id__in=org_ids, sale__completed_at__date__gte=start
+            )
+            .values("method")
+            .annotate(n=Count("id"))
+        )
+        donuts.append(
+            {
+                "title": "How customers paid",
+                "subtitle": "The mix decides what balances in the drawer and what waits in a claim",
+                "slices": _slices(tender, "method"),
+            }
+        )
+
+    if may_stock:
+        batches = InventoryBatch.objects.filter(
+            organization_id__in=org_ids, quantity_available__gt=0
+        )
+        bands = {"Expired": ZERO, "Within 30 days": ZERO, "31-90 days": ZERO, "Over 90 days": ZERO}
+        for row in batches.values("expiry_date", "quantity_available", "wholesale_cost"):
+            value = Decimal(str(row["wholesale_cost"] or 0)) * row["quantity_available"]
+            days = (row["expiry_date"] - today).days
+            key = (
+                "Expired"
+                if days < 0
+                else (
+                    "Within 30 days"
+                    if days <= 30
+                    else "31-90 days" if days <= 90 else "Over 90 days"
+                )
+            )
+            bands[key] += value
+        tiles.append(
+            {"label": "Stock at cost", "value": _money(sum(bands.values(), ZERO)), "money": True}
+        )
+        donuts.append(
+            {
+                "title": "Stock value by shelf life",
+                "subtitle": "Money already spent, ranked by how long it has to earn back",
+                "slices": [{"label": k, "value": _money(v)} for k, v in bands.items() if v > 0],
+                "money": True,
+            }
+        )
+
+    if may_claim:
+        claims = Claim.objects.filter(organization_id__in=org_ids)
+        outstanding = claims.exclude(
+            status__in=[Claim.Status.PAID, Claim.Status.REJECTED]
+        ).aggregate(v=Sum("claimed_amount"))["v"]
+        tiles.append(
+            {
+                "label": "With the insurers",
+                "value": _money(outstanding),
+                "money": True,
+                "hint": "claimed and not yet settled",
+            }
+        )
+        donuts.append(
+            {
+                "title": "Claims by state",
+                "subtitle": "Medicine already dispensed that somebody else has to pay for",
+                "slices": _slices(claims.values("status").annotate(n=Count("id")), "status"),
+            }
+        )
+
+    if may_money:
+        from apps.finance.models import CustomerInvoice, SupplierBill
+
+        owed_to_us = sum(
+            (
+                Decimal(str(r["total_amount"] or 0)) - Decimal(str(r["amount_paid"] or 0))
+                for r in CustomerInvoice.objects.filter(organization_id__in=org_ids)
+                .exclude(status__in=[CustomerInvoice.Status.PAID, CustomerInvoice.Status.CANCELLED])
+                .values("total_amount", "amount_paid")
+            ),
+            ZERO,
+        )
+        owed_by_us = sum(
+            (
+                Decimal(str(r["total_amount"] or 0)) - Decimal(str(r["amount_paid"] or 0))
+                for r in SupplierBill.objects.filter(organization_id__in=org_ids)
+                .exclude(status=SupplierBill.Status.PAID)
+                .values("total_amount", "amount_paid")
+            ),
+            ZERO,
+        )
+        tiles.append({"label": "Owed to us", "value": _money(owed_to_us), "money": True})
+        tiles.append({"label": "Owed by us", "value": _money(owed_by_us), "money": True})
+
+    if may_stock and user.has_permission("catalog.view"):
+        tiles.append({"label": "Medicines listed", "value": Product.objects.count()})
+
+    return {"tiles": tiles, "donuts": donuts, "bars": bars, "trend": [], "trend_series": []}
+
+
 #: module -> (permission required, builder). Same gate as the work queues, so a
 #: person is never shown a chart about work they cannot see.
 _MODULES: dict[str, tuple[str, Callable[[list[int]], dict[str, Any]]]] = {
@@ -737,13 +884,18 @@ def insights_for(user: Any, module: str) -> dict[str, Any]:
     """Chart-ready figures for one module, or empty if this person may not see it."""
     from apps.iam.scoping import organizations_visible_to
 
+    org_ids = list(organizations_visible_to(user).values_list("id", flat=True))
+    # The landing page is the one module everyone reaches, so it gates each of
+    # its sections rather than the whole payload.
+    if module == "overview":
+        return {**EMPTY, **_overview(user, org_ids)}
+
     entry = _MODULES.get(module)
     if entry is None:
         return EMPTY.copy()
     permission, build = entry
     if not user.has_permission(permission):
         return EMPTY.copy()
-    org_ids = list(organizations_visible_to(user).values_list("id", flat=True))
     # Normalise against the full shape so a builder only states what it has. The
     # frontend renders every module through one component, and that component is
     # entitled to assume the keys exist — a module without a trend should not

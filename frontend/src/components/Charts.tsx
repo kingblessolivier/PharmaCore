@@ -236,7 +236,7 @@ export function LineTrend({
       Math.max(56, widest(seriesNames.map((_, s) => valueFormat(last.values[s] ?? 0))) + 18),
     ),
     bottom: 26,
-    left: Math.max(46, widest(ticks.map(valueFormat)) + 12),
+    left: Math.max(46, widest(ticks.map(valueFormat)) + 16),
   };
   const innerW = W - pad.left - pad.right;
   const innerH = H - pad.top - pad.bottom;
@@ -318,18 +318,30 @@ export function LineTrend({
           );
         })}
 
-        {points.map((p, i) => (
-          <text
-            key={p.label}
-            x={x(i)}
-            y={H - 8}
-            fontSize={10}
-            textAnchor="middle"
-            fill="var(--viz-muted)"
-          >
-            {p.label}
-          </text>
-        ))}
+        {/* Thinned to what actually fits. Fourteen dates across 600px collide
+            into an unreadable smear — the axis then costs space and tells you
+            nothing. Showing every nth keeps the ends, which are the two a
+            reader actually looks for. */}
+        {points.map((p, i) => {
+          const widest = Math.max(...points.map((q) => q.label.length)) * 6.2 + 10;
+          const every = Math.max(1, Math.ceil(widest / (innerW / Math.max(1, points.length - 1))));
+          const isEnd = i === 0 || i === points.length - 1;
+          if (!isEnd && i % every !== 0) return null;
+          // Never let a thinned label sit on top of the last one.
+          if (!isEnd && points.length - 1 - i < every / 2) return null;
+          return (
+            <text
+              key={p.label}
+              x={x(i)}
+              y={H - 8}
+              fontSize={10}
+              textAnchor={i === 0 ? "start" : i === points.length - 1 ? "end" : "middle"}
+              fill="var(--viz-muted)"
+            >
+              {p.label}
+            </text>
+          );
+        })}
 
         {/* Crosshair + tooltip: an SVG chart is interactive by default. */}
         {points.map((p, i) => (
