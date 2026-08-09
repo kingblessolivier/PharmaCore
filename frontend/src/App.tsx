@@ -105,6 +105,7 @@ import { LoansPage } from "./pages/LoansPage";
 import { RecruitmentPage } from "./pages/RecruitmentPage";
 import { OffboardingPage } from "./pages/OffboardingPage";
 import { FinanceCockpitPage } from "./pages/FinanceCockpitPage";
+import { FinanceRiskPage } from "./pages/FinanceRiskPage";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
@@ -299,6 +300,7 @@ function App() {
               <Route path="/pos" element={<PosPage />} />
               <Route path="/finance" element={forFinance(<FinanceHome />)} />
               <Route path="/finance/cockpit" element={forFinance(<FinanceCockpitPage />)} />
+              <Route path="/finance/risk" element={forFinance(<FinanceRiskPage />)} />
               <Route
                 path="/finance/aging"
                 element={<Navigate to="/finance/receivables?tab=aging" replace />}
