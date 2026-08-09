@@ -63,7 +63,10 @@ export function OrderComposePage() {
   const [qty, setQty] = useState("10");
   const [error, setError] = useState<string | null>(null);
 
-  const buyers = useQuery({ queryKey: ["partners", "buyer"], queryFn: () => tradingPartners("buyer") });
+  const buyers = useQuery({
+    queryKey: ["partners", "buyer"],
+    queryFn: () => tradingPartners("buyer"),
+  });
   const sellers = useQuery({
     queryKey: ["partners", "seller"],
     queryFn: () => tradingPartners("seller"),
@@ -155,7 +158,6 @@ export function OrderComposePage() {
         <WorkbenchHeader
           icon={Truck}
           title="New B2B order"
-          subtitle="Priced from the depot's storefront. Anything it cannot supply is recorded as demand rather than refused."
           facts={[
             { label: "Lines", value: lines.length },
             { label: "Units", value: units.toLocaleString() },
@@ -164,7 +166,10 @@ export function OrderComposePage() {
           actions={
             <>
               {blocker && <span className="text-form text-ink-500">{blocker}</span>}
-              <Button onClick={() => create.mutate()} disabled={Boolean(blocker) || create.isPending}>
+              <Button
+                onClick={() => create.mutate()}
+                disabled={Boolean(blocker) || create.isPending}
+              >
                 <Icon as={Save} size="sm" />
                 {create.isPending ? "Creating…" : "Create order"}
               </Button>
@@ -331,7 +336,9 @@ export function OrderComposePage() {
                         className={`px-3 py-1 text-right tabular-nums ${
                           over ? "font-semibold text-warning-700" : "text-ink-600"
                         }`}
-                        title={over ? "More than the depot will release — the rest becomes demand" : ""}
+                        title={
+                          over ? "More than the depot will release — the rest becomes demand" : ""
+                        }
                       >
                         {line.available.toLocaleString()}
                       </td>
@@ -358,9 +365,7 @@ export function OrderComposePage() {
               </tbody>
               <tfoot>
                 <tr>
-                  <td className="font-medium text-ink-700">
-                    {units.toLocaleString()} units
-                  </td>
+                  <td className="font-medium text-ink-700">{units.toLocaleString()} units</td>
                   <td colSpan={3} className="text-right font-medium text-ink-700">
                     Net value
                   </td>

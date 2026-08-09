@@ -66,7 +66,8 @@ export function InteractionsPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api<void>(`/api/catalog/product-interactions/${id}/`, { method: "DELETE" }),
+    mutationFn: (id: number) =>
+      api<void>(`/api/catalog/product-interactions/${id}/`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["product-interactions"] }),
   });
 
@@ -121,9 +122,6 @@ export function InteractionsPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        Full CRUD management for active pharmaceutical ingredient interaction rules and DrugBank severity alerts.
-      </p>
 
       <div className="mb-4 flex items-center gap-2 rounded-md border border-line bg-surface-0 px-3 py-2">
         <input
@@ -271,7 +269,8 @@ export function InteractionsPage() {
         <Drawer title="Edit Drug Interaction Rule" onClose={() => setEditing(null)}>
           <form onSubmit={submitUpdate} className="flex flex-col gap-4">
             <div className="text-sm font-medium text-ink-900">
-              Interaction: <span className="text-brand-700">{editing.ingredient_a_name}</span> + <span className="text-brand-700">{editing.ingredient_b_name}</span>
+              Interaction: <span className="text-brand-700">{editing.ingredient_a_name}</span> +{" "}
+              <span className="text-brand-700">{editing.ingredient_b_name}</span>
             </div>
             <SelectField
               label="Severity"

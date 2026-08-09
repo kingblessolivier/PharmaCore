@@ -12,30 +12,26 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
-  CheckCircle2,
   ClipboardList,
   EyeOff,
-  FileCheck,
-  PackageCheck,
   RotateCcw,
   Ship,
-  ShoppingCart,
   Store,
   TrendingUp,
   Truck,
-  Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   AppHeader,
   QuickAction,
   QuickActions,
-  SectionCard,
-  SectionGrid,
+  ReadinessCard,
+  ReadinessGrid,
   StatTile,
   WorkQueue,
 } from "../../components/AppHome";
 import { useModuleWork } from "../../lib/modulework";
+import { ModuleInsights } from "../../components/ModuleInsights";
 import { api } from "../../lib/api";
 import { overview } from "../../lib/distribution";
 import { money } from "../../lib/format";
@@ -71,24 +67,13 @@ export function DistributionHome() {
     select: (r) => r.count,
   });
 
-  const grns = useQuery({
-    queryKey: ["count", "grn"],
-    queryFn: () => api<Paginated<unknown>>("/api/distribution/grns/?page_size=1"),
-    select: (r) => r.count,
-  });
-
   const store = health.data?.storefront;
   const demand = health.data?.demand;
   const returns = health.data?.returns;
 
   return (
-    <div className="flex max-w-6xl flex-col gap-6">
-      <AppHeader
-        icon={Truck}
-        hue="#3B5BDB"
-        title="Distribution"
-        subtitle="What you offer to retail pharmacies, what they ordered that you could not supply, and what is moving between you."
-      />
+    <div className="flex flex-col gap-6">
+      <AppHeader icon={Truck} hue="#3B5BDB" title="Distribution" />
 
       <WorkQueue items={work.items} loading={work.loading} />
 
@@ -125,137 +110,34 @@ export function DistributionHome() {
           />
         </Link>
         <Link to="/distribution/in-transit">
-          <StatTile
-            label="In transit"
-            value={inTransit.data ?? 0}
-            hint="batches on the road"
-          />
+          <StatTile label="In transit" value={inTransit.data ?? 0} hint="batches on the road" />
         </Link>
       </div>
 
-      <NeedsAttention
-        store={store}
-        demand={demand}
-        returns={returns}
-        loading={health.isLoading}
-      />
+      <NeedsAttention store={store} demand={demand} returns={returns} loading={health.isLoading} />
 
       <QuickActions>
-        <QuickAction to="/distribution/listings" icon={Store} label="Manage what you offer" primary />
+        <QuickAction
+          to="/distribution/listings"
+          icon={Store}
+          label="Manage what you offer"
+          primary
+        />
         <QuickAction to="/distribution/demand" icon={TrendingUp} label="Review unmet demand" />
         <QuickAction to="/distribution/orders" icon={ClipboardList} label="B2B purchase orders" />
       </QuickActions>
 
       <div>
         <h2 className="mb-3 text-base font-semibold tracking-tight text-ink-900">
-          Everything in distribution
+          How the depot is trading
         </h2>
-        <SectionGrid>
-          <SectionCard
-            icon={Store}
-            title="Depot offered listings"
-            description="What you publish to buyers, what you hold back, and who may buy it."
-            to="/distribution/listings"
-            meta={store?.published}
-          />
-          <SectionCard
-            icon={ShoppingCart}
-            title="B2B ordering portal"
-            description="Buy from another wholesaler's published catalogue."
-            to="/distribution/portal"
-          />
-          <SectionCard
-            icon={TrendingUp}
-            title="Unmet demand"
-            description="What pharmacies asked for that you could not supply — and the import it becomes."
-            to="/distribution/demand"
-            meta={demand?.products_open}
-          />
-          <SectionCard
-            icon={ClipboardList}
-            title="B2B purchase orders"
-            description="Approve, FEFO-reserve, dispatch and settle orders from retail pharmacies."
-            to="/distribution/orders"
-            meta={orders.data}
-          />
-          <SectionCard
-            icon={Truck}
-            title="In-transit stock"
-            description="Units that have left you but not yet been received, so nothing is counted twice or lost."
-            to="/distribution/in-transit"
-            meta={inTransit.data}
-          />
-          <SectionCard
-            icon={PackageCheck}
-            title="Goods received notes"
-            description="Receipt verification, discrepancy logging and stock landing."
-            to="/distribution/grn"
-            meta={grns.data}
-          />
-          <SectionCard
-            icon={Users}
-            title="Field sales & reps"
-            description="Territory performance against target, van stock and commission."
-            to="/distribution/sales-reps"
-          />
-          <SectionCard
-            icon={FileCheck}
-            title="Institutional tenders"
-            description="Awarded contracts, locked prices and how much committed volume is left."
-            to="/distribution/tenders"
-          />
-          <SectionCard
-            icon={RotateCcw}
-            title="Customer returns"
-            description="Inspect what came back, restock only what is fit to resell, credit only that."
-            to="/distribution/returns"
-            meta={returns?.awaiting_inspection}
-          />
-        </SectionGrid>
+        <ModuleInsights module="distribution" />
       </div>
     </div>
   );
 }
 
 /* -------------------------------------------------------------------------- */
-
-function Row({
-  ok,
-  label,
-  detail,
-  to,
-  icon: Icon,
-}: {
-  ok: boolean;
-  label: string;
-  detail: string;
-  to: string;
-  icon: typeof Store;
-}) {
-  return (
-    <li className="flex items-start gap-2.5 py-2">
-      <span className="mt-0.5">
-        {ok ? (
-          <CheckCircle2 className="h-4 w-4 text-success-600" />
-        ) : (
-          <AlertTriangle className="h-4 w-4 text-warning-600" />
-        )}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 text-sm text-ink-900">
-          <Icon className="h-3.5 w-3.5 text-ink-400" />
-          {label}
-        </div>
-        <div className="text-xs text-ink-500">{detail}</div>
-      </div>
-      {!ok && (
-        <Link to={to} className="shrink-0 text-xs text-brand-600 hover:underline">
-          Open
-        </Link>
-      )}
-    </li>
-  );
-}
 
 function NeedsAttention({
   store,
@@ -277,84 +159,73 @@ function NeedsAttention({
   if (loading || !store || !demand || !returns) return null;
 
   return (
-    <div className="rounded-lg border border-line bg-surface-0">
-      <div className="border-b border-line px-4 py-3">
-        <div className="text-sm font-semibold text-ink-900">Needs your attention</div>
-        <div className="text-xs text-ink-500">
-          Decisions only you can make: what to sell, what to import, what to take back.
-        </div>
-      </div>
-      <ul className="divide-y divide-line px-4">
-        <Row
-          ok={store.unlisted === 0}
-          icon={Store}
-          label={
-            store.unlisted === 0
-              ? "Everything you hold is listed"
-              : `${store.unlisted} product(s) you hold are not listed at all`
-          }
-          detail={
-            store.unlisted === 0
-              ? "Every product in your warehouse has a storefront listing."
-              : "No buyer can see or order them. Publish them, or leave them off deliberately."
-          }
+    <ReadinessGrid title="Needs your attention">
+      <ReadinessCard
+        icon={Store}
+        tone={store.unlisted === 0 ? "ok" : "warning"}
+        title={store.unlisted === 0 ? "Everything listed" : `${store.unlisted} not listed`}
+        detail={store.unlisted === 0 ? "All stock is on the storefront." : "No buyer can see them."}
+        to={store.unlisted === 0 ? undefined : "/distribution/listings"}
+        actionLabel="Publish"
+      />
+      <ReadinessCard
+        icon={AlertTriangle}
+        tone={store.oversold.length === 0 ? "ok" : "danger"}
+        title={
+          store.oversold.length === 0
+            ? "Nothing over-published"
+            : `${store.oversold.length} over-published`
+        }
+        detail={
+          store.oversold.length === 0
+            ? "Every quantity is backed by stock."
+            : "These orders will under-fill."
+        }
+        to={store.oversold.length === 0 ? undefined : "/distribution/listings"}
+        actionLabel="Fix listings"
+      />
+      <ReadinessCard
+        icon={Ship}
+        tone={demand.open_lines === 0 ? "ok" : "warning"}
+        title={
+          demand.open_lines === 0
+            ? "No unsourced demand"
+            : `${demand.units_open.toLocaleString()} unit(s) unsourced`
+        }
+        detail={
+          demand.open_lines === 0
+            ? "Everything asked for was supplied."
+            : `${demand.buyers_waiting} waiting, oldest ${demand.oldest_days}d.`
+        }
+        to={demand.open_lines === 0 ? undefined : "/distribution/demand"}
+        actionLabel="Raise a requisition"
+      />
+      <ReadinessCard
+        icon={RotateCcw}
+        tone={returns.awaiting_inspection === 0 ? "ok" : "warning"}
+        title={
+          returns.awaiting_inspection === 0
+            ? "No returns waiting"
+            : `${returns.awaiting_inspection} awaiting inspection`
+        }
+        detail={
+          returns.awaiting_inspection === 0
+            ? `${money(returns.credited_amount)} credited to date.`
+            : "Neither restocked nor credited."
+        }
+        to={returns.awaiting_inspection === 0 ? undefined : "/distribution/returns"}
+        actionLabel="Inspect"
+      />
+      {store.withheld > 0 && (
+        <ReadinessCard
+          icon={EyeOff}
+          tone="ok"
+          title={`${store.withheld} withheld`}
+          detail="Hidden from buyers by your choice."
           to="/distribution/listings"
+          actionLabel="Review"
         />
-        <Row
-          ok={store.oversold.length === 0}
-          icon={AlertTriangle}
-          label={
-            store.oversold.length === 0
-              ? "Nothing is over-published"
-              : `${store.oversold.length} listing(s) offer more than you can deliver`
-          }
-          detail={
-            store.oversold.length === 0
-              ? "Every published quantity is backed by stock you actually hold."
-              : "Buyers are capped at real stock, so these orders will quietly under-fill."
-          }
-          to="/distribution/listings"
-        />
-        <Row
-          ok={demand.open_lines === 0}
-          icon={Ship}
-          label={
-            demand.open_lines === 0
-              ? "No unsourced demand"
-              : `${demand.units_open.toLocaleString()} unit(s) wanted and not yet sourced`
-          }
-          detail={
-            demand.open_lines === 0
-              ? "Everything your customers asked for was either supplied or is being sourced."
-              : `${demand.buyers_waiting} pharmacy(ies) waiting, oldest ${demand.oldest_days} day(s). Raise a requisition to import against it.`
-          }
-          to="/distribution/demand"
-        />
-        <Row
-          ok={returns.awaiting_inspection === 0}
-          icon={RotateCcw}
-          label={
-            returns.awaiting_inspection === 0
-              ? "No returns waiting"
-              : `${returns.awaiting_inspection} return(s) awaiting inspection`
-          }
-          detail={
-            returns.awaiting_inspection === 0
-              ? `${money(returns.credited_amount)} credited to date.`
-              : "Goods are sitting at your depot uninspected — neither restocked nor credited."
-          }
-          to="/distribution/returns"
-        />
-        {store.withheld > 0 && (
-          <Row
-            ok
-            icon={EyeOff}
-            label={`${store.withheld} listing(s) deliberately withheld`}
-            detail="Invisible to buyers by your choice. Nothing to do — shown so it is never a surprise."
-            to="/distribution/listings"
-          />
-        )}
-      </ul>
-    </div>
+      )}
+    </ReadinessGrid>
   );
 }

@@ -298,9 +298,7 @@ export function ClaimWorkbenchPage() {
                 <tr key={line.id}>
                   <td className="text-ink-900">
                     {line.product_name}
-                    {line.note && (
-                      <span className="ml-2 text-micro text-ink-500">{line.note}</span>
-                    )}
+                    {line.note && <span className="ml-2 text-micro text-ink-500">{line.note}</span>}
                   </td>
                   <td className="text-right tabular-nums">{line.quantity}</td>
                   <td className="text-right tabular-nums text-ink-700">

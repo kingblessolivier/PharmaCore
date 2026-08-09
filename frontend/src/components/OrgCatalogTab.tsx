@@ -107,7 +107,11 @@ function AddModal({
           placeholder="e.g. paracetamol"
           autoFocus
         />
-        <SelectField label="Product" value={productId} onChange={(e) => setProductId(e.target.value)}>
+        <SelectField
+          label="Product"
+          value={productId}
+          onChange={(e) => setProductId(e.target.value)}
+        >
           <option value="">— select —</option>
           {(products.data?.results ?? []).map((pr) => (
             <option key={pr.id} value={pr.id}>

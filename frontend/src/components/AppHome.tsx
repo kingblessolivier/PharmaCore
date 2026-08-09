@@ -1,15 +1,13 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { WorkQueueItem } from "../lib/modulework";
-import {
-  ArrowRight,
-  CheckCircle2,
-  TrendingDown,
-  TrendingUp,
-  type LucideIcon,
-} from "lucide-react";
+import { ArrowRight, CheckCircle2, TrendingDown, TrendingUp, type LucideIcon } from "lucide-react";
 
-/** The header of a subsystem's home page: hue tile + glyph + title + one-line subtitle. */
+/** The header of a subsystem's home page: hue tile + glyph + title.
+ *
+ * The subtitle is optional and usually absent. It used to carry a paragraph
+ * describing what the subsystem was for, which is a thing you read once and
+ * then scroll past every day afterwards. */
 export function AppHeader({
   icon: Icon,
   hue,
@@ -19,7 +17,7 @@ export function AppHeader({
   icon: LucideIcon;
   hue: string;
   title: string;
-  subtitle: string;
+  subtitle?: string;
 }) {
   return (
     <div className="mb-6 flex items-start gap-3.5">
@@ -31,7 +29,7 @@ export function AppHeader({
       </span>
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-ink-900">{title}</h1>
-        <p className="text-sm text-ink-500">{subtitle}</p>
+        {subtitle && <p className="text-sm text-ink-500">{subtitle}</p>}
       </div>
     </div>
   );
@@ -171,6 +169,95 @@ export function SectionGrid({
 }
 
 /* -------------------------------------------------------------------------- */
+/* Readiness cards — a checklist you can read at a glance.                     */
+/*                                                                             */
+/* These used to be rows of small text: a label, then a sentence explaining     */
+/* what the label meant. Nobody reads the sentence twice, and after the first   */
+/* day it is just noise between you and the one row that is red. As cards the   */
+/* state is carried by the icon and its colour, so a glance is enough and the   */
+/* words can be short.                                                          */
+/* -------------------------------------------------------------------------- */
+
+export type ReadinessTone = "ok" | "warning" | "danger";
+
+const TONE: Record<ReadinessTone, { tile: string; ring: string; chip: string; text: string }> = {
+  ok: {
+    tile: "bg-success-50 text-success-700",
+    ring: "border-line",
+    chip: "bg-success-50 text-success-700",
+    text: "Ready",
+  },
+  warning: {
+    tile: "bg-warning-50 text-warning-700",
+    ring: "border-warning-200",
+    chip: "bg-warning-50 text-warning-800",
+    text: "Action",
+  },
+  danger: {
+    tile: "bg-danger-50 text-danger-700",
+    ring: "border-danger-200",
+    chip: "bg-danger-50 text-danger-800",
+    text: "Blocked",
+  },
+};
+
+/** One check, as a card: coloured glyph, the state, a short read, and a way in. */
+export function ReadinessCard({
+  icon: Icon,
+  tone,
+  title,
+  detail,
+  to,
+  actionLabel = "Open",
+}: {
+  icon: LucideIcon;
+  tone: ReadinessTone;
+  title: string;
+  /** One short clause. Not a sentence explaining the feature. */
+  detail: string;
+  to?: string;
+  actionLabel?: string;
+}) {
+  const t = TONE[tone];
+  return (
+    <div className={`flex flex-col rounded-lg border ${t.ring} bg-surface-0 p-4`}>
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${t.tile}`}>
+          <Icon className="h-[18px] w-[18px]" aria-hidden />
+        </span>
+        {/* The chip repeats the state in words — the colour is never the only signal. */}
+        <span
+          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${t.chip}`}
+        >
+          {t.text}
+        </span>
+      </div>
+      <div className="text-sm font-semibold leading-snug text-ink-900">{title}</div>
+      <div className="mt-0.5 text-xs leading-relaxed text-ink-500">{detail}</div>
+      {to && (
+        <Link
+          to={to}
+          className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline"
+        >
+          {actionLabel}
+          <ArrowRight className="h-3 w-3" aria-hidden />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+/** The grid readiness cards sit in — four across on a wide screen. */
+export function ReadinessGrid({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="mb-6">
+      <h2 className="mb-3 text-base font-semibold tracking-tight text-ink-900">{title}</h2>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{children}</div>
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* Work queue — the reason a module home is not just a menu.                   */
 /*                                                                             */
 /* Arriving at Inventory should say "four batches are in quarantine waiting on  */
@@ -189,9 +276,7 @@ export function WorkQueue({
   emptyMessage?: string;
 }) {
   if (loading) {
-    return (
-      <div className="mb-6 h-16 animate-pulse rounded-lg border border-line bg-surface-100" />
-    );
+    return <div className="mb-6 h-16 animate-pulse rounded-lg border border-line bg-surface-100" />;
   }
   if (items.length === 0) {
     return (
@@ -228,4 +313,3 @@ export function WorkQueue({
     </div>
   );
 }
-

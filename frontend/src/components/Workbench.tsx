@@ -281,13 +281,7 @@ export function ReadOnly({ children }: { children: ReactNode }) {
 }
 
 /** Two or three fieldset columns. Below `lg` it collapses to one, in order. */
-export function WorkbenchGrid({
-  cols = 2,
-  children,
-}: {
-  cols?: 1 | 2 | 3;
-  children: ReactNode;
-}) {
+export function WorkbenchGrid({ cols = 2, children }: { cols?: 1 | 2 | 3; children: ReactNode }) {
   const at = cols === 1 ? "" : cols === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2";
   return <div className={`grid grid-cols-1 gap-3 ${at}`}>{children}</div>;
 }

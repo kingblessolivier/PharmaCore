@@ -54,9 +54,7 @@ function RequisitionDrawer({
     needed_by: requisition?.needed_by ?? "",
     justification: requisition?.justification ?? "",
     preferred_supplier: requisition?.preferred_supplier ?? null,
-    lines: requisition?.lines?.length
-      ? requisition.lines.map((l) => ({ ...l }))
-      : [emptyLine()],
+    lines: requisition?.lines?.length ? requisition.lines.map((l) => ({ ...l })) : [emptyLine()],
   });
 
   const total = useMemo(
@@ -376,7 +374,10 @@ function ConsolidateModal({
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button disabled={!supplier || consolidate.isPending} onClick={() => consolidate.mutate()}>
+          <Button
+            disabled={!supplier || consolidate.isPending}
+            onClick={() => consolidate.mutate()}
+          >
             {consolidate.isPending ? "Creating…" : "Create purchase order"}
           </Button>
         </div>
@@ -400,7 +401,7 @@ export function RequisitionsPage() {
   });
 
   const rows = data?.results ?? [];
-  const current = open ? rows.find((r) => r.id === open.id) ?? open : null;
+  const current = open ? (rows.find((r) => r.id === open.id) ?? open) : null;
 
   return (
     <div>
@@ -412,10 +413,6 @@ export function RequisitionsPage() {
           </Button>
         }
       />
-      <p className="mb-4 max-w-3xl text-sm text-ink-500">
-        Branches raise what they need; an approver (never the requester) signs it off; HQ selects the
-        approved ones and consolidates them into one purchase order per supplier.
-      </p>
 
       <DataGrid<PurchaseRequisition>
         rows={rows}
@@ -474,7 +471,11 @@ export function RequisitionsPage() {
             header: "Priority",
             value: (r) => r.priority,
             render: (r) => (
-              <Badge tone={r.priority === "URGENT" ? "danger" : r.priority === "HIGH" ? "warning" : "neutral"}>
+              <Badge
+                tone={
+                  r.priority === "URGENT" ? "danger" : r.priority === "HIGH" ? "warning" : "neutral"
+                }
+              >
                 {r.priority}
               </Badge>
             ),
@@ -495,7 +496,11 @@ export function RequisitionsPage() {
             value: (r) => Number(r.estimated_total),
             render: (r) => money(r.estimated_total),
           },
-          { key: "requested_by_name", header: "Requested by", value: (r) => r.requested_by_name ?? "—" },
+          {
+            key: "requested_by_name",
+            header: "Requested by",
+            value: (r) => r.requested_by_name ?? "—",
+          },
         ]}
       />
 

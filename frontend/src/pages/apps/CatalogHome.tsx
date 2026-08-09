@@ -4,12 +4,8 @@ import {
   ArrowRight,
   CalendarClock,
   CheckCircle2,
-  Factory,
-  FlaskConical,
-  Layers,
   Pill,
   Plus,
-  RefreshCcw,
   ShieldAlert,
   ShieldCheck,
   ShoppingCart,
@@ -17,17 +13,11 @@ import {
   Upload,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import {
-  AppHeader,
-  QuickAction,
-  QuickActions,
-  SectionCard,
-  SectionGrid,
-  StatTile,
-} from "../../components/AppHome";
+import { AppHeader, QuickAction, QuickActions, StatTile } from "../../components/AppHome";
 import { Badge, Card, Spinner } from "../../components/ui";
 import { api } from "../../lib/api";
 import type { DashboardSummary, Paginated, Product } from "../../lib/types";
+import { ModuleInsights } from "../../components/ModuleInsights";
 
 export function CatalogHome() {
   // Queries for real-time dashboard data
@@ -86,14 +76,9 @@ export function CatalogHome() {
   const essentialCount = products.filter((p) => p.is_essential).length;
 
   return (
-    <div className="flex flex-col gap-6 max-w-6xl">
+    <div className="flex flex-col gap-6">
       {/* App Header */}
-      <AppHeader
-        icon={Pill}
-        hue="#CA8A04"
-        title="Catalog Executive Dashboard"
-        subtitle="Medicine master data, WHO clinical standards, price lists, formularies, drug safety rules, and stock health."
-      />
+      <AppHeader icon={Pill} hue="#CA8A04" title="Catalog Executive Dashboard" />
 
       {/* Top Level Metric KPIs */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
@@ -119,7 +104,11 @@ export function CatalogHome() {
           <StatTile label="Formularies" value={formulariesQuery.data ?? 0} hint="insurer schemes" />
         </Link>
         <Link to="/catalog/interactions">
-          <StatTile label="Drug Safety" value={interactionsQuery.data ?? 0} hint="interaction rules" />
+          <StatTile
+            label="Drug Safety"
+            value={interactionsQuery.data ?? 0}
+            hint="interaction rules"
+          />
         </Link>
       </div>
 
@@ -199,16 +188,23 @@ export function CatalogHome() {
             </div>
             <div className="mt-4 flex flex-col gap-3">
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                <div className="font-semibold text-sm">{s?.expiring_soon.count ?? 0} Batches Expiring</div>
-                <div className="mt-0.5 font-mono">{s?.expiring_soon.units.toLocaleString() ?? 0} total units within 90 days</div>
-                <p className="mt-1 text-[11px] text-amber-700">Enforce FEFO (First-Expired-First-Out) during POS sale scanning.</p>
+                <div className="font-semibold text-sm">
+                  {s?.expiring_soon.count ?? 0} Batches Expiring
+                </div>
+                <div className="mt-0.5 font-mono">
+                  {s?.expiring_soon.units.toLocaleString() ?? 0} total units within 90 days
+                </div>
+                <p className="mt-1 text-[11px] text-amber-700">
+                  Enforce FEFO (First-Expired-First-Out) during POS sale scanning.
+                </p>
               </div>
 
               {s && s.expired.count > 0 && (
                 <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-900 flex items-start gap-2">
                   <ShieldAlert className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-semibold">{s.expired.count} Expired Batch(es)</span> ({s.expired.units} units) requiring immediate quarantine and write-off.
+                    <span className="font-semibold">{s.expired.count} Expired Batch(es)</span> (
+                    {s.expired.units} units) requiring immediate quarantine and write-off.
                   </div>
                 </div>
               )}
@@ -231,7 +227,9 @@ export function CatalogHome() {
             <div className="mt-4 flex flex-col gap-3 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-ink-600">WHO Essential Medicines List</span>
-                <Badge tone="success">{essentialCount} / {products.length} essential</Badge>
+                <Badge tone="success">
+                  {essentialCount} / {products.length} essential
+                </Badge>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-ink-600">Prescription Control (Rx)</span>
@@ -243,11 +241,15 @@ export function CatalogHome() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-ink-600">Manufacturers Registered</span>
-                <span className="font-mono font-semibold">{manufacturersQuery.data ?? 0} companies</span>
+                <span className="font-mono font-semibold">
+                  {manufacturersQuery.data ?? 0} companies
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-ink-600">Active Ingredients (INN)</span>
-                <span className="font-mono font-semibold">{ingredientsQuery.data ?? 0} ingredients</span>
+                <span className="font-mono font-semibold">
+                  {ingredientsQuery.data ?? 0} ingredients
+                </span>
               </div>
             </div>
           </div>
@@ -263,79 +265,9 @@ export function CatalogHome() {
       {/* Comprehensive Catalog Modules Navigation Grid */}
       <div>
         <h2 className="mb-3 text-base font-semibold tracking-tight text-ink-900">
-          Catalog System Directory
+          What the catalogue is made of
         </h2>
-        <SectionGrid>
-          <SectionCard
-            icon={Pill}
-            title="Products Master"
-            description="Medicine master: reg no., ATC, GTIN, form, strength, WHO DDD, WHO Essential, Rx/controlled flags."
-            to="/products"
-            meta={totalProducts}
-          />
-          <SectionCard
-            icon={Tag}
-            title="Price Lists & Tiered Pricing"
-            description="Multi-tier pricing engine: Retail, Wholesale, Contract, Promotional lists and volume breaks."
-            to="/catalog/price-lists"
-            meta={priceListsQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={ShieldCheck}
-            title="Insurer Formularies & Coverage"
-            description="RSSB/RAMA, CBHI, MMI reimbursable formularies, co-pay %, max price limits, and prior auth."
-            to="/catalog/formularies"
-            meta={formulariesQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={AlertTriangle}
-            title="Drug Interactions & Safety"
-            description="Active ingredient drug-drug interaction matrix with DrugBank severity alerts & management guidance."
-            to="/catalog/interactions"
-            meta={interactionsQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={Layers}
-            title="Units of Measure (UoM)"
-            description="Pack ↔ Strip ↔ Tablet conversions for OTC increment dispensing and unit pricing."
-            to="/catalog/uom"
-            meta={uomQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={RefreshCcw}
-            title="Generic & Therapeutic Substitutes"
-            description="Bioequivalent generic equivalents and therapeutic alternatives for stock-outs."
-            to="/catalog/substitutes"
-          />
-          <SectionCard
-            icon={Factory}
-            title="Manufacturers Directory"
-            description="Pharmaceutical manufacturers, origin countries, and GMP compliance tracking."
-            to="/catalog/manufacturers"
-            meta={manufacturersQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={FlaskConical}
-            title="Active Ingredients (INN Master)"
-            description="International Nonproprietary Names (INN) active ingredient dictionary."
-            to="/catalog/ingredients"
-            meta={ingredientsQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={AlertTriangle}
-            title="Low-stock Reorder List"
-            description="Dedicated view of medicines below reorder thresholds across your pharmacies."
-            to="/catalog/low-stock"
-            meta={s?.low_stock.count}
-          />
-          <SectionCard
-            icon={CalendarClock}
-            title="Expiry Forecast & Actions"
-            description="Batches nearing expiry within 90 days and FEFO priority dispensing action list."
-            to="/catalog/expiry"
-            meta={s?.expiring_soon.count}
-          />
-        </SectionGrid>
+        <ModuleInsights module="catalog" />
       </div>
     </div>
   );

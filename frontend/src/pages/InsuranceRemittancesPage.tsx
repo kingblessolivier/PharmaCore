@@ -169,9 +169,7 @@ export function InsuranceRemittancesPage() {
       key: "status",
       header: "Status",
       value: (a) => a.status,
-      render: (a) => (
-<StatusChip status={a.status} size="sm" />
-      ),
+      render: (a) => <StatusChip status={a.status} size="sm" />,
     },
   ];
 
@@ -187,10 +185,6 @@ export function InsuranceRemittancesPage() {
           </Button>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Match each claim the insurer settled, then post. An advice whose total disagrees with its
-        own lines is refused — the difference has to be explained rather than absorbed.
-      </p>
 
       <DataGrid
         rows={rows}
@@ -382,7 +376,6 @@ export function InsuranceRemittancesPage() {
       {creating && (
         <Drawer
           title="New remittance advice"
-          subtitle="What the insurer's own document says it is paying."
           onClose={() => setCreating(false)}
           footer={
             <div className="flex justify-end gap-2">

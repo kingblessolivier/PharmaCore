@@ -92,13 +92,10 @@ function AccountDrawer({
 
   const save = useMutation({
     mutationFn: () =>
-      api<Account>(
-        account ? `/api/finance/accounts/${account.id}/` : "/api/finance/accounts/",
-        {
-          method: account ? "PATCH" : "POST",
-          body: JSON.stringify({ ...form, organization: orgId }),
-        },
-      ),
+      api<Account>(account ? `/api/finance/accounts/${account.id}/` : "/api/finance/accounts/", {
+        method: account ? "PATCH" : "POST",
+        body: JSON.stringify({ ...form, organization: orgId }),
+      }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["accounts"] });
       onClose();
@@ -142,7 +139,10 @@ function AccountDrawer({
 
       <Section title="Identity">
         <Grid cols={2}>
-          <Field label="Code" hint="Codes are grouped by range, but nothing infers meaning from them.">
+          <Field
+            label="Code"
+            hint="Codes are grouped by range, but nothing infers meaning from them."
+          >
             <Input
               value={form.code}
               onChange={(e) => set({ code: e.target.value })}
@@ -188,10 +188,8 @@ function AccountDrawer({
             onChange={(e) => set({ classification: e.target.value })}
           >
             <option value="">
-              — default for a {form.account_type.toLowerCase()} ({CLASSIFICATION_LABEL[
-                DEFAULT_BY_TYPE[form.account_type]
-              ]}
-              ) —
+              — default for a {form.account_type.toLowerCase()} (
+              {CLASSIFICATION_LABEL[DEFAULT_BY_TYPE[form.account_type]]}) —
             </option>
             {CLASSIFICATIONS.map(([v, l, group]) => (
               <option key={v} value={v}>
@@ -258,10 +256,7 @@ export function ChartOfAccountsPage() {
   // An account with no explicit classification is being reported on a default.
   // That is usually right and occasionally very wrong, so it is worth surfacing
   // rather than leaving to be discovered in a set of statements.
-  const unclassified = useMemo(
-    () => accounts.filter((a) => !a.classification),
-    [accounts],
-  );
+  const unclassified = useMemo(() => accounts.filter((a) => !a.classification), [accounts]);
 
   return (
     <div className="space-y-4">
@@ -279,9 +274,9 @@ export function ChartOfAccountsPage() {
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
             <strong>{unclassified.length}</strong> account
-            {unclassified.length === 1 ? " is" : "s are"} reporting on the default
-            classification for their type. That is usually right, but an account in the wrong
-            statement line moves gross profit without anything looking broken.
+            {unclassified.length === 1 ? " is" : "s are"} reporting on the default classification
+            for their type. That is usually right, but an account in the wrong statement line moves
+            gross profit without anything looking broken.
           </span>
         </div>
       )}

@@ -2,14 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Save } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Button,
-  Card,
-  PageHeader,
-  SelectField,
-  Spinner,
-  TextField,
-} from "../components/ui";
+import { Button, Card, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { TenantSettings } from "../lib/types";
@@ -25,13 +18,13 @@ import type { TenantSettings } from "../lib/types";
 const COSTING_HELP: Record<TenantSettings["costing_method"], string> = {
   FEFO_LOT:
     "First-expiry / first-out at the lot level — pharma default. Issues each batch's actual cost at dispense.",
-  WAC:
-    "Weighted average across all batches of the product. Smoother margins; less traceability for recalls.",
+  WAC: "Weighted average across all batches of the product. Smoother margins; less traceability for recalls.",
 };
 
 const PAY_PERIOD_HELP: Record<TenantSettings["pay_period"], string> = {
   MONTHLY: "Most common in Rwanda. Salary credited on the last working day of the month.",
-  FORTNIGHTLY: "Twice a month — mid-month and end-of-month. Matches half-month statutory remittances.",
+  FORTNIGHTLY:
+    "Twice a month — mid-month and end-of-month. Matches half-month statutory remittances.",
   WEEKLY: "Weekly cycle — common for hourly / contract staff.",
   DAILY: "Daily pay — used for very short engagements or piece-work.",
 };
@@ -44,8 +37,7 @@ export function TenantSettingsPage() {
 
   const settingsQ = useQuery({
     queryKey: ["tenant-settings", orgId],
-    queryFn: () =>
-      api<TenantSettings>(`/api/finance/tenant-settings/${orgId}/`),
+    queryFn: () => api<TenantSettings>(`/api/finance/tenant-settings/${orgId}/`),
     enabled: orgId > 0,
   });
 
@@ -121,7 +113,7 @@ export function TenantSettingsPage() {
 
   if (!orgId) {
     return (
-      <div className="max-w-3xl">
+      <div>
         <Card>
           <p className="py-6 text-center text-sm text-ink-500">
             No organization is linked to your account.
@@ -132,7 +124,7 @@ export function TenantSettingsPage() {
   }
 
   return (
-    <div className="max-w-3xl">
+    <div>
       <button
         onClick={() => navigate("/finance")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -148,12 +140,6 @@ export function TenantSettingsPage() {
           </span>
         }
       />
-      <p className="mb-4 text-sm text-ink-500">
-        These are the per-tenant defaults that the rest of the system reads from:
-        which currency to settle in, how to value inventory, when payroll runs,
-        and when statutory filings are due. Changes are auditable — every save
-        writes an entry to <code>/activity</code>.
-      </p>
 
       {settingsQ.isLoading && (
         <div className="flex justify-center py-10">
@@ -181,9 +167,9 @@ export function TenantSettingsPage() {
               />
             </div>
             <p className="mt-2 text-xs text-ink-500">
-              <strong>Base currency</strong> is the unit the books close in. Foreign
-              invoices / supplier bills are translated to this currency at the FX
-              provider's rate on the document date.
+              <strong>Base currency</strong> is the unit the books close in. Foreign invoices /
+              supplier bills are translated to this currency at the FX provider's rate on the
+              document date.
             </p>
           </Card>
 
@@ -232,9 +218,7 @@ export function TenantSettingsPage() {
                   min={1}
                   max={28}
                   value={form.statutory_remittance_day}
-                  onChange={(e) =>
-                    setForm({ ...form, statutory_remittance_day: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, statutory_remittance_day: e.target.value })}
                   required
                 />
               </div>
@@ -242,8 +226,8 @@ export function TenantSettingsPage() {
                 <strong>Pay period</strong> — {PAY_PERIOD_HELP[form.pay_period]}
               </p>
               <p className="mt-1 text-xs text-ink-500">
-                <strong>Statutory remittance day</strong> — RSSB / PAYE / CBHI are
-                paid on this day each month. Rwanda default: the 15th.
+                <strong>Statutory remittance day</strong> — RSSB / PAYE / CBHI are paid on this day
+                each month. Rwanda default: the 15th.
               </p>
             </Card>
           </div>
@@ -257,9 +241,7 @@ export function TenantSettingsPage() {
                   min={1}
                   max={12}
                   value={form.pit_filing_deadline_month}
-                  onChange={(e) =>
-                    setForm({ ...form, pit_filing_deadline_month: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, pit_filing_deadline_month: e.target.value })}
                   required
                 />
                 <TextField
@@ -268,16 +250,13 @@ export function TenantSettingsPage() {
                   min={1}
                   max={31}
                   value={form.pit_filing_deadline_day}
-                  onChange={(e) =>
-                    setForm({ ...form, pit_filing_deadline_day: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, pit_filing_deadline_day: e.target.value })}
                   required
                 />
               </div>
               <p className="mt-2 text-xs text-ink-500">
-                Rwanda personal-income-tax declaration deadline. Defaults to 31
-                March each year — the system uses this to schedule the pre-deadline
-                reminder.
+                Rwanda personal-income-tax declaration deadline. Defaults to 31 March each year —
+                the system uses this to schedule the pre-deadline reminder.
               </p>
             </Card>
           </div>
@@ -304,12 +283,8 @@ export function TenantSettingsPage() {
             </Card>
           </div>
 
-          {error && (
-            <p className="mt-3 text-sm text-danger">{error}</p>
-          )}
-          {save.isSuccess && !error && (
-            <p className="mt-3 text-sm text-success">Saved.</p>
-          )}
+          {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+          {save.isSuccess && !error && <p className="mt-3 text-sm text-success">Saved.</p>}
 
           <div className="mt-5 flex justify-end gap-2">
             <Button
@@ -322,15 +297,9 @@ export function TenantSettingsPage() {
                     fx_provider: settingsQ.data.fx_provider,
                     costing_method: settingsQ.data.costing_method,
                     pay_period: settingsQ.data.pay_period,
-                    statutory_remittance_day: String(
-                      settingsQ.data.statutory_remittance_day,
-                    ),
-                    pit_filing_deadline_month: String(
-                      settingsQ.data.pit_filing_deadline_month,
-                    ),
-                    pit_filing_deadline_day: String(
-                      settingsQ.data.pit_filing_deadline_day,
-                    ),
+                    statutory_remittance_day: String(settingsQ.data.statutory_remittance_day),
+                    pit_filing_deadline_month: String(settingsQ.data.pit_filing_deadline_month),
+                    pit_filing_deadline_day: String(settingsQ.data.pit_filing_deadline_day),
                     default_country: settingsQ.data.default_country,
                     timezone: settingsQ.data.timezone,
                   });

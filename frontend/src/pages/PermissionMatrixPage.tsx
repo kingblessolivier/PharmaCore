@@ -13,7 +13,10 @@ export function PermissionMatrixPage() {
   const editable = isSysAdmin(user);
   const [error, setError] = useState<string | null>(null);
 
-  const permsQ = useQuery({ queryKey: ["permissions"], queryFn: () => api<Permission[]>("/api/permissions/") });
+  const permsQ = useQuery({
+    queryKey: ["permissions"],
+    queryFn: () => api<Permission[]>("/api/permissions/"),
+  });
   const rolesQ = useQuery({ queryKey: ["roles"], queryFn: () => api<Role[]>("/api/roles/") });
 
   // Local editable copy: role code -> set of permission codes.
@@ -28,7 +31,10 @@ export function PermissionMatrixPage() {
 
   // Columns: every role except SYS_ADMIN (which implicitly holds all).
   const roles = useMemo(
-    () => (rolesQ.data ?? []).filter((r) => r.code !== "SYS_ADMIN").sort((a, b) => a.code.localeCompare(b.code)),
+    () =>
+      (rolesQ.data ?? [])
+        .filter((r) => r.code !== "SYS_ADMIN")
+        .sort((a, b) => a.code.localeCompare(b.code)),
     [rolesQ.data],
   );
   // Rows: permissions grouped by resource.
@@ -89,11 +95,16 @@ export function PermissionMatrixPage() {
   return (
     <div>
       <div className="mb-4 flex items-start gap-3.5">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white" style={{ backgroundColor: "#475569" }}>
+        <span
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white"
+          style={{ backgroundColor: "#475569" }}
+        >
           <ShieldCheck className="h-6 w-6" />
         </span>
         <div className="flex-1">
-          <h1 className="text-xl font-semibold tracking-tight text-ink-900">Roles &amp; permissions</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-ink-900">
+            Roles &amp; permissions
+          </h1>
           <p className="text-sm text-ink-500">
             Each role is a bundle of permissions (<code>resource.action</code>). Tick a box to grant
             a permission to a role. {editable ? "" : "Only a system admin can edit the matrix."}
@@ -115,11 +126,18 @@ export function PermissionMatrixPage() {
                 Permission
               </th>
               {roles.map((r) => (
-                <th key={r.code} className="px-2 py-2.5 text-center text-[11px] font-semibold text-ink-600" title={r.name}>
+                <th
+                  key={r.code}
+                  className="px-2 py-2.5 text-center text-[11px] font-semibold text-ink-600"
+                  title={r.name}
+                >
                   {r.code}
                 </th>
               ))}
-              <th className="px-2 py-2.5 text-center text-[11px] font-semibold text-ink-400" title="System admin holds every permission">
+              <th
+                className="px-2 py-2.5 text-center text-[11px] font-semibold text-ink-400"
+                title="System admin holds every permission"
+              >
                 SYS_ADMIN
               </th>
             </tr>
@@ -128,12 +146,18 @@ export function PermissionMatrixPage() {
             {Object.entries(groups).map(([resource, perms]) => (
               <Fragment key={resource}>
                 <tr className="bg-surface-100">
-                  <td colSpan={roles.length + 2} className="px-4 py-1 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+                  <td
+                    colSpan={roles.length + 2}
+                    className="px-4 py-1 text-[11px] font-semibold uppercase tracking-wide text-ink-500"
+                  >
                     {resource}
                   </td>
                 </tr>
                 {perms.map((p) => (
-                  <tr key={p.code} className="border-b border-line last:border-0 hover:bg-surface-100/60">
+                  <tr
+                    key={p.code}
+                    className="border-b border-line last:border-0 hover:bg-surface-100/60"
+                  >
                     <td className="sticky left-0 z-10 bg-surface-0 px-4 py-2">
                       <div className="font-medium text-ink-800">{p.action}</div>
                       <div className="text-xs text-ink-500">{p.description}</div>

@@ -73,7 +73,6 @@ function LogDrawer({ orgId, onClose }: { orgId: number | null; onClose: () => vo
   return (
     <Drawer
       title="Record attendance"
-      subtitle="A manual correction to the clock feed — the device normally writes these."
       onClose={onClose}
       width="max-w-2xl"
       footer={
@@ -166,10 +165,6 @@ export function AttendancePage() {
           </Button>
         }
       />
-      <p className="mb-4 max-w-3xl text-sm text-ink-500">
-        The raw clock feed. Timesheets are derived from it — hours, overtime and lateness are
-        computed, not typed, and payroll only ever reads the approved timesheet.
-      </p>
 
       <DataGrid<AttendanceLog>
         rows={rows}
@@ -206,8 +201,18 @@ export function AttendancePage() {
             ),
           },
           { key: "date", header: "Date" },
-          { key: "clock_in", header: "In", value: (r) => r.clock_in ?? "", render: (r) => timeOf(r.clock_in) },
-          { key: "clock_out", header: "Out", value: (r) => r.clock_out ?? "", render: (r) => timeOf(r.clock_out) },
+          {
+            key: "clock_in",
+            header: "In",
+            value: (r) => r.clock_in ?? "",
+            render: (r) => timeOf(r.clock_in),
+          },
+          {
+            key: "clock_out",
+            header: "Out",
+            value: (r) => r.clock_out ?? "",
+            render: (r) => timeOf(r.clock_out),
+          },
           {
             key: "hours",
             header: "Hours",

@@ -18,7 +18,6 @@ import { StatusChip } from "../components/Status";
 const money = (n: string | number) =>
   Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
-
 function NewInvoiceModal({ onClose, orgId }: { onClose: () => void; orgId: number }) {
   const qc = useQueryClient();
   const today = new Date().toISOString().slice(0, 10);
@@ -39,8 +38,7 @@ function NewInvoiceModal({ onClose, orgId }: { onClose: () => void; orgId: numbe
 
   // Class B is the only standard-rated class; everything else is 0%, so the VAT
   // split follows the class rather than asking the user to compute it.
-  const vatAmount =
-    taxClass === "B" && total ? ((Number(total) * 18) / 118).toFixed(2) : "0.00";
+  const vatAmount = taxClass === "B" && total ? ((Number(total) * 18) / 118).toFixed(2) : "0.00";
 
   const create = useMutation({
     mutationFn: () =>
@@ -62,8 +60,7 @@ function NewInvoiceModal({ onClose, orgId }: { onClose: () => void; orgId: numbe
       void qc.invalidateQueries({ queryKey: ["ar-aging"] });
       onClose();
     },
-    onError: (e) =>
-      setError(e instanceof ApiError ? e.message : "Could not raise this invoice."),
+    onError: (e) => setError(e instanceof ApiError ? e.message : "Could not raise this invoice."),
   });
 
   function submit(e: FormEvent) {
@@ -169,8 +166,7 @@ function ReceiptModal({ invoice, onClose }: { invoice: CustomerInvoice; onClose:
       void qc.invalidateQueries({ queryKey: ["ar-aging"] });
       onClose();
     },
-    onError: (e) =>
-      setError(e instanceof ApiError ? e.message : "Could not record this receipt."),
+    onError: (e) => setError(e instanceof ApiError ? e.message : "Could not record this receipt."),
   });
 
   const overpaying = Number(amount) > Number(invoice.amount_due);
@@ -248,9 +244,7 @@ function AgingStrip({ orgId }: { orgId: number }) {
       {buckets.map((b) => (
         <Card key={b.label} className="p-3">
           <p className="text-xs font-medium uppercase tracking-wide text-ink-500">{b.label}</p>
-          <p className={`mt-1 text-lg font-semibold tabular-nums ${b.tone}`}>
-            {money(b.value)}
-          </p>
+          <p className={`mt-1 text-lg font-semibold tabular-nums ${b.tone}`}>{money(b.value)}</p>
         </Card>
       ))}
     </div>
@@ -288,7 +282,11 @@ function InvoiceDetailDrawer({
   const canCancel = inv && inv.status !== "CANCELLED" && Number(inv.amount_paid) === 0;
 
   return (
-    <Drawer title={inv ? `Invoice ${inv.invoice_number}` : "Invoice"} onClose={onClose} width="max-w-3xl">
+    <Drawer
+      title={inv ? `Invoice ${inv.invoice_number}` : "Invoice"}
+      onClose={onClose}
+      width="max-w-3xl"
+    >
       {invoiceQ.isLoading && (
         <div className="flex justify-center py-8">
           <p className="text-sm text-ink-500">Loading…</p>
@@ -323,9 +321,7 @@ function InvoiceDetailDrawer({
               </div>
               <div>
                 <div className="text-xs text-ink-500">Outstanding</div>
-                <div className="font-mono font-semibold tabular-nums">
-                  {money(inv.amount_due)}
-                </div>
+                <div className="font-mono font-semibold tabular-nums">{money(inv.amount_due)}</div>
               </div>
             </div>
           </div>
@@ -380,11 +376,7 @@ function InvoiceDetailDrawer({
 
           <div className="flex flex-wrap justify-end gap-2">
             {canCancel && (
-              <Button
-                variant="secondary"
-                onClick={() => onCancel(inv)}
-                className="text-red-700"
-              >
+              <Button variant="secondary" onClick={() => onCancel(inv)} className="text-red-700">
                 <AlertTriangle className="h-4 w-4" /> Cancel invoice
               </Button>
             )}
@@ -450,20 +442,16 @@ function CancelInvoiceModal({
   }
 
   return (
-    <Drawer
-      title={`Cancel invoice ${invoice.invoice_number}`}
-      onClose={onClose}
-     width="max-w-2xl">
+    <Drawer title={`Cancel invoice ${invoice.invoice_number}`} onClose={onClose} width="max-w-2xl">
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="rounded-md bg-red-50 p-3 text-sm text-red-900">
           <p className="font-semibold">This action voids the invoice.</p>
           <p className="mt-1 text-xs">
-            The system posts a reversal entry to the GL — <strong>Dr Revenue</strong>{" "}
-            (net) and <strong>Dr VAT Output</strong> (vat) against{" "}
-            <strong>Cr Accounts Receivable</strong> for the full invoice total of{" "}
-            <strong>RWF {money(invoice.total_amount)}</strong>. The original
-            invoice line is preserved in the audit log; only the status flips
-            to <code>CANCELLED</code>.
+            The system posts a reversal entry to the GL — <strong>Dr Revenue</strong> (net) and{" "}
+            <strong>Dr VAT Output</strong> (vat) against <strong>Cr Accounts Receivable</strong> for
+            the full invoice total of <strong>RWF {money(invoice.total_amount)}</strong>. The
+            original invoice line is preserved in the audit log; only the status flips to{" "}
+            <code>CANCELLED</code>.
           </p>
         </div>
         <TextField
@@ -479,11 +467,7 @@ function CancelInvoiceModal({
           <Button type="button" variant="secondary" onClick={onClose}>
             Keep invoice
           </Button>
-          <Button
-            type="submit"
-            variant="danger"
-            disabled={cancel.isPending}
-          >
+          <Button type="submit" variant="danger" disabled={cancel.isPending}>
             {cancel.isPending ? "Cancelling…" : "Cancel invoice"}
           </Button>
         </div>
@@ -523,9 +507,7 @@ export function ReceivablesPage() {
       render: (r) => (
         <span className={r.days_past_due > 0 ? "font-medium text-red-700" : ""}>
           {r.due_date}
-          {r.days_past_due > 0 && (
-            <span className="ml-1 text-xs">({r.days_past_due}d late)</span>
-          )}
+          {r.days_past_due > 0 && <span className="ml-1 text-xs">({r.days_past_due}d late)</span>}
         </span>
       ),
     },
@@ -593,7 +575,9 @@ export function ReceivablesPage() {
         storageKey="ar-invoices"
         exportName="customer-invoices"
         searchPlaceholder="Search by customer or invoice number…"
-        emptyMessage={onlyOpen ? "Nothing outstanding — every invoice is settled." : "No invoices yet."}
+        emptyMessage={
+          onlyOpen ? "Nothing outstanding — every invoice is settled." : "No invoices yet."
+        }
         onRowClick={(r) => setViewing(r)}
         toolbar={
           <label className="flex items-center gap-2 text-sm text-ink-700">
@@ -607,13 +591,8 @@ export function ReceivablesPage() {
           </label>
         }
       />
-      <p className="mt-2 text-xs text-ink-500">
-        Tip: click any row to open its detail drawer (receipts posted, outstanding balance).
-      </p>
       {raising && <NewInvoiceModal orgId={orgId} onClose={() => setRaising(false)} />}
-      {receipting && (
-        <ReceiptModal invoice={receipting} onClose={() => setReceipting(null)} />
-      )}
+      {receipting && <ReceiptModal invoice={receipting} onClose={() => setReceipting(null)} />}
       {viewing && (
         <InvoiceDetailDrawer
           invoiceId={viewing.id}
@@ -629,10 +608,7 @@ export function ReceivablesPage() {
         />
       )}
       {cancelling && (
-        <CancelInvoiceModal
-          invoice={cancelling}
-          onClose={() => setCancelling(null)}
-        />
+        <CancelInvoiceModal invoice={cancelling} onClose={() => setCancelling(null)} />
       )}
     </div>
   );

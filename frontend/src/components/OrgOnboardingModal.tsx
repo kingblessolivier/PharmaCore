@@ -86,7 +86,8 @@ export function OrgOnboardingModal({ org, onClose }: { org: OnboardingOrg; onClo
     onSuccess: () => void refresh(),
   });
   const remove = useMutation({
-    mutationFn: (id: number) => api<void>(`/api/organization-documents/${id}/`, { method: "DELETE" }),
+    mutationFn: (id: number) =>
+      api<void>(`/api/organization-documents/${id}/`, { method: "DELETE" }),
     onSuccess: () => void refresh(),
   });
 
@@ -100,7 +101,9 @@ export function OrgOnboardingModal({ org, onClose }: { org: OnboardingOrg; onClo
         <div className="flex items-center justify-between rounded-lg border border-line bg-surface-50 p-3">
           <div>
             <div className="text-xs font-medium uppercase tracking-wide text-ink-500">Status</div>
-            <span className={`mt-1 inline-block rounded-md px-2 py-0.5 text-sm font-semibold ${s.cls}`}>
+            <span
+              className={`mt-1 inline-block rounded-md px-2 py-0.5 text-sm font-semibold ${s.cls}`}
+            >
               {s.label}
             </span>
             <div className="mt-1 text-xs text-ink-500">
@@ -109,11 +112,18 @@ export function OrgOnboardingModal({ org, onClose }: { org: OnboardingOrg; onClo
           </div>
           <div className="flex gap-2">
             {status !== "ACTIVE" ? (
-              <Button onClick={() => changeStatus.mutate("activate")} disabled={changeStatus.isPending}>
+              <Button
+                onClick={() => changeStatus.mutate("activate")}
+                disabled={changeStatus.isPending}
+              >
                 <CheckCircle2 className="h-4 w-4" /> Activate
               </Button>
             ) : (
-              <Button variant="secondary" onClick={() => changeStatus.mutate("suspend")} disabled={changeStatus.isPending}>
+              <Button
+                variant="secondary"
+                onClick={() => changeStatus.mutate("suspend")}
+                disabled={changeStatus.isPending}
+              >
                 <PauseCircle className="h-4 w-4" /> Suspend
               </Button>
             )}
@@ -196,8 +206,17 @@ export function OrgOnboardingModal({ org, onClose }: { org: OnboardingOrg; onClo
                 </option>
               ))}
             </SelectField>
-            <TextField label="Document number" value={number} onChange={(e) => setNumber(e.target.value)} />
-            <TextField label="Expiry (optional)" type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
+            <TextField
+              label="Document number"
+              value={number}
+              onChange={(e) => setNumber(e.target.value)}
+            />
+            <TextField
+              label="Expiry (optional)"
+              type="date"
+              value={expiry}
+              onChange={(e) => setExpiry(e.target.value)}
+            />
             <div className="flex items-end">
               <Button onClick={() => add.mutate()} disabled={add.isPending}>
                 <Plus className="h-4 w-4" /> Add

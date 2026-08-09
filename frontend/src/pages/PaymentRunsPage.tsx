@@ -12,7 +12,6 @@ import { StatusChip } from "../components/Status";
 const money = (n: string | number) =>
   Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
-
 /** What the operator can do next, given where the run has got to. */
 const NEXT_STEP: Record<string, string> = {
   DRAFT: "Send for approval",
@@ -305,7 +304,13 @@ export function PaymentRunsPage() {
       value: (r) => r.method,
       render: (r) => r.method.replace("_", " ").toLowerCase(),
     },
-    { key: "line_count", header: "Bills", numeric: true, align: "right", value: (r) => r.line_count },
+    {
+      key: "line_count",
+      header: "Bills",
+      numeric: true,
+      align: "right",
+      value: (r) => r.line_count,
+    },
     {
       key: "total_amount",
       header: "Total",

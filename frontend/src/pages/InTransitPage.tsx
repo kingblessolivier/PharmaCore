@@ -36,8 +36,7 @@ export function InTransitPage() {
 
   const inTransit = useQuery({
     queryKey: ["in-transit-list"],
-    queryFn: () =>
-      api<Paginated<InTransitStock>>("/api/distribution/in-transit/?page_size=500"),
+    queryFn: () => api<Paginated<InTransitStock>>("/api/distribution/in-transit/?page_size=500"),
   });
 
   const rows = inTransit.data?.results ?? [];
@@ -79,7 +78,11 @@ export function InTransitPage() {
       render: (t) => {
         const d = daysOnRoad(t.dispatched_at);
         if (d >= STALE_DAYS)
-          return <Badge tone="danger">{d} day{d === 1 ? "" : "s"}</Badge>;
+          return (
+            <Badge tone="danger">
+              {d} day{d === 1 ? "" : "s"}
+            </Badge>
+          );
         return <span className="tabular-nums text-ink-600">{d === 0 ? "today" : `${d}d`}</span>;
       },
     },
@@ -101,11 +104,6 @@ export function InTransitPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="In-transit stock" />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Units that have left the depot but have not yet been received. They belong to no one's
-        on-hand until a GRN lands them, which is what stops a unit being counted twice — or
-        disappearing between the two.
-      </p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tile label="Consignments moving" value={consignments} />
@@ -176,9 +174,10 @@ export function InTransitPage() {
             <div className="flex items-start gap-2 text-sm text-ink-600">
               <Truck className="mt-0.5 h-4 w-4 shrink-0 text-ink-400" />
               <span>
-                Held against <span className="font-medium text-ink-900">{open.destination_name}</span>
-                . Until the GRN is finalised these units are on neither party's on-hand, which is
-                deliberate — it is the only way the two counts can never disagree.
+                Held against{" "}
+                <span className="font-medium text-ink-900">{open.destination_name}</span>. Until the
+                GRN is finalised these units are on neither party's on-hand, which is deliberate —
+                it is the only way the two counts can never disagree.
               </span>
             </div>
           </Section>
@@ -200,7 +199,11 @@ function Tile({
   tone?: "danger" | "warning";
 }) {
   const colour =
-    tone === "danger" ? "text-danger-700" : tone === "warning" ? "text-warning-700" : "text-ink-900";
+    tone === "danger"
+      ? "text-danger-700"
+      : tone === "warning"
+        ? "text-warning-700"
+        : "text-ink-900";
   return (
     <div className="rounded-lg border border-line bg-surface-0 p-3">
       <div className="text-xs text-ink-500">{label}</div>

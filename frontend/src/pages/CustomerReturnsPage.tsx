@@ -47,7 +47,9 @@ export function CustomerReturnsPage() {
     queryKey: ["customer-returns", orgId],
     enabled: orgId != null,
     queryFn: () =>
-      api<Paginated<CustomerReturn>>(`/api/distribution/returns/?depot=${orgId ?? 0}&page_size=100`),
+      api<Paginated<CustomerReturn>>(
+        `/api/distribution/returns/?depot=${orgId ?? 0}&page_size=100`,
+      ),
   });
 
   function openReturn(r: CustomerReturn) {
@@ -125,7 +127,11 @@ export function CustomerReturnsPage() {
       align: "right",
       value: (r) => Number(r.credit_note_amount),
       render: (r) =>
-        Number(r.credit_note_amount) > 0 ? money(r.credit_note_amount) : <span className="text-ink-400">—</span>,
+        Number(r.credit_note_amount) > 0 ? (
+          money(r.credit_note_amount)
+        ) : (
+          <span className="text-ink-400">—</span>
+        ),
     },
     {
       key: "status",
@@ -167,12 +173,7 @@ export function CustomerReturnsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Customer returns"
-      />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Inspect what came back, restock only what is fit to resell, and credit only what you restocked.
-      </p>
+      <PageHeader title="Customer returns" />
 
       <DataGrid
         rows={returns.data?.results ?? []}
@@ -187,166 +188,162 @@ export function CustomerReturnsPage() {
       />
 
       {open && (
-      <Drawer
-        onClose={() => setOpen(null)}
-        title={open ? `Return ${open.return_number}` : ""}
-        footer={
-          open && !settled ? (
+        <Drawer
+          onClose={() => setOpen(null)}
+          title={open ? `Return ${open.return_number}` : ""}
+          footer={
+            open && !settled ? (
+              <>
+                <Button
+                  variant="ghost"
+                  onClick={() => refuse.mutate()}
+                  disabled={refuse.isPending || !rejectReason.trim()}
+                >
+                  Reject whole return
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => inspect.mutate()}
+                  disabled={inspect.isPending}
+                >
+                  {inspect.isPending ? "Saving…" : "Save inspection"}
+                </Button>
+                <Button onClick={() => approve.mutate()} disabled={approve.isPending}>
+                  {approve.isPending ? "Approving…" : "Approve & credit"}
+                </Button>
+              </>
+            ) : (
+              <Button variant="ghost" onClick={() => setOpen(null)}>
+                Close
+              </Button>
+            )
+          }
+        >
+          {open && (
             <>
-              <Button
-                variant="ghost"
-                onClick={() => refuse.mutate()}
-                disabled={refuse.isPending || !rejectReason.trim()}
-              >
-                Reject whole return
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => inspect.mutate()}
-                disabled={inspect.isPending}
-              >
-                {inspect.isPending ? "Saving…" : "Save inspection"}
-              </Button>
-              <Button onClick={() => approve.mutate()} disabled={approve.isPending}>
-                {approve.isPending ? "Approving…" : "Approve & credit"}
-              </Button>
-            </>
-          ) : (
-            <Button variant="ghost" onClick={() => setOpen(null)}>
-              Close
-            </Button>
-          )
-        }
-      >
-        {open && (
-          <>
-            <Section title="Where it came from">
-              <Facts
-                rows={[
-                  ["Pharmacy", open.retail_name],
-                  ["Raised", shortDate(open.created_at)],
-                  ["Reason", open.reason || "—"],
-                ]}
-              />
-            </Section>
-
-            {outcome && (
-              <div className="mb-3 flex items-start gap-2 rounded-md bg-success-50 p-2.5 text-xs text-success-800">
-                <PackageCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <span>{outcome}</span>
-              </div>
-            )}
-
-            <Section
-              title="Inspection"
-              hint="Accepted plus rejected must equal what came back — nothing may go unaccounted for."
-            >
-              <div className="space-y-3">
-                {open.lines.map((l) => {
-                  const v = verdicts[l.id] ?? { accepted: "0", rejected: "0", note: "" };
-                  const total = Number(v.accepted) + Number(v.rejected);
-                  const mismatch = total !== l.quantity_returned;
-                  return (
-                    <div key={l.id} className="rounded-md border border-line p-3">
-                      <div className="mb-2 flex items-baseline justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm text-ink-900">{l.product_name}</div>
-                          <div className="text-xs text-ink-500">
-                            {l.quantity_returned} back · batch {l.batch_number || "—"} · expires{" "}
-                            {l.expiry_date ? shortDate(l.expiry_date) : "—"}
-                          </div>
-                        </div>
-                        <div className="shrink-0 text-xs tabular-nums text-ink-600">
-                          {money(l.unit_price)}/unit
-                        </div>
-                      </div>
-                      <Grid>
-                        <Field label="Fit to resell">
-                          <Input
-                            type="number"
-                            min={0}
-                            value={v.accepted}
-                            disabled={settled}
-                            onChange={(e) =>
-                              setVerdicts({
-                                ...verdicts,
-                                [l.id]: { ...v, accepted: e.target.value },
-                              })
-                            }
-                          />
-                        </Field>
-                        <Field label="Rejected">
-                          <Input
-                            type="number"
-                            min={0}
-                            value={v.rejected}
-                            disabled={settled}
-                            onChange={(e) =>
-                              setVerdicts({
-                                ...verdicts,
-                                [l.id]: { ...v, rejected: e.target.value },
-                              })
-                            }
-                          />
-                        </Field>
-                      </Grid>
-                      <Field label="Note">
-                        <Input
-                          value={v.note}
-                          disabled={settled}
-                          placeholder="Why were units rejected?"
-                          onChange={(e) =>
-                            setVerdicts({ ...verdicts, [l.id]: { ...v, note: e.target.value } })
-                          }
-                        />
-                      </Field>
-                      {mismatch && !settled && (
-                        <div className="mt-1.5 flex items-center gap-1.5 text-xs text-danger-700">
-                          <ShieldAlert className="h-3.5 w-3.5" />
-                          {total} of {l.quantity_returned} accounted for
-                        </div>
-                      )}
-                      {l.restocked_batch && (
-                        <div className="mt-1.5 text-xs text-success-700">
-                          Restocked into batch #{l.restocked_batch}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </Section>
-
-            <Section title="Credit">
-              <Facts
-                rows={[
-                  ["Credit due", money(totalCredit)],
-                  ["Recorded", money(open.credit_note_amount)],
-                ]}
-              />
-              <p className="mt-2 text-xs text-ink-500">
-                Only units you accept are credited and restocked. Rejected units never re-enter
-                saleable stock — approving issues the credit note automatically.
-              </p>
-            </Section>
-
-            {!settled && (
-              <Section title="Or refuse the whole return">
-                <Textarea
-                  value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
-                  placeholder="Say why. Nothing is restocked and nothing is credited."
-                  rows={2}
+              <Section title="Where it came from">
+                <Facts
+                  rows={[
+                    ["Pharmacy", open.retail_name],
+                    ["Raised", shortDate(open.created_at)],
+                    ["Reason", open.reason || "—"],
+                  ]}
                 />
               </Section>
-            )}
 
-            {(inspect.isError || approve.isError || refuse.isError) && (
-              <ErrorNote error={inspect.error} />
-            )}
-          </>
-        )}
-      </Drawer>
+              {outcome && (
+                <div className="mb-3 flex items-start gap-2 rounded-md bg-success-50 p-2.5 text-xs text-success-800">
+                  <PackageCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>{outcome}</span>
+                </div>
+              )}
+
+              <Section
+                title="Inspection"
+                hint="Accepted plus rejected must equal what came back — nothing may go unaccounted for."
+              >
+                <div className="space-y-3">
+                  {open.lines.map((l) => {
+                    const v = verdicts[l.id] ?? { accepted: "0", rejected: "0", note: "" };
+                    const total = Number(v.accepted) + Number(v.rejected);
+                    const mismatch = total !== l.quantity_returned;
+                    return (
+                      <div key={l.id} className="rounded-md border border-line p-3">
+                        <div className="mb-2 flex items-baseline justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm text-ink-900">{l.product_name}</div>
+                            <div className="text-xs text-ink-500">
+                              {l.quantity_returned} back · batch {l.batch_number || "—"} · expires{" "}
+                              {l.expiry_date ? shortDate(l.expiry_date) : "—"}
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-xs tabular-nums text-ink-600">
+                            {money(l.unit_price)}/unit
+                          </div>
+                        </div>
+                        <Grid>
+                          <Field label="Fit to resell">
+                            <Input
+                              type="number"
+                              min={0}
+                              value={v.accepted}
+                              disabled={settled}
+                              onChange={(e) =>
+                                setVerdicts({
+                                  ...verdicts,
+                                  [l.id]: { ...v, accepted: e.target.value },
+                                })
+                              }
+                            />
+                          </Field>
+                          <Field label="Rejected">
+                            <Input
+                              type="number"
+                              min={0}
+                              value={v.rejected}
+                              disabled={settled}
+                              onChange={(e) =>
+                                setVerdicts({
+                                  ...verdicts,
+                                  [l.id]: { ...v, rejected: e.target.value },
+                                })
+                              }
+                            />
+                          </Field>
+                        </Grid>
+                        <Field label="Note">
+                          <Input
+                            value={v.note}
+                            disabled={settled}
+                            placeholder="Why were units rejected?"
+                            onChange={(e) =>
+                              setVerdicts({ ...verdicts, [l.id]: { ...v, note: e.target.value } })
+                            }
+                          />
+                        </Field>
+                        {mismatch && !settled && (
+                          <div className="mt-1.5 flex items-center gap-1.5 text-xs text-danger-700">
+                            <ShieldAlert className="h-3.5 w-3.5" />
+                            {total} of {l.quantity_returned} accounted for
+                          </div>
+                        )}
+                        {l.restocked_batch && (
+                          <div className="mt-1.5 text-xs text-success-700">
+                            Restocked into batch #{l.restocked_batch}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </Section>
+
+              <Section title="Credit">
+                <Facts
+                  rows={[
+                    ["Credit due", money(totalCredit)],
+                    ["Recorded", money(open.credit_note_amount)],
+                  ]}
+                />
+              </Section>
+
+              {!settled && (
+                <Section title="Or refuse the whole return">
+                  <Textarea
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    placeholder="Say why. Nothing is restocked and nothing is credited."
+                    rows={2}
+                  />
+                </Section>
+              )}
+
+              {(inspect.isError || approve.isError || refuse.isError) && (
+                <ErrorNote error={inspect.error} />
+              )}
+            </>
+          )}
+        </Drawer>
       )}
     </div>
   );

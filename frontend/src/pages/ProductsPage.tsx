@@ -2,14 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import {
-  Badge,
-  Button,
-  ConfirmModal,
-  PageHeader,
-  SelectField,
-  TextField,
-} from "../components/ui";
+import { Badge, Button, ConfirmModal, PageHeader, SelectField, TextField } from "../components/ui";
 import { DataGrid } from "../components/DataGrid";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -61,7 +54,6 @@ interface ProductForm {
   rxnorm_id: string;
   lifecycle_status: "ACTIVE" | "DISCONTINUED" | "OBSOLETE" | "PENDING_APPROVAL";
 }
-
 
 const ROUTES = [
   "",
@@ -142,8 +134,7 @@ function ImportModal({ onClose }: { onClose: () => void }) {
       setResult(r);
       void qc.invalidateQueries({ queryKey: ["products"] });
     },
-    onError: (err) =>
-      setError(err instanceof ApiError ? err.message : "Import failed."),
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Import failed."),
   });
 
   return (
@@ -197,7 +188,10 @@ function ImportModal({ onClose }: { onClose: () => void }) {
           <Button variant="secondary" onClick={onClose}>
             {result ? "Done" : "Cancel"}
           </Button>
-          <Button onClick={() => mutation.mutate()} disabled={rows.length === 0 || mutation.isPending}>
+          <Button
+            onClick={() => mutation.mutate()}
+            disabled={rows.length === 0 || mutation.isPending}
+          >
             {mutation.isPending ? "Importing…" : `Import ${rows.length} row(s)`}
           </Button>
         </div>
@@ -353,7 +347,7 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
             onChange={(e) =>
               set(
                 "lifecycle_status",
-                e.target.value as "ACTIVE" | "DISCONTINUED" | "OBSOLETE" | "PENDING_APPROVAL"
+                e.target.value as "ACTIVE" | "DISCONTINUED" | "OBSOLETE" | "PENDING_APPROVAL",
               )
             }
           >

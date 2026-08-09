@@ -12,7 +12,16 @@ import { ArrowRight, Ship, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DataGrid, type Column } from "../components/DataGrid";
-import { Drawer, Empty, ErrorNote, Facts, Field, Grid, Input, Section } from "../components/RecordKit";
+import {
+  Drawer,
+  Empty,
+  ErrorNote,
+  Facts,
+  Field,
+  Grid,
+  Input,
+  Section,
+} from "../components/RecordKit";
 import { Badge, Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
 import {
@@ -204,9 +213,6 @@ export function DemandBoardPage() {
           ) : undefined
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        What retail pharmacies asked for and you could not supply — the basis for your next import.
-      </p>
 
       {raised && (
         <div className="flex items-start gap-2 rounded-lg border border-success-200 bg-success-50 p-3">
@@ -216,8 +222,8 @@ export function DemandBoardPage() {
               Requisition {raised.number} raised with {raised.lines} line(s)
             </div>
             <div className="mt-0.5 text-xs text-success-800">
-              It is a draft in Procurement. Submit it there to start the RFQ, quote and import
-              flow. The demand it covers is now marked as being sourced.
+              It is a draft in Procurement. Submit it there to start the RFQ, quote and import flow.
+              The demand it covers is now marked as being sourced.
             </div>
           </div>
           <Button
@@ -280,68 +286,56 @@ export function DemandBoardPage() {
       )}
 
       {sourcing && (
-      <Drawer
-        onClose={() => setSourcing(false)}
-        title="Raise a purchase requisition"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setSourcing(false)}>
-              Cancel
-            </Button>
-            <Button onClick={() => raise.mutate()} disabled={raise.isPending}>
-              {raise.isPending ? "Raising…" : "Raise requisition"}
-            </Button>
-          </>
-        }
-      >
-        <Section title="What this will do">
-          <Facts
-                rows={[
-                  ["Products", selected.size > 0 ? `${selected.size} selected` : `all ${rows.length} wanted`],
-                  ["Units", selectedUnits.toLocaleString()],
-                  ["Raised at", "This depot"],
-                ]}
-              />
-          <p className="mt-2 text-xs text-ink-500">
-            A draft requisition is created in Procurement with one line per product, quantities
-            consolidated across every pharmacy that asked. The demand is marked as being sourced so
-            it cannot be raised twice.
-          </p>
-        </Section>
-
-        <Section title="Details">
-          <Grid>
-            <Field label="Needed by" hint="Defaults to 30 days out.">
-              <Input type="date" value={neededBy} onChange={(e) => setNeededBy(e.target.value)} />
-            </Field>
-          </Grid>
-          <Field label="Justification">
-            <Input
-              value={justification}
-              onChange={(e) => setJustification(e.target.value)}
-              placeholder="Left blank, the requisition explains itself from the demand behind it."
+        <Drawer
+          onClose={() => setSourcing(false)}
+          title="Raise a purchase requisition"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setSourcing(false)}>
+                Cancel
+              </Button>
+              <Button onClick={() => raise.mutate()} disabled={raise.isPending}>
+                {raise.isPending ? "Raising…" : "Raise requisition"}
+              </Button>
+            </>
+          }
+        >
+          <Section title="What this will do">
+            <Facts
+              rows={[
+                [
+                  "Products",
+                  selected.size > 0 ? `${selected.size} selected` : `all ${rows.length} wanted`,
+                ],
+                ["Units", selectedUnits.toLocaleString()],
+                ["Raised at", "This depot"],
+              ]}
             />
-          </Field>
-        </Section>
+          </Section>
 
-        {raise.isError && (
-          <ErrorNote error={raise.error} />
-        )}
-      </Drawer>
+          <Section title="Details">
+            <Grid>
+              <Field label="Needed by" hint="Defaults to 30 days out.">
+                <Input type="date" value={neededBy} onChange={(e) => setNeededBy(e.target.value)} />
+              </Field>
+            </Grid>
+            <Field label="Justification">
+              <Input
+                value={justification}
+                onChange={(e) => setJustification(e.target.value)}
+                placeholder="Left blank, the requisition explains itself from the demand behind it."
+              />
+            </Field>
+          </Section>
+
+          {raise.isError && <ErrorNote error={raise.error} />}
+        </Drawer>
       )}
     </div>
   );
 }
 
-function Tile({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "warn";
-}) {
+function Tile({ label, value, tone }: { label: string; value: string; tone?: "warn" }) {
   return (
     <div className="rounded-lg border border-line bg-surface-0 p-3">
       <div className="text-xs text-ink-500">{label}</div>

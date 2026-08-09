@@ -22,11 +22,16 @@ function periodFor(preset: PeriodPreset, customStart: string, customEnd: string)
   const quarterStart = iso(new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1));
   const ytdStart = iso(new Date(now.getFullYear(), 0, 1));
   switch (preset) {
-    case "this-month": return { start: monthStart, end: today };
-    case "last-month": return { start: lastMonthStart, end: lastMonthEnd };
-    case "this-quarter": return { start: quarterStart, end: today };
-    case "ytd": return { start: ytdStart, end: today };
-    case "custom": return { start: customStart, end: customEnd };
+    case "this-month":
+      return { start: monthStart, end: today };
+    case "last-month":
+      return { start: lastMonthStart, end: lastMonthEnd };
+    case "this-quarter":
+      return { start: quarterStart, end: today };
+    case "ytd":
+      return { start: ytdStart, end: today };
+    case "custom":
+      return { start: customStart, end: customEnd };
   }
 }
 
@@ -36,7 +41,9 @@ const money = (s: string | number) =>
 /** Render the VAT-return report as a downloadable CSV — the format the
  * accountant uploads / types into RRA e-Tax. Column order mirrors the report. */
 function exportCsv(v: VatReturn): string {
-  const rows = v.csv.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const rows = v.csv
+    .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
   return `VAT return ${v.start} to ${v.end}\n\n${rows}\n`;
 }
 
@@ -48,7 +55,10 @@ export function VatPage() {
   const [preset, setPreset] = useState<PeriodPreset>("this-month");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
-  const period = useMemo(() => periodFor(preset, customStart, customEnd), [preset, customStart, customEnd]);
+  const period = useMemo(
+    () => periodFor(preset, customStart, customEnd),
+    [preset, customStart, customEnd],
+  );
 
   const q = useQuery({
     queryKey: ["vat-return", orgId, period.start, period.end],
@@ -93,39 +103,34 @@ export function VatPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        Per-class Output and Input derived from posted journal entries, plus withholding,
-        the running carry-forward, and a CSV draft for the RRA e-Tax filing.
-        {/* A CSV draft proves nothing after the fact — the filed copy is the record. */}
-        {filed.data && (
-          <>
-            {" "}
-            Filed copy issued as <strong>{filed.data.doc_number}</strong>.
-          </>
-        )}
-      </p>
 
       {/* Period switcher — same UI as FinanceHome. */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium uppercase tracking-wide text-ink-500">Period</span>
-        {(["this-month", "last-month", "this-quarter", "ytd", "custom"] as PeriodPreset[]).map((p) => (
-          <button
-            key={p}
-            type="button"
-            onClick={() => setPreset(p)}
-            className={`rounded-md border px-2.5 py-1 text-xs ${
-              preset === p
-                ? "border-emerald-700 bg-emerald-700 text-white"
-                : "border-line bg-surface-0 text-ink-700 hover:bg-surface-50"
-            }`}
-          >
-            {p === "this-month" ? "This month"
-              : p === "last-month" ? "Last month"
-              : p === "this-quarter" ? "This quarter"
-              : p === "ytd" ? "YTD"
-              : "Custom"}
-          </button>
-        ))}
+        {(["this-month", "last-month", "this-quarter", "ytd", "custom"] as PeriodPreset[]).map(
+          (p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPreset(p)}
+              className={`rounded-md border px-2.5 py-1 text-xs ${
+                preset === p
+                  ? "border-emerald-700 bg-emerald-700 text-white"
+                  : "border-line bg-surface-0 text-ink-700 hover:bg-surface-50"
+              }`}
+            >
+              {p === "this-month"
+                ? "This month"
+                : p === "last-month"
+                  ? "Last month"
+                  : p === "this-quarter"
+                    ? "This quarter"
+                    : p === "ytd"
+                      ? "YTD"
+                      : "Custom"}
+            </button>
+          ),
+        )}
         {preset === "custom" && (
           <div className="flex items-center gap-2">
             <input
@@ -180,7 +185,11 @@ export function VatPage() {
                 value={`RWF ${money(v.amount_due_after_payments)}`}
                 tone={Number(v.amount_due_after_payments) > 0 ? "warn" : "ok"}
               />
-              <Tile label="Carry-forward" value={`RWF ${money(v.running_carry_forward)}`} hint="VAT Output − VAT Input" />
+              <Tile
+                label="Carry-forward"
+                value={`RWF ${money(v.running_carry_forward)}`}
+                hint="VAT Output − VAT Input"
+              />
               <Tile label="Period" value={`${v.start} → ${v.end}`} />
             </div>
           </Card>
@@ -203,7 +212,15 @@ export function VatPage() {
                   return (
                     <tr key={cls} className="border-b border-line/50">
                       <td className="py-2 text-ink-700">
-                        <Badge>{cls === "B" ? "Standard 18%" : cls === "A" ? "Exempt" : cls === "C" ? "Zero-rated" : "Special"}</Badge>
+                        <Badge>
+                          {cls === "B"
+                            ? "Standard 18%"
+                            : cls === "A"
+                              ? "Exempt"
+                              : cls === "C"
+                                ? "Zero-rated"
+                                : "Special"}
+                        </Badge>
                       </td>
                       <td className="py-2 font-medium text-ink-900">{cls}</td>
                       <td className="py-2 text-right tabular-nums">{money(out)}</td>
@@ -217,7 +234,9 @@ export function VatPage() {
               </tbody>
               <tfoot className="border-t border-line text-sm font-medium text-ink-900">
                 <tr>
-                  <td className="py-2" colSpan={2}>Total</td>
+                  <td className="py-2" colSpan={2}>
+                    Total
+                  </td>
                   <td className="py-2 text-right tabular-nums">{money(v.output_total)}</td>
                   <td className="py-2 text-right tabular-nums">{money(v.input_total)}</td>
                   <td className="py-2 text-right tabular-nums">{money(v.net_payable)}</td>
@@ -246,11 +265,27 @@ export function VatPage() {
   );
 }
 
-function Tile({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: "warn" | "ok" }) {
+function Tile({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: "warn" | "ok";
+}) {
   return (
-    <div className={`rounded-lg border p-3 ${
-      tone === "warn" ? "border-amber-300 bg-amber-50" : tone === "ok" ? "border-emerald-300 bg-emerald-50" : "border-line bg-surface-0"
-    }`}>
+    <div
+      className={`rounded-lg border p-3 ${
+        tone === "warn"
+          ? "border-amber-300 bg-amber-50"
+          : tone === "ok"
+            ? "border-emerald-300 bg-emerald-50"
+            : "border-line bg-surface-0"
+      }`}
+    >
       <div className="text-xs font-medium uppercase tracking-wide text-ink-500">{label}</div>
       <div className="mt-1 text-base font-semibold tabular-nums text-ink-900">{value}</div>
       {hint && <div className="mt-1 text-xs text-ink-500">{hint}</div>}

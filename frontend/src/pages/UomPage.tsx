@@ -67,7 +67,8 @@ export function UomPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api<void>(`/api/catalog/product-uom-conversions/${id}/`, { method: "DELETE" }),
+    mutationFn: (id: number) =>
+      api<void>(`/api/catalog/product-uom-conversions/${id}/`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["product-uom-conversions"] }),
   });
 
@@ -121,9 +122,6 @@ export function UomPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        Full CRUD management for pack-to-strip and tablet conversions and OTC increment pricing.
-      </p>
 
       <div className="mb-4 flex items-center gap-2 rounded-md border border-line bg-surface-0 px-3 py-2">
         <input

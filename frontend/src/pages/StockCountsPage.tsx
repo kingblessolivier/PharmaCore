@@ -100,9 +100,7 @@ export function StockCountsPage() {
       key: "status",
       header: "Status",
       value: (c) => c.status,
-      render: (c) => (
-<StatusChip status={c.status} size="sm" />
-      ),
+      render: (c) => <StatusChip status={c.status} size="sm" />,
     },
     {
       key: "started_at",
@@ -115,10 +113,6 @@ export function StockCountsPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="Physical counts" />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Approving a count adjusts stock and posts the variance to the ledger, once and
-        irreversibly. Open a count to see exactly what approving it would post.
-      </p>
 
       {awaiting.length > 0 && (
         <div className="flex items-start gap-2 rounded-lg border border-warning-200 bg-warning-50 p-3">
@@ -290,7 +284,11 @@ function Mini({
   tone?: "danger" | "warning";
 }) {
   const colour =
-    tone === "danger" ? "text-danger-700" : tone === "warning" ? "text-warning-700" : "text-ink-900";
+    tone === "danger"
+      ? "text-danger-700"
+      : tone === "warning"
+        ? "text-warning-700"
+        : "text-ink-900";
   return (
     <div className="rounded-lg border border-line bg-surface-0 p-3">
       <div className="text-xs text-ink-500">{label}</div>

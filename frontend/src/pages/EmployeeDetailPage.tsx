@@ -53,14 +53,23 @@ function AddDocumentModal({ onClose, employeeId }: { onClose: () => void; employ
   return (
     <Modal title="Attach a document" onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <SelectField label="Document type" value={docType} onChange={(e) => setDocType(e.target.value)}>
+        <SelectField
+          label="Document type"
+          value={docType}
+          onChange={(e) => setDocType(e.target.value)}
+        >
           {DOC_TYPES.map((t) => (
             <option key={t.value} value={t.value}>
               {t.label}
             </option>
           ))}
         </SelectField>
-        <TextField label="Document URL" value={url} onChange={(e) => setUrl(e.target.value)} required />
+        <TextField
+          label="Document URL"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          required
+        />
         {error && <p className="text-sm text-danger">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>
@@ -106,7 +115,8 @@ function TerminateModal({ onClose, employeeId }: { onClose: () => void; employee
         <div className="flex flex-col gap-3">
           <p className="text-sm text-ink-700">
             Submitted for approval — the employee stays active until a senior approver decides this
-            in the <strong>Approvals inbox</strong> (no self-approval; you cannot decide your own request).
+            in the <strong>Approvals inbox</strong> (no self-approval; you cannot decide your own
+            request).
           </p>
           <div className="flex justify-end">
             <Button onClick={onClose}>Done</Button>
@@ -114,8 +124,19 @@ function TerminateModal({ onClose, employeeId }: { onClose: () => void; employee
         </div>
       ) : (
         <form onSubmit={submit} className="flex flex-col gap-4">
-          <TextField label="Effective date" type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} />
-          <TextField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} required autoFocus />
+          <TextField
+            label="Effective date"
+            type="date"
+            value={effectiveDate}
+            onChange={(e) => setEffectiveDate(e.target.value)}
+          />
+          <TextField
+            label="Reason"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            required
+            autoFocus
+          />
           {error && <p className="text-sm text-danger">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>
@@ -178,9 +199,6 @@ export function EmployeeDetailPage() {
           )
         }
       />
-      <p className="mb-5 text-sm text-ink-500">
-        {emp.employee_number} · {emp.job_title || "No title"} · {emp.organization_name}
-      </p>
 
       <div className="mb-6 grid grid-cols-2 gap-4 rounded-lg border border-line bg-surface-0 p-5 sm:grid-cols-3">
         <Field label="Status" value={emp.employment_status} />
@@ -194,7 +212,12 @@ export function EmployeeDetailPage() {
         <Field label="RSSB number" value={emp.rssb_number} />
         <Field label="Professional licence" value={emp.license_number ?? ""} />
         <Field label="Linked login" value={emp.user_username ?? "Not provisioned"} />
-        <Field label="Next of kin" value={emp.next_of_kin_name ? `${emp.next_of_kin_name} (${emp.next_of_kin_relation})` : ""} />
+        <Field
+          label="Next of kin"
+          value={
+            emp.next_of_kin_name ? `${emp.next_of_kin_name} (${emp.next_of_kin_relation})` : ""
+          }
+        />
       </div>
 
       <div className="mb-2 flex items-center justify-between">
@@ -213,7 +236,12 @@ export function EmployeeDetailPage() {
                   {d.doc_type.replace(/_/g, " ")}
                 </td>
                 <td className="px-4 py-2.5 text-right">
-                  <a href={d.document_url} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                  <a
+                    href={d.document_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-brand-700 hover:underline"
+                  >
                     View
                   </a>
                 </td>

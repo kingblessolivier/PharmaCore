@@ -1,19 +1,57 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, Clock, ShieldCheck, XCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  Banknote,
+  BookOpen,
+  Boxes,
+  CheckCircle2,
+  ClipboardList,
+  Clock,
+  CreditCard,
+  FileMinus,
+  FileQuestion,
+  HandCoins,
+  Receipt,
+  ShieldCheck,
+  ShoppingCart,
+  Trash2,
+  Truck,
+  UserMinus,
+  Wallet,
+  XCircle,
+  type LucideIcon,
+} from "lucide-react";
 import { useState } from "react";
 import { Button, PageHeader, Spinner } from "../components/ui";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { can, isAdmin } from "../lib/roles";
 import type { ApprovalRequest, Paginated } from "../lib/types";
 
-const RESOURCE_LABELS: Record<string, string> = {
-  "finance.credit_override": "Credit-limit override",
-  "hr.employee_termination": "Employee termination",
+/** The glyph for an approval kind — grouped by the subsystem that raised it.
+ *
+ * The wording comes from the server (`resource_label`), which reads it off the
+ * same authority registry that decides who may approve the thing. Only the icon
+ * is chosen here, so a new approval kind cannot show up mislabelled — at worst
+ * it gets the neutral glyph. */
+const ICONS: Record<string, LucideIcon> = {
+  "hr.payroll_run": Wallet,
+  "hr.employee_termination": UserMinus,
+  "hr.loan": HandCoins,
+  "finance.credit_override": CreditCard,
+  "finance.write_off": FileMinus,
+  "finance.payment_run": Banknote,
+  "finance.journal": BookOpen,
+  "procurement.purchase_order": ShoppingCart,
+  "procurement.requisition": ClipboardList,
+  "procurement.supplier_invoice": Receipt,
+  "distribution.stock_order": Truck,
+  "inventory.stock_adjustment": Boxes,
+  "inventory.disposal": Trash2,
 };
 
-function label(resourceType: string): string {
-  return RESOURCE_LABELS[resourceType] ?? resourceType;
+function iconFor(resourceType: string) {
+  const Icon = ICONS[resourceType] ?? FileQuestion;
+  return <Icon className="h-5 w-5" aria-hidden />;
 }
 
 export function ApprovalsInboxPage() {
@@ -22,29 +60,29 @@ export function ApprovalsInboxPage() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"PENDING" | "APPROVED" | "REJECTED">("PENDING");
 
-  const canManage = isAdmin(user) || can(user, "approval.manage");
-
   const q = useQuery({
     queryKey: ["approvals", tab],
-    queryFn: () =>
-      api<Paginated<ApprovalRequest>>(`/api/approvals/requests/?status=${tab}`),
+    queryFn: () => api<Paginated<ApprovalRequest>>(`/api/approvals/requests/?status=${tab}`),
     refetchInterval: 30000,
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["approvals"] });
 
   const claim = useMutation({
-    mutationFn: (id: number) => api<ApprovalRequest>(`/api/approvals/requests/${id}/claim/`, { method: "POST" }),
+    mutationFn: (id: number) =>
+      api<ApprovalRequest>(`/api/approvals/requests/${id}/claim/`, { method: "POST" }),
     onSuccess: invalidate,
     onError: (e) => setError(e instanceof ApiError ? e.message : "Could not claim this request."),
   });
   const approve = useMutation({
-    mutationFn: (id: number) => api<ApprovalRequest>(`/api/approvals/requests/${id}/approve/`, { method: "POST" }),
+    mutationFn: (id: number) =>
+      api<ApprovalRequest>(`/api/approvals/requests/${id}/approve/`, { method: "POST" }),
     onSuccess: invalidate,
     onError: (e) => setError(e instanceof ApiError ? e.message : "Could not approve this request."),
   });
   const reject = useMutation({
-    mutationFn: (id: number) => api<ApprovalRequest>(`/api/approvals/requests/${id}/reject/`, { method: "POST" }),
+    mutationFn: (id: number) =>
+      api<ApprovalRequest>(`/api/approvals/requests/${id}/reject/`, { method: "POST" }),
     onSuccess: invalidate,
     onError: (e) => setError(e instanceof ApiError ? e.message : "Could not reject this request."),
   });
@@ -54,10 +92,6 @@ export function ApprovalsInboxPage() {
   return (
     <div>
       <PageHeader title="Approvals inbox" />
-      <p className="mb-4 text-sm text-ink-500">
-        Every pending approval across subsystems, in one queue. Claim an item to lock it before
-        deciding — you can never claim or decide your own request. {canManage && "As senior oversight, you can also reassign a claim."}
-      </p>
 
       <div className="mb-4 flex gap-1 border-b border-line">
         {(["PENDING", "APPROVED", "REJECTED"] as const).map((t) => (
@@ -65,7 +99,9 @@ export function ApprovalsInboxPage() {
             key={t}
             onClick={() => setTab(t)}
             className={`px-3 py-2 text-sm font-medium ${
-              tab === t ? "border-b-2 border-brand-600 text-brand-700" : "text-ink-500 hover:text-ink-900"
+              tab === t
+                ? "border-b-2 border-brand-600 text-brand-700"
+                : "text-ink-500 hover:text-ink-900"
             }`}
           >
             {t.charAt(0) + t.slice(1).toLowerCase()}
@@ -91,41 +127,66 @@ export function ApprovalsInboxPage() {
                 key={a.id}
                 className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface-0 p-4"
               >
+                {/* The glyph carries the kind, so the headline can be the thing
+                    itself — "Purchase order PO-2026-00003" rather than the
+                    registry key `procurement.purchase_order`. */}
+                <span
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                    a.sla_breached
+                      ? "bg-danger-50 text-danger-700"
+                      : a.is_overdue
+                        ? "bg-warning-50 text-warning-700"
+                        : "bg-surface-100 text-ink-600"
+                  }`}
+                >
+                  {iconFor(a.resource_type)}
+                </span>
+
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-ink-900">{label(a.resource_type)}</span>
-                    <span className="text-xs text-ink-500">#{a.resource_id}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-ink-900">
+                      {a.reason || a.resource_label}
+                    </span>
                     {a.sla_breached && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-danger-50 px-2 py-0.5 text-[11px] font-semibold text-danger-800">
                         <AlertTriangle className="h-3 w-3" /> SLA breached
                       </span>
                     )}
                     {a.is_overdue && !a.sla_breached && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
-                        <Clock className="h-3 w-3" /> overdue
+                      <span className="inline-flex items-center gap-1 rounded-full bg-warning-50 px-2 py-0.5 text-[11px] font-semibold text-warning-800">
+                        <Clock className="h-3 w-3" /> Overdue
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-ink-500">
-                    Requested by {a.requested_by_name} · {a.organization_name}
-                    {a.reason && <> — {a.reason}</>}
+                  <div className="mt-0.5 text-xs text-ink-500">
+                    {a.resource_label} #{a.resource_id} · {a.requested_by_name} ·{" "}
+                    {a.organization_name}
                   </div>
-                  {a.claimed_by_name && (
+                  {(a.claimed_by_name || a.decided_by_name) && (
                     <div className="mt-1 text-xs text-ink-500">
-                      Claimed by <span className="font-medium text-ink-700">{a.claimed_by_name}</span>
-                    </div>
-                  )}
-                  {a.decided_by_name && (
-                    <div className="mt-1 text-xs text-ink-500">
-                      Decided by {a.decided_by_name}
-                      {a.decision_note && <> — {a.decision_note}</>}
+                      {a.decided_by_name ? (
+                        <>
+                          Decided by{" "}
+                          <span className="font-medium text-ink-700">{a.decided_by_name}</span>
+                          {a.decision_note && <> — {a.decision_note}</>}
+                        </>
+                      ) : (
+                        <>
+                          Claimed by{" "}
+                          <span className="font-medium text-ink-700">{a.claimed_by_name}</span>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
                 {a.status === "PENDING" && !isRequester && (
                   <div className="flex shrink-0 gap-2">
                     {!a.claimed_by && (
-                      <Button variant="secondary" onClick={() => claim.mutate(a.id)} disabled={claim.isPending}>
+                      <Button
+                        variant="secondary"
+                        onClick={() => claim.mutate(a.id)}
+                        disabled={claim.isPending}
+                      >
                         <ShieldCheck className="h-4 w-4" /> Claim
                       </Button>
                     )}
@@ -147,7 +208,9 @@ export function ApprovalsInboxPage() {
                   </div>
                 )}
                 {a.status === "PENDING" && isRequester && (
-                  <span className="shrink-0 text-xs text-ink-400">Your request — awaiting another approver</span>
+                  <span className="shrink-0 text-xs text-ink-400">
+                    Your request — awaiting another approver
+                  </span>
                 )}
               </div>
             );

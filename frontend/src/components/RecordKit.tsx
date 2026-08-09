@@ -96,7 +96,9 @@ export function Section({
     <section className="mb-5">
       <div className="mb-2 flex items-center justify-between">
         <div>
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">{title}</h3>
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+            {title}
+          </h3>
           {hint && <p className="text-xs text-ink-500">{hint}</p>}
         </div>
         {action}
@@ -210,9 +212,7 @@ export function ProductPicker({
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const pool = q
-      ? products.filter((p) => productLabel(p).toLowerCase().includes(q))
-      : products;
+    const pool = q ? products.filter((p) => productLabel(p).toLowerCase().includes(q)) : products;
     return pool.slice(0, 40);
   }, [products, query]);
 

@@ -35,13 +35,21 @@ const STATUS_LABEL: Record<string, string> = {
 
 function StatusBadge({ status }: { status: string }) {
   return (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_TONE[status] ?? "bg-surface-100 text-ink-700"}`}>
+    <span
+      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_TONE[status] ?? "bg-surface-100 text-ink-700"}`}
+    >
       {STATUS_LABEL[status] ?? status.replace("_", " ")}
     </span>
   );
 }
 
-function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | null; onClose: () => void }) {
+function NewOrderModal({
+  defaultRetail,
+  onClose,
+}: {
+  defaultRetail: number | null;
+  onClose: () => void;
+}) {
   const qc = useQueryClient();
   const [depot, setDepot] = useState("");
   const [retail, setRetail] = useState(defaultRetail ? String(defaultRetail) : "");
@@ -50,7 +58,10 @@ function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | nul
   const [qty, setQty] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const orgs = useQuery({ queryKey: ["organizations"], queryFn: () => api<Paginated<Organization>>("/api/organizations/") });
+  const orgs = useQuery({
+    queryKey: ["organizations"],
+    queryFn: () => api<Paginated<Organization>>("/api/organizations/"),
+  });
   // The depot's catalog — only what it actually offers, with the wholesale price it set.
   const listings = useQuery({
     queryKey: ["depot-catalog", depot],
@@ -91,7 +102,8 @@ function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | nul
       void qc.invalidateQueries({ queryKey: ["orders"] });
       onClose();
     },
-    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not place the order."),
+    onError: (err) =>
+      setError(err instanceof ApiError ? err.message : "Could not place the order."),
   });
 
   function addItem() {
@@ -138,26 +150,49 @@ function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | nul
     <Modal title="New purchase order" onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
-          <SelectField label="From (supplying branch)" value={depot} onChange={(e) => changeDepot(e.target.value)}>
+          <SelectField
+            label="From (supplying branch)"
+            value={depot}
+            onChange={(e) => changeDepot(e.target.value)}
+          >
             <option value="">— select —</option>
-            {depots.map((d) => <option key={d.id} value={d.id}>{d.name} · {d.type}</option>)}
+            {depots.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name} · {d.type}
+              </option>
+            ))}
           </SelectField>
-          <SelectField label="To (receiving branch)" value={retail} onChange={(e) => setRetail(e.target.value)}>
+          <SelectField
+            label="To (receiving branch)"
+            value={retail}
+            onChange={(e) => setRetail(e.target.value)}
+          >
             <option value="">— select —</option>
-            {retails.map((r) => <option key={r.id} value={r.id}>{r.name} · {r.type}</option>)}
+            {retails.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name} · {r.type}
+              </option>
+            ))}
           </SelectField>
         </div>
 
         <div className="rounded-lg border border-line p-3">
           <div className="mb-2 text-xs font-semibold uppercase text-ink-500">Items</div>
           {items.map((it, i) => (
-            <div key={i} className="flex items-center justify-between border-b border-line py-1 text-sm last:border-0">
+            <div
+              key={i}
+              className="flex items-center justify-between border-b border-line py-1 text-sm last:border-0"
+            >
               <span>{it.product_name}</span>
               <span className="font-mono text-ink-700">
                 ×{it.quantity_ordered} @ {Number(it.price_per_unit).toLocaleString()} ={" "}
                 {(Number(it.price_per_unit) * it.quantity_ordered).toLocaleString()}
               </span>
-              <button type="button" onClick={() => setItems((s) => s.filter((_, x) => x !== i))} className="text-ink-500 hover:text-red-600">
+              <button
+                type="button"
+                onClick={() => setItems((s) => s.filter((_, x) => x !== i))}
+                className="text-ink-500 hover:text-red-600"
+              >
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
@@ -172,7 +207,9 @@ function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | nul
             {!depot ? (
               <p className="text-sm text-ink-500">Select a depot to see the products it offers.</p>
             ) : listings.isLoading ? (
-              <div className="flex justify-center py-2"><Spinner /></div>
+              <div className="flex justify-center py-2">
+                <Spinner />
+              </div>
             ) : offered.length === 0 ? (
               <p className="text-sm text-ink-500">
                 This depot has no priced products in its catalog yet.
@@ -181,14 +218,25 @@ function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | nul
               <>
                 <div className="grid grid-cols-4 items-end gap-2">
                   <div className="col-span-2">
-                    <SelectField label="Product" value={pickProduct} onChange={(e) => setPickProduct(e.target.value)}>
+                    <SelectField
+                      label="Product"
+                      value={pickProduct}
+                      onChange={(e) => setPickProduct(e.target.value)}
+                    >
                       <option value="">— select —</option>
                       {offered.map((l) => (
-                        <option key={l.id} value={l.product}>{l.product_name}</option>
+                        <option key={l.id} value={l.product}>
+                          {l.product_name}
+                        </option>
                       ))}
                     </SelectField>
                   </div>
-                  <TextField label="Qty" type="number" value={qty} onChange={(e) => setQty(e.target.value)} />
+                  <TextField
+                    label="Qty"
+                    type="number"
+                    value={qty}
+                    onChange={(e) => setQty(e.target.value)}
+                  />
                   <TextField
                     label="Unit price"
                     value={picked ? Number(picked.wholesale_price).toLocaleString() : "—"}
@@ -196,7 +244,12 @@ function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | nul
                     disabled
                   />
                 </div>
-                <Button type="button" variant="secondary" onClick={addItem} disabled={!picked || !qty}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={addItem}
+                  disabled={!picked || !qty}
+                >
                   <Plus className="h-4 w-4" /> Add item
                 </Button>
               </>
@@ -206,8 +259,12 @@ function NewOrderModal({ defaultRetail, onClose }: { defaultRetail: number | nul
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={create.isPending}>{create.isPending ? "Placing…" : "Place order"}</Button>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={create.isPending}>
+            {create.isPending ? "Placing…" : "Place order"}
+          </Button>
         </div>
       </form>
     </Modal>
@@ -288,18 +345,38 @@ function PaymentModal({ order, onClose }: { order: StockOrder; onClose: () => vo
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <TextField label="Amount (RWF)" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
-          <SelectField label="Method" value={method} onChange={(e) => setMethod(e.target.value as OrderPaymentMethod)}>
+          <TextField
+            label="Amount (RWF)"
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            autoFocus
+          />
+          <SelectField
+            label="Method"
+            value={method}
+            onChange={(e) => setMethod(e.target.value as OrderPaymentMethod)}
+          >
             {PAY_METHODS.map((m) => (
-              <option key={m.value} value={m.value}>{m.label}</option>
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
             ))}
           </SelectField>
         </div>
-        <TextField label="Reference (txn / cheque no.)" value={reference} onChange={(e) => setReference(e.target.value)} />
+        <TextField
+          label="Reference (txn / cheque no.)"
+          value={reference}
+          onChange={(e) => setReference(e.target.value)}
+        />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={pay.isPending}>{pay.isPending ? "Saving…" : "Record payment"}</Button>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={pay.isPending}>
+            {pay.isPending ? "Saving…" : "Record payment"}
+          </Button>
         </div>
       </form>
     </Modal>
@@ -313,7 +390,10 @@ export function OrdersPage() {
   const [discussing, setDiscussing] = useState<StockOrder | null>(null);
   const [paying, setPaying] = useState<StockOrder | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const { data, isLoading } = useQuery({ queryKey: ["orders"], queryFn: () => api<Paginated<StockOrder>>("/api/distribution/orders/") });
+  const { data, isLoading } = useQuery({
+    queryKey: ["orders"],
+    queryFn: () => api<Paginated<StockOrder>>("/api/distribution/orders/"),
+  });
 
   const act = useMutation({
     mutationFn: (v: { id: number; action: "approve" | "receive" | "cancel" }) =>
@@ -323,15 +403,25 @@ export function OrdersPage() {
       void qc.invalidateQueries({ queryKey: ["orders"] });
       void qc.invalidateQueries({ queryKey: ["pharmacy-products"] });
     },
-    onError: (err) =>
-      setActionError(err instanceof ApiError ? err.message : "Action failed."),
+    onError: (err) => setActionError(err instanceof ApiError ? err.message : "Action failed."),
   });
 
   return (
     <div>
-      <PageHeader title="Purchase orders" action={<Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New purchase order</Button>} />
+      <PageHeader
+        title="Purchase orders"
+        action={
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4" /> New purchase order
+          </Button>
+        }
+      />
       {actionError && <p className="mb-3 text-sm text-red-600">{actionError}</p>}
-      {isLoading && <div className="flex justify-center py-10"><Spinner /></div>}
+      {isLoading && (
+        <div className="flex justify-center py-10">
+          <Spinner />
+        </div>
+      )}
       {data && (
         <div className="overflow-hidden rounded-lg border border-line bg-surface-0">
           <table className="w-full text-sm">
@@ -349,37 +439,72 @@ export function OrdersPage() {
               {data.results.map((o) => (
                 <tr key={o.id} className="border-b border-line last:border-0 hover:bg-surface-100">
                   <td className="px-4 py-2.5 font-mono font-medium">{o.order_number}</td>
-                  <td className="px-4 py-2.5 text-ink-700">{o.depot_name} → {o.retail_name}</td>
+                  <td className="px-4 py-2.5 text-ink-700">
+                    {o.depot_name} → {o.retail_name}
+                  </td>
                   <td className="px-4 py-2.5">
                     <StatusBadge status={o.status} />
                     {o.status === "IN_TRANSIT" && o.in_transit.length > 0 && (
                       <div className="mt-0.5 text-xs text-blue-700">
-                        {o.in_transit.reduce((s, t) => s + t.quantity, 0).toLocaleString()} units on the way
+                        {o.in_transit.reduce((s, t) => s + t.quantity, 0).toLocaleString()} units on
+                        the way
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-2.5 text-right font-mono">{o.total_amount.toLocaleString()}</td>
+                  <td className="px-4 py-2.5 text-right font-mono">
+                    {o.total_amount.toLocaleString()}
+                  </td>
                   <td className="px-4 py-2.5">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${PAY_TONE[o.payment_status] ?? ""}`}>
-                      {o.payment_status === "PAID" ? "Paid" : o.payment_status === "PARTIAL" ? "Partial" : "Unpaid"}
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${PAY_TONE[o.payment_status] ?? ""}`}
+                    >
+                      {o.payment_status === "PAID"
+                        ? "Paid"
+                        : o.payment_status === "PARTIAL"
+                          ? "Partial"
+                          : "Unpaid"}
                     </span>
                     {o.amount_due > 0 && (
-                      <div className="mt-0.5 font-mono text-xs text-ink-500">{o.amount_due.toLocaleString()} due</div>
+                      <div className="mt-0.5 font-mono text-xs text-ink-500">
+                        {o.amount_due.toLocaleString()} due
+                      </div>
                     )}
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex justify-end gap-1">
                       {o.status === "PENDING" && canDepotAct(user, o) && (
-                        <Button variant="secondary" onClick={() => act.mutate({ id: o.id, action: "approve" })} disabled={act.isPending}>Approve &amp; send</Button>
+                        <Button
+                          variant="secondary"
+                          onClick={() => act.mutate({ id: o.id, action: "approve" })}
+                          disabled={act.isPending}
+                        >
+                          Approve &amp; send
+                        </Button>
                       )}
                       {o.status === "IN_TRANSIT" && canRetailAct(user, o) && (
-                        <Button variant="secondary" onClick={() => act.mutate({ id: o.id, action: "receive" })} disabled={act.isPending}>Receive</Button>
+                        <Button
+                          variant="secondary"
+                          onClick={() => act.mutate({ id: o.id, action: "receive" })}
+                          disabled={act.isPending}
+                        >
+                          Receive
+                        </Button>
                       )}
-                      {o.payment_status !== "PAID" && o.status !== "CANCELLED" && o.status !== "DRAFT" && isParty(user, o) && (
-                        <Button variant="secondary" onClick={() => setPaying(o)}>Record payment</Button>
-                      )}
+                      {o.payment_status !== "PAID" &&
+                        o.status !== "CANCELLED" &&
+                        o.status !== "DRAFT" &&
+                        isParty(user, o) && (
+                          <Button variant="secondary" onClick={() => setPaying(o)}>
+                            Record payment
+                          </Button>
+                        )}
                       {["DRAFT", "PENDING"].includes(o.status) && (
-                        <Button variant="ghost" onClick={() => act.mutate({ id: o.id, action: "cancel" })}>Cancel</Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => act.mutate({ id: o.id, action: "cancel" })}
+                        >
+                          Cancel
+                        </Button>
                       )}
                       <Button variant="ghost" onClick={() => setDiscussing(o)}>
                         <MessageSquare className="h-4 w-4" />
@@ -389,17 +514,30 @@ export function OrdersPage() {
                 </tr>
               ))}
               {data.results.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-ink-500">No orders yet.</td></tr>
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-ink-500">
+                    No orders yet.
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
         </div>
       )}
-      {creating && <NewOrderModal defaultRetail={user?.organization ?? null} onClose={() => setCreating(false)} />}
+      {creating && (
+        <NewOrderModal
+          defaultRetail={user?.organization ?? null}
+          onClose={() => setCreating(false)}
+        />
+      )}
       {paying && <PaymentModal order={paying} onClose={() => setPaying(null)} />}
       {discussing && (
         <Modal title={`Discuss ${discussing.order_number}`} onClose={() => setDiscussing(null)}>
-          <Comments entityType="stock_order" entityId={discussing.id} organization={discussing.retail} />
+          <Comments
+            entityType="stock_order"
+            entityId={discussing.id}
+            organization={discussing.retail}
+          />
         </Modal>
       )}
     </div>

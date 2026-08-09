@@ -86,9 +86,7 @@ export function SuppliersPage() {
     },
   });
 
-  const bySupplier = new Map(
-    (profiles.data?.results ?? []).map((p) => [p.supplier, p] as const),
-  );
+  const bySupplier = new Map((profiles.data?.results ?? []).map((p) => [p.supplier, p] as const));
   const rows: Row[] = (suppliers.data?.results ?? []).map((s) => ({
     ...s,
     profile: bySupplier.get(s.id),
@@ -189,11 +187,6 @@ export function SuppliersPage() {
           )
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Who you buy from, and whether you are allowed to. A purchase order is refused outright for
-        a supplier whose required licences have lapsed or whose standing is suspended — so that
-        verdict belongs here, before anyone raises one.
-      </p>
 
       {(blocked.length > 0 || unassessed.length > 0) && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -307,7 +300,6 @@ export function SuppliersPage() {
       {draft && (
         <Drawer
           title="New supplier"
-          subtitle="Trading details only — licences and standing are set up on Supplier Master."
           onClose={() => setDraft(null)}
           footer={
             <div className="flex justify-end gap-2">

@@ -3,12 +3,10 @@ import { ChartFrame, BarChart, VizRoot } from "../../components/Charts";
 import {
   AlertTriangle,
   Boxes,
-  CheckCircle2,
-  Building2,
+  CalendarClock,
+  ClipboardCheck,
   ClipboardList,
   FileCheck2,
-  Handshake,
-  MoveRight,
   RefreshCw,
   ScanLine,
   ShieldAlert,
@@ -21,8 +19,8 @@ import {
   AppHeader,
   QuickAction,
   QuickActions,
-  SectionCard,
-  SectionGrid,
+  ReadinessCard,
+  ReadinessGrid,
   StatTile,
   WorkQueue,
 } from "../../components/AppHome";
@@ -33,6 +31,7 @@ import { inventoryOverview, type InventoryOverview } from "../../lib/inventory";
 import { money } from "../../lib/format";
 import { useDefaultOrg } from "../../lib/recordData";
 import type { DashboardSummary, Paginated } from "../../lib/types";
+import { ModuleInsights } from "../../components/ModuleInsights";
 
 const BAND_LABELS: Record<string, string> = {
   expired: "Already expired",
@@ -128,12 +127,6 @@ export function InventoryHome() {
     select: (r) => r.count,
   });
 
-  const putawayQuery = useQuery({
-    queryKey: ["count", "putaway-rules"],
-    queryFn: () => api<Paginated<unknown>>("/api/inventory/putaway-rules/?page_size=1"),
-    select: (r) => r.count,
-  });
-
   const excursionsQuery = useQuery({
     queryKey: ["count", "excursions"],
     queryFn: () => api<Paginated<unknown>>("/api/inventory/excursions/?page_size=1"),
@@ -141,21 +134,13 @@ export function InventoryHome() {
   });
 
   return (
-    <div className="flex flex-col gap-6 max-w-6xl">
-      <AppHeader
-        icon={Warehouse}
-        hue="#0284C7"
-        title="Inventory & Warehouse Operations"
-        subtitle="Good Distribution Practice (GDP) facilities and zones, put-away and wave picking, demand-driven replenishment, GS1 serialisation and EPCIS track-and-trace, consignment ownership, cold-chain calibration and excursion investigations, QC quarantine, recalls, counts and witnessed disposal."
-      />
+    <div className="flex flex-col gap-6">
+      <AppHeader icon={Warehouse} hue="#0284C7" title="Inventory & Warehouse Operations" />
 
       <WorkQueue items={work.items} loading={work.loading} />
 
       <VizRoot>
-        <ChartFrame
-          title="Stock at risk, by expiry band"
-          subtitle="Banded because the action differs: sell through, move it, or write it off."
-        >
+        <ChartFrame title="Stock at risk, by expiry band">
           <BarChart
             data={(dash.data?.expiry_exposure?.bands ?? [])
               .filter((b) => b.value > 0)
@@ -187,13 +172,21 @@ export function InventoryHome() {
           <StatTile label="Reorder Rules" value={rulesQuery.data ?? 0} hint="demand-driven" />
         </Link>
         <Link to="/inventory/serialisation">
-          <StatTile label="Serialised Units" value={serialsQuery.data ?? 0} hint="GS1 track & trace" />
+          <StatTile
+            label="Serialised Units"
+            value={serialsQuery.data ?? 0}
+            hint="GS1 track & trace"
+          />
         </Link>
         <Link to="/inventory/consignment">
           <StatTile label="Consignment" value={consignmentsQuery.data ?? 0} hint="VMI agreements" />
         </Link>
         <Link to="/inventory/coldchain">
-          <StatTile label="Excursions" value={excursionsQuery.data ?? 0} hint="under investigation" />
+          <StatTile
+            label="Excursions"
+            value={excursionsQuery.data ?? 0}
+            hint="under investigation"
+          />
         </Link>
         <Link to="/inventory/temperature">
           <StatTile label="Temp Sensors" value={sensorsQuery.data ?? 0} hint="calibrated probes" />
@@ -212,7 +205,12 @@ export function InventoryHome() {
       <NeedsAttention data={health.data} />
 
       <QuickActions>
-        <QuickAction to="/inventory/serialisation" icon={ScanLine} label="Scan & Commission" primary />
+        <QuickAction
+          to="/inventory/serialisation"
+          icon={ScanLine}
+          label="Scan & Commission"
+          primary
+        />
         <QuickAction to="/inventory/picking" icon={ClipboardList} label="Release a Pick Wave" />
         <QuickAction to="/inventory/replenishment" icon={RefreshCw} label="What to Reorder" />
         <QuickAction to="/inventory/qc" icon={FileCheck2} label="Inbound QC Review" />
@@ -229,7 +227,10 @@ export function InventoryHome() {
             <div className="mt-4 flex flex-col gap-3 text-xs">
               <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sky-900">
                 <div className="font-semibold text-sm">Environmental Control Active</div>
-                <p className="mt-1 text-sky-700">All calibrated temperature sensors are operating within defined thresholds (2–8°C Cold Room & 15–25°C Ambient Vault).</p>
+                <p className="mt-1 text-sky-700">
+                  All calibrated temperature sensors are operating within defined thresholds (2–8°C
+                  Cold Room & 15–25°C Ambient Vault).
+                </p>
               </div>
             </div>
           </div>
@@ -248,7 +249,10 @@ export function InventoryHome() {
               <h3 className="font-semibold text-sm text-ink-900">Inbound Quarantine & QC Queue</h3>
             </div>
             <div className="mt-4 flex flex-col gap-3 text-xs">
-              <p className="text-ink-600">Inbound batches must undergo Quality Check inspection before release to sellable stock.</p>
+              <p className="text-ink-600">
+                Inbound batches must undergo Quality Check inspection before release to sellable
+                stock.
+              </p>
               <div className="flex items-center justify-between border-t border-line pt-2">
                 <span>Pending Inspection</span>
                 <Badge tone="warning">{qcQuery.data ?? 0} batches</Badge>
@@ -291,236 +295,108 @@ export function InventoryHome() {
 
       <div>
         <h2 className="mb-3 text-base font-semibold tracking-tight text-ink-900">
-          Warehouse Subsystem Modules
+          What is on the shelf, and what it is worth
         </h2>
-        <SectionGrid>
-          <SectionCard
-            icon={Building2}
-            title="Warehouses & Facilities"
-            description="Every facility stock is stored in — main store, cross-dock, bonded warehouse, quarantine hold — with live zone occupancy."
-            to="/inventory/warehouses"
-            meta={warehousesQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={Warehouse}
-            title="Storage Zones & Bin Locations"
-            description="Climate zones (Ambient, Cold Room 2–8°C, Freezer, Safe) and bin location mapping."
-            to="/inventory/zones"
-            meta={zonesQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={MoveRight}
-            title="Put-away Rules"
-            description="Where a received lot goes, by policy rather than by whoever holds the trolley. Cold-chain stock is never defaulted onto an ambient shelf."
-            to="/inventory/putaway"
-            meta={putawayQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={ClipboardList}
-            title="Wave Picking"
-            description="FEFO pick tasks built from demand, walk-ordered by bin, reserved on release and short-picked honestly."
-            to="/inventory/picking"
-            meta={wavesQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={RefreshCw}
-            title="Replenishment & Stock Intelligence"
-            description="Reorder points from observed demand, ABC/XYZ classes, suggested orders, slow & dead stock, near-expiry actions."
-            to="/inventory/replenishment"
-            meta={rulesQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={ScanLine}
-            title="Serialisation & Track-and-Trace"
-            description="GS1 DataMatrix scanning, each→case→pallet aggregation, chain-of-custody trace and EPCIS 2.0 export."
-            to="/inventory/serialisation"
-            meta={serialsQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={Handshake}
-            title="Consignment & VMI"
-            description="Stock that is not where its owner is — supplier-owned held by us, our stock held at a customer, settled on consumption."
-            to="/inventory/consignment"
-            meta={consignmentsQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={Thermometer}
-            title="Cold-Chain Compliance"
-            description="Calibrated-sensor register, certificate trail, and excursion investigations closed with a QA-signed disposition."
-            to="/inventory/coldchain"
-            meta={excursionsQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={Thermometer}
-            title="Cold-Chain Temperature Logging"
-            description="Real-time environmental sensor logs, MKT calculations, and excursion breach alerts."
-            to="/inventory/temperature"
-            meta={sensorsQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={FileCheck2}
-            title="Quality Control & Quarantine"
-            description="Inbound inspection hold queue, COA verification, and Pass/Fail release actions."
-            to="/inventory/qc"
-            meta={qcQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={ShieldAlert}
-            title="Batch Recalls & Emergency Freeze"
-            description="Manufacturer recall directory and 1-click multi-branch emergency batch freeze engine."
-            to="/inventory/recalls"
-            meta={recallsQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={Boxes}
-            title="Physical Stock Counts & Audits"
-            description="Cycle counts, physical audits, variance reconciliation, and automated adjustment ledger."
-            to="/inventory/counts"
-            meta={countsQuery.data ?? 0}
-          />
-          <SectionCard
-            icon={Trash2}
-            title="Stock Disposal & Witnessed Destruction"
-            description="Expired/damaged write-off protocol with dual witness signatures & destruction certificates."
-            to="/inventory/disposal"
-            meta={disposalsQuery.data ?? 0}
-          />
-        </SectionGrid>
+        <ModuleInsights module="inventory" />
       </div>
     </div>
   );
 }
 
-
 /* -------------------------------------------------------------------------- */
 /* Decisions waiting on somebody, each linking to where it is made.            */
 /* -------------------------------------------------------------------------- */
-
-function Row({
-  ok,
-  label,
-  detail,
-  to,
-}: {
-  ok: boolean;
-  label: string;
-  detail: string;
-  to: string;
-}) {
-  return (
-    <li className="flex items-start gap-2.5 py-2">
-      <span className="mt-0.5">
-        {ok ? (
-          <CheckCircle2 className="h-4 w-4 text-success-600" />
-        ) : (
-          <AlertTriangle className="h-4 w-4 text-warning-600" />
-        )}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm text-ink-900">{label}</div>
-        <div className="text-xs text-ink-500">{detail}</div>
-      </div>
-      {!ok && (
-        <Link to={to} className="shrink-0 text-xs text-brand-600 hover:underline">
-          Open
-        </Link>
-      )}
-    </li>
-  );
-}
 
 function NeedsAttention({ data }: { data?: InventoryOverview }) {
   if (!data) return null;
   const { quality, recalls, disposal, counts } = data;
 
   return (
-    <div className="rounded-lg border border-line bg-surface-0">
-      <div className="border-b border-line px-4 py-3">
-        <div className="text-sm font-semibold text-ink-900">Needs your attention</div>
-        <div className="text-xs text-ink-500">
-          Stock nobody can sell, and decisions only a person can make.
-        </div>
-      </div>
-      <ul className="divide-y divide-line px-4">
-        <Row
-          ok={quality.pending === 0}
-          label={
-            quality.pending === 0
-              ? "Nothing waiting on quality control"
-              : `${quality.pending} batch(es) held awaiting a quality decision`
-          }
-          detail={
-            quality.pending === 0
-              ? "Every received batch has been released or rejected."
-              : `${quality.units_held.toLocaleString()} unit(s) that cannot be sold or dispensed, oldest waiting ${quality.oldest_days} day(s).`
-          }
-          to="/inventory/qc"
-        />
-        <Row
-          ok={quality.expiring_in_quarantine === 0}
-          label={
-            quality.expiring_in_quarantine === 0
-              ? "No held stock is near expiry"
-              : `${quality.expiring_in_quarantine} held batch(es) expire within 90 days`
-          }
-          detail={
-            quality.expiring_in_quarantine === 0
-              ? "Nothing will expire while waiting for a decision."
-              : "Paid for, never sold, and destroyed at your cost if the decision waits."
-          }
-          to="/inventory/qc"
-        />
-        <Row
-          ok={recalls.open_recalls === 0}
-          label={
-            recalls.open_recalls === 0
-              ? "No open recalls"
-              : `${recalls.open_recalls} recall(s) open`
-          }
-          detail={
-            recalls.open_recalls === 0
-              ? "No batch is currently withdrawn."
-              : `${recalls.recalled_units_held.toLocaleString()} recalled unit(s) still held. Open each recall to see whether it reached a patient.`
-          }
-          to="/inventory/recalls"
-        />
-        <Row
-          ok={disposal.awaiting_destruction === 0}
-          label={
-            disposal.awaiting_destruction === 0
-              ? "Nothing awaiting destruction"
-              : `${disposal.awaiting_destruction} batch(es) cannot be sold`
-          }
-          detail={
-            disposal.awaiting_destruction === 0
-              ? "No expired, quarantined or recalled stock is sitting on a shelf."
-              : `${money(disposal.value_awaiting)} at cost, still counted as inventory until it is destroyed.`
-          }
+    <ReadinessGrid title="Needs your attention">
+      <ReadinessCard
+        icon={ClipboardCheck}
+        tone={quality.pending === 0 ? "ok" : "warning"}
+        title={quality.pending === 0 ? "QC clear" : `${quality.pending} held for QC`}
+        detail={
+          quality.pending === 0
+            ? "Every batch released or rejected."
+            : `${quality.units_held.toLocaleString()} unit(s) unsellable, oldest ${quality.oldest_days}d.`
+        }
+        to={quality.pending === 0 ? undefined : "/inventory/qc"}
+        actionLabel="Decide"
+      />
+      <ReadinessCard
+        icon={CalendarClock}
+        tone={quality.expiring_in_quarantine === 0 ? "ok" : "danger"}
+        title={
+          quality.expiring_in_quarantine === 0
+            ? "No held stock near expiry"
+            : `${quality.expiring_in_quarantine} expiring in QC`
+        }
+        detail={
+          quality.expiring_in_quarantine === 0
+            ? "Nothing expires while waiting."
+            : "Destroyed at your cost if the decision waits."
+        }
+        to={quality.expiring_in_quarantine === 0 ? undefined : "/inventory/qc"}
+        actionLabel="Release or reject"
+      />
+      <ReadinessCard
+        icon={ShieldAlert}
+        tone={recalls.open_recalls === 0 ? "ok" : "danger"}
+        title={
+          recalls.open_recalls === 0 ? "No open recalls" : `${recalls.open_recalls} recall(s) open`
+        }
+        detail={
+          recalls.open_recalls === 0
+            ? "No batch is withdrawn."
+            : `${recalls.recalled_units_held.toLocaleString()} recalled unit(s) still held.`
+        }
+        to={recalls.open_recalls === 0 ? undefined : "/inventory/recalls"}
+        actionLabel="Work the recall"
+      />
+      <ReadinessCard
+        icon={Trash2}
+        tone={disposal.awaiting_destruction === 0 ? "ok" : "warning"}
+        title={
+          disposal.awaiting_destruction === 0
+            ? "Nothing to destroy"
+            : `${disposal.awaiting_destruction} batch(es) unsellable`
+        }
+        detail={
+          disposal.awaiting_destruction === 0
+            ? "No dead stock on a shelf."
+            : `${money(disposal.value_awaiting)} at cost, still counted as inventory.`
+        }
+        to={disposal.awaiting_destruction === 0 ? undefined : "/inventory/disposal"}
+        actionLabel="Schedule disposal"
+      />
+      {disposal.expired_still_active > 0 && (
+        <ReadinessCard
+          icon={AlertTriangle}
+          tone="danger"
+          title={`${disposal.expired_still_active} expired still active`}
+          detail="FEFO will pick these first."
           to="/inventory/disposal"
+          actionLabel="Quarantine them"
         />
-        {disposal.expired_still_active > 0 && (
-          <Row
-            ok={false}
-            label={`${disposal.expired_still_active} expired batch(es) still marked active`}
-            detail="Unsellable in fact, sellable on the system — FEFO will pick them first."
-            to="/inventory/disposal"
-          />
-        )}
-        <Row
-          ok={counts.awaiting_approval === 0}
-          label={
-            counts.awaiting_approval === 0
-              ? "No counts awaiting approval"
-              : `${counts.awaiting_approval} stock count(s) awaiting approval`
-          }
-          detail={
-            counts.awaiting_approval === 0
-              ? "Every count has been reconciled to the books."
-              : "Until approved, the books still show the pre-count figures."
-          }
-          to="/inventory/counts"
-        />
-      </ul>
-    </div>
+      )}
+      <ReadinessCard
+        icon={FileCheck2}
+        tone={counts.awaiting_approval === 0 ? "ok" : "warning"}
+        title={
+          counts.awaiting_approval === 0
+            ? "Counts reconciled"
+            : `${counts.awaiting_approval} count(s) to approve`
+        }
+        detail={
+          counts.awaiting_approval === 0
+            ? "Books match the last count."
+            : "The books still show pre-count figures."
+        }
+        to={counts.awaiting_approval === 0 ? undefined : "/inventory/counts"}
+        actionLabel="Approve"
+      />
+    </ReadinessGrid>
   );
 }

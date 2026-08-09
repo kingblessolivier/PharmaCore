@@ -173,11 +173,6 @@ export function InstitutionalTendersPage() {
           </Button>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Awarded contracts with a locked price and a committed volume. A live contract beats your
-        storefront price automatically, and dispatch draws the volume down — so what is left here
-        is what the customer can still call off.
-      </p>
 
       <DataGrid
         rows={rows}
@@ -200,7 +195,6 @@ export function InstitutionalTendersPage() {
       {draft && (
         <Drawer
           title="Record a tender award"
-          subtitle="The price and volume you committed to when the tender was awarded."
           onClose={() => setDraft(null)}
           footer={
             <div className="flex justify-end gap-2">

@@ -99,7 +99,7 @@ function toDraft(order?: PurchaseOrder): Draft {
 
 /** Client-side mirror of the server's line maths, so totals move as you type. */
 function lineMaths(line: PurchaseOrderLine) {
-  const net = num(line.unit_price) * (100 - num(line.discount_pct)) / 100;
+  const net = (num(line.unit_price) * (100 - num(line.discount_pct))) / 100;
   const subtotal = net * Number(line.quantity_ordered || 0);
   const tax = (subtotal * num(line.tax_rate_pct)) / 100;
   return { net, subtotal, tax, total: subtotal + tax };
@@ -127,7 +127,11 @@ function OrderDrawer({
     const subtotal = draft.lines.reduce((s, l) => s + lineMaths(l).subtotal, 0);
     const tax = draft.lines.reduce((s, l) => s + lineMaths(l).tax, 0);
     const grand =
-      subtotal + tax + num(draft.freight_amount) + num(draft.other_charges) - num(draft.discount_amount);
+      subtotal +
+      tax +
+      num(draft.freight_amount) +
+      num(draft.other_charges) -
+      num(draft.discount_amount);
     return { subtotal, tax, grand, base: grand * num(draft.exchange_rate) };
   }, [draft]);
 
@@ -241,9 +245,18 @@ function OrderDrawer({
   });
 
   const busy =
-    save.isPending || submit.isPending || send.isPending || cancel.isPending || startReceipt.isPending;
+    save.isPending ||
+    submit.isPending ||
+    send.isPending ||
+    cancel.isPending ||
+    startReceipt.isPending;
   const error =
-    save.error ?? submit.error ?? send.error ?? cancel.error ?? closeOrder.error ?? startReceipt.error;
+    save.error ??
+    submit.error ??
+    send.error ??
+    cancel.error ??
+    closeOrder.error ??
+    startReceipt.error;
 
   const footer = (
     <>
@@ -570,7 +583,12 @@ function OrderDrawer({
             <>
               <TotalsRow span={6} label="Subtotal" value={totals.subtotal.toFixed(2)} />
               <TotalsRow span={6} label="VAT" value={totals.tax.toFixed(2)} />
-              <TotalsRow span={6} label={`Total (${draft.currency})`} value={totals.grand.toFixed(2)} strong />
+              <TotalsRow
+                span={6}
+                label={`Total (${draft.currency})`}
+                value={totals.grand.toFixed(2)}
+                strong
+              />
               {draft.currency !== "RWF" && (
                 <TotalsRow span={6} label="Total (RWF)" value={totals.base.toFixed(2)} />
               )}
@@ -654,7 +672,7 @@ export function SupplierOrdersPage() {
   });
 
   const rows = data?.results ?? [];
-  const current = open ? rows.find((o) => o.id === open.id) ?? open : null;
+  const current = open ? (rows.find((o) => o.id === open.id) ?? open) : null;
 
   return (
     <div>
@@ -666,10 +684,6 @@ export function SupplierOrdersPage() {
           </Button>
         }
       />
-      <p className="mb-4 max-w-3xl text-sm text-ink-500">
-        Buying from external suppliers: raise → approve (never your own) → send → receive. Multi-currency
-        with Incoterms and payment terms; partial receipt and drop-ship to a branch are both supported.
-      </p>
 
       <DataGrid<PurchaseOrder>
         rows={rows}

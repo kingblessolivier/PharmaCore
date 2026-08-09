@@ -14,11 +14,7 @@ import {
 import { DataGrid } from "../components/DataGrid";
 import { Drawer } from "../components/RecordKit";
 import { api } from "../lib/api";
-import type {
-  Paginated,
-  Warehouse as WarehouseType,
-  WarehouseOccupancy,
-} from "../lib/types";
+import type { Paginated, Warehouse as WarehouseType, WarehouseOccupancy } from "../lib/types";
 
 const TYPES: { value: WarehouseType["warehouse_type"]; label: string }[] = [
   { value: "MAIN", label: "Main distribution store" },
@@ -77,8 +73,7 @@ export function WarehousesPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) =>
-      api<void>(`/api/inventory/warehouses/${id}/`, { method: "DELETE" }),
+    mutationFn: (id: number) => api<void>(`/api/inventory/warehouses/${id}/`, { method: "DELETE" }),
     onSuccess: () => {
       setDeleting(null);
       void qc.invalidateQueries({ queryKey: ["warehouses"] });
@@ -132,11 +127,6 @@ export function WarehousesPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        Every facility this organization stores stock in — main store, cross-dock, bonded
-        warehouse, quarantine hold. Zones and bins hang off a warehouse, so stock is
-        addressable down to facility → zone → bin.
-      </p>
 
       <DataGrid<WarehouseType>
         rows={rows}
@@ -169,14 +159,31 @@ export function WarehousesPage() {
             ),
           },
           { key: "district", header: "District", value: (w) => w.district || "—" },
-          { key: "zones_count", header: "Zones", align: "center", numeric: true, value: (w) => w.zones_count },
-          { key: "bins_count", header: "Bins", align: "center", numeric: true, value: (w) => w.bins_count },
+          {
+            key: "zones_count",
+            header: "Zones",
+            align: "center",
+            numeric: true,
+            value: (w) => w.zones_count,
+          },
+          {
+            key: "bins_count",
+            header: "Bins",
+            align: "center",
+            numeric: true,
+            value: (w) => w.bins_count,
+          },
           {
             key: "is_default",
             header: "Default",
             align: "center",
             value: (w) => (w.is_default ? "Default" : ""),
-            render: (w) => (w.is_default ? <Badge tone="success">Default</Badge> : <span className="text-ink-400">—</span>),
+            render: (w) =>
+              w.is_default ? (
+                <Badge tone="success">Default</Badge>
+              ) : (
+                <span className="text-ink-400">—</span>
+              ),
           },
           {
             key: "is_active",
@@ -224,10 +231,7 @@ export function WarehousesPage() {
       />
 
       {(creating || editing) && (
-        <Drawer
-          title={editing ? `Edit ${editing.name}` : "Add Warehouse"}
-          onClose={close}
-        >
+        <Drawer title={editing ? `Edit ${editing.name}` : "Add Warehouse"} onClose={close}>
           <form onSubmit={submit} className="flex flex-col gap-4">
             {error && (
               <div className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>
@@ -320,10 +324,7 @@ export function WarehousesPage() {
       )}
 
       {inspecting && (
-        <Drawer
-          title={`${inspecting.name} — Zone Occupancy`}
-          onClose={() => setInspecting(null)}
-        >
+        <Drawer title={`${inspecting.name} — Zone Occupancy`} onClose={() => setInspecting(null)}>
           {occupancyQuery.isLoading && <p className="text-sm text-ink-500">Loading…</p>}
           {occupancyQuery.data && occupancyQuery.data.zones.length === 0 && (
             <p className="text-sm text-ink-500">

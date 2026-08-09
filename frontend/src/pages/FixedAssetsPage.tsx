@@ -183,7 +183,11 @@ function AssetDrawer({ asset, onClose }: { asset: FixedAsset; onClose: () => voi
       title={`${asset.asset_number} · ${asset.name}`}
       subtitle={CATEGORY_LABEL[asset.category] ?? asset.category}
       badge={
-        asset.is_active ? <Badge tone="success">In use</Badge> : <Badge tone="default">Disposed</Badge>
+        asset.is_active ? (
+          <Badge tone="success">In use</Badge>
+        ) : (
+          <Badge tone="default">Disposed</Badge>
+        )
       }
       width="max-w-2xl"
       onClose={onClose}
@@ -299,10 +303,6 @@ export function FixedAssetsPage() {
           </div>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Depreciation is charged monthly, straight-line, and capped at the depreciable amount. It
-        is idempotent per month, so running it twice cannot double-charge.
-      </p>
       <ErrorNote error={runDepreciation.error} />
       {runDepreciation.data && (
         <div className="rounded-lg border border-line bg-surface-0 px-4 py-2 text-sm text-ink-600">

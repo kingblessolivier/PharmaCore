@@ -1,16 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import {
-  BadgeCheck,
   CalendarDays,
   ClipboardCheck,
-  Clock,
-  DoorClosed,
   FileCheck2,
-  GraduationCap,
-  HandCoins,
   TriangleAlert,
-  UserCog,
-  UserPlus,
   Users,
   Wallet,
 } from "lucide-react";
@@ -19,8 +12,6 @@ import {
   AppHeader,
   QuickAction,
   QuickActions,
-  SectionCard,
-  SectionGrid,
   StatTile,
   WorkQueue,
 } from "../../components/AppHome";
@@ -28,6 +19,7 @@ import { useModuleWork } from "../../lib/modulework";
 import { Card } from "../../components/ui";
 import { api } from "../../lib/api";
 import type { PeopleOverview } from "../../lib/people";
+import { ModuleInsights } from "../../components/ModuleInsights";
 
 export function PeopleHome() {
   const work = useModuleWork("people");
@@ -97,13 +89,8 @@ export function PeopleHome() {
   ].filter((x) => x.show);
 
   return (
-    <div className="flex max-w-6xl flex-col gap-6">
-      <AppHeader
-        icon={Users}
-        hue="#EA580C"
-        title="People"
-        subtitle="Who works here, what they earn and how it is calculated, whether they are present, and whether they are still qualified to do the job — from the day they apply to the day they are cleared."
-      />
+    <div className="flex flex-col gap-6">
+      <AppHeader icon={Users} hue="#EA580C" title="People" />
 
       <WorkQueue items={work.items} loading={work.loading} />
 
@@ -167,82 +154,9 @@ export function PeopleHome() {
 
       <div>
         <h2 className="mb-3 text-base font-semibold tracking-tight text-ink-900">
-          The employee lifecycle
+          The shape of the workforce
         </h2>
-        <SectionGrid>
-          <SectionCard
-            icon={UserPlus}
-            title="Recruitment"
-            description="Requisition → applicants → interviews → offer. Hiring creates the employee, contract, opening salary and onboarding in one step."
-            to="/people/recruitment"
-            meta={o?.open_requisitions ?? 0}
-          />
-          <SectionCard
-            icon={UserCog}
-            title="Employees"
-            description="The master record: identity, statutory registration, contracts, itemised pay structure, leave, training and competencies."
-            to="/people/employees"
-            meta={o?.headcount ?? 0}
-          />
-          <SectionCard
-            icon={Clock}
-            title="Time & attendance"
-            description="The clock feed — punches, lateness and overtime, which the timesheet is derived from."
-            to="/people/attendance"
-          />
-          <SectionCard
-            icon={ClipboardCheck}
-            title="Timesheets"
-            description="The approved, calculated period. Payroll reads this, never raw punches, and a run is blocked while one is pending."
-            to="/people/timesheets"
-            meta={o?.timesheets_pending ?? 0}
-          />
-          <SectionCard
-            icon={CalendarDays}
-            title="Leave"
-            description="Requests held against a real balance, with accrual, carry-over and encashment on exit."
-            to="/people/leave"
-            meta={o?.leave_requests_pending ?? 0}
-          />
-          <SectionCard
-            icon={BadgeCheck}
-            title="Shift roster"
-            description="Credential-based scheduling — every shift needs a pharmacist on cover."
-            to="/people/roster"
-          />
-          <SectionCard
-            icon={Wallet}
-            title="Payroll"
-            description="Gross→net from the statutory rates in force at period end. Never self-approved; posts to the ledger."
-            to="/people/payroll"
-          />
-          <SectionCard
-            icon={HandCoins}
-            title="Loans & advances"
-            description="Amortised staff loans deducted by payroll, skipped (not lost) when the employee had unpaid leave."
-            to="/people/loans"
-            meta={o?.loans_active ?? 0}
-          />
-          <SectionCard
-            icon={FileCheck2}
-            title="Statutory filings"
-            description="PAYE, RSSB, CBHI, VAT and PIT returns — reconciled to the GL sub-ledger before they can be filed."
-            to="/people/filings"
-            meta={o?.filings_due ?? 0}
-          />
-          <SectionCard
-            icon={DoorClosed}
-            title="Offboarding"
-            description="Notice, clearance checklist and the final settlement: leave encashment, pro-rata pay, loan recovery."
-            to="/people/offboarding"
-          />
-          <SectionCard
-            icon={GraduationCap}
-            title="Statutory rates"
-            description="PAYE bands, RSSB, maternity, CBHI and occupational hazards — effective-dated data, never hardcoded."
-            to="/people/statutory-rates"
-          />
-        </SectionGrid>
+        <ModuleInsights module="people" />
       </div>
     </div>
   );

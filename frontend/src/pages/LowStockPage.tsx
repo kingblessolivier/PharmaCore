@@ -40,9 +40,6 @@ export function LowStockPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        Medicines across your pharmacies that are below their minimum threshold and require reordering.
-      </p>
 
       <div className="mb-4 flex items-center gap-2 rounded-md border border-line bg-surface-0 px-3 py-2">
         <Search className="h-4 w-4 text-ink-500" />
@@ -90,9 +87,7 @@ export function LowStockPage() {
             numeric: true,
             value: (r) => Math.max(0, r.min - r.on_hand),
             render: (r) => (
-              <span className="font-mono text-warning-700">
-                +{Math.max(0, r.min - r.on_hand)}
-              </span>
+              <span className="font-mono text-warning-700">+{Math.max(0, r.min - r.on_hand)}</span>
             ),
           },
           {
@@ -112,7 +107,6 @@ export function LowStockPage() {
           },
         ]}
       />
-
     </div>
   );
 }

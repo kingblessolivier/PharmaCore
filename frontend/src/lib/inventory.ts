@@ -33,10 +33,10 @@ export async function quarantineQueue(orgId: number): Promise<QuarantineRow[]> {
 }
 
 export function releaseBatch(checkId: number, notes = "") {
-  return api<{ released_units: number }>(
-    `/api/inventory/quality-checks/${checkId}/pass_qc/`,
-    { method: "POST", body: JSON.stringify({ notes }) },
-  );
+  return api<{ released_units: number }>(`/api/inventory/quality-checks/${checkId}/pass_qc/`, {
+    method: "POST",
+    body: JSON.stringify({ notes }),
+  });
 }
 
 /** A rejection must carry a reason — the API refuses a blank one. */
@@ -121,12 +121,7 @@ export async function destructionCandidates(orgId: number): Promise<DestructionC
   return body.rows;
 }
 
-export function addDisposalLine(
-  disposalId: number,
-  batch: number,
-  quantity: number,
-  note = "",
-) {
+export function addDisposalLine(disposalId: number, batch: number, quantity: number, note = "") {
   return api<{ line: number }>(`/api/inventory/disposals/${disposalId}/add_line/`, {
     method: "POST",
     body: JSON.stringify({ batch, quantity, note }),
@@ -172,10 +167,12 @@ export function varianceReport(countId: number) {
 }
 
 export function approveCount(countId: number) {
-  return api<{ lines_adjusted: number; units_gained: number; units_lost: number; net_value: string }>(
-    `/api/inventory/stock-counts/${countId}/approve_count/`,
-    { method: "POST" },
-  );
+  return api<{
+    lines_adjusted: number;
+    units_gained: number;
+    units_lost: number;
+    net_value: string;
+  }>(`/api/inventory/stock-counts/${countId}/approve_count/`, { method: "POST" });
 }
 
 /* --- Overview ------------------------------------------------------------- */

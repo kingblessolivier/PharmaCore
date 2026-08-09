@@ -151,11 +151,6 @@ export function QualityControlPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="Quality control" />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Inbound stock is held until someone competent releases it. Whoever received the delivery
-        cannot be the one to release it — the API refuses that, because a single pair of eyes on
-        both steps is the failure quarantine exists to catch.
-      </p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tile label="Awaiting a decision" value={rows.length} />
@@ -214,11 +209,7 @@ export function QualityControlPage() {
                 onClick={() => decide.mutate(decision)}
                 disabled={decide.isPending || (isReject && !reason.trim())}
               >
-                {decide.isPending
-                  ? "Saving…"
-                  : isReject
-                    ? "Reject and hold"
-                    : "Release to stock"}
+                {decide.isPending ? "Saving…" : isReject ? "Reject and hold" : "Release to stock"}
               </Button>
             </div>
           }
@@ -238,8 +229,8 @@ export function QualityControlPage() {
               <p className="mt-2 text-sm text-danger-700">
                 This delivery failed an arrival check
                 {!decision.row.visual_integrity_ok && " (packaging integrity)"}
-                {!decision.row.temp_indicator_ok && " (temperature indicator)"}. Releasing it
-                anyway needs a reason on record.
+                {!decision.row.temp_indicator_ok && " (temperature indicator)"}. Releasing it anyway
+                needs a reason on record.
               </p>
             )}
           </Section>
@@ -259,7 +250,9 @@ export function QualityControlPage() {
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder={
-                  isReject ? "Seal broken on 3 cartons; temperature indicator triggered" : "COA checked against batch; seals intact"
+                  isReject
+                    ? "Seal broken on 3 cartons; temperature indicator triggered"
+                    : "COA checked against batch; seals intact"
                 }
               />
             </Field>
@@ -296,7 +289,11 @@ function Tile({
   tone?: "danger" | "warning";
 }) {
   const colour =
-    tone === "danger" ? "text-danger-700" : tone === "warning" ? "text-warning-700" : "text-ink-900";
+    tone === "danger"
+      ? "text-danger-700"
+      : tone === "warning"
+        ? "text-warning-700"
+        : "text-ink-900";
   return (
     <div className="rounded-lg border border-line bg-surface-0 p-3">
       <div className="text-xs text-ink-500">{label}</div>

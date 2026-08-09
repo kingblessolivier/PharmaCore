@@ -48,7 +48,6 @@ function NewProfileDrawer({
   return (
     <Drawer
       title="New credit profile"
-      subtitle="The terms one organization extends to another."
       width="max-w-xl"
       onClose={onClose}
       footer={
@@ -99,8 +98,8 @@ function NewProfileDrawer({
         </Grid>
         <p className="mt-2 text-xs text-ink-500">
           {/* The control that makes credit limits mean something. */}
-          Limit, terms and holds are never edited directly — every change goes through the
-          approvals engine, so nobody can raise their own customer's limit.
+          Limit, terms and holds are never edited directly — every change goes through the approvals
+          engine, so nobody can raise their own customer's limit.
         </p>
       </Section>
     </Drawer>
@@ -242,10 +241,6 @@ export function CreditProfilesPage() {
           </Button>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Who may buy on credit, how much, and on what terms. Changes go through approvals, so a
-        limit cannot be raised by the person who benefits from it.
-      </p>
 
       {onHold > 0 && (
         <div className="rounded-lg border border-warning-300 bg-warning-50 px-4 py-3 text-sm text-warning-800">

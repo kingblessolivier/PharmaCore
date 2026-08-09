@@ -30,13 +30,26 @@ function AdjustModal({ batch, onClose }: { batch: InventoryBatch; onClose: () =>
   return (
     <Modal title={`Adjust ${batch.batch_number}`} onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <p className="text-sm text-ink-500">On record: {batch.quantity_available}. Enter the counted quantity.</p>
-        <TextField label="Counted quantity" type="number" value={counted} onChange={(e) => setCounted(e.target.value)} required autoFocus />
+        <p className="text-sm text-ink-500">
+          On record: {batch.quantity_available}. Enter the counted quantity.
+        </p>
+        <TextField
+          label="Counted quantity"
+          type="number"
+          value={counted}
+          onChange={(e) => setCounted(e.target.value)}
+          required
+          autoFocus
+        />
         <TextField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : "Adjust"}</Button>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={mutation.isPending}>
+            {mutation.isPending ? "Saving…" : "Adjust"}
+          </Button>
         </div>
       </form>
     </Modal>
@@ -68,8 +81,17 @@ function WasteModal({ batch, onClose }: { batch: InventoryBatch; onClose: () => 
   return (
     <Modal title={`Log wastage — ${batch.batch_number}`} onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <p className="text-sm text-ink-500">On hand: {batch.quantity_available}. Remove expired/damaged units.</p>
-        <TextField label="Quantity to waste" type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} required autoFocus />
+        <p className="text-sm text-ink-500">
+          On hand: {batch.quantity_available}. Remove expired/damaged units.
+        </p>
+        <TextField
+          label="Quantity to waste"
+          type="number"
+          value={quantity}
+          onChange={(e) => setQuantity(e.target.value)}
+          required
+          autoFocus
+        />
         <SelectField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)}>
           <option value="">— select —</option>
           <option value="EXPIRED">Expired</option>
@@ -79,8 +101,12 @@ function WasteModal({ batch, onClose }: { batch: InventoryBatch; onClose: () => 
         </SelectField>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : "Log wastage"}</Button>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={mutation.isPending}>
+            {mutation.isPending ? "Saving…" : "Log wastage"}
+          </Button>
         </div>
       </form>
     </Modal>
@@ -89,7 +115,11 @@ function WasteModal({ batch, onClose }: { batch: InventoryBatch; onClose: () => 
 
 function ExpiryCell({ date, days }: { date: string; days: number }) {
   const cls =
-    days < 0 ? "text-red-700 font-medium" : days <= 90 ? "text-amber-700 font-medium" : "text-ink-700";
+    days < 0
+      ? "text-red-700 font-medium"
+      : days <= 90
+        ? "text-amber-700 font-medium"
+        : "text-ink-700";
   const note = days < 0 ? " (expired)" : days <= 90 ? ` (${days}d)` : "";
   return (
     <span className={`font-mono text-xs ${cls}`}>
@@ -157,7 +187,11 @@ function IntakeModal({ organizationId, onClose }: { organizationId: number; onCl
           placeholder="e.g. amoxicillin"
           autoFocus
         />
-        <SelectField label="Product" value={productId} onChange={(e) => setProductId(e.target.value)}>
+        <SelectField
+          label="Product"
+          value={productId}
+          onChange={(e) => setProductId(e.target.value)}
+        >
           <option value="">— select —</option>
           {(products.data?.results ?? []).map((p) => (
             <option key={p.id} value={p.id}>
@@ -166,16 +200,47 @@ function IntakeModal({ organizationId, onClose }: { organizationId: number; onCl
           ))}
         </SelectField>
         <div className="grid grid-cols-2 gap-3">
-          <TextField label="Batch / lot number" value={batchNumber} onChange={(e) => setBatchNumber(e.target.value)} required />
-          <TextField label="Quantity" type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} required />
+          <TextField
+            label="Batch / lot number"
+            value={batchNumber}
+            onChange={(e) => setBatchNumber(e.target.value)}
+            required
+          />
+          <TextField
+            label="Quantity"
+            type="number"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            required
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <TextField label="Expiry date" type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} required />
-          <TextField label="Manufacture date" type="date" value={mfg} onChange={(e) => setMfg(e.target.value)} />
+          <TextField
+            label="Expiry date"
+            type="date"
+            value={expiry}
+            onChange={(e) => setExpiry(e.target.value)}
+            required
+          />
+          <TextField
+            label="Manufacture date"
+            type="date"
+            value={mfg}
+            onChange={(e) => setMfg(e.target.value)}
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <TextField label="Wholesale cost (RWF)" type="number" value={cost} onChange={(e) => setCost(e.target.value)} />
-          <TextField label="Storage location" value={location} onChange={(e) => setLocation(e.target.value)} />
+          <TextField
+            label="Wholesale cost (RWF)"
+            type="number"
+            value={cost}
+            onChange={(e) => setCost(e.target.value)}
+          />
+          <TextField
+            label="Storage location"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+          />
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
@@ -206,7 +271,8 @@ export function OrgStockTab({
   const [wasting, setWasting] = useState<InventoryBatch | null>(null);
   const { data, isLoading, isError } = useQuery({
     queryKey: ["batches", organizationId],
-    queryFn: () => api<Paginated<InventoryBatch>>(`/api/inventory/batches/?organization=${organizationId}`),
+    queryFn: () =>
+      api<Paginated<InventoryBatch>>(`/api/inventory/batches/?organization=${organizationId}`),
   });
 
   return (
@@ -258,7 +324,9 @@ export function OrgStockTab({
                     <ExpiryCell date={b.expiry_date} days={b.days_to_expiry} />
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono">{b.quantity_available}</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-ink-700">{b.wholesale_cost ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-ink-700">
+                    {b.wholesale_cost ?? "—"}
+                  </td>
                   <td className="px-4 py-2.5 text-ink-700">{b.source_name ?? "—"}</td>
                   <td className="px-4 py-2.5 text-ink-700">{b.storage_location || "—"}</td>
                   <td className="px-4 py-2.5">

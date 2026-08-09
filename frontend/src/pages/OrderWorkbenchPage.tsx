@@ -13,14 +13,7 @@
 /* -------------------------------------------------------------------------- */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  ArrowLeft,
-  Banknote,
-  CheckCircle2,
-  PackageCheck,
-  Send,
-  Truck,
-} from "lucide-react";
+import { ArrowLeft, Banknote, CheckCircle2, PackageCheck, Send, Truck } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Empty, ErrorNote } from "../components/RecordKit";
 import { Button, Spinner } from "../components/ui";
@@ -40,7 +33,6 @@ import { api } from "../lib/api";
 import { money, shortDate } from "../lib/format";
 import type { StockOrder } from "../lib/types";
 import { StatusChip } from "../components/Status";
-
 
 export function OrderWorkbenchPage() {
   const { id } = useParams<{ id: string }>();
@@ -99,9 +91,7 @@ export function OrderWorkbenchPage() {
           icon={Truck}
           title={order.order_number || `Order #${order.id}`}
           subtitle={`${order.depot_name} → ${order.retail_name}`}
-          status={
-            <StatusChip status={order.status} />
-          }
+          status={<StatusChip status={order.status} />}
           facts={[
             { label: "Ordered", value: shortDate(order.created_at) },
             {

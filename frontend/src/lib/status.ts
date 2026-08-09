@@ -141,4 +141,3 @@ export function meaningFor(status: string): StatusMeaning {
 export function statusTone(status: string): Tone {
   return meaningFor(status).tone;
 }
-

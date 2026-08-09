@@ -95,11 +95,6 @@ export function FinancePage() {
           </div>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        How old the debt is, not just how much. Money in the 90+ bucket is materially less
-        likely to arrive than money in the current one, and it is the same number on a balance
-        sheet.
-      </p>
 
       {side && (
         <div className="rounded-lg border border-line bg-surface-0 px-4 py-3">
@@ -117,10 +112,7 @@ export function FinancePage() {
 
       {rows.length > 0 && (
         <VizRoot>
-          <ChartFrame
-            title={which === "receivables" ? "Who owes the most" : "Who we owe the most"}
-            subtitle="Ranked by overdue, not by total — a large current balance is not a problem."
-          >
+          <ChartFrame title={which === "receivables" ? "Who owes the most" : "Who we owe the most"}>
             <BarChart
               data={[...rows]
                 .sort((a, b) => overdueTotal(b) - overdueTotal(a))

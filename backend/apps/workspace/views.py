@@ -142,3 +142,21 @@ class ModuleWorkView(APIView):
         user = cast(User, request.user)
         module = request.query_params.get("module") or None
         return Response({"queues": modulework.queues_for(user, module)})
+
+
+class ModuleInsightsView(APIView):
+    """How this part of the business is doing — the figures behind a module home.
+
+    Paired with `ModuleWorkView`: that one says what needs doing, this one says
+    how it is going. Between them a module home has no reason left to be a
+    second copy of the menu.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        from apps.workspace import moduleinsights
+
+        user = cast(User, request.user)
+        module = request.query_params.get("module") or ""
+        return Response(moduleinsights.insights_for(user, module))

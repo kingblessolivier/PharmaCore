@@ -179,8 +179,16 @@ function RequisitionDrawer({
 
   return (
     <Drawer
-      title={requisition ? `${requisition.reference || "Requisition"} · ${requisition.job_title}` : "New requisition"}
-      badge={requisition && <StatusBadge status={requisition.status} label={requisition.status_display} />}
+      title={
+        requisition
+          ? `${requisition.reference || "Requisition"} · ${requisition.job_title}`
+          : "New requisition"
+      }
+      badge={
+        requisition && (
+          <StatusBadge status={requisition.status} label={requisition.status_display} />
+        )
+      }
       subtitle={
         requisition
           ? `${requisition.headcount_filled}/${requisition.headcount} filled · ${requisition.applicant_count} applicant(s)`
@@ -204,7 +212,9 @@ function RequisitionDrawer({
         </>
       }
     >
-      <ErrorNote error={save.error ?? openReq.error ?? addApplicant.error ?? applicantAction.error} />
+      <ErrorNote
+        error={save.error ?? openReq.error ?? addApplicant.error ?? applicantAction.error}
+      />
 
       <Section title="Role">
         <Grid cols={3}>
@@ -328,9 +338,7 @@ function RequisitionDrawer({
                 <Field label="Licence number">
                   <Input
                     value={applicant.licence_number}
-                    onChange={(e) =>
-                      setApplicant({ ...applicant, licence_number: e.target.value })
-                    }
+                    onChange={(e) => setApplicant({ ...applicant, licence_number: e.target.value })}
                   />
                 </Field>
                 <Field label="Experience (years)">
@@ -398,9 +406,7 @@ function RequisitionDrawer({
                           id: a.id,
                           verb: "advance",
                           body:
-                            a.stage === "INTERVIEWED"
-                              ? { offered_salary: a.expected_salary }
-                              : {},
+                            a.stage === "INTERVIEWED" ? { offered_salary: a.expected_salary } : {},
                         })
                       }
                       onReject={() =>
@@ -446,7 +452,7 @@ export function RecruitmentPage() {
   });
 
   const rows = data?.results ?? [];
-  const current = open ? rows.find((r) => r.id === open.id) ?? open : null;
+  const current = open ? (rows.find((r) => r.id === open.id) ?? open) : null;
 
   return (
     <div>
@@ -458,10 +464,6 @@ export function RecruitmentPage() {
           </Button>
         }
       />
-      <p className="mb-4 max-w-3xl text-sm text-ink-500">
-        Requisition → applicants → interviews → offer → hire. Hiring creates the employee record,
-        their first contract, an opening salary structure and the onboarding checklist in one step.
-      </p>
 
       <DataGrid<JobRequisition>
         rows={rows}
@@ -558,8 +560,12 @@ export function RecruitmentPage() {
         ]}
       />
 
-      {creating && <RequisitionDrawer requisition={null} orgId={orgId} onClose={() => setCreating(false)} />}
-      {current && <RequisitionDrawer requisition={current} orgId={orgId} onClose={() => setOpen(null)} />}
+      {creating && (
+        <RequisitionDrawer requisition={null} orgId={orgId} onClose={() => setCreating(false)} />
+      )}
+      {current && (
+        <RequisitionDrawer requisition={current} orgId={orgId} onClose={() => setOpen(null)} />
+      )}
     </div>
   );
 }

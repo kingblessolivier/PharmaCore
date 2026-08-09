@@ -66,7 +66,6 @@ function NewAccountDrawer({ orgId, onClose }: { orgId: number | null; onClose: (
   return (
     <Drawer
       title="New account"
-      subtitle="Each account gets its own ledger sub-account, so its cash book and reconciliation stand alone."
       width="max-w-xl"
       onClose={onClose}
       footer={
@@ -74,10 +73,7 @@ function NewAccountDrawer({ orgId, onClose }: { orgId: number | null; onClose: (
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button
-            onClick={() => create.mutate()}
-            disabled={create.isPending || !form.name.trim()}
-          >
+          <Button onClick={() => create.mutate()} disabled={create.isPending || !form.name.trim()}>
             {create.isPending ? "Creating…" : "Create account"}
           </Button>
         </div>
@@ -242,16 +238,14 @@ export function BankingPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["bank-accounts", orgId],
     enabled: orgId !== null,
-    queryFn: () =>
-      api<Paginated<BankAccount>>(`/api/finance/bank-accounts/?organization=${orgId}`),
+    queryFn: () => api<Paginated<BankAccount>>(`/api/finance/bank-accounts/?organization=${orgId}`),
   });
   const accounts = useMemo(() => data?.results ?? [], [data]);
 
   const { data: forecast } = useQuery({
     queryKey: ["cash-flow-forecast", orgId],
     enabled: orgId !== null,
-    queryFn: () =>
-      api<CashFlowForecast>(`/api/finance/cash-flow-forecast/?organization=${orgId}`),
+    queryFn: () => api<CashFlowForecast>(`/api/finance/cash-flow-forecast/?organization=${orgId}`),
   });
 
   return (
@@ -270,9 +264,7 @@ export function BankingPage() {
           <div className="mb-2 flex items-center gap-2 text-sm">
             <TrendingUp className="h-4 w-4 text-ink-400" />
             <span className="text-ink-600">Cash on hand</span>
-            <strong className="tabular-nums text-ink-900">
-              {money(forecast.cash_on_hand)}
-            </strong>
+            <strong className="tabular-nums text-ink-900">{money(forecast.cash_on_hand)}</strong>
           </div>
           <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
             {forecast.projection.map((bucket) => (

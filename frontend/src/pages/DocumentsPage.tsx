@@ -23,10 +23,6 @@ export function DocumentsPage() {
   return (
     <div>
       <PageHeader title="Document vault" />
-      <p className="mb-4 text-sm text-ink-500">
-        Every generated document is numbered, hashed, and QR-verifiable. Finalized documents are
-        write-once.
-      </p>
 
       {isLoading && (
         <div className="flex justify-center py-10">

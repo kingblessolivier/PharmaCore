@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  PanelLeft,
   Activity,
   Banknote,
   BarChart3,
@@ -83,14 +84,44 @@ interface AppTile {
 const APPS: AppTile[] = [
   { label: "Retail", hue: "#0D9488", icon: ShoppingCart, to: "/retail", needs: ["sale.create"] },
   { label: "Catalog", hue: "#CA8A04", icon: Pill, to: "/catalog", needs: ["catalog.view"] },
-  { label: "Distribution", hue: "#3B5BDB", icon: Truck, to: "/distribution", needs: ["distribution.view"] },
-  { label: "Inventory", hue: "#0891B2", icon: Warehouse, to: "/inventory", needs: ["inventory.view"] },
-  { label: "Procurement", hue: "#7C3AED", icon: ShoppingBag, to: "/procurement", needs: ["procurement.view"] },
+  {
+    label: "Distribution",
+    hue: "#3B5BDB",
+    icon: Truck,
+    to: "/distribution",
+    needs: ["distribution.view"],
+  },
+  {
+    label: "Inventory",
+    hue: "#0891B2",
+    icon: Warehouse,
+    to: "/inventory",
+    needs: ["inventory.view"],
+  },
+  {
+    label: "Procurement",
+    hue: "#7C3AED",
+    icon: ShoppingBag,
+    to: "/procurement",
+    needs: ["procurement.view"],
+  },
   { label: "Finance", hue: "#15803D", icon: Wallet, to: "/finance", needs: ["finance.view"] },
   { label: "Insights", hue: "#DB2777", icon: BarChart3, to: "/", needs: "all" },
-  { label: "Admin", hue: "#475569", icon: ShieldCheck, to: "/admin", needs: ["organization.manage"] },
+  {
+    label: "Admin",
+    hue: "#475569",
+    icon: ShieldCheck,
+    to: "/admin",
+    needs: ["organization.manage"],
+  },
   { label: "Insurance", hue: "#7C3AED", icon: Shield, to: "/insurance", needs: ["insurance.view"] },
-  { label: "People", hue: "#EA580C", icon: Users, to: "/people", needs: ["employee.view", "user.manage"] },
+  {
+    label: "People",
+    hue: "#EA580C",
+    icon: Users,
+    to: "/people",
+    needs: ["employee.view", "user.manage"],
+  },
   { label: "Online", hue: "#0EA5E9", icon: Globe, to: null, needs: "all" },
   { label: "Connect", hue: "#2563EB", icon: MessageSquare, to: "/connect/chat", needs: "all" },
 ];
@@ -180,7 +211,9 @@ function OrgSwitcher() {
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
-  const label = user?.is_superuser ? "All organizations" : (data?.results[0]?.name ?? "Organization");
+  const label = user?.is_superuser
+    ? "All organizations"
+    : (data?.results[0]?.name ?? "Organization");
 
   return (
     <div className="relative" ref={ref}>
@@ -288,7 +321,10 @@ function NotificationsBell() {
           <div className="flex items-center justify-between border-b border-line px-3 py-2">
             <span className="text-sm font-semibold">Notifications</span>
             {count > 0 && (
-              <button onClick={() => markAll.mutate()} className="text-xs text-brand-700 hover:underline">
+              <button
+                onClick={() => markAll.mutate()}
+                className="text-xs text-brand-700 hover:underline"
+              >
                 Mark all read
               </button>
             )}
@@ -365,7 +401,11 @@ interface NavGroup {
 // Organizations, Departments, Users and the Audit Log all live under ADMIN (not as
 // separate top-level entries).
 const NAV: NavGroup[] = [
-  { label: "", needs: "all", items: [{ to: "/", label: "Dashboard", icon: LayoutDashboard, end: true }] },
+  {
+    label: "",
+    needs: "all",
+    items: [{ to: "/", label: "Dashboard", icon: LayoutDashboard, end: true }],
+  },
   {
     label: "Catalog",
     needs: ["catalog.view"],
@@ -489,9 +529,7 @@ const NAV: NavGroup[] = [
     label: "Money in",
     app: "finance",
     needs: ["finance.view"],
-    items: [
-      { to: "/finance/receivables", label: "Customer money", icon: Receipt },
-    ],
+    items: [{ to: "/finance/receivables", label: "Customer money", icon: Receipt }],
   },
   {
     label: "Money out",
@@ -564,7 +602,15 @@ const NAV: NavGroup[] = [
   {
     label: "Admin",
     needs: ["organization.manage", "company.manage"],
-    match: ["/admin", "/companies", "/organizations", "/departments", "/users", "/permissions", "/activity"],
+    match: [
+      "/admin",
+      "/companies",
+      "/organizations",
+      "/departments",
+      "/users",
+      "/permissions",
+      "/activity",
+    ],
     items: [
       { to: "/admin", label: "Admin Overview", icon: ShieldCheck, end: true },
       { to: "/companies", label: "Organizations & branches", icon: Building2 },
@@ -579,7 +625,7 @@ function ViewAsBanner() {
   const { user, stopImpersonating } = useAuth();
   if (!user?.impersonator) return null;
   return (
-    <div className="sticky top-0 z-50 flex items-center justify-center gap-3 bg-amber-500 px-4 py-1.5 text-sm font-medium text-amber-950">
+    <div className="z-50 flex shrink-0 items-center justify-center gap-3 bg-amber-500 px-4 py-1.5 text-sm font-medium text-amber-950">
       <Eye className="h-4 w-4" />
       <span>
         Viewing as <strong>{user.username}</strong>
@@ -600,6 +646,18 @@ export function AppShell() {
   const { user, logout } = useAuth();
   const [paletteOpen, setPaletteOpen] = useState(false);
 
+  /* Collapse the sidebar to its glyphs. Remembered, because this is a working
+     preference rather than a per-visit one: somebody who wants the width back
+     for a wide table wants it back tomorrow too. Every item keeps a `title`
+     when collapsed, so the icon alone is never the only way to identify it. */
+  const [railOnly, setRailOnly] = useState(() => localStorage.getItem("nav-rail") === "1");
+  const toggleRail = () => {
+    setRailOnly((on) => {
+      localStorage.setItem("nav-rail", on ? "0" : "1");
+      return !on;
+    });
+  };
+
   // Tailor the nav to what the signed-in user may actually do. A cashier sees the
   // till, not the admin console; a warehouse clerk sees Inventory, which the old
   // role-name gate denied them. `can()` already grants everything to a superuser
@@ -611,22 +669,34 @@ export function AppShell() {
     items: g.items.filter((i) => canSee(i.needs ?? g.needs)),
   }));
 
-  // App-scoped side nav (Oracle Fusion / Workspace behaviour): once you're inside an
-  // app, show ONLY that app's contents — not every subsystem at once. Outside any app
-  // (e.g. the dashboard) show the full menu so users can still get anywhere.
+  /* App-scoped side nav: inside an app you see that app, and nothing else.
+   *
+   * This existed and leaked badly. "No `match`" was being read as "always
+   * visible" — a rule meant for Dashboard, Approvals and Connect, which really
+   * are global. But Finance's six sections carry `app: "finance"` and no `match`
+   * of their own, so they fell through it into every app: a cashier standing at
+   * the till was shown "Ledger & close" and "Chart of accounts".
+   *
+   * Global now means what it says — no `match` AND no `app`. A group that
+   * belongs to an app is only ever shown inside it.
+   *
+   * And outside any app the menu no longer lists all 89 entries. Picking a
+   * subsystem is what the app switcher is for; a side nav that shows everything
+   * at once is a directory, not a navigation.
+   */
   const path = useLocation().pathname;
+  const isGlobal = (g: NavGroup) => (g.match ?? []).length === 0 && g.app === undefined;
   const activeApp = visible.find((g) =>
     (g.match ?? []).some((p) => path === p || path.startsWith(p + "/")),
   );
-  const nav = activeApp
-    ? visible.filter(
-        (g) =>
-          g === activeApp ||
+  const nav = visible.filter(
+    (g) =>
+      isGlobal(g) ||
+      (activeApp !== undefined &&
+        (g === activeApp ||
           // Sibling sections of the same app (see NavGroup.app).
-          (activeApp.app !== undefined && g.app === activeApp.app) ||
-          (g.match ?? []).length === 0,
-      )
-    : visible;
+          (activeApp.app !== undefined && g.app === activeApp.app))),
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -640,9 +710,18 @@ export function AppShell() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-surface-100 text-ink-900">
+    <div className="flex h-screen flex-col overflow-hidden text-ink-900">
       <ViewAsBanner />
-      <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-line bg-surface-0 px-4">
+      <header className="z-40 flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface-0 px-4">
+        <button
+          onClick={toggleRail}
+          title={railOnly ? "Expand the menu" : "Collapse the menu"}
+          aria-label={railOnly ? "Expand the menu" : "Collapse the menu"}
+          aria-expanded={!railOnly}
+          className="rounded-md p-1.5 text-ink-600 hover:bg-surface-100"
+        >
+          <PanelLeft className="h-[18px] w-[18px]" />
+        </button>
         <AppSwitcher />
         <BrandMark />
         <span className="text-[15px] font-semibold tracking-tight">
@@ -663,7 +742,10 @@ export function AppShell() {
             <Users className="h-4 w-4 text-ink-500" />
             <span className="font-medium">{user?.username}</span>
             {user?.roles.map((r) => (
-              <span key={r} className="rounded bg-surface-100 px-1.5 py-0.5 text-[11px] text-ink-500">
+              <span
+                key={r}
+                className="rounded bg-surface-100 px-1.5 py-0.5 text-[11px] text-ink-500"
+              >
                 {r}
               </span>
             ))}
@@ -677,34 +759,49 @@ export function AppShell() {
         </div>
       </header>
 
-      <div className="flex">
-        <nav className="min-h-[calc(100vh-3.5rem)] w-56 border-r border-line bg-surface-0 p-2">
+      <div className="flex min-h-0 flex-1">
+        <nav
+          className={`${railOnly ? "w-14" : "w-56"} shrink-0 overflow-y-auto overflow-x-hidden border-r border-line bg-surface-0 p-2 transition-[width] duration-150`}
+        >
           {activeApp && (
             <div className="mb-2 border-b border-line pb-2">
               <NavLink
                 to="/"
+                title="All apps"
                 className="flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-ink-500 hover:bg-surface-100 hover:text-ink-700"
               >
-                <ChevronLeft className="h-3.5 w-3.5" /> All apps
+                <ChevronLeft className="h-3.5 w-3.5 shrink-0" />
+                {!railOnly && "All apps"}
               </NavLink>
-              <div className="mt-1 flex items-center gap-2 px-3">
-                <span className="text-sm font-semibold text-ink-900">{activeApp.label}</span>
-              </div>
+              {!railOnly && (
+                <div className="mt-1 flex items-center gap-2 px-3">
+                  <span className="text-sm font-semibold text-ink-900">{activeApp.label}</span>
+                </div>
+              )}
             </div>
           )}
           {nav.map((group, gi) =>
             group.items.length === 0 ? null : (
-              <div key={group.label || `g${gi}`} className={group.label ? "mb-1 mt-3 first:mt-0" : ""}>
-                {group.label && group !== activeApp && (
+              <div
+                key={group.label || `g${gi}`}
+                className={group.label ? "mb-1 mt-3 first:mt-0" : ""}
+              >
+                {group.label && group !== activeApp && !railOnly && (
                   <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
                     {group.label}
                   </div>
+                )}
+                {/* Collapsed, a heading becomes a rule: the grouping survives
+                    even when its name cannot be shown. */}
+                {group.label && group !== activeApp && railOnly && (
+                  <div className="mx-2 mb-1 border-t border-line" />
                 )}
                 {group.items.map(({ to, label, icon: Icon, end }) => (
                   <NavLink
                     key={to}
                     to={to}
                     end={end}
+                    title={label}
                     className={({ isActive }) =>
                       `mb-0.5 flex items-center gap-2.5 rounded-md px-3 py-2 text-sm ${
                         isActive
@@ -713,14 +810,14 @@ export function AppShell() {
                       }`
                     }
                   >
-                    <Icon className="h-4 w-4" />
-                    {label}
+                    <Icon className="h-4 w-4 shrink-0" />
+                    {!railOnly && label}
                   </NavLink>
                 ))}
               </div>
             ),
           )}
-          {can(user, "organization.manage") && (
+          {can(user, "organization.manage") && !railOnly && (
             <>
               <div className="mt-4 px-3 text-[11px] uppercase tracking-wide text-ink-500">
                 More modules
@@ -737,7 +834,7 @@ export function AppShell() {
           )}
         </nav>
 
-        <main className="min-w-0 flex-1 p-6">
+        <main className="min-w-0 flex-1 overflow-y-auto p-6">
           <Outlet />
         </main>
       </div>

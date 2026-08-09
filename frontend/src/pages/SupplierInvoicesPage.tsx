@@ -56,7 +56,9 @@ const emptyLine = (): SupplierInvoiceLine => ({
 
 function MatchPanel({ invoice }: { invoice: SupplierInvoice }) {
   if (invoice.match_result === "NOT_RUN") {
-    return <Empty message="Not matched yet — run the 3-way match to compare against the PO and GRN." />;
+    return (
+      <Empty message="Not matched yet — run the 3-way match to compare against the PO and GRN." />
+    );
   }
   const clean = invoice.match_result === "MATCHED";
   return (
@@ -173,7 +175,10 @@ function NotesPanel({ invoice }: { invoice: SupplierInvoice }) {
           <ErrorNote error={create.error} />
           <Grid cols={4}>
             <Field label="Type">
-              <Select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
+              <Select
+                value={form.kind}
+                onChange={(e) => setForm({ ...form, kind: e.target.value })}
+              >
                 <option value="DEBIT">Debit note (we charge them)</option>
                 <option value="CREDIT">Credit note (they credit us)</option>
               </Select>
@@ -252,9 +257,7 @@ function NotesPanel({ invoice }: { invoice: SupplierInvoice }) {
                   </td>
                   <td className="px-2.5 py-2">
                     {n.reason_display}
-                    {n.description && (
-                      <div className="text-xs text-ink-500">{n.description}</div>
-                    )}
+                    {n.description && <div className="text-xs text-ink-500">{n.description}</div>}
                   </td>
                   <td className="px-2.5 py-2">
                     <StatusBadge status={n.status} />
@@ -341,11 +344,11 @@ function InvoiceDrawer({
 
   const totals = useMemo(() => {
     const goods = form.lines.reduce(
-      (s, l) => s + (num(l.unit_price) * (100 - num(l.discount_pct)) / 100) * num(l.quantity),
+      (s, l) => s + ((num(l.unit_price) * (100 - num(l.discount_pct))) / 100) * num(l.quantity),
       0,
     );
     const tax = form.lines.reduce((s, l) => {
-      const sub = (num(l.unit_price) * (100 - num(l.discount_pct)) / 100) * num(l.quantity);
+      const sub = ((num(l.unit_price) * (100 - num(l.discount_pct))) / 100) * num(l.quantity);
       return s + (sub * num(l.tax_rate_pct)) / 100;
     }, 0);
     const net =
@@ -452,7 +455,9 @@ function InvoiceDrawer({
 
   return (
     <Drawer
-      title={invoice ? `${invoice.invoice_number} · ${invoice.supplier_name}` : "New supplier invoice"}
+      title={
+        invoice ? `${invoice.invoice_number} · ${invoice.supplier_name}` : "New supplier invoice"
+      }
       badge={invoice && <StatusBadge status={invoice.status} label={invoice.status_display} />}
       subtitle={
         invoice
@@ -627,7 +632,10 @@ function InvoiceDrawer({
                   onChange={(e) => setForm({ ...form, exchange_rate: e.target.value })}
                 />
               </Field>
-              <Field label="Qty tolerance %" hint="Difference accepted before it counts as a variance.">
+              <Field
+                label="Qty tolerance %"
+                hint="Difference accepted before it counts as a variance."
+              >
                 <Input
                   type="number"
                   step="0.01"
@@ -766,7 +774,8 @@ function InvoiceDrawer({
                   align: "right",
                   cell: (row) => {
                     const sub =
-                      (num(row.unit_price) * (100 - num(row.discount_pct)) / 100) * num(row.quantity);
+                      ((num(row.unit_price) * (100 - num(row.discount_pct))) / 100) *
+                      num(row.quantity);
                     const total = sub + (sub * num(row.tax_rate_pct)) / 100;
                     return (
                       <span className="font-medium">
@@ -860,9 +869,7 @@ function InvoiceDrawer({
 function StatementModal({ onClose }: { onClose: () => void }) {
   const { orgId } = useDefaultOrg();
   const [supplier, setSupplier] = useState<number | null>(null);
-  const [from, setFrom] = useState(
-    new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 10),
-  );
+  const [from, setFrom] = useState(new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 10));
   const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
 
   const { data, isFetching, refetch, error } = useQuery({
@@ -971,7 +978,7 @@ export function SupplierInvoicesPage() {
   });
 
   const rows = data?.results ?? [];
-  const current = open ? rows.find((i) => i.id === open.id) ?? open : null;
+  const current = open ? (rows.find((i) => i.id === open.id) ?? open) : null;
 
   return (
     <div>
@@ -988,11 +995,6 @@ export function SupplierInvoicesPage() {
           </div>
         }
       />
-      <p className="mb-4 max-w-3xl text-sm text-ink-500">
-        An invoice is only payable once it agrees with what we ordered and what we received.
-        Approving posts the payable and the purchase journal; debit and credit notes adjust it
-        afterwards, and the statement reconciles the whole account.
-      </p>
 
       <DataGrid<SupplierInvoice>
         rows={rows}

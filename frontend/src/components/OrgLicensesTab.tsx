@@ -9,7 +9,12 @@ const TYPES = ["PREMISES", "PHARMACIST", "WHOLESALE", "RETAIL", "OTHER"];
 
 function ExpiryTag({ days }: { days: number | null }) {
   if (days === null) return <span className="text-ink-500">—</span>;
-  const cls = days < 0 ? "text-red-700 font-medium" : days <= 60 ? "text-amber-700 font-medium" : "text-ink-700";
+  const cls =
+    days < 0
+      ? "text-red-700 font-medium"
+      : days <= 60
+        ? "text-amber-700 font-medium"
+        : "text-ink-700";
   return <span className={`text-xs ${cls}`}>{days < 0 ? "expired" : `${days}d`}</span>;
 }
 
@@ -69,14 +74,39 @@ function LicenseModal({
               </option>
             ))}
           </SelectField>
-          <TextField label="Licence number" value={number} onChange={(e) => setNumber(e.target.value)} required autoFocus />
+          <TextField
+            label="Licence number"
+            value={number}
+            onChange={(e) => setNumber(e.target.value)}
+            required
+            autoFocus
+          />
         </div>
-        <TextField label="Issuing authority" value={authority} onChange={(e) => setAuthority(e.target.value)} placeholder="e.g. Rwanda FDA" />
+        <TextField
+          label="Issuing authority"
+          value={authority}
+          onChange={(e) => setAuthority(e.target.value)}
+          placeholder="e.g. Rwanda FDA"
+        />
         <div className="grid grid-cols-2 gap-3">
-          <TextField label="Issue date" type="date" value={issue} onChange={(e) => setIssue(e.target.value)} />
-          <TextField label="Expiry date" type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
+          <TextField
+            label="Issue date"
+            type="date"
+            value={issue}
+            onChange={(e) => setIssue(e.target.value)}
+          />
+          <TextField
+            label="Expiry date"
+            type="date"
+            value={expiry}
+            onChange={(e) => setExpiry(e.target.value)}
+          />
         </div>
-        <SelectField label="Staff member (for professional licences)" value={userId} onChange={(e) => setUserId(e.target.value)}>
+        <SelectField
+          label="Staff member (for professional licences)"
+          value={userId}
+          onChange={(e) => setUserId(e.target.value)}
+        >
           <option value="">— premises / not staff-specific —</option>
           {users.map((u) => (
             <option key={u.id} value={u.id}>

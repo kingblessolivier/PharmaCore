@@ -177,12 +177,7 @@ export interface OrderItem {
   line_total?: number;
 }
 
-export type OrderPaymentMethod =
-  | "CASH"
-  | "BANK_TRANSFER"
-  | "MOBILE_MONEY"
-  | "CHEQUE"
-  | "CREDIT";
+export type OrderPaymentMethod = "CASH" | "BANK_TRANSFER" | "MOBILE_MONEY" | "CHEQUE" | "CREDIT";
 
 export interface OrderPayment {
   id: number;
@@ -601,6 +596,8 @@ export interface Payment {
 export interface ApprovalRequest {
   id: number;
   resource_type: string;
+  /** What this approval is, in words — served from the authority registry. */
+  resource_label: string;
   resource_id: string;
   organization: number;
   organization_name: string;
@@ -1187,11 +1184,7 @@ export interface TemperatureSensor {
   device_id: string;
   name: string;
   device_type:
-    | "DATA_LOGGER"
-    | "WIRELESS_PROBE"
-    | "CHART_RECORDER"
-    | "MIN_MAX_THERMOMETER"
-    | "IOT_GATEWAY";
+    "DATA_LOGGER" | "WIRELESS_PROBE" | "CHART_RECORDER" | "MIN_MAX_THERMOMETER" | "IOT_GATEWAY";
   manufacturer: string;
   model_number: string;
   serial_number: string;
@@ -1479,15 +1472,9 @@ export interface VatReturn {
   csv: string[][];
 }
 
-
 // --- Warehouse & supply-chain intelligence ---------------------------------
 
-export type ZoneType =
-  | "AMBIENT"
-  | "COLD_CHAIN"
-  | "FREEZER"
-  | "CONTROLLED_SAFE"
-  | "HAZARDOUS";
+export type ZoneType = "AMBIENT" | "COLD_CHAIN" | "FREEZER" | "CONTROLLED_SAFE" | "HAZARDOUS";
 
 export type CalibrationState = "VALID" | "DUE_SOON" | "OVERDUE" | "UNKNOWN";
 
@@ -1497,13 +1484,7 @@ export interface Warehouse {
   organization_name: string;
   code: string;
   name: string;
-  warehouse_type:
-    | "MAIN"
-    | "SATELLITE"
-    | "COLD_STORE"
-    | "BONDED"
-    | "QUARANTINE"
-    | "DISPENSARY";
+  warehouse_type: "MAIN" | "SATELLITE" | "COLD_STORE" | "BONDED" | "QUARANTINE" | "DISPENSARY";
   address_line: string;
   district: string;
   contact_person: string;
@@ -1552,11 +1533,7 @@ export interface SensorCalibration {
 }
 
 export type ExcursionDisposition =
-  | "PENDING"
-  | "RELEASE"
-  | "QUARANTINE"
-  | "DESTROY"
-  | "RETURN_TO_SUPPLIER";
+  "PENDING" | "RELEASE" | "QUARANTINE" | "DESTROY" | "RETURN_TO_SUPPLIER";
 
 export interface ExcursionInvestigation {
   id: number;
@@ -1659,10 +1636,7 @@ export interface SuggestedOrder {
 
 export interface AbcXyzMatrix {
   organization: number;
-  cells: Record<
-    string,
-    { count: number; units: number; value: string; products: string[] }
-  >;
+  cells: Record<string, { count: number; units: number; value: string; products: string[] }>;
   unclassified: number;
   total_rules: number;
 }
@@ -1882,12 +1856,7 @@ export interface PutawayRule {
   warehouse: number | null;
   warehouse_name: string | null;
   name: string;
-  strategy:
-    | "FIXED_BIN"
-    | "ZONE_BY_CONDITION"
-    | "NEAREST_EMPTY"
-    | "ABC_VELOCITY"
-    | "BULK_THEN_PICK";
+  strategy: "FIXED_BIN" | "ZONE_BY_CONDITION" | "NEAREST_EMPTY" | "ABC_VELOCITY" | "BULK_THEN_PICK";
   priority: number;
   match_product: number | null;
   match_product_name: string | null;
@@ -2262,7 +2231,6 @@ export interface ClinicalServiceRecord {
   performed_at: string;
 }
 
-
 /** `/api/finance/reports/inventory-valuation/` — what is sitting on the shelf, at cost. */
 export interface InventoryValuation {
   as_of: string;
@@ -2276,7 +2244,6 @@ export interface InventoryValuation {
     batches: number;
   }[];
 }
-
 
 /** One candidate from typing a name at the till. */
 export interface CounterSearchHit {

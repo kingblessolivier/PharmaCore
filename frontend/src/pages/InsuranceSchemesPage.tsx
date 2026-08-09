@@ -154,7 +154,10 @@ export function InsuranceSchemesPage() {
       value: (s) => s.covered_products,
       render: (s) =>
         s.covered_products === 0 ? (
-          <span className="text-danger-700" title="Nothing is covered — every sale falls to the patient">
+          <span
+            className="text-danger-700"
+            title="Nothing is covered — every sale falls to the patient"
+          >
             none
           </span>
         ) : (
@@ -174,10 +177,6 @@ export function InsuranceSchemesPage() {
           </Button>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        A medicine with no formulary entry is not covered and the patient pays in full — silence is
-        never treated as agreement to pay. Open a scheme to see and extend what it covers.
-      </p>
 
       <DataGrid
         rows={rows}
@@ -329,7 +328,6 @@ export function InsuranceSchemesPage() {
       {creating && (
         <Drawer
           title="New scheme"
-          subtitle="A payer: CBHI, RSSB medical, military, or a private insurer."
           onClose={() => setCreating(false)}
           footer={
             <div className="flex justify-end gap-2">

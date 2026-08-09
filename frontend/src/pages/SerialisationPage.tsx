@@ -10,14 +10,7 @@ import {
 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Badge,
-  Button,
-  Card,
-  PageHeader,
-  SelectField,
-  TextField,
-} from "../components/ui";
+import { Badge, Button, Card, PageHeader, SelectField, TextField } from "../components/ui";
 import { DataGrid } from "../components/DataGrid";
 import { Drawer } from "../components/RecordKit";
 import { api } from "../lib/api";
@@ -42,7 +35,6 @@ const BIZ_STEPS: { value: BizStep; label: string }[] = [
   { value: "destroying", label: "Destroying — witnessed disposal" },
 ];
 
-
 export function SerialisationPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -50,9 +42,10 @@ export function SerialisationPage() {
   const orgId = user?.organization ?? 0;
 
   const [scan, setScan] = useState("");
-  const [scanFeedback, setScanFeedback] = useState<
-    { kind: "ok" | "warn" | "error"; message: string } | null
-  >(null);
+  const [scanFeedback, setScanFeedback] = useState<{
+    kind: "ok" | "warn" | "error";
+    message: string;
+  } | null>(null);
   const [selected, setSelected] = useState<SerialUnit[]>([]);
   const [tracing, setTracing] = useState<SerialUnit | null>(null);
   const [observing, setObserving] = useState(false);
@@ -63,15 +56,13 @@ export function SerialisationPage() {
 
   const unitsQuery = useQuery({
     queryKey: ["serial-units", orgId],
-    queryFn: () =>
-      api<Paginated<SerialUnit>>(`/api/inventory/serial-units/?organization=${orgId}`),
+    queryFn: () => api<Paginated<SerialUnit>>(`/api/inventory/serial-units/?organization=${orgId}`),
     enabled: orgId > 0,
   });
 
   const eventsQuery = useQuery({
     queryKey: ["epcis-events", orgId],
-    queryFn: () =>
-      api<Paginated<EpcisEvent>>(`/api/inventory/epcis-events/?organization=${orgId}`),
+    queryFn: () => api<Paginated<EpcisEvent>>(`/api/inventory/epcis-events/?organization=${orgId}`),
     enabled: orgId > 0,
   });
 
@@ -154,9 +145,7 @@ export function SerialisationPage() {
   });
 
   async function exportEpcis() {
-    const doc = await api<unknown>(
-      `/api/inventory/epcis-events/export/?organization=${orgId}`,
-    );
+    const doc = await api<unknown>(`/api/inventory/epcis-events/export/?organization=${orgId}`);
     const blob = new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -193,11 +182,6 @@ export function SerialisationPage() {
           </Button>
         }
       />
-      <p className="mb-4 text-sm text-ink-500 max-w-3xl">
-        Every scan changes state and leaves a record. Commission a pack from its GS1
-        DataMatrix, pack it into a case and a pallet, then observe it through receiving,
-        dispatch and dispensing — the unit history and the EPCIS export are the same data.
-      </p>
 
       <Card className="mb-5 p-5">
         <form onSubmit={submitScan} className="flex flex-col gap-3">
@@ -290,7 +274,9 @@ export function SerialisationPage() {
             header: "Level",
             align: "center",
             render: (u) => (
-              <Badge tone={u.level === "PALLET" ? "warning" : u.level === "CASE" ? "neutral" : "neutral"}>
+              <Badge
+                tone={u.level === "PALLET" ? "warning" : u.level === "CASE" ? "neutral" : "neutral"}
+              >
                 {u.level}
               </Badge>
             ),
@@ -316,7 +302,9 @@ export function SerialisationPage() {
             header: "Packed Into",
             value: (u) => u.parent_epc ?? "—",
             render: (u) => (
-              <span className="font-mono text-xs">{u.parent_epc ? u.parent_epc.slice(-14) : "—"}</span>
+              <span className="font-mono text-xs">
+                {u.parent_epc ? u.parent_epc.slice(-14) : "—"}
+              </span>
             ),
           },
           {
@@ -365,7 +353,9 @@ export function SerialisationPage() {
             header: "When",
             value: (e) => e.event_time,
             render: (e) => (
-              <span className="font-mono text-xs">{e.event_time.replace("T", " ").slice(0, 19)}</span>
+              <span className="font-mono text-xs">
+                {e.event_time.replace("T", " ").slice(0, 19)}
+              </span>
             ),
           },
           { key: "event_type", header: "Type" },
@@ -373,12 +363,23 @@ export function SerialisationPage() {
           {
             key: "biz_step",
             header: "Business Step",
-            render: (e) => (e.biz_step ? <Badge tone="neutral">{e.biz_step}</Badge> : <span>—</span>),
+            render: (e) =>
+              e.biz_step ? <Badge tone="neutral">{e.biz_step}</Badge> : <span>—</span>,
           },
           { key: "disposition", header: "Disposition", value: (e) => e.disposition || "—" },
-          { key: "epc_count", header: "EPCs", align: "right", numeric: true, value: (e) => e.epc_count },
+          {
+            key: "epc_count",
+            header: "EPCs",
+            align: "right",
+            numeric: true,
+            value: (e) => e.epc_count,
+          },
           { key: "read_point", header: "Read Point", value: (e) => e.read_point || "—" },
-          { key: "created_by_username", header: "By", value: (e) => e.created_by_username ?? "system" },
+          {
+            key: "created_by_username",
+            header: "By",
+            value: (e) => e.created_by_username ?? "system",
+          },
         ]}
       />
 
@@ -386,8 +387,8 @@ export function SerialisationPage() {
         <Drawer title="Record a Business Step" onClose={() => setObserving(false)}>
           <div className="flex flex-col gap-4">
             <p className="text-sm text-ink-600">
-              {selected.length} unit(s) selected. Scanning a pallet cascades the step to every
-              case and pack on it.
+              {selected.length} unit(s) selected. Scanning a pallet cascades the step to every case
+              and pack on it.
             </p>
             <SelectField
               label="Business Step"
@@ -410,10 +411,7 @@ export function SerialisationPage() {
               <Button variant="secondary" onClick={() => setObserving(false)}>
                 Cancel
               </Button>
-              <Button
-                onClick={() => observeMutation.mutate()}
-                disabled={observeMutation.isPending}
-              >
+              <Button onClick={() => observeMutation.mutate()} disabled={observeMutation.isPending}>
                 {observeMutation.isPending ? "Recording…" : "Record Step"}
               </Button>
             </div>
@@ -425,8 +423,8 @@ export function SerialisationPage() {
         <Drawer title="Pack Units Into a Container" onClose={() => setAggregating(null)}>
           <div className="flex flex-col gap-4">
             <p className="text-sm text-ink-600">
-              {selected.length} unit(s) will be packed. Aggregation only goes up the hierarchy:
-              each → case → pallet.
+              {selected.length} unit(s) will be packed. Aggregation only goes up the hierarchy: each
+              → case → pallet.
             </p>
             <SelectField
               label="Parent Container"

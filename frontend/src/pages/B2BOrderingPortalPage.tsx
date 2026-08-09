@@ -12,7 +12,16 @@ import { AlertTriangle, Clock, PackageSearch, ShoppingCart, Trash2 } from "lucid
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DataGrid, type Column } from "../components/DataGrid";
-import { Drawer, Empty, ErrorNote, Facts, Field, Grid, Input, Section } from "../components/RecordKit";
+import {
+  Drawer,
+  Empty,
+  ErrorNote,
+  Facts,
+  Field,
+  Grid,
+  Input,
+  Section,
+} from "../components/RecordKit";
 import { Badge, Button, PageHeader, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -180,9 +189,6 @@ export function B2BOrderingPortalPage() {
           ) : undefined
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Order from a wholesaler's published catalogue. Anything they cannot supply is recorded so they can source it.
-      </p>
 
       {suppliers.length === 0 ? (
         <Empty message="No wholesalers available No depot or distributor organisation is visible to you yet." />
@@ -221,149 +227,147 @@ export function B2BOrderingPortalPage() {
           />
 
           <p className="text-xs text-ink-500">
-            You are seeing what this wholesaler has chosen to offer. Their total stock may be
-            higher — the published quantity is what they will sell.
+            You are seeing what this wholesaler has chosen to offer. Their total stock may be higher
+            — the published quantity is what they will sell.
           </p>
         </>
       )}
 
       {/* ---------------------------- quantity ---------------------------- */}
       {picking && (
-      <Drawer
-        onClose={() => setPicking(null)}
-        title={picking?.product_name ?? ""}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setPicking(null)}>
-              Cancel
-            </Button>
-            <Button onClick={addToBasket}>Add to order</Button>
-          </>
-        }
-      >
-        {picking && (
-          <Section title="How many?">
-            <Facts
+        <Drawer
+          onClose={() => setPicking(null)}
+          title={picking?.product_name ?? ""}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setPicking(null)}>
+                Cancel
+              </Button>
+              <Button onClick={addToBasket}>Add to order</Button>
+            </>
+          }
+        >
+          {picking && (
+            <Section title="How many?">
+              <Facts
                 rows={[
                   ["Price", money(picking.price)],
                   ["Available now", String(picking.available)],
                   ["Minimum order", String(picking.min_order_qty)],
                 ]}
               />
-            <Grid>
-              <Field label="Quantity">
-                <Input
-                  type="number"
-                  min={1}
-                  value={qty}
-                  onChange={(e) => setQty(e.target.value)}
-                  autoFocus
-                />
-              </Field>
-            </Grid>
-            {Number(qty) > picking.available && (
-              <div className="mt-2 flex items-start gap-2 rounded-md bg-warning-50 p-2.5 text-xs text-warning-800">
-                <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <span>
-                  {picking.available > 0 ? (
-                    <>
-                      {picking.available} will ship now. The remaining{" "}
-                      {Number(qty) - picking.available} will be recorded as a sourcing request —
-                      the wholesaler sees it and can import against it.
-                    </>
-                  ) : (
-                    <>
-                      None is available today. The full {qty} will be recorded as a sourcing
-                      request rather than refused.
-                    </>
-                  )}
-                </span>
-              </div>
-            )}
-          </Section>
-        )}
-      </Drawer>
+              <Grid>
+                <Field label="Quantity">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={qty}
+                    onChange={(e) => setQty(e.target.value)}
+                    autoFocus
+                  />
+                </Field>
+              </Grid>
+              {Number(qty) > picking.available && (
+                <div className="mt-2 flex items-start gap-2 rounded-md bg-warning-50 p-2.5 text-xs text-warning-800">
+                  <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    {picking.available > 0 ? (
+                      <>
+                        {picking.available} will ship now. The remaining{" "}
+                        {Number(qty) - picking.available} will be recorded as a sourcing request —
+                        the wholesaler sees it and can import against it.
+                      </>
+                    ) : (
+                      <>
+                        None is available today. The full {qty} will be recorded as a sourcing
+                        request rather than refused.
+                      </>
+                    )}
+                  </span>
+                </div>
+              )}
+            </Section>
+          )}
+        </Drawer>
       )}
 
       {/* ----------------------------- review ----------------------------- */}
       {reviewing && (
-      <Drawer
-        onClose={() => setReviewing(false)}
-        title="Review your order"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setReviewing(false)}>
-              Keep shopping
-            </Button>
-            <Button
-              onClick={() => placeOrder.mutate()}
-              disabled={placeOrder.isPending || basket.length === 0}
-            >
-              {placeOrder.isPending ? "Sending…" : "Place order"}
-            </Button>
-          </>
-        }
-      >
-        <Section title="Lines">
-          <div className="divide-y divide-line">
-            {basket.map((l) => {
-              const now = Math.min(l.quantity, l.available);
-              const later = l.quantity - now;
-              return (
-                <div key={l.product} className="flex items-start gap-3 py-2.5">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm text-ink-900">{l.name}</div>
-                    <div className="text-xs text-ink-500">
-                      {l.quantity} × {money(l.price)}
-                      {later > 0 && (
-                        <>
-                          {" · "}
-                          <span className="text-warning-700">
-                            {now} now, {later} to be sourced
-                          </span>
-                        </>
-                      )}
+        <Drawer
+          onClose={() => setReviewing(false)}
+          title="Review your order"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setReviewing(false)}>
+                Keep shopping
+              </Button>
+              <Button
+                onClick={() => placeOrder.mutate()}
+                disabled={placeOrder.isPending || basket.length === 0}
+              >
+                {placeOrder.isPending ? "Sending…" : "Place order"}
+              </Button>
+            </>
+          }
+        >
+          <Section title="Lines">
+            <div className="divide-y divide-line">
+              {basket.map((l) => {
+                const now = Math.min(l.quantity, l.available);
+                const later = l.quantity - now;
+                return (
+                  <div key={l.product} className="flex items-start gap-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm text-ink-900">{l.name}</div>
+                      <div className="text-xs text-ink-500">
+                        {l.quantity} × {money(l.price)}
+                        {later > 0 && (
+                          <>
+                            {" · "}
+                            <span className="text-warning-700">
+                              {now} now, {later} to be sourced
+                            </span>
+                          </>
+                        )}
+                      </div>
                     </div>
+                    <div className="shrink-0 text-sm tabular-nums text-ink-700">
+                      {money(now * Number(l.price))}
+                    </div>
+                    <button
+                      onClick={() => setBasket((p) => p.filter((x) => x.product !== l.product))}
+                      className="shrink-0 text-ink-400 hover:text-danger-600"
+                      aria-label={`Remove ${l.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
-                  <div className="shrink-0 text-sm tabular-nums text-ink-700">
-                    {money(now * Number(l.price))}
-                  </div>
-                  <button
-                    onClick={() => setBasket((p) => p.filter((x) => x.product !== l.product))}
-                    className="shrink-0 text-ink-400 hover:text-danger-600"
-                    aria-label={`Remove ${l.name}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </Section>
-
-        <Section title="What happens when you send this">
-          <Facts
-                rows={[
-                  ["Shipping now", `${shipNow} unit(s)`],
-                  ["Value of that", money(shipValue)],
-                  ["To be sourced", toSource > 0 ? `${toSource} unit(s)` : "Nothing"],
-                ]}
-              />
-          {toSource > 0 && (
-            <div className="mt-2 flex items-start gap-2 rounded-md bg-surface-1 p-2.5 text-xs text-ink-600">
-              <PackageSearch className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>
-                You are only invoiced for what ships. The {toSource} unit(s) the wholesaler cannot
-                supply today are passed to them as a sourcing request — they can import against it
-                and fulfil you when it lands.
-              </span>
+                );
+              })}
             </div>
-          )}
-          {placeOrder.isError && (
-            <ErrorNote error={placeOrder.error} />
-          )}
-        </Section>
-      </Drawer>
+          </Section>
+
+          <Section title="What happens when you send this">
+            <Facts
+              rows={[
+                ["Shipping now", `${shipNow} unit(s)`],
+                ["Value of that", money(shipValue)],
+                ["To be sourced", toSource > 0 ? `${toSource} unit(s)` : "Nothing"],
+              ]}
+            />
+            {toSource > 0 && (
+              <div className="mt-2 flex items-start gap-2 rounded-md bg-surface-1 p-2.5 text-xs text-ink-600">
+                <PackageSearch className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  You are only invoiced for what ships. The {toSource} unit(s) the wholesaler cannot
+                  supply today are passed to them as a sourcing request — they can import against it
+                  and fulfil you when it lands.
+                </span>
+              </div>
+            )}
+            {placeOrder.isError && <ErrorNote error={placeOrder.error} />}
+          </Section>
+        </Drawer>
       )}
 
       {basket.length > 0 && !reviewing && (

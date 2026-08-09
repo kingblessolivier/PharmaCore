@@ -128,8 +128,17 @@ export function ApiKeysModal({ onClose }: { onClose: () => void }) {
             <KeyRound className="h-3.5 w-3.5" /> Create a key
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. EBM bridge" />
-            <SelectField label="Acts as user" value={userId} onChange={(e) => setUserId(e.target.value)}>
+            <TextField
+              label="Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. EBM bridge"
+            />
+            <SelectField
+              label="Acts as user"
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+            >
               <option value="">— select user —</option>
               {(users.data?.results ?? []).map((u) => (
                 <option key={u.id} value={u.id}>

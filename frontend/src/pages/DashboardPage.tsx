@@ -144,8 +144,8 @@ function WorkPanel({ work }: { work: MyWork }) {
             <Clock className="h-4 w-4 text-warning-600" /> Not yours to decide
           </div>
           <p className="mt-1 text-xs text-ink-500">
-            Visible to you, above your authority. Named here so they do not sit in a shared
-            queue while everyone assumes someone else is handling them.
+            Visible to you, above your authority. Named here so they do not sit in a shared queue
+            while everyone assumes someone else is handling them.
           </p>
           <ul className="mt-2">
             {needs_escalation.slice(0, 5).map((item) => (
@@ -165,8 +165,8 @@ function WorkPanel({ work }: { work: MyWork }) {
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>
                 {my_team.breaching.length} request
-                {my_team.breaching.length > 1 ? "s" : ""} from your team has passed its
-                agreed response time.
+                {my_team.breaching.length > 1 ? "s" : ""} from your team has passed its agreed
+                response time.
               </span>
             </div>
           )}
@@ -235,11 +235,6 @@ export function DashboardPage() {
     <div className="space-y-5">
       <div>
         <PageHeader title={`Good day${user?.first_name ? `, ${user.first_name}` : ""}`} />
-        <p className="-mt-2 text-sm text-ink-500">
-          {d.org_count > 1
-            ? `${d.org_count} organizations · today, with the last 14 days for context`
-            : "Today, with the last 14 days for context"}
-        </p>
       </div>
 
       {work.data && <WorkPanel work={work.data} />}
@@ -278,18 +273,12 @@ export function DashboardPage() {
 
       <VizRoot>
         <div className="grid gap-3 lg:grid-cols-2">
-          <ChartFrame
-            title="Revenue, last 14 days"
-            subtitle="A single day's takings cannot be judged on its own."
-          >
+          <ChartFrame title="Revenue, last 14 days">
             <LineTrend points={trend} seriesNames={["Revenue"]} valueFormat={money} />
           </ChartFrame>
 
           {branches.length > 1 ? (
-            <ChartFrame
-              title="Today by branch"
-              subtitle="Which pharmacy earned it — the question a group total cannot answer."
-            >
+            <ChartFrame title="Today by branch">
               <BarChart
                 data={branches.map((b) => ({
                   label: b.name,
@@ -300,10 +289,7 @@ export function DashboardPage() {
               />
             </ChartFrame>
           ) : (
-            <ChartFrame
-              title="Stock at risk by expiry band"
-              subtitle="Banded because the action differs: sell through, move, or write off."
-            >
+            <ChartFrame title="Stock at risk by expiry band">
               <BarChart
                 data={bands.map((b) => ({
                   label: BAND_LABELS[b.band] ?? b.band,
@@ -332,7 +318,11 @@ export function DashboardPage() {
           to="/catalog/expiry"
           tone={d.expired.count > 0 ? "danger" : undefined}
         />
-        <Tile label="Units in transit" value={d.in_transit_units.toLocaleString()} to="/distribution/in-transit" />
+        <Tile
+          label="Units in transit"
+          value={d.in_transit_units.toLocaleString()}
+          to="/distribution/in-transit"
+        />
         <Tile
           label="Licences expiring"
           value={d.licences_expiring}

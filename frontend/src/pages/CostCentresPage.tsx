@@ -2,24 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DataGrid } from "../components/DataGrid";
-import {
-  Drawer,
-  ErrorNote,
-  Field,
-  Grid,
-  Input,
-  Section,
-  Select,
-} from "../components/RecordKit";
+import { Drawer, ErrorNote, Field, Grid, Input, Section, Select } from "../components/RecordKit";
 import { Badge, Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
 import { money, pct } from "../lib/format";
-import type {
-  CentreResult,
-  CostCentre,
-  CostCentreKind,
-  CostCentrePnl,
-} from "../lib/finance";
+import type { CentreResult, CostCentre, CostCentreKind, CostCentrePnl } from "../lib/finance";
 import { useDefaultOrg } from "../lib/recordData";
 import type { Paginated } from "../lib/types";
 
@@ -211,10 +198,6 @@ export function CostCentresPage() {
           </Button>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        The dimension every posting can be tagged with, so the ledger can be read by branch,
-        department or function without inventing a separate account for each one.
-      </p>
 
       {pnl && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-surface-0 px-4 py-3 text-sm">

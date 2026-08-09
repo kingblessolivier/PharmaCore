@@ -1,13 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  BadgeCheck,
-  Building2,
-  Gauge,
-  Plus,
-  ShieldAlert,
-  Tags,
-  Trash2,
-} from "lucide-react";
+import { BadgeCheck, Building2, Gauge, Plus, ShieldAlert, Tags, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { DataGrid } from "../components/DataGrid";
 import {
@@ -55,7 +47,8 @@ function NewSupplierProfile({ onClose }: { onClose: () => void }) {
   const { data: suppliers = [] } = useSuppliers();
   const { data: profiles } = useQuery({
     queryKey: ["supplier-profiles"],
-    queryFn: () => api<Paginated<SupplierProfile>>("/api/procurement/supplier-profiles/?page_size=500"),
+    queryFn: () =>
+      api<Paginated<SupplierProfile>>("/api/procurement/supplier-profiles/?page_size=500"),
   });
   const taken = new Set((profiles?.results ?? []).map((p) => p.supplier));
   const available = suppliers.filter((s) => !taken.has(s.id));
@@ -76,7 +69,6 @@ function NewSupplierProfile({ onClose }: { onClose: () => void }) {
   return (
     <Drawer
       title="Add a supplier to procurement"
-      subtitle="Give an existing catalog supplier its buy-side master record."
       onClose={onClose}
       width="max-w-lg"
       footer={
@@ -150,11 +142,17 @@ function LicenceRow({ licence, onDelete }: { licence: SupplierLicence; onDelete:
         </Badge>
       </td>
       <td className="px-2.5 py-2">
-        {licence.is_required ? <Badge tone="info">Required</Badge> : <span className="text-ink-500">Optional</span>}
+        {licence.is_required ? (
+          <Badge tone="info">Required</Badge>
+        ) : (
+          <span className="text-ink-500">Optional</span>
+        )}
       </td>
       <td className="px-2.5 py-2">
         <Badge tone={licence.is_verified ? "success" : "warning"}>
-          {licence.is_verified ? `Verified${licence.verified_by_name ? ` · ${licence.verified_by_name}` : ""}` : "Unverified"}
+          {licence.is_verified
+            ? `Verified${licence.verified_by_name ? ` · ${licence.verified_by_name}` : ""}`
+            : "Unverified"}
         </Badge>
       </td>
       <td className="px-2.5 py-2 text-right">
@@ -266,7 +264,10 @@ export function LicencesTab({ profile }: { profile: SupplierProfile }) {
             <ErrorNote error={create.error} />
             <Grid cols={3}>
               <Field label="Type">
-                <Select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
+                <Select
+                  value={form.kind}
+                  onChange={(e) => setForm({ ...form, kind: e.target.value })}
+                >
                   {LICENCE_KINDS.map((k) => (
                     <option key={k.value} value={k.value}>
                       {k.label}
@@ -640,7 +641,10 @@ export function PerformanceTab({ profile }: { profile: SupplierProfile }) {
 
   return (
     <>
-      <Section title="Current scorecard" hint="Delivery and quality are computed from posted goods receipts — not self-reported.">
+      <Section
+        title="Current scorecard"
+        hint="Delivery and quality are computed from posted goods receipts — not self-reported."
+      >
         <div className="grid grid-cols-2 gap-4 rounded-lg border border-line p-4 sm:grid-cols-4">
           <ScoreBar label="On-time delivery" value={profile.delivery_score} />
           <ScoreBar label="Quality acceptance" value={profile.quality_score} />
@@ -735,8 +739,12 @@ export function PerformanceTab({ profile }: { profile: SupplierProfile }) {
                       {e.period_start} → {e.period_end}
                     </td>
                     <td className="px-2.5 py-2 text-right tabular-nums">{e.orders_count}</td>
-                    <td className="px-2.5 py-2 text-right tabular-nums">{e.on_time_delivery_pct}%</td>
-                    <td className="px-2.5 py-2 text-right tabular-nums">{e.quality_acceptance_pct}%</td>
+                    <td className="px-2.5 py-2 text-right tabular-nums">
+                      {e.on_time_delivery_pct}%
+                    </td>
+                    <td className="px-2.5 py-2 text-right tabular-nums">
+                      {e.quality_acceptance_pct}%
+                    </td>
                     <td className="px-2.5 py-2 text-right font-semibold tabular-nums">
                       {Number(e.overall_score).toFixed(0)}
                     </td>
@@ -809,7 +817,10 @@ export function TermsTab({ profile }: { profile: SupplierProfile }) {
 
   return (
     <>
-      <Section title="Standing" hint="Suspended and blacklisted suppliers cannot receive new purchase orders.">
+      <Section
+        title="Standing"
+        hint="Suspended and blacklisted suppliers cannot receive new purchase orders."
+      >
         <ErrorNote error={changeStanding.error} />
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Standing">
@@ -852,7 +863,10 @@ export function TermsTab({ profile }: { profile: SupplierProfile }) {
             </Select>
           </Field>
           <Field label="Trading name">
-            <Input value={form.trading_name} onChange={(e) => set({ trading_name: e.target.value })} />
+            <Input
+              value={form.trading_name}
+              onChange={(e) => set({ trading_name: e.target.value })}
+            />
           </Field>
           <Field label="Website">
             <Input value={form.website} onChange={(e) => set({ website: e.target.value })} />
@@ -1014,7 +1028,7 @@ export function SupplierMasterPage() {
 
   // Keep the open drawer in sync after a mutation refetches the list.
   const current = selected
-    ? (data?.results ?? []).find((p) => p.id === selected.id) ?? selected
+    ? ((data?.results ?? []).find((p) => p.id === selected.id) ?? selected)
     : null;
 
   const tabs: [Tab, string, typeof Building2][] = [
@@ -1034,11 +1048,6 @@ export function SupplierMasterPage() {
           </Button>
         }
       />
-      <p className="mb-4 max-w-3xl text-sm text-ink-500">
-        Who we may buy from, on what terms, at what contract price — and how they have actually
-        performed. A supplier without a verified, unexpired required licence cannot have a purchase
-        order approved.
-      </p>
 
       <DataGrid<SupplierProfile>
         rows={data?.results ?? []}

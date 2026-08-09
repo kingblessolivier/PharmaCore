@@ -57,7 +57,15 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "close", label: "Period close" },
 ];
 
-function Section({ title, lines, total }: { title: string; lines: StatementLine[]; total: string }) {
+function Section({
+  title,
+  lines,
+  total,
+}: {
+  title: string;
+  lines: StatementLine[];
+  total: string;
+}) {
   return (
     <div className="overflow-hidden rounded-lg border border-line bg-surface-0">
       <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
@@ -146,10 +154,6 @@ export function FinanceStatementsPage() {
   return (
     <div>
       <PageHeader title="Financial statements" />
-      <p className="mb-4 text-sm text-ink-500">
-        Every statement is derived from posted journal entries — never a second set of numbers that
-        could drift from the ledger.
-      </p>
 
       <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface-0 p-3">
         <label className="text-xs font-medium text-ink-600">
@@ -222,10 +226,7 @@ export function FinanceStatementsPage() {
           <div className="mb-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
             {/* Revenue down to net profit, one step at a time. A column of
                 numbers makes the reader do this subtraction in their head. */}
-            <ChartFrame
-              title="Revenue to net profit"
-              subtitle="What each layer of cost takes out."
-            >
+            <ChartFrame title="Revenue to net profit">
               <Waterfall
                 steps={[
                   { label: "Revenue", value: Number(plQ.data.revenue), isTotal: true },
@@ -239,16 +240,16 @@ export function FinanceStatementsPage() {
                 ]}
               />
             </ChartFrame>
-            <ChartFrame
-              title="Where the money goes"
-              subtitle="Cost of sales against everything else."
-            >
+            <ChartFrame title="Where the money goes">
               <Donut
                 slices={[
                   { label: "Cost of sales", value: Number(plQ.data.cogs) },
                   { label: "Operating expenses", value: Number(plQ.data.operating_expenses) },
                   { label: "Depreciation", value: Number(plQ.data.depreciation) },
-                  { label: "Interest & tax", value: Number(plQ.data.finance_cost) + Number(plQ.data.tax_expense) },
+                  {
+                    label: "Interest & tax",
+                    value: Number(plQ.data.finance_cost) + Number(plQ.data.tax_expense),
+                  },
                   { label: "Net profit", value: Math.max(Number(plQ.data.net_profit), 0) },
                 ].filter((s) => s.value > 0)}
                 valueFormat={money}
@@ -279,7 +280,8 @@ export function FinanceStatementsPage() {
           </div>
           <div className="flex flex-wrap gap-4 rounded-lg border border-line bg-surface-0 px-4 py-3 text-sm">
             <span>
-              Gross margin <strong className="tabular-nums">{pct(plQ.data.gross_margin_pct)}</strong>
+              Gross margin{" "}
+              <strong className="tabular-nums">{pct(plQ.data.gross_margin_pct)}</strong>
             </span>
             <span>
               Net margin <strong className="tabular-nums">{pct(plQ.data.net_margin_pct)}</strong>
@@ -525,8 +527,8 @@ export function FinanceStatementsPage() {
                 </span>
                 <span className="text-ink-600">
                   less internal trade{" "}
-                  <span className="tabular-nums">{money(groupQ.data.eliminations.revenue)}</span>
-                  {" "}({groupQ.data.eliminations.invoice_count} invoice
+                  <span className="tabular-nums">{money(groupQ.data.eliminations.revenue)}</span> (
+                  {groupQ.data.eliminations.invoice_count} invoice
                   {groupQ.data.eliminations.invoice_count === 1 ? "" : "s"})
                 </span>
                 <span className="font-semibold text-ink-900">
@@ -642,8 +644,8 @@ function ChecklistPanel({ period }: { period: AccountingPeriod }) {
           <div className="text-xs text-ink-500">
             {/* A balanced trial balance only proves the double entry was arithmetically
                 consistent, not that anything real was recorded. */}
-            A set of books can balance perfectly and still be wrong. These are the checks that
-            make a month-end trustworthy.
+            A set of books can balance perfectly and still be wrong. These are the checks that make
+            a month-end trustworthy.
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -769,8 +771,8 @@ function PeriodClosePanel({ orgId, start, end }: { orgId: number; start: string;
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-0 px-4 py-3">
         <div className="text-sm text-ink-600">
-          Closing freezes {start} to {end}: no entry may be dated inside a closed period, and
-          every blocking checklist item must be done or waived first.
+          Closing freezes {start} to {end}: no entry may be dated inside a closed period, and every
+          blocking checklist item must be done or waived first.
         </div>
         <Button onClick={() => close.mutate()} disabled={close.isPending}>
           <Lock className="h-4 w-4" /> {close.isPending ? "Closing…" : "Close this period"}

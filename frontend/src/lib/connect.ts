@@ -71,9 +71,7 @@ export function openDirect(userId: number) {
 }
 
 export async function listMessages(spaceId: number): Promise<ChatMessage[]> {
-  const body = await api<{ results: ChatMessage[] }>(
-    `/api/workspace/spaces/${spaceId}/messages/`,
-  );
+  const body = await api<{ results: ChatMessage[] }>(`/api/workspace/spaces/${spaceId}/messages/`);
   return body.results;
 }
 
@@ -141,10 +139,10 @@ export function sendMail(payload: {
   bcc?: number[];
   thread?: number;
 }) {
-  return api<{ thread: number; message: number; recipients: number }>(
-    "/api/workspace/mail/",
-    { method: "POST", body: JSON.stringify(payload) },
-  );
+  return api<{ thread: number; message: number; recipients: number }>("/api/workspace/mail/", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function listSent() {

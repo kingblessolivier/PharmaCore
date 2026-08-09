@@ -59,7 +59,6 @@ function BuildDrawer({ orgId, onClose }: { orgId: number | null; onClose: () => 
   return (
     <Drawer
       title="Build timesheets"
-      subtitle="Derives the period from attendance punches, the roster and approved leave — nobody types the hours."
       onClose={onClose}
       width="max-w-xl"
       footer={
@@ -125,7 +124,7 @@ export function TimesheetsPage() {
   });
 
   const rows = data?.results ?? [];
-  const current = open ? rows.find((t) => t.id === open.id) ?? open : null;
+  const current = open ? (rows.find((t) => t.id === open.id) ?? open) : null;
 
   return (
     <div>
@@ -137,10 +136,6 @@ export function TimesheetsPage() {
           </Button>
         }
       />
-      <p className="mb-4 max-w-3xl text-sm text-ink-500">
-        The approved, calculated view of a period's attendance. Payroll reads this — never raw
-        punches — so hours, overtime and unpaid leave are agreed before anyone is paid.
-      </p>
 
       <DataGrid<Timesheet>
         rows={rows}

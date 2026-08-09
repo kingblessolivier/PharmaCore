@@ -164,7 +164,6 @@ function EncounterDrawer({
   return (
     <Drawer
       title="Record an encounter"
-      subtitle="A vaccination, screening or consultation performed at the pharmacy."
       width="max-w-2xl"
       onClose={onClose}
       footer={
@@ -251,8 +250,7 @@ export function ClinicalServicesPage() {
 
   const { data: serviceData } = useQuery({
     queryKey: ["clinical-services"],
-    queryFn: () =>
-      api<Paginated<ClinicalService>>("/api/retail/clinical-services/?page_size=200"),
+    queryFn: () => api<Paginated<ClinicalService>>("/api/retail/clinical-services/?page_size=200"),
   });
   const services = useMemo(() => serviceData?.results ?? [], [serviceData]);
 
@@ -293,11 +291,6 @@ export function ClinicalServicesPage() {
           </div>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Vaccinations, screenings and consultations the pharmacy charges for. Fees post to
-        <strong> 4300 Services Revenue</strong> — until recently they were recorded here and
-        never reached the books at all.
-      </p>
       <ErrorNote error={bill.error} />
 
       {unbilled.length > 0 && (
@@ -431,11 +424,7 @@ export function ClinicalServicesPage() {
       )}
 
       {newEncounter && (
-        <EncounterDrawer
-          orgId={orgId}
-          services={services}
-          onClose={() => setNewEncounter(false)}
-        />
+        <EncounterDrawer orgId={orgId} services={services} onClose={() => setNewEncounter(false)} />
       )}
       {service !== null && (
         <ServiceDrawer

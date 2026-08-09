@@ -14,7 +14,40 @@
  *   A border is ink that isn't data.
  */
 
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+
+/* -------------------------------------------------------------------------- */
+/*  Sizing                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/** The chart's own width in real pixels.
+ *
+ * Every chart here used to draw into a fixed 640-unit viewBox and then stretch
+ * it with `w-full`. A viewBox scales *both* axes, so on a 1560px screen the
+ * whole drawing — 10px axis text, 2px strokes, 30px bar rows — came out 2.4×
+ * larger than designed. That is why the charts read as oversized on a wide
+ * monitor and looked right on a laptop.
+ *
+ * Measuring the container and drawing at that width instead makes one SVG unit
+ * exactly one CSS pixel, so type and stroke weights stay put at any size and
+ * only the plot gets wider — which is the thing that should get wider. */
+function useChartWidth(fallback = 640) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(fallback);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (element === null || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const next = Math.round(entries[0].contentRect.width);
+      if (next > 0) setWidth(next);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return [ref, width] as const;
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Palette                                                                    */
@@ -139,23 +172,9 @@ function Tip({ x, y, lines }: { x: number; y: number; lines: string[] }) {
   const h = lines.length * 15 + 10;
   return (
     <g transform={`translate(${x},${y})`} pointerEvents="none">
-      <rect
-        x={8}
-        y={-h / 2}
-        width={w}
-        height={h}
-        rx={5}
-        fill="var(--viz-ink)"
-        opacity={0.92}
-      />
+      <rect x={8} y={-h / 2} width={w} height={h} rx={5} fill="var(--viz-ink)" opacity={0.92} />
       {lines.map((line, i) => (
-        <text
-          key={i}
-          x={16}
-          y={-h / 2 + 16 + i * 15}
-          fontSize={11}
-          fill="var(--viz-surface)"
-        >
+        <text key={i} x={16} y={-h / 2 + 16 + i * 15} fontSize={11} fill="var(--viz-surface)">
           {line}
         </text>
       ))}
@@ -192,30 +211,46 @@ export function LineTrend({
   valueFormat?: (n: number) => string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
+  const [box, W] = useChartWidth();
   if (points.length === 0) return <EmptyChart message="No data in this period." />;
 
-  const W = 640;
   const H = height;
-  const pad = { top: 12, right: 56, bottom: 26, left: 46 };
-  const innerW = W - pad.left - pad.right;
-  const innerH = H - pad.top - pad.bottom;
 
   const all = points.flatMap((p) => p.values);
   const max = Math.max(...all, 0);
   const min = Math.min(...all, 0);
   const span = max - min || 1;
+  const ticks = [min, min + span / 2, max];
+
+  // Padding sized to the text that has to fit in it. It used to be fixed at
+  // 46/56, which is fine for "1.2k" and clips "RWF 26,400" — and because the
+  // SVG scales to its container, a wide screen made the clipping worse rather
+  // than better. 6.2 units per character is close enough at these sizes.
+  const CH = 6.2;
+  const widest = (labels: string[]) => Math.max(0, ...labels.map((l) => l.length)) * CH;
+  const last = points[points.length - 1];
+  const pad = {
+    top: 12,
+    right: Math.min(
+      190,
+      Math.max(56, widest(seriesNames.map((_, s) => valueFormat(last.values[s] ?? 0))) + 18),
+    ),
+    bottom: 26,
+    left: Math.max(46, widest(ticks.map(valueFormat)) + 12),
+  };
+  const innerW = W - pad.left - pad.right;
+  const innerH = H - pad.top - pad.bottom;
 
   const x = (i: number) =>
     pad.left + (points.length === 1 ? innerW / 2 : (i / (points.length - 1)) * innerW);
   const y = (v: number) => pad.top + innerH - ((v - min) / span) * innerH;
 
-  const ticks = [min, min + span / 2, max];
-
   return (
-    <div className="relative">
+    <div className="relative" ref={box}>
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        className="w-full"
+        width={W}
+        height={H}
         role="img"
         aria-label={`Trend of ${seriesNames.join(" and ")}`}
         onMouseLeave={() => setHover(null)}
@@ -231,7 +266,13 @@ export function LineTrend({
               stroke="var(--viz-grid)"
               strokeWidth={1}
             />
-            <text x={pad.left - 8} y={y(t) + 4} fontSize={10} textAnchor="end" fill="var(--viz-muted)">
+            <text
+              x={pad.left - 8}
+              y={y(t) + 4}
+              fontSize={10}
+              textAnchor="end"
+              fill="var(--viz-muted)"
+            >
               {valueFormat(t)}
             </text>
           </g>
@@ -246,7 +287,7 @@ export function LineTrend({
               key={s}
               d={d}
               fill="none"
-              stroke={slotVar(s === 0 ? 0 : 2)}
+              stroke={slotVar(s)}
               strokeWidth={2}
               strokeLinejoin="round"
               strokeLinecap="round"
@@ -317,9 +358,7 @@ export function LineTrend({
               y={pad.top + innerH / 2}
               lines={[
                 points[hover].label,
-                ...seriesNames.map(
-                  (n, s) => `${n}: ${valueFormat(points[hover].values[s] ?? 0)}`,
-                ),
+                ...seriesNames.map((n, s) => `${n}: ${valueFormat(points[hover].values[s] ?? 0)}`),
               ]}
             />
           </>
@@ -399,7 +438,13 @@ export function Donut({
 
   return (
     <div className="flex flex-wrap items-center gap-6">
-      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label="Breakdown">
+      <svg
+        viewBox={`0 0 ${size} ${size}`}
+        width={size}
+        height={size}
+        role="img"
+        aria-label="Breakdown"
+      >
         {arcs.map((a) => (
           <path
             key={a.label}
@@ -416,7 +461,9 @@ export function Donut({
               x={c}
               y={c - 2}
               textAnchor="middle"
-              fontSize={20}
+              /* Fit the figure to the hole. "RWF 1,713,148" at a fixed 20px is
+                 wider than the 116px opening and spilled over the ring. */
+              fontSize={Math.min(20, Math.max(11, (rInner * 2 - 14) / (centreValue.length * 0.58)))}
               fontWeight={600}
               fill="var(--viz-ink)"
             >
@@ -487,58 +534,56 @@ export function BarChart({
   ordinalRamp?: boolean;
 }) {
   const [hover, setHover] = useState<number | null>(null);
+  const [box, W] = useChartWidth();
   if (data.length === 0) return <EmptyChart message="Nothing to compare yet." />;
 
   const rowH = 30;
   const H = height ?? data.length * rowH + 12;
-  const W = 640;
   const labelW = 150;
   const valueW = 74;
   const trackW = W - labelW - valueW;
   const max = Math.max(...data.map((d) => Math.abs(d.value)), 1);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Comparison">
-      {data.map((d, i) => {
-        const w = Math.max(2, (Math.abs(d.value) / max) * trackW);
-        const y = i * rowH + 6;
-        const fill = d.tone
-          ? `var(--viz-${d.tone === "good" ? "good" : d.tone === "warning" ? "warn" : d.tone})`
-          : ordinalRamp
-            ? rampVar(i, data.length)
-            : "var(--viz-s1)";
-        return (
-          <g
-            key={d.label}
-            onMouseEnter={() => setHover(i)}
-            onMouseLeave={() => setHover(null)}
-          >
-            <rect x={0} y={y - 4} width={W} height={rowH - 4} fill="transparent" />
-            <text x={0} y={y + 14} fontSize={11} fill="var(--viz-ink-2)">
-              {d.label.length > 24 ? `${d.label.slice(0, 23)}…` : d.label}
-            </text>
-            {/* 4px rounded data-end, square at the baseline; capped thickness. */}
-            <path
-              d={`M${labelW},${y} h${Math.max(0, w - 4)} a4,4 0 0 1 4,4 v${18 - 8} a4,4 0 0 1 -4,4 h${-Math.max(0, w - 4)} z`}
-              fill={fill}
-              opacity={hover === null || hover === i ? 1 : 0.5}
-            />
-            <text
-              x={labelW + w + 8}
-              y={y + 14}
-              fontSize={11}
-              fill="var(--viz-ink)"
-              className="tabular-nums"
-            >
-              {valueFormat(d.value)}
-            </text>
-          </g>
-        );
-      })}
-      {hover !== null && data[hover].note && (
-        <Tip x={labelW} y={hover * rowH + 20} lines={[data[hover].label, data[hover].note!]} />
-      )}
-    </svg>
+    <div ref={box}>
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label="Comparison">
+        {data.map((d, i) => {
+          const w = Math.max(2, (Math.abs(d.value) / max) * trackW);
+          const y = i * rowH + 6;
+          const fill = d.tone
+            ? `var(--viz-${d.tone === "good" ? "good" : d.tone === "warning" ? "warn" : d.tone})`
+            : ordinalRamp
+              ? rampVar(i, data.length)
+              : "var(--viz-s1)";
+          return (
+            <g key={d.label} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+              <rect x={0} y={y - 4} width={W} height={rowH - 4} fill="transparent" />
+              <text x={0} y={y + 14} fontSize={11} fill="var(--viz-ink-2)">
+                {d.label.length > 24 ? `${d.label.slice(0, 23)}…` : d.label}
+              </text>
+              {/* 4px rounded data-end, square at the baseline; capped thickness. */}
+              <path
+                d={`M${labelW},${y} h${Math.max(0, w - 4)} a4,4 0 0 1 4,4 v${18 - 8} a4,4 0 0 1 -4,4 h${-Math.max(0, w - 4)} z`}
+                fill={fill}
+                opacity={hover === null || hover === i ? 1 : 0.5}
+              />
+              <text
+                x={labelW + w + 8}
+                y={y + 14}
+                fontSize={11}
+                fill="var(--viz-ink)"
+                className="tabular-nums"
+              >
+                {valueFormat(d.value)}
+              </text>
+            </g>
+          );
+        })}
+        {hover !== null && data[hover].note && (
+          <Tip x={labelW} y={hover * rowH + 20} lines={[data[hover].label, data[hover].note!]} />
+        )}
+      </svg>
+    </div>
   );
 }
 
@@ -552,17 +597,11 @@ export interface WaterfallStep {
   isTotal?: boolean;
 }
 
-export function Waterfall({
-  steps,
-  unit = "days",
-}: {
-  steps: WaterfallStep[];
-  unit?: string;
-}) {
+export function Waterfall({ steps, unit = "days" }: { steps: WaterfallStep[]; unit?: string }) {
   const [hover, setHover] = useState<number | null>(null);
+  const [box, W] = useChartWidth();
   if (steps.length === 0) return <EmptyChart message="No cycle to show." />;
 
-  const W = 640;
   const H = 210;
   const pad = { top: 16, bottom: 34, left: 8, right: 8 };
   const innerH = H - pad.top - pad.bottom;
@@ -584,61 +623,65 @@ export function Waterfall({
   const y = (v: number) => pad.top + innerH - ((v - min) / span) * innerH;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`Waterfall in ${unit}`}>
-      <line
-        x1={pad.left}
-        x2={W - pad.right}
-        y1={y(0)}
-        y2={y(0)}
-        stroke="var(--viz-axis)"
-        strokeWidth={1}
-      />
-      {bars.map((b, i) => {
-        const cx = pad.left + slot * i + slot / 2;
-        const top = y(Math.max(b.from, b.to));
-        const h = Math.max(3, Math.abs(y(b.to) - y(b.from)));
-        const fill = b.isTotal
-          ? "var(--viz-ink-2)"
-          : b.value >= 0
-            ? "var(--viz-pos)"
-            : "var(--viz-neg)";
-        return (
-          <g
-            key={b.label}
-            onMouseEnter={() => setHover(i)}
-            onMouseLeave={() => setHover(null)}
-          >
-            <rect x={cx - slot / 2} y={pad.top} width={slot} height={innerH} fill="transparent" />
-            <rect
-              x={cx - barW / 2}
-              y={top}
-              width={barW}
-              height={h}
-              rx={4}
-              fill={fill}
-              opacity={hover === null || hover === i ? 1 : 0.5}
-            />
-            <text
-              x={cx}
-              y={top - 6}
-              fontSize={11}
-              textAnchor="middle"
-              fill="var(--viz-ink)"
-              className="tabular-nums"
-            >
-              {b.value >= 0 && !b.isTotal ? "+" : ""}
-              {b.value.toFixed(0)}
-            </text>
-            <text x={cx} y={H - 18} fontSize={10} textAnchor="middle" fill="var(--viz-muted)">
-              {b.label}
-            </text>
-          </g>
-        );
-      })}
-      <text x={W / 2} y={H - 4} fontSize={9} textAnchor="middle" fill="var(--viz-muted)">
-        {unit}
-      </text>
-    </svg>
+    <div ref={box}>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width={W}
+        height={H}
+        role="img"
+        aria-label={`Waterfall in ${unit}`}
+      >
+        <line
+          x1={pad.left}
+          x2={W - pad.right}
+          y1={y(0)}
+          y2={y(0)}
+          stroke="var(--viz-axis)"
+          strokeWidth={1}
+        />
+        {bars.map((b, i) => {
+          const cx = pad.left + slot * i + slot / 2;
+          const top = y(Math.max(b.from, b.to));
+          const h = Math.max(3, Math.abs(y(b.to) - y(b.from)));
+          const fill = b.isTotal
+            ? "var(--viz-ink-2)"
+            : b.value >= 0
+              ? "var(--viz-pos)"
+              : "var(--viz-neg)";
+          return (
+            <g key={b.label} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+              <rect x={cx - slot / 2} y={pad.top} width={slot} height={innerH} fill="transparent" />
+              <rect
+                x={cx - barW / 2}
+                y={top}
+                width={barW}
+                height={h}
+                rx={4}
+                fill={fill}
+                opacity={hover === null || hover === i ? 1 : 0.5}
+              />
+              <text
+                x={cx}
+                y={top - 6}
+                fontSize={11}
+                textAnchor="middle"
+                fill="var(--viz-ink)"
+                className="tabular-nums"
+              >
+                {b.value >= 0 && !b.isTotal ? "+" : ""}
+                {b.value.toFixed(0)}
+              </text>
+              <text x={cx} y={H - 18} fontSize={10} textAnchor="middle" fill="var(--viz-muted)">
+                {b.label}
+              </text>
+            </g>
+          );
+        })}
+        <text x={W / 2} y={H - 4} fontSize={9} textAnchor="middle" fill="var(--viz-muted)">
+          {unit}
+        </text>
+      </svg>
+    </div>
   );
 }
 
@@ -661,7 +704,8 @@ export function Meter({
 }) {
   const id = useId();
   const pct = target > 0 ? Math.min(150, (value / target) * 100) : 0;
-  const tone = pct >= 100 ? "var(--viz-good)" : pct >= 70 ? "var(--viz-warn)" : "var(--viz-critical)";
+  const tone =
+    pct >= 100 ? "var(--viz-good)" : pct >= 70 ? "var(--viz-warn)" : "var(--viz-critical)";
   return (
     <div>
       <div className="flex items-baseline justify-between">

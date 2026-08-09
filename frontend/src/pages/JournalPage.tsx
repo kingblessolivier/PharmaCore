@@ -144,7 +144,6 @@ function NewEntryDrawer({
   return (
     <Drawer
       title="New journal entry"
-      subtitle="Posted entries are immutable — a correction is a new reversing entry, never an edit."
       width="max-w-4xl"
       onClose={onClose}
       footer={
@@ -239,10 +238,7 @@ function NewEntryDrawer({
               header: "Side",
               width: "7rem",
               cell: (row, set) => (
-                <Select
-                  value={row.side}
-                  onChange={(e) => set({ side: e.target.value as Side })}
-                >
+                <Select value={row.side} onChange={(e) => set({ side: e.target.value as Side })}>
                   <option value="DEBIT">Debit</option>
                   <option value="CREDIT">Credit</option>
                 </Select>
@@ -410,10 +406,6 @@ export function JournalPage() {
           </Button>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Every posting in the books, and which part of the business produced it. Entries are
-        immutable once posted — a correction is a new reversing entry, never an edit.
-      </p>
 
       <DataGrid
         rows={filtered}

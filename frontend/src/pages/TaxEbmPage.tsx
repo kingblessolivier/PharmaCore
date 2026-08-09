@@ -28,10 +28,6 @@ export function TaxEbmPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="EBM audit trail" />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Every fiscalised receipt sent to the RRA, with its SDC and MRC identifiers. This is the
-        evidence trail for an audit, so nothing here is editable.
-      </p>
 
       <div className="flex flex-wrap gap-6 rounded-lg border border-line bg-surface-0 px-4 py-3 text-sm">
         <span className="flex items-center gap-2 text-ink-600">

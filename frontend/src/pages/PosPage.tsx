@@ -84,7 +84,6 @@ function DispensingDrawer({
   return (
     <Drawer
       title="Dispensing details"
-      subtitle="Required before a prescription-only or controlled item can leave the counter."
       width="max-w-2xl"
       onClose={onClose}
       footer={
@@ -474,9 +473,7 @@ export function PosPage() {
                   if (showList && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
                     e.preventDefault();
                     setHighlight((i) =>
-                      e.key === "ArrowDown"
-                        ? Math.min(i + 1, hits.length - 1)
-                        : Math.max(i - 1, 0),
+                      e.key === "ArrowDown" ? Math.min(i + 1, hits.length - 1) : Math.max(i - 1, 0),
                     );
                     return;
                   }
@@ -592,9 +589,7 @@ export function PosPage() {
                       <div className="text-xs text-ink-500">
                         {money(line.unit_price)} each
                         {line.quantity > line.on_hand && (
-                          <span className="ml-2 text-danger-700">
-                            only {line.on_hand} in stock
-                          </span>
+                          <span className="ml-2 text-danger-700">only {line.on_hand} in stock</span>
                         )}
                       </div>
                     </div>
@@ -605,9 +600,7 @@ export function PosPage() {
                         onClick={() => {
                           setLines((c) =>
                             c
-                              .map((l, i) =>
-                                i === index ? { ...l, quantity: l.quantity - 1 } : l,
-                              )
+                              .map((l, i) => (i === index ? { ...l, quantity: l.quantity - 1 } : l))
                               .filter((l) => l.quantity > 0),
                           );
                           focusScan();
@@ -755,9 +748,7 @@ export function PosPage() {
                 }`}
               >
                 <dt>{outstanding > 0 ? "Still to pay" : "Change"}</dt>
-                <dd className="tabular-nums">
-                  {money(outstanding > 0 ? outstanding : change)}
-                </dd>
+                <dd className="tabular-nums">{money(outstanding > 0 ? outstanding : change)}</dd>
               </div>
             </dl>
           </div>

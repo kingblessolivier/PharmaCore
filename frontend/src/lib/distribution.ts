@@ -78,7 +78,13 @@ export interface DemandSummary {
   open_lines: number;
   sourcing_lines: number;
   oldest_days: number;
-  top: { product: number; product_name: string; quantity: number; buyers: number; age_days: number }[];
+  top: {
+    product: number;
+    product_name: string;
+    quantity: number;
+    buyers: number;
+    age_days: number;
+  }[];
 }
 
 export interface Backorder {
@@ -244,7 +250,12 @@ export function sourceDemand(body: {
     requisition: number;
     requisition_number: string;
     status: string;
-    lines: { product: number; product_name: string; quantity: number; estimated_unit_cost: string }[];
+    lines: {
+      product: number;
+      product_name: string;
+      quantity: number;
+      estimated_unit_cost: string;
+    }[];
     next: string;
   }>("/api/distribution/demand/source/", { method: "POST", body: JSON.stringify(body) });
 }

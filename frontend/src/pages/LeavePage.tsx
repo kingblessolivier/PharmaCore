@@ -76,7 +76,6 @@ function RequestLeaveDrawer({ onClose }: { onClose: () => void }) {
   return (
     <Drawer
       title="Request leave"
-      subtitle="The days are held against the balance the moment the request is raised."
       onClose={onClose}
       width="max-w-2xl"
       footer={
@@ -181,10 +180,20 @@ function BalancesPanel({ orgId }: { orgId: number | null }) {
         emptyMessage="No balances yet — seed the leave types, then run an accrual."
         toolbar={
           <>
-            <Button variant="secondary" size="sm" disabled={seed.isPending} onClick={() => seed.mutate()}>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={seed.isPending}
+              onClick={() => seed.mutate()}
+            >
               <Sprout className="h-3.5 w-3.5" /> Seed leave types
             </Button>
-            <Button variant="secondary" size="sm" disabled={accrue.isPending} onClick={() => accrue.mutate()}>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={accrue.isPending}
+              onClick={() => accrue.mutate()}
+            >
               <CalendarPlus className="h-3.5 w-3.5" /> Accrue this month
             </Button>
           </>
@@ -210,8 +219,20 @@ function BalancesPanel({ orgId }: { orgId: number | null }) {
             ),
           },
           { key: "year", header: "Year", align: "right", numeric: true, value: (b) => b.year },
-          { key: "entitled", header: "Entitled", align: "right", numeric: true, value: (b) => num(b.entitled) },
-          { key: "taken", header: "Taken", align: "right", numeric: true, value: (b) => num(b.taken) },
+          {
+            key: "entitled",
+            header: "Entitled",
+            align: "right",
+            numeric: true,
+            value: (b) => num(b.entitled),
+          },
+          {
+            key: "taken",
+            header: "Taken",
+            align: "right",
+            numeric: true,
+            value: (b) => num(b.taken),
+          },
           {
             key: "pending",
             header: "Pending",
@@ -219,7 +240,11 @@ function BalancesPanel({ orgId }: { orgId: number | null }) {
             numeric: true,
             value: (b) => num(b.pending),
             render: (b) =>
-              num(b.pending) > 0 ? <Badge tone="warning">{b.pending}</Badge> : <span className="text-ink-400">—</span>,
+              num(b.pending) > 0 ? (
+                <Badge tone="warning">{b.pending}</Badge>
+              ) : (
+                <span className="text-ink-400">—</span>
+              ),
           },
           {
             key: "available",
@@ -275,10 +300,6 @@ export function LeavePage() {
           </Button>
         }
       />
-      <p className="mb-4 max-w-3xl text-sm text-ink-500">
-        Requests are checked against a real balance and held as pending until decided — so two
-        requests can never spend the same day, and nobody approves their own.
-      </p>
 
       <div className="mb-4 flex gap-1 border-b border-line">
         {(["requests", "balances"] as const).map((v) => (
@@ -363,7 +384,11 @@ export function LeavePage() {
               value: (r) => r.status,
               render: (r) => <StatusBadge status={r.status} />,
             },
-            { key: "approved_by_name", header: "Decided by", value: (r) => r.approved_by_name ?? "—" },
+            {
+              key: "approved_by_name",
+              header: "Decided by",
+              value: (r) => r.approved_by_name ?? "—",
+            },
             { key: "reason", header: "Reason", value: (r) => r.reason || "—" },
           ]}
         />

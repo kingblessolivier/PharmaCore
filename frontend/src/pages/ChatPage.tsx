@@ -160,9 +160,7 @@ export function ChatPage() {
                 <div className="text-sm font-semibold text-ink-900">{active.name}</div>
                 <div className="text-xs text-ink-500">
                   {active.topic ||
-                    (active.is_direct
-                      ? "Direct message"
-                      : `${active.members.length} member(s)`)}
+                    (active.is_direct ? "Direct message" : `${active.members.length} member(s)`)}
                 </div>
               </header>
 
@@ -223,7 +221,6 @@ export function ChatPage() {
       {creating && (
         <Drawer
           title="New space"
-          subtitle="A room for a branch, a department, or anything else."
           onClose={() => setCreating(false)}
           footer={
             <div className="flex justify-end gap-2">
@@ -292,9 +289,7 @@ function MessageRow({
         }`}
       >
         {!mine && (
-          <span className="block text-micro font-semibold text-ink-700">
-            {message.author_name}
-          </span>
+          <span className="block text-micro font-semibold text-ink-700">{message.author_name}</span>
         )}
         {message.is_deleted ? (
           <p className={`text-form italic ${mine ? "text-white/70" : "text-ink-400"}`}>
@@ -333,7 +328,10 @@ function MessageRow({
               {e}
             </button>
           ))}
-          <button onClick={onReply} className="rounded px-1 text-xs text-ink-500 hover:bg-surface-100">
+          <button
+            onClick={onReply}
+            className="rounded px-1 text-xs text-ink-500 hover:bg-surface-100"
+          >
             Reply
           </button>
           {message.is_mine && !message.is_deleted && (

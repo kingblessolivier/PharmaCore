@@ -17,14 +17,7 @@ import { isAdmin } from "../lib/roles";
 import type { Organization } from "../lib/types";
 
 type Tab =
-  | "details"
-  | "users"
-  | "catalog"
-  | "stock"
-  | "movements"
-  | "dispensing"
-  | "licences"
-  | "logs";
+  "details" | "users" | "catalog" | "stock" | "movements" | "dispensing" | "licences" | "logs";
 
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
@@ -43,7 +36,11 @@ export function OrganizationDetailPage() {
   const [editing, setEditing] = useState(false);
   const [tab, setTab] = useState<Tab>("details");
 
-  const { data: org, isLoading, isError } = useQuery({
+  const {
+    data: org,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ["organization", Number(id)],
     queryFn: () => api<Organization>(`/api/organizations/${id}/`),
   });
@@ -71,7 +68,7 @@ export function OrganizationDetailPage() {
   ];
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <button
         onClick={() => navigate("/organizations")}
         className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
@@ -116,7 +113,11 @@ export function OrganizationDetailPage() {
         <Card className="p-6">
           <h2 className="mb-4 text-sm font-semibold text-ink-900">Pharmacy details</h2>
           {editing ? (
-            <OrganizationForm org={org} onDone={() => setEditing(false)} onCancel={() => setEditing(false)} />
+            <OrganizationForm
+              org={org}
+              onDone={() => setEditing(false)}
+              onCancel={() => setEditing(false)}
+            />
           ) : (
             <div className="grid grid-cols-2 gap-5 sm:grid-cols-3">
               <Field label="Type" value={org.type} />

@@ -240,19 +240,13 @@ export function PromotionsPage() {
           </Button>
         }
       />
-      <p className="-mt-2 max-w-3xl text-sm text-ink-500">
-        Applied at the till, not just stored. A coupon that does not qualify is refused with a
-        reason the cashier can read out — "expired on 30 June", "spend 3,000 more".
-      </p>
 
       <div className="flex flex-wrap gap-6 rounded-lg border border-line bg-surface-0 px-4 py-3 text-sm">
         <span className="flex items-center gap-2 text-ink-600">
           <TicketPercent className="h-4 w-4 text-ink-400" /> {live} live at the counter today
         </span>
         {stale > 0 && (
-          <Badge tone="warning">
-            {stale} still switched on but past their end date
-          </Badge>
+          <Badge tone="warning">{stale} still switched on but past their end date</Badge>
         )}
       </div>
 
@@ -321,10 +315,7 @@ export function PromotionsPage() {
       />
 
       {open !== null && (
-        <PromotionDrawer
-          promotion={open === "new" ? null : open}
-          onClose={() => setOpen(null)}
-        />
+        <PromotionDrawer promotion={open === "new" ? null : open} onClose={() => setOpen(null)} />
       )}
     </div>
   );

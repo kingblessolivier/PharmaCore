@@ -99,7 +99,9 @@ function PrescriptionDrawer({
   return (
     <Drawer
       title={prescription ? prescription.prescription_number : "New prescription"}
-      subtitle={prescription ? `${prescription.patient_name} · ${prescription.prescriber_name}` : undefined}
+      subtitle={
+        prescription ? `${prescription.patient_name} · ${prescription.prescriber_name}` : undefined
+      }
       badge={
         prescription ? (
           <StatusChip status={isLapsed(prescription) ? "LAPSED" : prescription.status} />
@@ -147,9 +149,8 @@ function PrescriptionDrawer({
             />
           </div>
           <p className="mt-2 text-xs text-ink-500">
-            {/* The whole reason the FK exists. */}
-            A fill is used up by the till when the script is dispensed against, not by anyone
-            editing this screen.
+            {/* The whole reason the FK exists. */}A fill is used up by the till when the script is
+            dispensed against, not by anyone editing this screen.
           </p>
         </Section>
       )}
@@ -235,9 +236,7 @@ function PrescriptionDrawer({
       >
         {prescription ? (
           prescription.items.length === 0 ? (
-            <p className="text-sm text-ink-500">
-              No items recorded on this prescription.
-            </p>
+            <p className="text-sm text-ink-500">No items recorded on this prescription.</p>
           ) : (
             <ul className="divide-y divide-line text-sm">
               {prescription.items.map((item) => (
@@ -247,9 +246,7 @@ function PrescriptionDrawer({
                     {item.dosage_instructions && (
                       <div className="text-xs text-ink-500">{item.dosage_instructions}</div>
                     )}
-                    {!item.substitution_allowed && (
-                      <Badge tone="warning">No substitution</Badge>
-                    )}
+                    {!item.substitution_allowed && <Badge tone="warning">No substitution</Badge>}
                   </div>
                   <div className="shrink-0 text-right">
                     <div className="tabular-nums text-ink-900">
@@ -387,9 +384,7 @@ export function PrescriptionsPage() {
           <FileText className="h-4 w-4 text-ink-400" /> {refillable} with fills remaining
         </span>
         {lapsed > 0 && (
-          <Badge tone="warning">
-            {lapsed} past their expiry date but still marked active
-          </Badge>
+          <Badge tone="warning">{lapsed} past their expiry date but still marked active</Badge>
         )}
       </div>
 
@@ -459,9 +454,7 @@ export function PrescriptionsPage() {
             key: "status",
             header: "Status",
             value: (p) => (isLapsed(p) ? "LAPSED" : p.status),
-            render: (p) => (
-              <StatusChip status={isLapsed(p) ? "LAPSED" : p.status} />
-            ),
+            render: (p) => <StatusChip status={isLapsed(p) ? "LAPSED" : p.status} />,
           },
         ]}
       />
