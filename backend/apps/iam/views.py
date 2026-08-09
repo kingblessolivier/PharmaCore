@@ -592,8 +592,11 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = 'attachment; filename="audit-log.csv"'
         writer = csv.writer(response)
+        # "changes" is the detail of what was actually done. A trail exported
+        # for an inspector without it says an action occurred and refuses to
+        # say what it was.
         writer.writerow(
-            ["when", "user", "action", "entity_type", "entity_id", "organization", "ip"]
+            ["when", "user", "action", "entity_type", "entity_id", "organization", "ip", "changes"]
         )
         for row in self.filter_queryset(self.get_queryset())[:10000]:
             writer.writerow(
@@ -605,6 +608,10 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
                     row.entity_id,
                     row.organization_id or "",
                     row.ip_address or "",
+                    # Flattened to key=value pairs rather than raw JSON: this
+                    # column is read in a spreadsheet, where a nested brace is
+                    # noise.
+                    "; ".join(f"{k}={v}" for k, v in (row.changes or {}).items()),
                 ]
             )
         return response

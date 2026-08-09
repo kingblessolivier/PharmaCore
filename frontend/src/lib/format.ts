@@ -119,3 +119,46 @@ export function statusLabel(status: string): string {
     .toLowerCase()
     .replace(/^./, (c) => c.toUpperCase());
 }
+
+/**
+ * Turn a record key into something a person reads.
+ *
+ * Audit entries, approval payloads and error bodies are all keyed by field
+ * name, and showing `payroll_run_id` to a pharmacist inspecting a log is the
+ * same as showing nothing. Acronyms that would look wrong title-cased are
+ * kept as they are written.
+ */
+const KEEP_UPPER = new Set(["id", "tin", "vat", "ip", "po", "sku", "coa", "fda", "rra", "url"]);
+
+export function fieldLabel(key: string): string {
+  return String(key ?? "")
+    .replaceAll(/[_.]/g, " ")
+    .trim()
+    .split(/\s+/)
+    .map((word) =>
+      KEEP_UPPER.has(word.toLowerCase())
+        ? word.toUpperCase()
+        : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(),
+    )
+    .join(" ");
+}
+
+/**
+ * Render one value out of an audit payload.
+ *
+ * These arrive as whatever JSON the caller recorded — strings, numbers,
+ * booleans, nested objects — so the job is to never show `[object Object]`
+ * and never show a bare `true`.
+ */
+export function fieldValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") return amount(value, Number.isInteger(value) ? 0 : 2);
+  if (Array.isArray(value)) return value.map(fieldValue).join(", ");
+  if (typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([k, v]) => `${fieldLabel(k)}: ${fieldValue(v)}`)
+      .join(", ");
+  }
+  return String(value);
+}

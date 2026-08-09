@@ -1,3 +1,12 @@
+/* -------------------------------------------------------------------------- */
+/* Who did what — including the what.                                          */
+/*                                                                             */
+/* This log recorded a `changes` payload on every entry and showed none of it.  */
+/* So a row said "someone updated a payroll run at 14:02 from this IP" and      */
+/* stopped exactly where the question starts. An inspector asking why a batch   */
+/* was written off, or a manager asking who moved a price, got a timestamp.     */
+/* -------------------------------------------------------------------------- */
+
 import { useQuery } from "@tanstack/react-query";
 import { Download } from "lucide-react";
 import { useState } from "react";
@@ -5,8 +14,19 @@ import { api, downloadFile } from "../lib/api";
 import type { AuditLogEntry, Organization, Paginated, UserAdmin } from "../lib/types";
 import { Button, PageHeader, SelectField, TextField } from "../components/ui";
 import { DataGrid } from "../components/DataGrid";
+import { Drawer } from "../components/RecordKit";
+import { dateTime, fieldLabel, fieldValue } from "../lib/format";
+
+/** The payload as a single line, for the row. */
+function summarise(changes: AuditLogEntry["changes"]): string {
+  if (!changes || Object.keys(changes).length === 0) return "—";
+  return Object.entries(changes)
+    .map(([key, value]) => `${fieldLabel(key)} ${fieldValue(value)}`)
+    .join(" · ");
+}
 
 export function ActivityPage() {
+  const [open, setOpen] = useState<AuditLogEntry | null>(null);
   const [org, setOrg] = useState("");
   const [userId, setUserId] = useState("");
   const [action, setAction] = useState("");
@@ -105,6 +125,7 @@ export function ActivityPage() {
         initialDensity="compact"
         searchPlaceholder="Filter these results…"
         emptyMessage="No activity matches these filters."
+        onRowClick={(r) => setOpen(r)}
         columns={[
           {
             key: "created_at",
@@ -128,9 +149,66 @@ export function ActivityPage() {
             header: "Entity",
             value: (r) => `${r.entity_type}${r.entity_id ? ` #${r.entity_id}` : ""}`,
           },
-          { key: "ip_address", header: "IP", value: (r) => r.ip_address ?? "—" },
+          {
+            /* The reason the log exists. Truncated here and given in full in
+               the drawer, because most entries are one short fact and the
+               occasional one is a whole posting. */
+            key: "changes",
+            header: "What changed",
+            sortable: false,
+            value: (r) => summarise(r.changes),
+            render: (r) => (
+              <span className="block max-w-md truncate text-ink-700" title={summarise(r.changes)}>
+                {summarise(r.changes)}
+              </span>
+            ),
+          },
+          {
+            key: "ip_address",
+            header: "IP",
+            defaultHidden: true,
+            value: (r) => r.ip_address ?? "—",
+          },
         ]}
       />
+
+      {open && (
+        <Drawer
+          title={`${open.action} · ${open.entity_type}${open.entity_id ? ` #${open.entity_id}` : ""}`}
+          subtitle={`${open.user ?? "System"} · ${dateTime(open.created_at)}`}
+          onClose={() => setOpen(null)}
+        >
+          <div className="space-y-4">
+            <dl className="divide-y divide-line rounded-lg border border-line">
+              {Object.entries(open.changes ?? {}).map(([key, value]) => (
+                <div key={key} className="flex justify-between gap-4 px-3 py-2 text-sm">
+                  <dt className="text-ink-600">{fieldLabel(key)}</dt>
+                  <dd className="text-right font-medium text-ink-900">{fieldValue(value)}</dd>
+                </div>
+              ))}
+              {Object.keys(open.changes ?? {}).length === 0 && (
+                <p className="px-3 py-3 text-sm text-ink-500">
+                  This action recorded no detail beyond who did it and when.
+                </p>
+              )}
+            </dl>
+
+            <dl className="space-y-1 rounded-lg border border-line px-3 py-2 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-ink-600">Record</dt>
+                <dd className="font-mono text-xs">
+                  {open.entity_type}
+                  {open.entity_id ? ` #${open.entity_id}` : ""}
+                </dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-ink-600">From</dt>
+                <dd className="font-mono text-xs">{open.ip_address ?? "—"}</dd>
+              </div>
+            </dl>
+          </div>
+        </Drawer>
+      )}
     </div>
   );
 }

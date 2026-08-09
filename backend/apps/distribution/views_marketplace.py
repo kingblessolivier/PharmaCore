@@ -29,6 +29,7 @@ from apps.distribution.models import (
     BackorderLine,
     CustomerReturn,
     CustomerReturnLine,
+    DepotProductListing,
     SalesRepresentative,
     VanStock,
     VanStockMovement,
@@ -193,6 +194,23 @@ class AvailabilityView(APIView):
         )
 
 
+def _image_url(data: Any) -> str | None:
+    """The photo on a listing, if the caller is setting one.
+
+    Absent means "leave it as it is"; an empty string means "remove it". The
+    two have to stay distinguishable, because a depot editing a price must not
+    silently drop the picture — and because the model clears the verification
+    tick whenever the photo changes, a spurious change would quietly untrust a
+    photo somebody had already checked.
+    """
+    if "image_url" not in data:
+        return None
+    value = str(data.get("image_url") or "").strip()
+    if value and not value.startswith(("http://", "https://", "/")):
+        raise ValidationError({"image_url": "Upload an image, or give a full http(s) address."})
+    return value
+
+
 class PublishListingView(APIView):
     """Create or update what a depot offers — including withdrawing it from sale."""
 
@@ -218,13 +236,51 @@ class PublishListingView(APIView):
             price_per_unit=price,
             buffer_qty=int(request.data.get("buffer_qty", 0)),
             min_order_qty=int(request.data.get("min_order_qty", 1)),
+            order_multiple=int(request.data.get("order_multiple", 1)),
             customer_segment=request.data.get("customer_segment", "ALL"),
             is_published=bool(request.data.get("is_published", True)),
+            image_url=_image_url(request.data),
         )
         return Response(
             DepotProductListingSerializer(listing, context={"request": request}).data,
             status=201,
         )
+
+
+class VerifyListingImageView(APIView):
+    """Confirm that the photo on a listing is of the medicine it claims to be.
+
+    Separate from uploading on purpose, and the same shape as batch paperwork:
+    attaching a file is not the same as somebody checking it is the right file.
+    An unverified picture is worse than no picture — a buyer trusts it, and a
+    wrong photo on a listing sells the wrong medicine.
+
+    The model drops this the moment the photo changes, so the tick always
+    belongs to the image it was granted for and never to the row.
+    """
+
+    permission_classes = [IsAuthenticated, DistributionAccess]
+
+    def post(self, request: Request, pk: int) -> Response:
+        listing = get_object_or_404(DepotProductListing, pk=pk)
+        user = cast(User, request.user)
+        _assert_may_act_for(user, listing.depot_id)
+
+        if not listing.image_url:
+            raise ValidationError({"image_url": "There is no photo on this listing to verify."})
+
+        confirm = request.data.get("confirmed")
+        if confirm is False or str(confirm).lower() in {"false", "0", "no"}:
+            # Rejecting is a real outcome: the photo is wrong and must not be
+            # shown to buyers. Removing it is the only safe response.
+            listing.image_url = ""
+            listing.save(update_fields=["image_url", "image_verified_by", "image_verified_at"])
+            return Response({"image_is_trusted": False, "image_url": ""})
+
+        listing.image_verified_by = user
+        listing.image_verified_at = timezone.now()
+        listing.save(update_fields=["image_verified_by", "image_verified_at"])
+        return Response(DepotProductListingSerializer(listing, context={"request": request}).data)
 
 
 # ---------------------------------------------------------------------------

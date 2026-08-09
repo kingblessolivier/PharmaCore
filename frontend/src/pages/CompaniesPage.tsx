@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Network, Plus } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { api, ApiError } from "../lib/api";
+import { api, ApiError, assetUrl } from "../lib/api";
 import type { Company, Organization, Paginated } from "../lib/types";
 import { Badge, Button, PageHeader, SelectField, Spinner, TextField } from "../components/ui";
 import { DataGrid } from "../components/DataGrid";
 import { Drawer } from "../components/RecordKit";
+import { ImageUpload } from "../components/ImageUpload";
 
 function CompanyModal({ company, onClose }: { company?: Company; onClose: () => void }) {
   const qc = useQueryClient();
@@ -17,6 +18,8 @@ function CompanyModal({ company, onClose }: { company?: Company; onClose: () => 
   const [contact, setContact] = useState(company?.contact_person ?? "");
   const [phone, setPhone] = useState(company?.phone ?? "");
   const [email, setEmail] = useState(company?.email ?? "");
+  const [logo, setLogo] = useState(company?.logo_url ?? "");
+  const [currency, setCurrency] = useState(company?.currency ?? "RWF");
   const [error, setError] = useState<string | null>(null);
 
   const save = useMutation({
@@ -31,6 +34,8 @@ function CompanyModal({ company, onClose }: { company?: Company; onClose: () => 
           contact_person: contact,
           phone,
           email,
+          logo_url: logo,
+          currency,
         }),
       }),
     onSuccess: () => {
@@ -83,6 +88,20 @@ function CompanyModal({ company, onClose }: { company?: Company; onClose: () => 
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
+        <TextField
+          label="Reporting currency"
+          value={currency}
+          onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+          placeholder="RWF"
+        />
+        <ImageUpload
+          value={logo}
+          onChange={setLogo}
+          purpose="logo"
+          label="Company logo"
+          shape="wide"
+          hint="Heads every document the group issues — a branch without its own logo falls back to this one."
+        />
         {error && <p className="text-sm text-danger">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>
@@ -237,17 +256,46 @@ export function CompaniesPage() {
           {
             key: "name",
             header: "Company",
+            value: (c) => c.name,
+            /* The logo shows here because this is where somebody notices it is
+               wrong. Seeing it only inside the edit form means the first
+               place a bad logo appears is on a document sent to a supplier. */
             render: (c) => (
               <span className="flex items-center gap-2 font-medium">
-                <Building2 className="h-4 w-4 text-ink-500" /> {c.name}
+                {c.logo_url ? (
+                  <img
+                    src={assetUrl(c.logo_url)}
+                    alt=""
+                    className="h-6 w-6 shrink-0 rounded border border-line object-contain"
+                    onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+                  />
+                ) : (
+                  <Building2 className="h-4 w-4 shrink-0 text-ink-500" />
+                )}
+                {c.name}
               </span>
             ),
           },
+          { key: "legal_name", header: "Legal name", value: (c) => c.legal_name || "—" },
           { key: "tin", header: "TIN", value: (c) => c.tin || "—" },
           {
             key: "registration_number",
             header: "Reg no.",
             value: (c) => c.registration_number || "—",
+          },
+          {
+            key: "contact_person",
+            header: "Contact",
+            defaultHidden: true,
+            value: (c) => c.contact_person || "—",
+          },
+          { key: "phone", header: "Phone", defaultHidden: true, value: (c) => c.phone || "—" },
+          { key: "email", header: "Email", defaultHidden: true, value: (c) => c.email || "—" },
+          {
+            key: "currency",
+            header: "Currency",
+            defaultHidden: true,
+            value: (c) => c.currency || "—",
           },
           {
             key: "branch_count",

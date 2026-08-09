@@ -4,7 +4,8 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { Badge, Button, ConfirmModal, PageHeader, SelectField, TextField } from "../components/ui";
 import { DataGrid } from "../components/DataGrid";
-import { api, ApiError } from "../lib/api";
+import { ImageUpload } from "../components/ImageUpload";
+import { api, ApiError, assetUrl } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { isAdmin } from "../lib/roles";
 import type { Paginated, Product, TaxClass } from "../lib/types";
@@ -461,21 +462,16 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
             />
           </div>
         )}
-        <TextField
-          label="Image URL"
+        {/* A photograph is how a counter assistant confirms the box in their
+            hand is the product on the screen, so it needs to be easy enough to
+            add that somebody actually does it. */}
+        <ImageUpload
           value={form.image_url}
-          onChange={(e) => set("image_url", e.target.value)}
-          placeholder="https://…"
+          onChange={(url) => set("image_url", url)}
+          purpose="product"
+          label="Product photograph"
+          hint="Shown at the counter and on the B2B storefront."
         />
-        {form.image_url && (
-          <img
-            src={form.image_url}
-            alt="Product preview"
-            className="h-24 w-24 rounded-md border border-line object-contain"
-            onError={(e) => (e.currentTarget.style.display = "none")}
-            onLoad={(e) => (e.currentTarget.style.display = "block")}
-          />
-        )}
         <TextField
           label="Patient leaflet URL"
           value={form.leaflet_url}
@@ -565,7 +561,7 @@ export function ProductsPage() {
               <div className="flex items-center gap-3">
                 {p.image_url ? (
                   <img
-                    src={p.image_url}
+                    src={assetUrl(p.image_url)}
                     alt=""
                     className="h-9 w-9 shrink-0 rounded-md border border-line object-contain"
                     onError={(e) => (e.currentTarget.style.visibility = "hidden")}

@@ -80,7 +80,7 @@ class Company(models.Model):
     contact_person = models.CharField(max_length=150, blank=True, default="")
     phone = models.CharField(max_length=20, blank=True, default="")
     email = models.EmailField(blank=True, default="")
-    logo_url = models.URLField(blank=True, default="")
+    logo_url = models.CharField(max_length=500, blank=True, default="")
     currency = models.CharField(max_length=3, default="RWF")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -119,7 +119,7 @@ class Organization(models.Model):
     contact_person = models.CharField(max_length=150, blank=True, default="")
     phone = models.CharField(max_length=20, blank=True, default="")
     email = models.EmailField(blank=True, default="")
-    logo_url = models.URLField(blank=True, default="")
+    logo_url = models.CharField(max_length=500, blank=True, default="")
     currency = models.CharField(max_length=3, default="RWF")
     # Rwanda administrative hierarchy: Province › District › Sector › Cell › Village.
     province = models.CharField(max_length=100, blank=True, default="")

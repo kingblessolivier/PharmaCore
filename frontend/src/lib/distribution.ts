@@ -138,6 +138,14 @@ export interface DepotListing {
   is_published: boolean;
   customer_segment: string;
   min_order_qty: number;
+  order_multiple: number;
+  /** The picture buyers see — the depot's own, or the catalogue's as a fallback. */
+  image: string;
+  /** The depot's own photo only, so the seller can tell "none" from "inherited". */
+  image_url: string;
+  image_is_trusted: boolean;
+  image_verified_at: string | null;
+  image_verified_by_name: string;
   updated_at: string;
 }
 
@@ -237,8 +245,11 @@ export function publishListing(body: {
   price_per_unit: string;
   buffer_qty?: number;
   min_order_qty?: number;
+  order_multiple?: number;
   customer_segment?: string;
   is_published?: boolean;
+  /** Omit to leave the photo untouched; "" to remove it. */
+  image_url?: string;
 }) {
   return api<DepotListing>("/api/distribution/storefront/publish/", {
     method: "POST",
@@ -381,4 +392,18 @@ export async function tradingPartners(role: "seller" | "buyer"): Promise<Trading
     `/api/distribution/trading-partners/?role=${role}`,
   );
   return body.results;
+}
+
+/**
+ * Confirm — or reject — that a listing's photo is of the medicine it claims.
+ *
+ * Deliberately its own call rather than a field on the listing: uploading a
+ * picture and vouching for it are different acts by (often) different people,
+ * and the model drops the tick whenever the photo changes.
+ */
+export function verifyListingImage(id: number, confirmed: boolean) {
+  return api<DepotListing>(`/api/distribution/listings/${id}/verify-image/`, {
+    method: "POST",
+    body: JSON.stringify({ confirmed }),
+  });
 }

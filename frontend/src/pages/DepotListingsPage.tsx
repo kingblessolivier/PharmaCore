@@ -8,7 +8,7 @@
 /* -------------------------------------------------------------------------- */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, EyeOff, Plus } from "lucide-react";
+import { AlertTriangle, CheckCircle2, EyeOff, Plus, ShieldQuestion } from "lucide-react";
 import { useState } from "react";
 import { DataGrid, type Column } from "../components/DataGrid";
 import {
@@ -23,8 +23,14 @@ import {
   Select,
 } from "../components/RecordKit";
 import { Badge, Button, PageHeader } from "../components/ui";
-import { api } from "../lib/api";
-import { publishListing, storefront, type DepotListing } from "../lib/distribution";
+import { api, assetUrl } from "../lib/api";
+import {
+  publishListing,
+  storefront,
+  verifyListingImage,
+  type DepotListing,
+} from "../lib/distribution";
+import { ImageUpload } from "../components/ImageUpload";
 import { money } from "../lib/format";
 import { useDefaultOrg } from "../lib/recordData";
 import type { Paginated } from "../lib/types";
@@ -36,8 +42,10 @@ interface Draft {
   buffer_qty: string;
   price_per_unit: string;
   min_order_qty: string;
+  order_multiple: string;
   customer_segment: string;
   is_published: boolean;
+  image_url: string;
 }
 
 const BLANK: Draft = {
@@ -46,8 +54,10 @@ const BLANK: Draft = {
   buffer_qty: "0",
   price_per_unit: "0",
   min_order_qty: "1",
+  order_multiple: "1",
   customer_segment: "ALL",
   is_published: true,
+  image_url: "",
 };
 
 export function DepotListingsPage() {
@@ -78,8 +88,10 @@ export function DepotListingsPage() {
         buffer_qty: Number(d.buffer_qty),
         price_per_unit: d.price_per_unit,
         min_order_qty: Number(d.min_order_qty),
+        order_multiple: Number(d.order_multiple),
         customer_segment: d.customer_segment,
         is_published: d.is_published,
+        image_url: d.image_url,
       }),
     onSuccess: () => {
       setDraft(null);
@@ -88,9 +100,87 @@ export function DepotListingsPage() {
     },
   });
 
+  const verify = useMutation({
+    mutationFn: ({ id, confirmed }: { id: number; confirmed: boolean }) =>
+      verifyListingImage(id, confirmed),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["depot-listings"] });
+      void qc.invalidateQueries({ queryKey: ["storefront-depot"] });
+    },
+  });
+
   const coverage = shop.data?.coverage;
 
   const columns: Column<DepotListing>[] = [
+    {
+      key: "image",
+      header: "Photo",
+      sortable: false,
+      /* The photo and its trust state travel together, because a picture that
+         has not been checked must never look like one that has. Rejecting is
+         offered beside confirming: a wrong photo sells the wrong medicine, so
+         "this is not it" has to be as easy as "yes". */
+      render: (r) => (
+        <div className="flex items-center gap-2">
+          {r.image ? (
+            <img
+              src={assetUrl(r.image)}
+              alt=""
+              className="h-9 w-9 shrink-0 rounded-md border border-line object-contain"
+              onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+            />
+          ) : (
+            <div className="h-9 w-9 shrink-0 rounded-md border border-dashed border-line" />
+          )}
+          {r.image_url ? (
+            r.image_is_trusted ? (
+              <span
+                className="inline-flex items-center gap-1 text-xs text-success-700"
+                title={
+                  r.image_verified_by_name
+                    ? `Checked by ${r.image_verified_by_name}`
+                    : "Checked"
+                }
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+                Verified
+              </span>
+            ) : (
+              <div className="flex flex-col items-start gap-0.5">
+                <span className="inline-flex items-center gap-1 text-xs text-warning-700">
+                  <ShieldQuestion className="h-3.5 w-3.5" aria-hidden />
+                  Unchecked
+                </span>
+                <span className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      verify.mutate({ id: r.id, confirmed: true });
+                    }}
+                    className="rounded border border-line px-1.5 py-0.5 text-[11px] text-success-700 hover:bg-success-50"
+                  >
+                    It matches
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      verify.mutate({ id: r.id, confirmed: false });
+                    }}
+                    className="rounded border border-line px-1.5 py-0.5 text-[11px] text-danger-700 hover:bg-danger-50"
+                  >
+                    Wrong
+                  </button>
+                </span>
+              </div>
+            )
+          ) : (
+            <span className="text-xs text-ink-500">{r.image ? "Catalogue" : "None"}</span>
+          )}
+        </div>
+      ),
+    },
     {
       key: "product_name",
       header: "Product",
@@ -238,8 +328,10 @@ export function DepotListingsPage() {
             buffer_qty: String(r.buffer_qty),
             price_per_unit: r.price_per_unit,
             min_order_qty: String(r.min_order_qty),
+            order_multiple: String(r.order_multiple ?? 1),
             customer_segment: r.customer_segment || "ALL",
             is_published: r.is_published,
+            image_url: r.image_url ?? "",
           })
         }
       />
@@ -316,7 +408,42 @@ export function DepotListingsPage() {
                       onChange={(e) => setDraft({ ...draft, min_order_qty: e.target.value })}
                     />
                   </Field>
+                  <Field
+                    label="Order multiple"
+                    hint="Orders round to whole multiples of this. Set it to the case size if you never break a case."
+                  >
+                    <Input
+                      type="number"
+                      min={1}
+                      value={draft.order_multiple}
+                      onChange={(e) => setDraft({ ...draft, order_multiple: e.target.value })}
+                    />
+                  </Field>
                 </Grid>
+              </Section>
+
+              <Section
+                title="Photograph"
+                hint="A buyer scrolling a list of white boxes has nothing else to go on."
+              >
+                <ImageUpload
+                  value={draft.image_url}
+                  onChange={(url) => setDraft({ ...draft, image_url: url })}
+                  purpose="listing"
+                  label="Your photo of this stock"
+                  hint="Leave empty to show the catalogue picture instead."
+                />
+                {/* Verification is deliberately not a checkbox in this form.
+                    Uploading a photo and vouching for it are different acts,
+                    and the tick is dropped automatically whenever the photo
+                    changes — so it can only be given after the change is
+                    saved, on the row itself. */}
+                {draft.id != null && draft.image_url !== "" && (
+                  <p className="mt-2 text-xs text-ink-500">
+                    Once saved, this photo needs checking against the medicine before buyers are
+                    shown it as verified. Use the photo column on the list.
+                  </p>
+                )}
               </Section>
 
               <Section title="Who may buy it">

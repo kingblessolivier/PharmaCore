@@ -129,7 +129,7 @@ class Product(models.Model):
     reorder_level = models.PositiveIntegerField(default=0)
     reorder_quantity = models.PositiveIntegerField(default=0)  # how much to reorder
     rra_item_code = models.CharField(max_length=50, blank=True, default="")  # RRA EBM item code
-    image_url = models.URLField(blank=True, default="")
+    image_url = models.CharField(max_length=500, blank=True, default="")
     leaflet_url = models.URLField(blank=True, default="")  # patient information leaflet
     # Cold-chain range (used when storage_condition is COLD_CHAIN / FROZEN)
     min_temp_c = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)

@@ -30,6 +30,7 @@ from apps.distribution.views_marketplace import (
     VanManifestView,
     VanMovementViewSet,
     VanStockViewSet,
+    VerifyListingImageView,
 )
 
 router = DefaultRouter()
@@ -54,6 +55,11 @@ urlpatterns = [
     path("trading-partners/", TradingPartnersView.as_view(), name="trading-partners"),
     path("storefront/availability/", AvailabilityView.as_view(), name="availability"),
     path("storefront/publish/", PublishListingView.as_view(), name="publish-listing"),
+    path(
+        "listings/<int:pk>/verify-image/",
+        VerifyListingImageView.as_view(),
+        name="verify-listing-image",
+    ),
     # Demand-driven sourcing
     path("demand/", DemandBoardView.as_view(), name="demand-board"),
     path("demand/source/", SourceDemandView.as_view(), name="source-demand"),

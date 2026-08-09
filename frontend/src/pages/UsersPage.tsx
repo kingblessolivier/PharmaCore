@@ -4,7 +4,9 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { shortDate } from "../lib/format";
 import type {
+  Department,
   Organization,
   Paginated,
   Role,
@@ -175,6 +177,7 @@ function UserModal({
   orgs,
   roles,
   people,
+  departments,
   onClose,
 }: {
   user?: UserAdmin;
@@ -182,6 +185,7 @@ function UserModal({
   roles: Role[];
   /** Everyone this admin can see — the candidates for a reporting line. */
   people: UserAdmin[];
+  departments: Department[];
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -192,6 +196,10 @@ function UserModal({
   const [firstName, setFirstName] = useState(user?.first_name ?? "");
   const [lastName, setLastName] = useState(user?.last_name ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
+  const [email, setEmail] = useState(user?.email ?? "");
+  const [payrollEmail, setPayrollEmail] = useState(user?.payroll_email ?? "");
+  const [tin, setTin] = useState(user?.tin ?? "");
+  const [department, setDepartment] = useState(user?.department ? String(user.department) : "");
   const [organization, setOrganization] = useState(
     user?.organization ? String(user.organization) : "",
   );
@@ -208,6 +216,10 @@ function UserModal({
         first_name: firstName,
         last_name: lastName,
         phone,
+        email,
+        payroll_email: payrollEmail,
+        tin,
+        department: department ? Number(department) : null,
         organization: organization ? Number(organization) : null,
         roles: selectedRoles,
         /* The two inputs the authority model runs on. Without a supervisor an
@@ -278,6 +290,44 @@ function UserModal({
         </div>
         <div className="grid grid-cols-2 gap-3">
           <TextField label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <TextField
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {/* Payslips are sent by email. With no field to set one, the address
+              had to be put in by hand in the database or the payslip went
+              nowhere. */}
+          <TextField
+            label="Payroll email (optional)"
+            type="email"
+            value={payrollEmail}
+            onChange={(e) => setPayrollEmail(e.target.value)}
+            placeholder="Where payslips go, if not the login email"
+          />
+          <TextField
+            label="TIN (RRA)"
+            value={tin}
+            onChange={(e) => setTin(e.target.value)}
+            placeholder="Tax identification number"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <SelectField
+            label="Department"
+            value={department}
+            onChange={(e) => setDepartment(e.target.value)}
+          >
+            <option value="">— none —</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </SelectField>
           <SelectField
             label="Organization"
             value={organization}
@@ -473,12 +523,18 @@ export function UsersPage() {
     queryFn: () => api<Paginated<UserAdmin>>("/api/users/"),
   });
   const roles = useQuery({ queryKey: ["roles"], queryFn: () => api<Role[]>("/api/roles/") });
+  const departments = useQuery({
+    queryKey: ["departments"],
+    queryFn: () => api<Paginated<Department>>("/api/departments/"),
+  });
   const orgs = useQuery({
     queryKey: ["organizations"],
     queryFn: () => api<Paginated<Organization>>("/api/organizations/"),
   });
   const orgName = (id: number | null) =>
     id ? (orgs.data?.results.find((o) => o.id === id)?.name ?? `#${id}`) : "—";
+  const deptName = (id: number | null) =>
+    id ? (departments.data?.results.find((d) => d.id === id)?.name ?? `#${id}`) : "—";
 
   const toggleActive = useMutation({
     mutationFn: (u: UserAdmin) =>
@@ -535,7 +591,31 @@ export function UsersPage() {
             header: "Name",
             value: (u) => [u.first_name, u.last_name].filter(Boolean).join(" ") || "—",
           },
+          { key: "email", header: "Email", value: (u) => u.email || "—" },
           { key: "organization", header: "Organization", value: (u) => orgName(u.organization) },
+          {
+            key: "department",
+            header: "Department",
+            defaultHidden: true,
+            value: (u) => deptName(u.department),
+          },
+          {
+            key: "payroll_email",
+            header: "Payroll email",
+            defaultHidden: true,
+            value: (u) => u.payroll_email || "—",
+          },
+          { key: "tin", header: "TIN", defaultHidden: true, value: (u) => u.tin || "—" },
+          { key: "phone", header: "Phone", defaultHidden: true, value: (u) => u.phone || "—" },
+          {
+            /* When somebody was given access. The first question after "who
+               is this account" is usually "how long has it existed". */
+            key: "date_joined",
+            header: "Joined",
+            defaultHidden: true,
+            value: (u) => u.date_joined,
+            render: (u) => shortDate(u.date_joined),
+          },
           {
             key: "roles",
             header: "Roles",
@@ -632,6 +712,7 @@ export function UsersPage() {
           orgs={orgs.data.results}
           roles={roles.data}
           people={users.data?.results ?? []}
+          departments={departments.data?.results ?? []}
           onClose={() => setAdding(false)}
         />
       )}
@@ -641,6 +722,7 @@ export function UsersPage() {
           orgs={orgs.data.results}
           roles={roles.data}
           people={users.data?.results ?? []}
+          departments={departments.data?.results ?? []}
           onClose={() => setEditing(null)}
         />
       )}

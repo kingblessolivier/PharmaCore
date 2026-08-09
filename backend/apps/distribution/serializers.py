@@ -293,6 +293,13 @@ class DepotProductListingSerializer(QuantityAwareModelSerializer):
 
     image = serializers.SerializerMethodField()
     image_is_trusted = serializers.BooleanField(read_only=True)
+    # ``image`` above falls back to the catalogue picture, which is right for a
+    # buyer and wrong for the depot managing its own listing — it would show a
+    # photo they cannot replace and did not upload. So the depot's own field is
+    # served separately, alongside who vouched for it.
+    image_verified_by_name = serializers.CharField(
+        source="image_verified_by.get_full_name", read_only=True, default=""
+    )
     pack_units = serializers.SerializerMethodField()
 
     def get_image(self, obj: DepotProductListing) -> str:
@@ -337,6 +344,14 @@ class DepotProductListingSerializer(QuantityAwareModelSerializer):
             # the depot has not photographed its own stock.
             "image",
             "image_is_trusted",
+            # The depot's own photo, unfallen-back, plus who vouched for it —
+            # what the seller needs to manage the picture rather than just see
+            # one. Without these the listing screen cannot tell "no photo" from
+            # "showing the catalogue's photo", and cannot show whether the tick
+            # has been given.
+            "image_url",
+            "image_verified_at",
+            "image_verified_by_name",
             # How it is packed, so a pharmacy orders a case knowing it holds 24
             # boxes of 100 rather than guessing what "1" means.
             "pack_units",

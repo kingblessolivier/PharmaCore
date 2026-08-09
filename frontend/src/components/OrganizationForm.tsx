@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { api, ApiError } from "../lib/api";
 import type { Organization, OrgType } from "../lib/types";
+import { ImageUpload } from "./ImageUpload";
 import { RwandaLocation } from "./RwandaLocation";
 import { Button, SelectField, TextArea, TextField } from "./ui";
 
@@ -187,11 +188,16 @@ export function OrganizationForm({
           onChange={(e) => set("currency", e.target.value)}
         />
       </div>
-      <TextField
-        label="Logo URL"
+      {/* This is the mark that heads every purchase order, invoice and
+          delivery note this branch issues. Asking for a URL meant it stayed
+          empty and the documents went out unbranded. */}
+      <ImageUpload
         value={f.logo_url}
-        onChange={(e) => set("logo_url", e.target.value)}
-        placeholder="https://…"
+        onChange={(url) => set("logo_url", url)}
+        purpose="logo"
+        label="Branch logo"
+        shape="wide"
+        hint="Appears on every document this branch issues."
       />
 
       <SectionLabel>Location</SectionLabel>

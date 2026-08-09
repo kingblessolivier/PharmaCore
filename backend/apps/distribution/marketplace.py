@@ -457,8 +457,10 @@ def publish(
     price_per_unit: Decimal,
     buffer_qty: int = 0,
     min_order_qty: int = 1,
+    order_multiple: int = 1,
     customer_segment: str = "ALL",
     is_published: bool = True,
+    image_url: str | None = None,
 ) -> DepotProductListing:
     """Create or update a storefront listing.
 
@@ -475,8 +477,13 @@ def publish(
             "buffer_qty": buffer_qty,
             "price_per_unit": price_per_unit,
             "min_order_qty": max(1, min_order_qty),
+            "order_multiple": max(1, order_multiple),
             "customer_segment": customer_segment or "ALL",
             "is_published": is_published,
+            # None means "leave the photo alone" — a depot editing its price
+            # should not silently drop the picture, nor reset the verification
+            # that the model clears whenever the photo genuinely changes.
+            **({} if image_url is None else {"image_url": image_url}),
         },
     )
     return listing

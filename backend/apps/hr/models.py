@@ -67,7 +67,8 @@ class Employee(models.Model):
             "Date of birth — drives annual-leave entitlement " "(Law 66/2018 §55: 25 days if ≥55y)."
         ),
     )
-    photo = models.URLField(
+    photo = models.CharField(
+        max_length=500,
         blank=True,
         default="",
         help_text="URL of the employee's profile photo (badge).",
