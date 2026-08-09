@@ -133,6 +133,8 @@ class PharmacyProduct(models.Model):
     # For a depot: the price it charges retailers (pulled into their purchase orders).
     wholesale_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     min_stock_level = models.PositiveIntegerField(default=0)
+    #: The pharmacy's own photograph, falling back to the catalogue's.
+    image_url = models.CharField(max_length=500, blank=True, default="")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
