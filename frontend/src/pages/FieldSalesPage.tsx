@@ -26,9 +26,28 @@ import {
 import { Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
 import { repPerformance, vanAction, vanManifest } from "../lib/distribution";
-import { money, pct } from "../lib/format";
+import { money, pct, shortDate } from "../lib/format";
 import { useDefaultOrg } from "../lib/recordData";
 import type { Paginated } from "../lib/types";
+
+interface JourneyPlan {
+  id: number;
+  rep_username: string;
+  customer_name: string;
+  planned_date: string;
+  is_completed: boolean;
+}
+
+interface VisitLog {
+  id: number;
+  rep_username: string;
+  customer_name: string;
+  visit_type: string;
+  visited_at: string;
+  notes: string;
+  order: number | null;
+  sales_amount: string | null;
+}
 
 interface Rep {
   id: number;
@@ -53,6 +72,18 @@ export function FieldSalesPage() {
     queryKey: ["sales-reps", orgId],
     enabled: orgId != null,
     queryFn: () => api<Paginated<Rep>>(`/api/distribution/sales-reps/?page_size=100`),
+  });
+
+  const journeys = useQuery({
+    queryKey: ["journey-plans", orgId],
+    enabled: orgId != null,
+    queryFn: () => api<Paginated<JourneyPlan>>("/api/distribution/journey-plans/?page_size=100"),
+  });
+
+  const visits = useQuery({
+    queryKey: ["visit-logs", orgId],
+    enabled: orgId != null,
+    queryFn: () => api<Paginated<VisitLog>>("/api/distribution/visit-logs/?page_size=100"),
   });
 
   const performance = useQuery({
@@ -188,6 +219,75 @@ export function FieldSalesPage() {
         Sold and commission count orders that were not cancelled, over the current month. Conversion
         is the share of visits that produced an order.
       </p>
+
+      {/* The round and what came of it. Both were modelled and routed and had
+          no screen, so a rep's day was planned somewhere else and the visit
+          that produced no order — the one worth asking about — was invisible. */}
+      <section>
+        <h2 className="mb-2 text-base font-semibold tracking-tight text-ink-900">
+          Today&apos;s round
+        </h2>
+        <DataGrid
+          rows={journeys.data?.results ?? []}
+          columns={[
+            { key: "planned_date", header: "Planned", value: (r) => shortDate(r.planned_date) },
+            { key: "rep", header: "Rep", value: (r) => r.rep_username },
+            { key: "customer", header: "Customer", value: (r) => r.customer_name },
+            {
+              key: "done",
+              header: "Called on",
+              value: (r) => (r.is_completed ? "Yes" : "Not yet"),
+              render: (r) =>
+                r.is_completed ? (
+                  <span className="text-success-700">Yes</span>
+                ) : (
+                  <span className="text-ink-500">Not yet</span>
+                ),
+            },
+          ]}
+          getRowId={(r) => r.id}
+          loading={journeys.isLoading}
+          storageKey="journey-plans"
+          exportName="journey-plans"
+          emptyMessage="No calls planned."
+        />
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-base font-semibold tracking-tight text-ink-900">
+          Visits and what came of them
+        </h2>
+        <DataGrid
+          rows={visits.data?.results ?? []}
+          columns={[
+            { key: "visited_at", header: "When", value: (r) => shortDate(r.visited_at) },
+            { key: "rep", header: "Rep", value: (r) => r.rep_username },
+            { key: "customer", header: "Customer", value: (r) => r.customer_name },
+            { key: "kind", header: "Kind", value: (r) => r.visit_type },
+            {
+              key: "outcome",
+              header: "Outcome",
+              numeric: true,
+              align: "right",
+              value: (r) => Number(r.sales_amount ?? 0),
+              // A visit with no order is the one worth asking about, so it is
+              // named rather than shown as a blank cell.
+              render: (r) =>
+                r.order ? (
+                  <span className="tabular-nums">{money(Number(r.sales_amount ?? 0))}</span>
+                ) : (
+                  <span className="text-ink-500">no order</span>
+                ),
+            },
+            { key: "notes", header: "Notes", value: (r) => r.notes || "—" },
+          ]}
+          getRowId={(r) => r.id}
+          loading={visits.isLoading}
+          storageKey="visit-logs"
+          exportName="visit-logs"
+          emptyMessage="No visits logged."
+        />
+      </section>
 
       {vanRep && (
         <Drawer
