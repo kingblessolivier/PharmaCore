@@ -649,3 +649,128 @@ class TestTotalsBlocksUseTheFullPageWidth:
         assert not tokens - set(hits), f"missing: {sorted(tokens - set(hits))}"
         assert hits["dmkn"] < width * 0.2
         assert hits["7,500.00"] > width * 0.65
+
+
+class TestAnOrdinaryDocumentFitsOnOneSheet:
+    """A one-line order should not run to two pages.
+
+    It did, and the second page held nothing but the footer. The footer was in
+    the flow, cost about 70pt, and this renderer keeps its table together — so
+    a document that nearly filled the page pushed the whole block onto a fresh
+    sheet. Whether that happened depended on how long the pharmacy's address
+    was, which is not a thing a page count should turn on.
+    """
+
+    @staticmethod
+    def _pages(template: str, context: dict) -> tuple[int, str]:
+        import io
+
+        from pypdf import PdfReader
+
+        reader = PdfReader(io.BytesIO(render_pdf(render_to_string(template, context))))
+        return len(reader.pages), reader.pages[0].extract_text() or ""
+
+    @pytest.fixture
+    def wordy_issuer(self) -> Organization:
+        """An issuer with every optional field filled — the worst case."""
+        return Organization.objects.create(
+            name="Walkthrough Pharmacy",
+            type="RETAIL",
+            tin="400500600",
+            rwanda_fda_license_no="1298",
+            address_line="KG 11 Ave, House 42",
+            district="GASABO",
+            province="KIGALI",
+            phone="0788000111",
+            email="pharmacy@walkthrough.example.rw",
+        )
+
+    def test_a_single_line_order_is_one_page(self, wordy_issuer: Organization) -> None:
+        from apps.documents.renderer import qr_data_uri
+
+        pages, first = self._pages(
+            "documents/purchase_order.html",
+            {
+                "organization": wordy_issuer,
+                "doc_number": "PO-2026-00003",
+                "doc_type_label": "Purchase Order",
+                "generated_at": timezone.now(),
+                "po_number": "PO-00011",
+                "buyer_name": wordy_issuer.name,
+                "seller_name": "Kigali Central Depot",
+                "seller_address": "Nyarugenge",
+                "seller_tin": "100200300",
+                "deliver_to_address": "GASABO",
+                "notes": "",
+                "currency": "RWF",
+                "qr": qr_data_uri("https://example/verify/1"),
+                "subtotal": "7,500.00",
+                "tax_total": "0.00",
+                "freight_amount": "0.00",
+                "other_charges": "0.00",
+                "discount_amount": "0.00",
+                "total": "7,500.00",
+                "amount_in_words": "Seven thousand five hundred francs only",
+                "lines": [
+                    {
+                        "item_number": "PARA500",
+                        "name": "Paracetamol 500mg",
+                        "qty": "5",
+                        "unit_label": "Tablet",
+                        "price": "1,500.00",
+                        "total": "7,500.00",
+                    }
+                ],
+            },
+        )
+        assert pages == 1, "a one-line order spilling onto a second sheet is the bug"
+        assert "Produced with PharmaCore" in first, "the footer belongs on the page it ends on"
+
+    def test_the_footer_repeats_rather_than_taking_flow_height(self) -> None:
+        markup = (TEMPLATE_DIR / "base.html").read_text(encoding="utf-8")
+        assert "-pdf-frame-content: page-footer" in markup
+        assert (
+            'class="footer"' not in markup
+        ), "an in-flow footer block is what pushed documents onto a second sheet"
+
+
+class TestEmptyCommentsDoNotCollapseTheBlock:
+    """Most orders have no comments, and that emptied the whole block.
+
+    The renderer sizes a column from its *cells*, so widths declared only on
+    the header row are advisory: an empty comments cell below them collapsed
+    column one, dragged the labels left, and wrapped "Comments or special
+    instructions" over four lines in a strip down the page.
+    """
+
+    @pytest.mark.parametrize("notes", ["", "Deliver before noon."])
+    def test_the_block_holds_its_shape_with_or_without_comments(
+        self, issuer: Organization, notes: str
+    ) -> None:
+        hits, width = TestTotalsBlocksUseTheFullPageWidth._positions(
+            "documents/purchase_order.html",
+            {
+                "organization": issuer,
+                "doc_number": "PO-1",
+                "doc_type_label": "Purchase Order",
+                "generated_at": timezone.now(),
+                "po_number": "PO-00011",
+                "buyer_name": issuer.name,
+                "seller_name": "A Depot",
+                "notes": notes,
+                "currency": "RWF",
+                "subtotal": "7,500.00",
+                "tax_total": "0.00",
+                "freight_amount": "0.00",
+                "other_charges": "0.00",
+                "discount_amount": "0.00",
+                "total": "7,500.00",
+                "lines": [],
+            },
+            {"Subtotal", "7,500.00", "Comments or special instructions"},
+        )
+        assert "Comments or special instructions" in hits, "the header must not wrap"
+        assert (
+            hits["Subtotal"] > width * 0.5
+        ), f"labels collapsed left with notes={notes!r} — the column lost its width"
+        assert hits["7,500.00"] > width * 0.75

@@ -143,41 +143,48 @@ Two constraints from the renderer shape the markup:
     <th style="width:18%">&nbsp;</th>
   </tr>
   {% comment %}
-  Each figure falls back to a dash rather than an empty string. An empty cell
-  lets the renderer size the column from nothing and collapse it to a sliver —
-  which is how a caller omitting one key silently wrecked the whole block.
+  Two defences, because each one alone was not enough.
+
+  Every cell states its width, not just the header. This renderer sizes a
+  column from the cells, so widths declared only on <th> are advisory and an
+  empty <td> below them still collapses the column.
+
+  And each cell falls back to a non-breaking space or a dash rather than an
+  empty string: an order with no comments — which is most of them — otherwise
+  shrank the whole block to a strip down the left of the page and wrapped
+  "Comments or special instructions" over four lines.
   {% endcomment %}
   <tr>
-    <td class="contfirst">{{ notes }}</td>
-    <td class="right">Subtotal</td>
-    <td class="right">{% firstof subtotal "&mdash;" %}</td>
+    <td class="contfirst" style="width:58%">{% firstof notes "&nbsp;" %}</td>
+    <td class="right" style="width:24%">Subtotal</td>
+    <td class="right" style="width:18%">{% firstof subtotal "&mdash;" %}</td>
   </tr>
   {% if discount_amount and discount_amount != "0.00" %}
   <tr>
-    <td class="cont">&nbsp;</td>
-    <td class="right">Discount</td>
-    <td class="right">&minus;{{ discount_amount }}</td>
+    <td class="cont" style="width:58%">&nbsp;</td>
+    <td class="right" style="width:24%">Discount</td>
+    <td class="right" style="width:18%">&minus;{{ discount_amount }}</td>
   </tr>
   {% endif %}
   <tr>
-    <td class="cont">&nbsp;</td>
-    <td class="right">Tax</td>
-    <td class="right">{% firstof tax_total "&mdash;" %}</td>
+    <td class="cont" style="width:58%">&nbsp;</td>
+    <td class="right" style="width:24%">Tax</td>
+    <td class="right" style="width:18%">{% firstof tax_total "&mdash;" %}</td>
   </tr>
   <tr>
-    <td class="cont">&nbsp;</td>
-    <td class="right">Shipping</td>
-    <td class="right">{% firstof freight_amount "&mdash;" %}</td>
+    <td class="cont" style="width:58%">&nbsp;</td>
+    <td class="right" style="width:24%">Shipping</td>
+    <td class="right" style="width:18%">{% firstof freight_amount "&mdash;" %}</td>
   </tr>
   <tr>
-    <td class="cont">&nbsp;</td>
-    <td class="right">Other</td>
-    <td class="right">{% firstof other_charges "&mdash;" %}</td>
+    <td class="cont" style="width:58%">&nbsp;</td>
+    <td class="right" style="width:24%">Other</td>
+    <td class="right" style="width:18%">{% firstof other_charges "&mdash;" %}</td>
   </tr>
   <tr>
-    <td class="contlast">&nbsp;</td>
-    <td class="right grandcell">Total ({{ currency|default:"RWF" }})</td>
-    <td class="right grandcell">{% firstof total "&mdash;" %}</td>
+    <td class="contlast" style="width:58%">&nbsp;</td>
+    <td class="right grandcell" style="width:24%">Total ({{ currency|default:"RWF" }})</td>
+    <td class="right grandcell" style="width:18%">{% firstof total "&mdash;" %}</td>
   </tr>
 </table>
 

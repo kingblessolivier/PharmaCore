@@ -54,9 +54,14 @@ def generate_po_document(*, order: StockOrder, user: User | None) -> Document:
     # whatever the carton holds.
     lines = [
         {
+            # A code the depot can quote back. Without one every line on a
+            # wholesale order printed "—" in the Item # column.
+            "item_number": (i.product.rra_item_code or i.product.gtin or f"P{i.product_id}"),
             "name": _product_label(i.product),
             "qty": i.quantity_ordered,
-            "unit_label": i.unit_label,
+            # A line ordered in base units still has a unit — it is the base
+            # one. Printing "—" told the depot nothing about what to pick.
+            "unit_label": i.unit_label or _base_unit_label(i.product),
             "base_quantity": i.quantity_base or i.quantity_ordered,
             "base_unit": _base_unit_label(i.product),
             "price": invoicing.money(i.price_per_ordered_unit),
@@ -111,7 +116,13 @@ def _generate_delivery_note(order: StockOrder, shipment: Shipment, user: User | 
             "batch": si.batch_number,
             "expiry": si.expiry_date,
             "qty": si.quantity,
-            "unit_label": si.order_item.unit_label if si.order_item_id else "",
+            # A line shipped in base units still has a unit — the base one.
+            # Printing "—" on a delivery note tells the driver and the
+            # storekeeper nothing about what they are counting.
+            "unit_label": (
+                (si.order_item.unit_label if si.order_item_id else "")
+                or _base_unit_label(si.product)
+            ),
             "base_quantity": si.quantity,
             "base_unit": _base_unit_label(si.product),
         }

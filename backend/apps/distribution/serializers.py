@@ -206,31 +206,58 @@ class StockOrderSerializer(QuantityAwareModelSerializer):
     # cannot decide what to import.
     allow_backorder = serializers.BooleanField(write_only=True, required=False, default=True)
     backorders = serializers.SerializerMethodField()
-    #: The order document the depot was actually sent. It has been generated,
-    #: numbered, hashed and stored on approval all along, and no screen could
-    #: reach it — the same gap purchase orders had before #121.
+    #: The order document the depot was sent, and everything else this order
+    #: has produced.
+    #:
+    #: An order raises three documents over its life — the order itself, the
+    #: delivery note that travels with the goods, and the tax invoice — and all
+    #: three are filed under the same reference. Taking "the latest" therefore
+    #: gave whichever had been generated most recently: once a shipment went
+    #: out, the order screen quietly began linking to the delivery note instead
+    #: of the order, and neither the note nor the invoice could be reached.
     document = serializers.SerializerMethodField()
+    documents = serializers.SerializerMethodField()
 
-    def get_document(self, obj: StockOrder) -> dict[str, Any] | None:
-        from apps.documents.models import Document
-
-        record = (
-            Document.objects.filter(reference_type="stock_order", reference_id=str(obj.pk))
-            .order_by("-generated_at")
-            .first()
-        )
-        if record is None:
-            return None
+    @staticmethod
+    def _describe(record: Any) -> dict[str, Any]:
         return {
+            "doc_type": record.doc_type,
+            "doc_type_label": record.get_doc_type_display(),
             "doc_number": record.doc_number,
             "generated_at": record.generated_at,
             # The authenticated endpoint, never `record.file.url`. The raw
-            # media path is served by the web server with no login at all, so
-            # linking to it would hand a purchase order — supplier, prices,
-            # quantities, the pharmacy's TIN — to anyone who has the URL. The
-            # viewset behind this scopes by organization *and* document type.
+            # media path is served with no login at all, so linking to it
+            # would hand the order — supplier, prices, quantities, the
+            # pharmacy's TIN — to anyone holding the URL.
             "download_url": f"/api/documents/{record.pk}/download/",
         }
+
+    def _records(self, obj: StockOrder) -> list[Any]:
+        from apps.documents.models import Document
+
+        return list(
+            Document.objects.filter(
+                reference_type="stock_order", reference_id=str(obj.pk)
+            ).order_by("doc_type", "-generated_at")
+        )
+
+    def get_document(self, obj: StockOrder) -> dict[str, Any] | None:
+        """The order itself — chosen by type, not by whichever came last."""
+        from apps.documents.models import DocType
+
+        record = next((r for r in self._records(obj) if r.doc_type == DocType.PURCHASE_ORDER), None)
+        return self._describe(record) if record else None
+
+    def get_documents(self, obj: StockOrder) -> list[dict[str, Any]]:
+        """Every document this order has produced, so none is unreachable."""
+        seen: set[str] = set()
+        out: list[dict[str, Any]] = []
+        for record in self._records(obj):
+            if record.doc_type in seen:
+                continue
+            seen.add(record.doc_type)
+            out.append(self._describe(record))
+        return out
 
     class Meta:
         model = StockOrder
@@ -256,12 +283,14 @@ class StockOrderSerializer(QuantityAwareModelSerializer):
             "allow_backorder",
             "backorders",
             "document",
+            "documents",
             "created_at",
         ]
         read_only_fields = [
             "id",
             "order_number",
             "document",
+            "documents",
             "status",
             "total_amount",
             "payment_status",

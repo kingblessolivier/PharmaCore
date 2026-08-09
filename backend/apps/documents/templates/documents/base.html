@@ -31,12 +31,12 @@ footer instead, where it belongs.
      instead — which is how printed commercial forms have always done it. */
   @page {
     size: A4 portrait;
-    margin: 1.3cm 1.3cm 2.2cm 1.3cm;
+    margin: 1.3cm 1.3cm 2.9cm 1.3cm;
     /* A repeating frame, so the issuer and the page count appear on every
        sheet. A reader has to be able to see that page 4 of 10 is missing. */
     @frame page_footer {
       -pdf-frame-content: page-footer;
-      bottom: 0.9cm; left: 1.3cm; width: 18.4cm; height: 1cm;
+      bottom: 0.6cm; left: 1.3cm; width: 18.4cm; height: 2.1cm;
     }
   }
   body { font-family: Helvetica, Arial, sans-serif; font-size: 9pt; color: #000; }
@@ -125,15 +125,32 @@ footer instead, where it belongs.
 </head>
 <body>
 
+  {% comment %}
+  The footer lives in a repeating frame, not in the flow.
+
+  In the flow it cost about 70pt and this renderer keeps its table together,
+  so a document that nearly filled the page pushed the whole block — contact,
+  issuer, QR — onto a second sheet by itself. Whether that happened depended on
+  how long the pharmacy's address happened to be, which is not a thing a
+  document's page count should turn on.
+
+  In a frame it takes no flow height at all and appears at the bottom of every
+  sheet, which is what a printed commercial form does anyway.
+  {% endcomment %}
   <div id="page-footer">
     <table class="page-footer">
       <tr>
-        <td style="width:45%; border:none; padding:0;">{{ organization.name }}</td>
-        <td style="width:35%; border:none; padding:0;" class="center">
-          {% if organization.address_line %}{{ organization.address_line }}{% endif %}{% if organization.district %}{% if organization.address_line %}, {% endif %}{{ organization.district }}{% endif %}
+        <td style="width:82%; border:none; padding:0;">
+          {% block footer_note %}
+          Issued by <b>{{ organization.name }}</b>{% if organization.tin %}, TIN {{ organization.tin }}{% endif %}
+          &middot; reference {{ doc_number }}.
+          {% endblock %}
+          {% if qr %}<br>Registered and tamper-evident — scan to verify against the system of record.{% endif %}
+          <br>Produced with PharmaCore by Medlink.
+          &middot; <pdf:pagenumber> of <pdf:pagecount>
         </td>
-        <td style="width:20%; border:none; padding:0;" class="right">
-          <pdf:pagenumber> of <pdf:pagecount>
+        <td style="width:18%; border:none; padding:0; text-align:right;">
+          {% if qr %}<img src="{{ qr }}" alt="Verification QR code" style="width:48pt; height:48pt;">{% endif %}
         </td>
       </tr>
     </table>
@@ -176,26 +193,5 @@ footer instead, where it belongs.
 
   {% block content %}{% endblock %}
 
-  <div class="footer">
-    <table>
-      <tr>
-        <td style="width: 80%">
-          {% block footer_note %}
-          Issued by <b>{{ organization.name }}</b>{% if organization.tin %}, TIN {{ organization.tin }}{% endif %}.
-          Document reference <b>{{ doc_number }}</b>, generated {{ generated_at|date:"d M Y H:i" }}.
-          {% endblock %}
-          {% if qr %}<br>Registered and tamper-evident — scan to verify against the system of record.{% endif %}
-          <br>Produced with PharmaCore by Medlink.
-        </td>
-        <td class="right">
-          {% comment %}
-          Guarded: an unguarded src renders an empty image box and makes the
-          renderer complain on every document that has no QR to show.
-          {% endcomment %}
-          {% if qr %}<img src="{{ qr }}" alt="Verification QR code" style="width: 58pt; height: 58pt;">{% endif %}
-        </td>
-      </tr>
-    </table>
-  </div>
 </body>
 </html>
