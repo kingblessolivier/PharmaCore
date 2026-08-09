@@ -604,6 +604,117 @@ export function ProductsPage() {
             value: (p) => (p.requires_prescription ? "Rx" : ""),
             render: (p) => (p.requires_prescription ? <Badge>Rx</Badge> : null),
           },
+          {
+            key: "is_controlled_substance",
+            header: "Controlled",
+            value: (p) => (p.is_controlled_substance ? p.controlled_schedule || "Yes" : ""),
+            render: (p) =>
+              p.is_controlled_substance ? (
+                <Badge tone="danger">{p.controlled_schedule || "Controlled"}</Badge>
+              ) : null,
+          },
+          {
+            key: "manufacturer_name",
+            header: "Manufacturer",
+            value: (p) => p.manufacturer_name ?? "—",
+          },
+          {
+            key: "storage_condition",
+            header: "Storage",
+            value: (p) => p.storage_condition,
+            // Cold chain is the difference between stock and spoiled stock, so
+            // it is named rather than left to the reader to infer.
+            render: (p) =>
+              p.storage_condition === "COLD_CHAIN" ? (
+                <Badge tone="info">Cold chain</Badge>
+              ) : p.storage_condition === "FROZEN" ? (
+                <Badge tone="info">Frozen</Badge>
+              ) : (
+                <span className="text-ink-500">Ambient</span>
+              ),
+          },
+          {
+            key: "pack_size",
+            header: "Pack",
+            value: (p) => p.pack_size || "—",
+          },
+          {
+            key: "reorder_level",
+            header: "Reorder at",
+            numeric: true,
+            align: "right",
+            value: (p) => p.reorder_level,
+          },
+          /* Everything below ships hidden. The product master carries 35 fields
+             and a reader wants eight of them — but which eight depends on the
+             job, so the rest are one click away in the column picker rather
+             than unavailable. */
+          {
+            key: "route_of_administration",
+            header: "Route",
+            defaultHidden: true,
+            value: (p) => p.route_of_administration,
+          },
+          { key: "atc_code", header: "ATC", defaultHidden: true, value: (p) => p.atc_code || "—" },
+          {
+            key: "gtin",
+            header: "GTIN",
+            defaultHidden: true,
+            value: (p) => p.gtin || "—",
+            render: (p) => <span className="font-mono text-xs">{p.gtin || "—"}</span>,
+          },
+          {
+            key: "fda_registration_number",
+            header: "FDA reg.",
+            defaultHidden: true,
+            value: (p) => p.fda_registration_number || "—",
+          },
+          {
+            key: "unit_of_measure",
+            header: "Unit",
+            defaultHidden: true,
+            value: (p) => p.unit_of_measure || "—",
+          },
+          {
+            key: "units_per_pack",
+            header: "Per pack",
+            defaultHidden: true,
+            numeric: true,
+            align: "right",
+            value: (p) => p.units_per_pack,
+          },
+          {
+            key: "divisibility",
+            header: "May be split",
+            defaultHidden: true,
+            value: (p) => ((p.divisibility ?? 1) > 1 ? `1/${p.divisibility}` : "whole only"),
+          },
+          {
+            key: "is_essential",
+            header: "Essential (WHO)",
+            defaultHidden: true,
+            value: (p) => (p.is_essential ? "Yes" : "No"),
+          },
+          {
+            key: "reorder_quantity",
+            header: "Reorder qty",
+            defaultHidden: true,
+            numeric: true,
+            align: "right",
+            value: (p) => p.reorder_quantity,
+          },
+          {
+            key: "lifecycle_status",
+            header: "Lifecycle",
+            defaultHidden: true,
+            value: (p) => p.lifecycle_status,
+          },
+          {
+            key: "rra_item_code",
+            header: "RRA code",
+            defaultHidden: true,
+            value: (p) => p.rra_item_code || "—",
+          },
           ...(admin
             ? [
                 {
