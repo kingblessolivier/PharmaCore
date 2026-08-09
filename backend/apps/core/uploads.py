@@ -27,7 +27,7 @@ import uuid
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import PurePosixPath
-from typing import Any, Final
+from typing import Any, Final, cast
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -39,14 +39,23 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-#: What a caller says the picture is for. It only selects the folder and the
-#: size cap — it grants nothing, so an unknown value is simply rejected rather
-#: than trusted.
-PURPOSES: Final[dict[str, int]] = {
-    "logo": 800,  # letterhead marks; 800px is generous at print resolution
-    "product": 1600,
-    "listing": 1600,
-    "photo": 1024,  # employee badge
+from apps.iam.models import User
+
+#: What a caller says the picture is for: the folder, the size cap, and who is
+#: allowed to send one.
+#:
+#: The permission matters more than it first looks. A logo goes onto letterhead
+#: — every purchase order and invoice the pharmacy issues carries it — so the
+#: right to change one is the right to alter how the business appears to its
+#: suppliers and the regulator. A listing photo is a claim about which medicine
+#: is in the box. Neither is something any logged-in cashier should be able to
+#: replace, so each purpose names the authority it needs.
+PURPOSES: Final[dict[str, tuple[int, tuple[str, ...]]]] = {
+    # letterhead marks; 800px is generous at print resolution
+    "logo": (800, ("organization.manage",)),
+    "product": (1600, ("catalog.manage",)),
+    "listing": (1600, ("order.create", "order.approve")),
+    "photo": (1024, ("employee.manage",)),  # employee badge
 }
 
 #: Formats we will decode and re-encode. Anything else is refused by name so
@@ -136,7 +145,7 @@ def store_image(raw: bytes, purpose: str, *, original_name: str = "") -> dict[st
     # Shrink to what the purpose needs. A 12-megapixel phone photo of a shelf
     # is not more useful as a product picture than a 1600px one, and every
     # byte of it is served to a counter on a slow connection.
-    edge = PURPOSES[purpose]
+    edge = PURPOSES[purpose][0]
     image = _flatten(image, fmt)
     if max(image.size) > edge:
         image.thumbnail((edge, edge), Image.Resampling.LANCZOS)
@@ -175,12 +184,33 @@ class ImageUploadView(APIView):
     Deliberately not tied to a model. The alternative — an upload endpoint per
     field — would mean five copies of the validation above, and the fifth one
     would be the one that forgot to re-encode.
+
+    Authority is checked per purpose rather than on the endpoint as a whole,
+    because the four purposes are not equally sensitive and a single
+    "logged in" check would let a cashier change the letterhead.
     """
 
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request: Request) -> Response:
+        purpose = str(request.data.get("purpose") or "product")
+        allowed = PURPOSES.get(purpose)
+        if allowed is None:
+            return Response(
+                {"detail": "That is not something an image can be uploaded for."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user = cast(User, request.user)
+        if not any(user.has_permission(code) for code in allowed[1]):
+            # Named rather than generic: "you may not upload images" would send
+            # somebody looking for an upload right that does not exist. The
+            # right they are missing is over the thing the picture goes on.
+            return Response(
+                {"detail": f"You do not have authority to change a {purpose} image."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         upload = request.FILES.get("file")
         if upload is None:
             return Response(
@@ -193,7 +223,7 @@ class ImageUploadView(APIView):
         try:
             stored = store_image(
                 raw,
-                str(request.data.get("purpose") or "product"),
+                purpose,
                 original_name=getattr(upload, "name", "") or "",
             )
         except ImageRejected as exc:

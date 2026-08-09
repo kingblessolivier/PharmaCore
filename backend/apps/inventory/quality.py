@@ -97,14 +97,19 @@ def release(*, check: QualityCheck, user: User | None = None, notes: str = "") -
     # certificate for the manufacturer" is not an answer to "show me the CoA for
     # this one" at an inspection.
     #
-    # This records the gap rather than refusing the release. Refusing is the
-    # stricter reading of GDP and is one line away — but switching it on before
-    # a pharmacy has loaded any CoAs would stop it releasing stock at all, and
-    # that is a decision for whoever runs the pharmacy, not a default. The gap
-    # is recorded on the check so it is visible and auditable in the meantime.
+    # Whether a missing CoA *blocks* the release is the pharmacy's decision,
+    # not ours — turning enforcement on before it has loaded any CoAs would
+    # stop it releasing stock at all on its first day. So the default records
+    # the gap, visibly and auditably, and `require_coa_before_release` on the
+    # organization escalates that to a refusal once the paperwork has caught up.
     missing = missing_batch_documents(batch)
     if missing:
         shortfall = ", ".join(missing)
+        if batch.organization.require_coa_before_release:
+            raise QualityError(
+                f"This lot cannot be released: {shortfall} not on file and verified. "
+                "Attach the paperwork, or ask an administrator to relax the rule."
+            )
         notes = (
             f"{notes} (released without: {shortfall})".strip()
             if notes

@@ -79,6 +79,35 @@ class Product(models.Model):
         COLD_CHAIN = "COLD_CHAIN", "Cold chain"
         FROZEN = "FROZEN", "Frozen"
 
+    class Hazard(models.TextChoices):
+        """What makes a medicine dangerous to handle, rather than to take.
+
+        Separate from ``is_controlled_substance``, which is a legal category
+        about diversion. A cytotoxic is not controlled and is far more
+        dangerous to the person picking it; a benzodiazepine is controlled and
+        perfectly safe to hold.
+        """
+
+        NONE = "NONE", "No special handling"
+        CYTOTOXIC = "CYTOTOXIC", "Cytotoxic — segregate, gloves, spill kit"
+        FLAMMABLE = "FLAMMABLE", "Flammable — away from heat, limit quantity"
+        CORROSIVE = "CORROSIVE", "Corrosive — eye protection, contained"
+        BIOHAZARD = "BIOHAZARD", "Biohazard — sharps and contaminated waste route"
+
+    class DoseUnit(models.TextChoices):
+        """The unit a prescription is written in.
+
+        Only meaningful where it differs from the unit stock is counted in —
+        a syrup is dispensed in millilitres and held in bottles.
+        """
+
+        ML = "ML", "Millilitre (mL)"
+        MG = "MG", "Milligram (mg)"
+        DROP = "DROP", "Drop"
+        PUFF = "PUFF", "Puff"
+        SACHET = "SACHET", "Sachet"
+        UNIT = "UNIT", "International unit (IU)"
+
     class Route(models.TextChoices):
         ORAL = "ORAL", "Oral"
         IV = "IV", "Intravenous (IV)"
@@ -134,6 +163,49 @@ class Product(models.Model):
     # Cold-chain range (used when storage_condition is COLD_CHAIN / FROZEN)
     min_temp_c = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
     max_temp_c = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+
+    # ---------------------------------------------------------------- handling
+    # Temperature was the only handling requirement the catalogue could state,
+    # which quietly assumes the freezer is the only thing that can ruin a
+    # medicine. It is not: a cytotoxic needs segregation, gloves and a spill
+    # kit; ceftriaxone browns in daylight; effervescents collapse in Kigali
+    # humidity once the tube is opened. None of that could be recorded, so
+    # none of it could be picked, packed or shipped differently.
+    hazard_class = models.CharField(
+        max_length=20,
+        choices=Hazard.choices,
+        default=Hazard.NONE,
+        help_text="Handling hazard — drives segregation, PPE and who may pick it.",
+    )
+    light_sensitive = models.BooleanField(
+        default=False,
+        help_text="Degrades in daylight. Keep in its carton; do not display on an open shelf.",
+    )
+    humidity_sensitive = models.BooleanField(
+        default=False,
+        help_text="Absorbs moisture. Keep the desiccant; do not break the blister early.",
+    )
+
+    # ------------------------------------------------------------ dose vs stock
+    # A prescription is written in the unit a patient takes — 5 mL, 2 puffs,
+    # one drop — and stock is counted in the unit a shelf holds, which for a
+    # syrup is a bottle. Without the bridge between them, "5 mL twice daily for
+    # 7 days" cannot be turned into "one 100 mL bottle", so the till cannot
+    # tell a pharmacist whether one bottle finishes the course.
+    dose_unit = models.CharField(
+        max_length=20,
+        choices=DoseUnit.choices,
+        blank=True,
+        default="",
+        help_text="The unit a prescription is written in, when it differs from the stock unit.",
+    )
+    doses_per_base_unit = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        help_text="How many dose units one base stock unit holds — e.g. 100 mL in one bottle.",
+    )
 
     # WHO International Clinical Standards & Lifecycle
     ddd = models.CharField(
@@ -240,6 +312,29 @@ class ProductUnit(models.Model):
     #: times the factor, which is what a pharmacy that does not price packs
     #: separately actually wants.
     price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+
+    #: What one of this unit physically is, so a shipment can be planned before
+    #: it arrives rather than weighed on the loading bay.
+    #:
+    #: Freight is quoted on whichever of weight or volume is larger, and a cold
+    #: box has a fixed litre capacity — so "will this order fit in one cold box,
+    #: and what will the airline charge" is unanswerable without both numbers.
+    #: Recorded per level because a carton is not twenty times the volume of
+    #: the box inside it; packaging and voids are most of the difference.
+    gross_weight_g = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Weight of one of this unit, packaging included, in grams.",
+    )
+    volume_ml = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Space one of this unit occupies, in millilitres (1 L = 1,000).",
+    )
 
     class Meta:
         ordering = ["product__generic_name", "level"]

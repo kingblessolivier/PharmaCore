@@ -3,7 +3,10 @@
 **Date:** 2026-08-09
 **Source:** domain brief supplied by the product owner, cross-checked against
 [medicine-chain-import-to-patient.md](medicine-chain-import-to-patient.md).
-**Status:** the four-category model below is **recorded, not yet implemented**. What *is*
+**Status:** implemented as of #123. The four-category model below is reflected in
+`Product.hazard_class`, `light_sensitive`, `humidity_sensitive`, `dose_unit`,
+`doses_per_base_unit` and the per-level `gross_weight_g` / `volume_ml`, with the
+rules in `apps/catalog/handling.py`. What *is*
 implemented is listed in §5.
 
 ---
@@ -147,20 +150,46 @@ different margins and different cash cycles.
 
 **Recorded here, not built**
 
-1. Handling class per category (cold chain / hazmat / UV) — §2.1
-2. Dose unit distinct from stock unit — §2.2
-3. Weight and volume per unit, for capacity and freight — §2.3
-4. **Image verification** — §3
-5. Wholesale vs retail reported separately — §4
-6. Purchasing in packs and cases; converting on receipt (procurement lines are still
-   dimensionless — only sales lines carry a unit today)
-7. `order_multiple` is stored but **not enforced** at order entry
-8. ~~`counter-sync` is not routed~~ — **withdrawn, this was wrong.** The endpoint is
-   `offline-sync` at `/api/retail/offline/sync/`, it is registered, and the till calls exactly
-   that. My test used the wrong URL and I reported the 404 as a product defect.
+*(Nothing. This list was wrong for three of its entries — see the correction below.)*
 
-**Needing your decision**
+**Corrected**
 
-- Who registers a pharmacy: admin (today) vs depot-creates / admin-verifies (recommended)
-- Which products may be split — clinical data only a pharmacist can supply
-- Whether QC release should *refuse* without a verified CoA, or keep recording the gap
+Three items sat on the "not built" list after they had shipped, because the list
+was maintained by hand and the work was verified by reading it rather than by
+running anything:
+
+| Was listed as missing | Reality |
+|---|---|
+| Purchasing in packs; converting on receipt | `PurchaseOrderLine` has carried `unit` and `quantity_base` since #121, and receipt converts to base units. |
+| `order_multiple` stored but not enforced | `decide_line` rounds down to a whole multiple and refuses when that falls under the minimum. |
+| Wholesale vs retail reported separately | `retail_vs_wholesale` is computed in `finance/pharmacy.py` and rendered on the finance cockpit. |
+
+A fourth, `counter-sync is not routed`, was withdrawn earlier for the same
+reason — it was never true.
+
+**Delivered since**
+
+| | |
+|---|---|
+| #122 | Image upload for all five picture fields; PDF asset resolution; audit-log detail; listing photo verification (§3) |
+| #123 | Handling class beyond temperature (§2.1); dose unit vs stock unit (§2.2); weight and volume per packing level (§2.3); CoA release policy |
+
+**Decided**
+
+- **Whether QC release refuses without a verified CoA** — now
+  `Organization.require_coa_before_release`, defaulting to *record the gap*.
+  Enforcing it from day one would stop a pharmacy releasing any stock before it
+  had loaded a single certificate; leaving it unenforceable forever was the
+  other bad answer. It is a switch, which is what the original comment in
+  `quality.py` said it should be.
+
+**Still needing your decision**
+
+- **Who registers a pharmacy** — admin creates today; depot-creates /
+  admin-verifies is the alternative. This is a business process, not a defect,
+  and changing it moves who is accountable for a regulated entity's record.
+- **Which products may be split** — `divisibility` defaults to 1 (whole units
+  only), which is the safe default. Marking a product splittable needs clinical
+  knowledge of the formulation: a scored tablet may still be modified-release,
+  and halving it is a dosing error. The screen exists; the data has to come
+  from a pharmacist.

@@ -293,10 +293,28 @@ export interface OrderDocument {
   download_url: string;
 }
 
+/**
+ * How big an order physically is.
+ *
+ * `unmeasured` matters as much as the totals: a line whose pack size has no
+ * weight recorded contributes nothing, so a half-measured order looks light.
+ * A freight quote built on a silent undercount is worse than no quote.
+ */
+export interface OrderShipment {
+  gross_weight_kg: string;
+  volume_litres: string;
+  /** What an airline bills: the greater of actual and volumetric weight. */
+  chargeable_weight_kg: string;
+  cold_boxes: number;
+  is_complete: boolean;
+  unmeasured: string[];
+}
+
 export interface PurchaseOrder {
   id: number;
   po_number: string;
   document: OrderDocument | null;
+  shipment: OrderShipment | null;
   organization: number;
   organization_name: string;
   supplier: number;

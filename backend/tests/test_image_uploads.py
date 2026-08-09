@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from apps.core.uploads import ImageRejected, store_image
 from apps.documents.renderer import _resolve_asset, render_pdf
-from apps.iam.models import Organization, User
+from apps.iam.models import Organization, Permission, Role, User
 from django.core.files.storage import default_storage
 from PIL import Image
 from rest_framework.test import APIClient
@@ -38,14 +38,28 @@ def make_image(width: int = 200, height: int = 120, fmt: str = "PNG", mode: str 
     return buffer.getvalue()
 
 
-def _client(organization: Organization) -> APIClient:
-    """Any logged-in user. Uploading is not privileged — storing the URL on a
-    record is, and that is guarded by the endpoint which does the storing."""
+def _client(organization: Organization, *codes: str) -> APIClient:
+    """A user holding the authority a given purpose requires.
+
+    Uploading is not one right — it is four. Changing a logo alters the
+    letterhead on every document the pharmacy issues; changing a listing photo
+    changes what a buyer thinks is in the box. Neither belongs to whoever
+    happens to be logged in.
+    """
     user = User.objects.create_user(
-        username="uploader",
+        username=f"uploader-{'-'.join(codes) or 'none'}",
         password="x",  # noqa: S106 - test fixture
         organization=organization,
     )
+    if codes:
+        role, _ = Role.objects.get_or_create(code="UPLOADER", defaults={"name": "Uploader"})
+        for code in codes:
+            resource, _, action = code.partition(".")
+            permission, _ = Permission.objects.get_or_create(
+                code=code, defaults={"resource": resource, "action": action}
+            )
+            role.permissions.add(permission)
+        user.roles.add(role)
     client = APIClient()
     client.force_authenticate(user=user)
     return client
@@ -139,7 +153,7 @@ class TestEndpoint:
     def test_it_returns_a_url_the_caller_can_store(self, organization: Organization) -> None:
         upload = io.BytesIO(make_image())
         upload.name = "logo.png"
-        response = _client(organization).post(
+        response = _client(organization, "organization.manage").post(
             "/api/uploads/image",
             {"file": upload, "purpose": "logo"},
             format="multipart",
@@ -148,7 +162,7 @@ class TestEndpoint:
         assert response.data["url"].startswith("/media/uploads/logo/")
 
     def test_a_missing_file_says_so(self, organization: Organization) -> None:
-        response = _client(organization).post(
+        response = _client(organization, "organization.manage").post(
             "/api/uploads/image", {"purpose": "logo"}, format="multipart"
         )
         assert response.status_code == 400
@@ -158,7 +172,7 @@ class TestEndpoint:
     ) -> None:
         upload = io.BytesIO(b"<?php system($_GET['c']); ?>")
         upload.name = "shell.png"
-        response = _client(organization).post(
+        response = _client(organization, "organization.manage").post(
             "/api/uploads/image",
             {"file": upload, "purpose": "logo"},
             format="multipart",
@@ -205,3 +219,62 @@ class TestTheRendererCanFindIt:
             f'<html><body><img src="{stored["url"]}"><p>Document</p></body></html>'
         )
         assert len(branded) > len(plain), "the image should add bytes to the PDF"
+
+
+class TestAuthority:
+    """Uploading is four rights, not one.
+
+    A logo goes on the letterhead of every purchase order and invoice the
+    pharmacy issues, so replacing one changes how the business presents itself
+    to its suppliers and to the regulator. A listing photo is a claim about
+    which medicine is in a box. Neither belongs to whoever is logged in.
+    """
+
+    def _post(self, client: APIClient, purpose: str):
+        upload = io.BytesIO(make_image())
+        upload.name = "x.png"
+        return client.post(
+            "/api/uploads/image",
+            {"file": upload, "purpose": purpose},
+            format="multipart",
+        )
+
+    def test_a_cashier_cannot_change_the_letterhead(self, organization: Organization) -> None:
+        response = self._post(_client(organization), "logo")
+        assert response.status_code == 403
+        assert "logo" in response.data["detail"]
+
+    @pytest.mark.parametrize(
+        ("purpose", "code"),
+        [
+            ("logo", "organization.manage"),
+            ("product", "catalog.manage"),
+            ("listing", "order.create"),
+            ("photo", "employee.manage"),
+        ],
+    )
+    def test_each_purpose_admits_the_right_holder(
+        self, organization: Organization, purpose: str, code: str
+    ) -> None:
+        assert self._post(_client(organization, code), purpose).status_code == 201
+
+    @pytest.mark.parametrize(
+        ("purpose", "wrong_code"),
+        [
+            ("logo", "catalog.manage"),
+            ("product", "employee.manage"),
+            ("listing", "catalog.manage"),
+            ("photo", "organization.manage"),
+        ],
+    )
+    def test_authority_over_one_thing_is_not_authority_over_another(
+        self, organization: Organization, purpose: str, wrong_code: str
+    ) -> None:
+        # The failure this guards against is a single "can upload" right that
+        # quietly lets a catalogue clerk replace the company logo.
+        assert self._post(_client(organization, wrong_code), purpose).status_code == 403
+
+    def test_an_unknown_purpose_is_refused_before_authority_is_considered(
+        self, organization: Organization
+    ) -> None:
+        assert self._post(_client(organization), "../../etc").status_code == 400

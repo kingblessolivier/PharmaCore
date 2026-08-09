@@ -40,6 +40,11 @@ interface ProductForm {
   fda_registration_number: string;
   tax_class: TaxClass;
   storage_condition: string;
+  hazard_class: string;
+  light_sensitive: boolean;
+  humidity_sensitive: boolean;
+  dose_unit: string;
+  doses_per_base_unit: string;
   requires_prescription: boolean;
   is_controlled_substance: boolean;
   controlled_schedule: string;
@@ -215,6 +220,11 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
     fda_registration_number: product?.fda_registration_number ?? "",
     tax_class: product?.tax_class ?? "B",
     storage_condition: product?.storage_condition ?? "AMBIENT",
+    hazard_class: product?.hazard_class ?? "NONE",
+    light_sensitive: product?.light_sensitive ?? false,
+    humidity_sensitive: product?.humidity_sensitive ?? false,
+    dose_unit: product?.dose_unit ?? "",
+    doses_per_base_unit: product?.doses_per_base_unit ?? "",
     requires_prescription: product?.requires_prescription ?? false,
     is_controlled_substance: product?.is_controlled_substance ?? false,
     controlled_schedule: product?.controlled_schedule ?? "",
@@ -242,6 +252,10 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
         ...form,
         min_temp_c: form.min_temp_c === "" ? null : form.min_temp_c,
         max_temp_c: form.max_temp_c === "" ? null : form.max_temp_c,
+        // Blank means "not stated", which is a null, not a zero. A zero here
+        // would claim a bottle holds no doses at all.
+        doses_per_base_unit:
+          form.doses_per_base_unit === "" ? null : form.doses_per_base_unit,
       };
       return api<Product>(
         editing ? `/api/catalog/products/${product!.id}/` : "/api/catalog/products/",
@@ -462,6 +476,69 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
             />
           </div>
         )}
+
+        {/* Temperature used to be the only handling requirement this catalogue
+            could state, which assumes the freezer is the only thing that can
+            ruin a medicine. A cytotoxic needs segregation and a spill kit and
+            is not controlled at all; ceftriaxone browns in daylight. */}
+        <SelectField
+          label="Handling hazard"
+          value={form.hazard_class}
+          onChange={(e) => set("hazard_class", e.target.value)}
+        >
+          <option value="NONE">No special handling</option>
+          <option value="CYTOTOXIC">Cytotoxic — segregate, gloves, spill kit</option>
+          <option value="FLAMMABLE">Flammable — away from heat, limit quantity</option>
+          <option value="CORROSIVE">Corrosive — eye protection, contained</option>
+          <option value="BIOHAZARD">Biohazard — sharps and contaminated waste route</option>
+        </SelectField>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex items-center gap-2 text-sm text-ink-700">
+            <input
+              type="checkbox"
+              checked={form.light_sensitive}
+              onChange={(e) => set("light_sensitive", e.target.checked)}
+              className="h-4 w-4 rounded border-line"
+            />
+            Degrades in daylight
+          </label>
+          <label className="flex items-center gap-2 text-sm text-ink-700">
+            <input
+              type="checkbox"
+              checked={form.humidity_sensitive}
+              onChange={(e) => set("humidity_sensitive", e.target.checked)}
+              className="h-4 w-4 rounded border-line"
+            />
+            Absorbs moisture
+          </label>
+        </div>
+
+        {/* A prescription is written in the unit a patient takes and stock is
+            counted in the unit a shelf holds. Without the bridge, "5 mL twice
+            daily for 7 days" cannot be turned into "one 100 mL bottle". */}
+        <div className="grid grid-cols-2 gap-3">
+          <SelectField
+            label="Prescribed in"
+            value={form.dose_unit}
+            onChange={(e) => set("dose_unit", e.target.value)}
+          >
+            <option value="">Same unit as stock</option>
+            <option value="ML">Millilitre (mL)</option>
+            <option value="MG">Milligram (mg)</option>
+            <option value="DROP">Drop</option>
+            <option value="PUFF">Puff</option>
+            <option value="SACHET">Sachet</option>
+            <option value="UNIT">International unit (IU)</option>
+          </SelectField>
+          <TextField
+            label="Doses in one stock unit"
+            type="number"
+            value={form.doses_per_base_unit}
+            onChange={(e) => set("doses_per_base_unit", e.target.value)}
+            placeholder="e.g. 100 mL in a bottle"
+          />
+        </div>
+
         {/* A photograph is how a counter assistant confirms the box in their
             hand is the product on the screen, so it needs to be easy enough to
             add that somebody actually does it. */}
@@ -627,6 +704,28 @@ export function ProductsPage() {
                 <Badge tone="info">Frozen</Badge>
               ) : (
                 <span className="text-ink-500">Ambient</span>
+              ),
+          },
+          {
+            /* Everything that changes how this is picked and packed, in one
+               place. The list is built server-side so two screens can never
+               word "cytotoxic" differently, and the critical ones are coloured
+               because ignoring them ruins the medicine or hurts the handler. */
+            key: "handling",
+            header: "Handling",
+            sortable: false,
+            value: (p) => (p.handling ?? []).map((h) => h.label).join(", ") || "—",
+            render: (p) =>
+              (p.handling ?? []).length === 0 ? (
+                <span className="text-ink-400">—</span>
+              ) : (
+                <div className="flex flex-wrap gap-1">
+                  {p.handling.map((h) => (
+                    <span key={h.code} title={h.detail}>
+                      <Badge tone={h.critical ? "danger" : "warning"}>{h.label}</Badge>
+                    </span>
+                  ))}
+                </div>
               ),
           },
           {
