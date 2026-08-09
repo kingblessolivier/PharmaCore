@@ -125,6 +125,32 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   return (await res.json()) as T;
 }
 
+/**
+ * Where an image actually lives.
+ *
+ * Uploaded pictures are stored as site-relative paths (`/media/uploads/…`)
+ * so that moving the deployment does not strand every logo in the database
+ * pointing at the old domain. But the API is a different origin from this app,
+ * so a bare `/media/…` in an `img src` would resolve against the frontend and
+ * 404. Anything already absolute — a supplier's own CDN — is left alone.
+ */
+export function assetUrl(path: string | null | undefined): string {
+  if (!path) return "";
+  if (/^(https?:|data:)/i.test(path)) return path;
+  return `${BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+}
+
+/** Upload one image and get back the path to store on a record. */
+export async function uploadImage(
+  file: File,
+  purpose: "logo" | "product" | "listing" | "photo",
+): Promise<{ url: string; width: number; height: number; bytes: number }> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("purpose", purpose);
+  return api("/api/uploads/image", { method: "POST", body: form });
+}
+
 /** Fetch a file with auth and trigger a browser download. */
 export async function downloadFile(path: string, filename: string): Promise<void> {
   const headers: Record<string, string> = {};

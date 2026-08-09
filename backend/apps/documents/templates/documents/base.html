@@ -32,7 +32,7 @@
      they render. #}
   <div class="header">
     {% if organization.logo_url %}
-    <img src="{{ organization.logo_url }}" style="max-height:48pt;"><br>
+    <img src="{{ organization.logo_url }}" alt="{{ organization.name }}" style="max-height:48pt;"><br>
     {% endif %}
     <div class="brand">{{ organization.name }}</div>
     <div class="muted">
@@ -52,11 +52,19 @@
       <tr>
         <td style="width: 78%; border: none;">
           Issued by <b>{{ organization.name }}</b> &middot; document {{ doc_number }}.<br>
-          Produced with PharmaCore by Medlink.<br>
+          Produced with PharmaCore by Medlink.
+          {% if qr %}<br>
           This document is registered and tamper-evident. Scan the QR code to verify its
           authenticity against the system of record.
+          {% endif %}
         </td>
-        <td style="border: none; text-align: right;"><img src="{{ qr }}" style="width: 66pt; height: 66pt;"></td>
+        {# Guarded: an unguarded src renders an empty image box and makes the
+           renderer complain on every document that has no QR to show. The
+           promise about scanning it is guarded with it, so the page never
+           tells a reader to scan something that is not there. #}
+        <td style="border: none; text-align: right;">
+          {% if qr %}<img src="{{ qr }}" alt="Verification QR code" style="width: 66pt; height: 66pt;">{% endif %}
+        </td>
       </tr>
     </table>
   </div>

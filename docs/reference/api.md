@@ -5,7 +5,7 @@
 # API reference
 
 
-**1047 routes.**
+**1064 routes.**
 
 Every route the project serves, generated from the URL resolver.
 For conventions — pagination, errors, auth, idempotency — read
@@ -327,6 +327,10 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/catalog/^product-substitutes/(?P<pk>[^/.]+)/$` | DELETE,GET,PATCH,PUT | `ProductSubstituteViewSet` |  |
 | `/api/catalog/^product-substitutes/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | DELETE,GET,PATCH,PUT | `ProductSubstituteViewSet` |  |
 | `/api/catalog/^product-substitutes\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `ProductSubstituteViewSet` |  |
+| `/api/catalog/^product-units/$` | GET,POST | `ProductUnitViewSet` | A product's packaging chain — the levels it is bought, stocked and sold in. |
+| `/api/catalog/^product-units/(?P<pk>[^/.]+)/$` | DELETE,GET,PATCH,PUT | `ProductUnitViewSet` | A product's packaging chain — the levels it is bought, stocked and sold in. |
+| `/api/catalog/^product-units/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | DELETE,GET,PATCH,PUT | `ProductUnitViewSet` | A product's packaging chain — the levels it is bought, stocked and sold in. |
+| `/api/catalog/^product-units\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `ProductUnitViewSet` | A product's packaging chain — the levels it is bought, stocked and sold in. |
 | `/api/catalog/^product-uom-conversions/$` | GET,POST | `ProductUomConversionViewSet` |  |
 | `/api/catalog/^product-uom-conversions/(?P<pk>[^/.]+)/$` | DELETE,GET,PATCH,PUT | `ProductUomConversionViewSet` |  |
 | `/api/catalog/^product-uom-conversions/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | DELETE,GET,PATCH,PUT | `ProductUomConversionViewSet` |  |
@@ -425,6 +429,7 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/distribution/aging/` | — | `AgingView` | Aged receivables (owed to you) and payables (you owe) across visible orgs, bucketed by how overdue each unpaid order is, and grouped by trading partner. |
 | `/api/distribution/demand/` | — | `DemandBoardView` | Aggregated demand at a depot — the import shopping list. |
 | `/api/distribution/demand/source/` | — | `SourceDemandView` | Turn open demand into a purchase requisition and hand it to procurement. |
+| `/api/distribution/listings/<int:pk>/verify-image/` | — | `VerifyListingImageView` | Confirm that the photo on a listing is of the medicine it claims to be. |
 | `/api/distribution/overview/` | — | `DistributionOverviewView` | The distribution home: is the storefront healthy, and what is unmet. |
 | `/api/distribution/rep-performance/` | — | `RepPerformanceView` | A rep's attainment and commission over a period. |
 | `/api/distribution/returns/<int:pk>/<str:verb>/` | — | `ReturnActionsView` | Inspect, approve or reject a customer return. |
@@ -935,6 +940,12 @@ For conventions — pagination, errors, auth, idempotency — read
 | --- | --- | --- | --- |
 | `/api/inventory/` | — | `APIRootView` | The default basic root view for DefaultRouter |
 | `/api/inventory/<drf_format_suffix:format>` | — | `APIRootView` | The default basic root view for DefaultRouter |
+| `/api/inventory/^batch-documents/$` | GET,POST | `BatchDocumentViewSet` | A lot's paperwork. |
+| `/api/inventory/^batch-documents/(?P<pk>[^/.]+)/$` | DELETE,GET,PATCH,PUT | `BatchDocumentViewSet` | A lot's paperwork. |
+| `/api/inventory/^batch-documents/(?P<pk>[^/.]+)/verify/$` | POST | `BatchDocumentViewSet` | Confirm this is the right document for this lot. |
+| `/api/inventory/^batch-documents/(?P<pk>[^/.]+)/verify\.(?P<format>[a-z0-9]+)/?$` | POST | `BatchDocumentViewSet` | Confirm this is the right document for this lot. |
+| `/api/inventory/^batch-documents/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | DELETE,GET,PATCH,PUT | `BatchDocumentViewSet` | A lot's paperwork. |
+| `/api/inventory/^batch-documents\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `BatchDocumentViewSet` | A lot's paperwork. |
 | `/api/inventory/^batches/$` | GET | `InventoryBatchViewSet` | Batch stock-on-hand, org-scoped, FEFO-ordered (soonest expiry first). |
 | `/api/inventory/^batches/(?P<pk>[^/.]+)/$` | GET | `InventoryBatchViewSet` | Batch stock-on-hand, org-scoped, FEFO-ordered (soonest expiry first). |
 | `/api/inventory/^batches/(?P<pk>[^/.]+)/adjust/$` | POST | `InventoryBatchViewSet` | Batch stock-on-hand, org-scoped, FEFO-ordered (soonest expiry first). |
@@ -1247,10 +1258,12 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/retail/^counter/bill-clinical-service\.(?P<format>[a-z0-9]+)/?$` | POST | `CounterViewSet` | Take payment for a clinical service and post it to the ledger. |
 | `/api/retail/^counter/clear-promotion/$` | POST | `CounterViewSet` | Actions performed at the till. |
 | `/api/retail/^counter/clear-promotion\.(?P<format>[a-z0-9]+)/?$` | POST | `CounterViewSet` | Actions performed at the till. |
-| `/api/retail/^counter/promotions/$` | GET | `CounterViewSet` | Coupons in force today, so the till can offer them rather than guess. |
-| `/api/retail/^counter/promotions\.(?P<format>[a-z0-9]+)/?$` | GET | `CounterViewSet` | Coupons in force today, so the till can offer them rather than guess. |
+| `/api/retail/^counter/promotions/$` | GET | `CounterViewSet` | Coupons in force today at *this* pharmacy, so the till can offer them. |
+| `/api/retail/^counter/promotions\.(?P<format>[a-z0-9]+)/?$` | GET | `CounterViewSet` | Coupons in force today at *this* pharmacy, so the till can offer them. |
 | `/api/retail/^counter/scan/$` | GET | `CounterViewSet` | Resolve a scanned barcode to a product and the quantity it represents. |
 | `/api/retail/^counter/scan\.(?P<format>[a-z0-9]+)/?$` | GET | `CounterViewSet` | Resolve a scanned barcode to a product and the quantity it represents. |
+| `/api/retail/^counter/search/$` | GET | `CounterViewSet` | Find a product by typing its name, not by scanning it. |
+| `/api/retail/^counter/search\.(?P<format>[a-z0-9]+)/?$` | GET | `CounterViewSet` | Find a product by typing its name, not by scanning it. |
 | `/api/retail/^dispensing/$` | GET | `DispensingViewSet` | Read-only regulatory dispensing log — every Rx / controlled sale, with the pharmacist, patient, and prescriber. |
 | `/api/retail/^dispensing/(?P<pk>[^/.]+)/$` | GET | `DispensingViewSet` | Read-only regulatory dispensing log — every Rx / controlled sale, with the pharmacist, patient, and prescriber. |
 | `/api/retail/^dispensing/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | GET | `DispensingViewSet` | Read-only regulatory dispensing log — every Rx / controlled sale, with the pharmacist, patient, and prescriber. |
@@ -1295,6 +1308,14 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/schema/` | — | `SpectacularAPIView` | OpenApi3 schema for this API. |
 
 
+## `/api/uploads`
+
+
+| Path | Methods | View | Purpose |
+| --- | --- | --- | --- |
+| `/api/uploads/image` | — | `ImageUploadView` | POST an image, get back a URL to store on whatever record needs it. |
+
+
 ## `/api/workspace`
 
 
@@ -1311,8 +1332,8 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/workspace/^mail/$` | GET,POST | `MailViewSet` | Internal email. |
 | `/api/workspace/^mail/(?P<pk>[^/.]+)/flag/$` | POST | `MailViewSet` | Read, star, archive or trash — this person's copy only. |
 | `/api/workspace/^mail/(?P<pk>[^/.]+)/flag\.(?P<format>[a-z0-9]+)/?$` | POST | `MailViewSet` | Read, star, archive or trash — this person's copy only. |
-| `/api/workspace/^mail/(?P<pk>[^/.]+)/thread/$` | GET | `MailViewSet` | The whole conversation this message belongs to. |
-| `/api/workspace/^mail/(?P<pk>[^/.]+)/thread\.(?P<format>[a-z0-9]+)/?$` | GET | `MailViewSet` | The whole conversation this message belongs to. |
+| `/api/workspace/^mail/(?P<pk>[^/.]+)/thread/$` | GET | `MailViewSet` | The whole conversation this message belongs to, and who is on it. |
+| `/api/workspace/^mail/(?P<pk>[^/.]+)/thread\.(?P<format>[a-z0-9]+)/?$` | GET | `MailViewSet` | The whole conversation this message belongs to, and who is on it. |
 | `/api/workspace/^mail/sent/$` | GET | `MailViewSet` | Internal email. |
 | `/api/workspace/^mail/sent\.(?P<format>[a-z0-9]+)/?$` | GET | `MailViewSet` | Internal email. |
 | `/api/workspace/^mail\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `MailViewSet` | Internal email. |
@@ -1336,5 +1357,8 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/workspace/^spaces\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `SpaceViewSet` | Chat spaces and direct messages. |
 | `/api/workspace/mentionable-users` | — | `MentionableUsersView` | Users in an organization who can be @mentioned (id + username). |
 | `/api/workspace/messages/<int:pk>/<str:verb>/` | — | `MessageActionsView` | Edit, delete or react to one message. |
+| `/api/workspace/module-insights/` | — | `ModuleInsightsView` | How this part of the business is doing — the figures behind a module home. |
+| `/api/workspace/module-work/` | — | `ModuleWorkView` | What needs doing inside one app — a module home as a queue, not a menu. |
+| `/api/workspace/my-work/` | — | `MyWorkView` | What is waiting for you, what you cannot action, and what your team raised. |
 | `/api/workspace/search/` | — | `ConnectSearchView` | Search chat and mail together, scoped to what this user may see. |
 

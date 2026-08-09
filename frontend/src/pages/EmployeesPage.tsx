@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, FileSignature, GraduationCap, Plus, UserCog, Wallet } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DataGrid } from "../components/DataGrid";
+import { InlineImageUpload } from "../components/ImageUpload";
 import {
   Drawer,
   Empty,
@@ -267,6 +268,21 @@ function ProfileTab({ employee }: { employee: Employee }) {
     <>
       <ErrorNote error={save.error} />
       <Section title="Identity">
+        {/* Saved on its own rather than with the rest of the form: a photo is
+            the one field somebody changes alone, and making them press Save on
+            a 30-field form to do it is why the field stayed empty. */}
+        <div className="mb-4">
+          <InlineImageUpload
+            value={employee.photo ?? ""}
+            purpose="photo"
+            patchPath={`/api/hr/employees/${employee.id}/`}
+            field="photo"
+            label="Badge photograph"
+            shape="round"
+            hint="Shown on the staff record and anywhere an identity needs checking."
+            onSaved={() => void qc.invalidateQueries({ queryKey: ["employees"] })}
+          />
+        </div>
         <Grid cols={3}>
           <Field label="First name">
             <Input value={form.first_name} onChange={(e) => set({ first_name: e.target.value })} />

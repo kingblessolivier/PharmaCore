@@ -108,8 +108,13 @@ export interface UserAdmin {
   first_name: string;
   last_name: string;
   phone: string;
+  /** RRA tax identification number. */
+  tin: string;
+  /** Where payslips are delivered, if not the login email. */
+  payroll_email: string;
   organization: number | null;
   department: number | null;
+  department_name?: string | null;
   roles: string[];
   /** Who this person answers to — the chain escalation walks. */
   reports_to: number | null;
@@ -713,6 +718,8 @@ export interface Employee {
   last_name: string;
   full_name: string;
   national_id: string;
+  /** Badge photograph. Whoever checks somebody at a door needs a face. */
+  photo: string;
   job_title: string;
   employment_type: EmploymentType;
   employment_status: EmploymentStatus;

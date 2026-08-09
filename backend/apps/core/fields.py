@@ -65,3 +65,35 @@ class QuantityAwareModelSerializer(serializers.ModelSerializer[_M]):
             field_kwargs.pop("decimal_places", None)
             return QuantityField, field_kwargs
         return field_class, field_kwargs
+
+
+class ImageReferenceField(serializers.CharField):
+    """Where a picture lives: either one we stored, or one somebody else hosts.
+
+    These were ``URLField``s, which cannot hold ``/media/uploads/...`` because
+    it has no scheme — so the moment uploads existed, the field that was
+    supposed to receive them rejected them. Widening to a plain string would
+    accept ``javascript:`` and ``data:`` too, and every one of these values is
+    interpolated straight into an ``img src``, some of them inside generated
+    PDFs. So the rule is narrow and explicit: an ``http(s)`` URL, or a path
+    under our own media root.
+
+    A relative path is stored rather than an absolute one because the host
+    name in an absolute URL is a hostage — move the deployment and every logo
+    in the database points at the old domain.
+    """
+
+    def to_internal_value(self, data: Any) -> str:
+        value = str(super().to_internal_value(data)).strip()
+        if not value:
+            return ""
+        lowered = value.lower()
+        if lowered.startswith(("http://", "https://")):
+            return value
+        if value.startswith("/") and not value.startswith("//"):
+            # "//evil.test/x" is protocol-relative — a remote host wearing the
+            # costume of a local path.
+            return value
+        raise serializers.ValidationError(
+            "Give a full http(s) address, or upload an image to get one."
+        )
