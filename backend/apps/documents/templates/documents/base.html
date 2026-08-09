@@ -44,7 +44,7 @@ footer instead, where it belongs.
   /* Header ---------------------------------------------------------------- */
   .issuer-name { font-size: 13pt; font-weight: bold; }
   .issuer-detail { font-size: 8pt; line-height: 1.35; }
-  .doc-title { font-size: 20pt; font-weight: bold; letter-spacing: 1pt; }
+  .doc-title { font-size: 16pt; font-weight: bold; letter-spacing: 1pt; }
   .doc-meta { font-size: 8.5pt; line-height: 1.45; }
   .rule { border-bottom: 1pt solid #000; margin: 6pt 0 10pt 0; }
   .head td { border: none; padding: 0; vertical-align: top; }
@@ -163,7 +163,7 @@ footer instead, where it belongs.
   {% endcomment %}
   <table class="head">
     <tr>
-      <td style="width:58%">
+      <td style="width:53%">
         {% if organization.logo_url %}
           <img src="{{ organization.logo_url }}" alt="{{ organization.name }}" style="max-height:42pt;"><br>
         {% endif %}
@@ -178,7 +178,7 @@ footer instead, where it belongs.
           {% if organization.rwanda_fda_license_no %}{% if organization.tin %} &middot; {% endif %}FDA {{ organization.rwanda_fda_license_no }}{% endif %}
         </div>
       </td>
-      <td style="width:42%" class="right">
+      <td style="width:47%" class="right">
         <div class="doc-title">{% block title %}{{ doc_type_label|upper }}{% endblock %}</div>
         <div class="doc-meta">
           {% block docmeta %}

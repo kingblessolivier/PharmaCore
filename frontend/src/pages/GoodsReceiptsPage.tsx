@@ -112,6 +112,10 @@ function ReceiptDrawer({ receipt, onClose }: { receipt: GoodsReceipt; onClose: (
       invalidate();
       onClose();
     },
+    /* Posting a receipt fails when it has already been posted, or when the
+       order behind it moved. Leaving the drawer showing the pre-post state
+       invites a second attempt at the same dead end. */
+    onError: invalidate,
   });
 
   const cancel = useMutation({
@@ -121,6 +125,7 @@ function ReceiptDrawer({ receipt, onClose }: { receipt: GoodsReceipt; onClose: (
       invalidate();
       onClose();
     },
+    onError: invalidate,
   });
 
   return (

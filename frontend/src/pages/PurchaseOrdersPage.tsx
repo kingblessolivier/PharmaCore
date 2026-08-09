@@ -39,18 +39,33 @@ export function PurchaseOrdersPage() {
     mutationFn: (id: number) =>
       api<StockOrder>(`/api/distribution/orders/${id}/submit/`, { method: "POST" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["orders"] }),
+    /* A refusal here almost always means this list is stale — the order was
+       advanced elsewhere, or a request we thought failed actually landed. The
+       server said "only pending orders can be approved"; the only useful
+       response is to go and look again. */
+    onError: () => qc.invalidateQueries({ queryKey: ["orders"] }),
   });
 
   const approveOrderMutation = useMutation({
     mutationFn: (id: number) =>
       api<StockOrder>(`/api/distribution/orders/${id}/approve/`, { method: "POST" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["orders"] }),
+    /* A refusal here almost always means this list is stale — the order was
+       advanced elsewhere, or a request we thought failed actually landed. The
+       server said "only pending orders can be approved"; the only useful
+       response is to go and look again. */
+    onError: () => qc.invalidateQueries({ queryKey: ["orders"] }),
   });
 
   const receiveOrderMutation = useMutation({
     mutationFn: (id: number) =>
       api<StockOrder>(`/api/distribution/orders/${id}/receive/`, { method: "POST" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["orders"] }),
+    /* A refusal here almost always means this list is stale — the order was
+       advanced elsewhere, or a request we thought failed actually landed. The
+       server said "only pending orders can be approved"; the only useful
+       response is to go and look again. */
+    onError: () => qc.invalidateQueries({ queryKey: ["orders"] }),
   });
 
   const recordPaymentMutation = useMutation({

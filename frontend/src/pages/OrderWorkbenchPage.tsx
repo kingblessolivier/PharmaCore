@@ -62,9 +62,21 @@ export function OrderWorkbenchPage() {
   const act = useMutation({
     mutationFn: (verb: string) =>
       api<StockOrder>(`/api/distribution/orders/${id}/${verb}/`, { method: "POST" }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["stock-order", id] });
+    /* The response *is* the updated order, so it goes straight into the cache.
+       Invalidating alone left a window: the refetch had not landed, the page
+       still showed the old status, the button re-enabled offering the action
+       that had just been performed — and the second press hit a server that
+       had already moved on. That is the "Only pending orders can be approved"
+       400 in the logs, one second after a 200 on the same order. */
+    onSuccess: (updated) => {
+      qc.setQueryData(["stock-order", id], updated);
       void qc.invalidateQueries({ queryKey: ["stock-orders"] });
+    },
+    /* A refusal usually means this page is looking at a stale order — somebody
+       else advanced it, or a request we thought failed actually succeeded.
+       Refetching turns a dead-end error into a screen showing the truth. */
+    onError: () => {
+      void qc.invalidateQueries({ queryKey: ["stock-order", id] });
     },
   });
 

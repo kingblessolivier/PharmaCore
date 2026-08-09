@@ -208,9 +208,19 @@ class TestTheRendererCanFindIt:
     def test_a_missing_file_yields_nothing_rather_than_a_broken_path(self) -> None:
         assert _resolve_asset("/media/uploads/logo/gone.png", "") == ""
 
-    def test_remote_and_inline_sources_are_left_alone(self) -> None:
-        assert _resolve_asset("https://cdn.example/logo.png", "") == "https://cdn.example/logo.png"
+    def test_an_inline_source_is_left_alone(self) -> None:
         assert _resolve_asset("data:image/png;base64,AAAA", "").startswith("data:")
+
+    def test_a_remote_source_is_refused(self) -> None:
+        """Changed deliberately, and the opposite of what this once asserted.
+
+        Resolving a remote URL meant the renderer fetched it — an outbound
+        request on every document. A dead host cost three DNS retries and
+        ~3 seconds, and since `logo_url` is user-settable the fetch was a
+        server-side request forgery vector aimed at our own network. Documents
+        now draw only images we hold.
+        """
+        assert _resolve_asset("https://cdn.example/logo.png", "") == ""
 
     def test_the_logo_actually_lands_in_the_pdf(self) -> None:
         stored = store_image(make_image(300, 120), "logo")

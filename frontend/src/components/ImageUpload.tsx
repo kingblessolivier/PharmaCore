@@ -44,6 +44,8 @@ export function ImageUpload({
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** A picture somebody else hosts. It renders here and not on paper. */
+  const isRemote = /^https?:/i.test(value);
 
   const pick = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -148,7 +150,20 @@ export function ImageUpload({
             className="w-full rounded-md border border-line bg-surface-0 px-2.5 py-1.5 text-xs text-ink-700 placeholder:text-ink-400 focus:border-brand-500 focus:outline-none"
           />
 
-          {hint && !error && <p className="text-xs text-ink-500">{hint}</p>}
+          {/* Said here rather than discovered on a printed document. Generated
+              PDFs never fetch from the internet — it is slow, it fails when
+              the other end is down, and it would let a pasted address point
+              our server at anything. A pasted picture shows on screen and is
+              left off the paperwork. */}
+          {isRemote && (
+            <p className="flex items-start gap-1.5 text-xs text-warning-700">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              Shown on screen, but left off generated documents. Upload the file to have it
+              printed on invoices and orders.
+            </p>
+          )}
+
+          {hint && !error && !isRemote && <p className="text-xs text-ink-500">{hint}</p>}
           {error && (
             <p className="flex items-start gap-1.5 text-xs text-danger-700">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
