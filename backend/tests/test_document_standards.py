@@ -240,3 +240,141 @@ class TestTheTaxInvoiceCarriesWhatTheLawWants:
     ) -> None:
         html = self._render(issuer, customer)
         assert html.index("Fadhil Pharmacy") < html.index("PharmaCore by Medlink")
+
+
+class TestHandoverDocumentsCanBeSigned:
+    """A goods receipt nobody signed is a list, not evidence.
+
+    The receipt and the delivery note are two halves of one act: custody
+    passing from a driver to a storekeeper. Both carried the lines and neither
+    carried the handover — no supplier, no order reference, no remarks, and
+    nowhere for the two people present to put their names.
+    """
+
+    def _grn(self, issuer: Organization) -> str:
+        return render_to_string(
+            "documents/grn.html",
+            {
+                "organization": issuer,
+                "doc_number": "GRN-2026-00007",
+                "grn_number": "GRN-2026-00007",
+                "doc_type_label": "Goods Receipt Note",
+                "generated_at": timezone.now(),
+                "supplier_name": "Kigali Central Depot",
+                "supplier_phone": "0788123456",
+                "order_number": "PO-00042",
+                "received_at": date(2026, 8, 9),
+                "has_discrepancy": True,
+                "delivered_by_name": "J. Habimana",
+                "received_by_name": "A. Uwase",
+                "remarks": "Two cartons showed crushed corners.",
+                "show_values": True,
+                "total": "1,530,000.00",
+                "lines": [
+                    {
+                        "name": "Amoxicillin 500mg",
+                        "batch": "LOT-991",
+                        "expiry": date(2027, 6, 1),
+                        "unit_label": "Carton of 24 boxes",
+                        "base_quantity": "4,800",
+                        "base_unit": "tablets",
+                        "expected": 12,
+                        "received": 10,
+                        "damaged": 1,
+                        "value": "1,200,000.00",
+                    }
+                ],
+            },
+        )
+
+    def test_it_names_itself_and_says_what_it_is_for(self, issuer: Organization) -> None:
+        html = self._grn(issuer)
+        assert "GOODS RECEIPT NOTE" in html
+        assert "when goods are received" in html
+
+    def test_it_records_who_it_came_from_and_against_what(self, issuer: Organization) -> None:
+        html = self._grn(issuer)
+        assert "Kigali Central Depot" in html
+        assert "0788123456" in html
+        assert "PO-00042" in html
+
+    def test_both_parties_have_somewhere_to_sign(self, issuer: Organization) -> None:
+        html = self._grn(issuer)
+        assert "Delivered by" in html
+        assert "Received by" in html
+        assert "Name in print" in html
+        assert "Signature" in html
+        assert "J. Habimana" in html
+        assert "A. Uwase" in html
+
+    def test_a_short_delivery_is_marked_not_left_to_be_compared(self, issuer: Organization) -> None:
+        # Twelve expected, ten received. The reason the document exists is to
+        # surface that, not to print two columns and hope somebody subtracts.
+        html = self._grn(issuer)
+        row = re.search(r"<tr[^>]*>(?:(?!</tr>).)*Amoxicillin.*?</tr>", html, re.S)
+        assert row is not None
+        assert "warn" in row.group(0), "the short quantity must be flagged on the line"
+        assert "DISCREPANCIES: YES" in html
+
+    def test_batch_and_expiry_are_on_every_line(self, issuer: Organization) -> None:
+        # Traceability to the lot is the whole basis of a recall; a medicines
+        # receipt without it cannot support one.
+        html = self._grn(issuer)
+        assert "LOT-991" in html
+        assert "06/2027" in html
+
+    def test_the_unit_travels_with_the_quantity(self, issuer: Organization) -> None:
+        html = self._grn(issuer)
+        assert "Carton of 24 boxes" in html
+        assert "4,800 tablets in total" in html
+
+    def test_there_is_room_for_remarks(self, issuer: Organization) -> None:
+        assert "crushed corners" in self._grn(issuer)
+
+    def test_the_delivery_note_can_also_be_signed(self, issuer: Organization) -> None:
+        # The other half of the same handover: the driver carries it, the
+        # storekeeper signs it, and the signed copy is the proof of delivery.
+        html = render_to_string(
+            "documents/delivery_note.html",
+            {
+                "organization": issuer,
+                "doc_number": "DN-1",
+                "doc_type_label": "Delivery Note",
+                "generated_at": timezone.now(),
+                "from_name": "Kigali Central Depot",
+                "to_name": "Fadhil Pharmacy",
+                "driver": "J. Habimana",
+                "vehicle": "RAD 123 X",
+                "cold_chain": True,
+                "lines": [],
+            },
+        )
+        assert "DELIVERY NOTE" in html
+        assert "Name in print" in html
+        assert "Received by" in html
+        assert "COLD CHAIN CONSIGNMENT" in html
+
+
+class TestEveryPageIsIdentifiable:
+    def test_the_footer_repeats_with_a_page_count(self, issuer: Organization) -> None:
+        """A reader must be able to see that page 4 of 10 is missing.
+
+        Rendered as a repeating frame rather than once at the end, so a
+        document that runs to several sheets is still a record when the sheets
+        are separated.
+        """
+        html = render_to_string(
+            "documents/grn.html",
+            {
+                "organization": issuer,
+                "doc_number": "GRN-1",
+                "doc_type_label": "Goods Receipt Note",
+                "generated_at": timezone.now(),
+                "lines": [{"name": f"Item {i}", "expected": 1, "received": 1} for i in range(90)],
+            },
+        )
+        assert "pdf:pagenumber" in html
+        assert "pdf:pagecount" in html
+        assert "Fadhil Pharmacy" in html
+        pdf = render_pdf(html)
+        assert pdf.decode("latin-1", "ignore").count("/Type /Page") > 1, "should span pages"
