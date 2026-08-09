@@ -55,6 +55,7 @@ import { FinanceHome } from "./pages/apps/FinanceHome";
 import { CostCentresPage } from "./pages/CostCentresPage";
 import { SchedulesPage } from "./pages/SchedulesPage";
 import { PeopleHome } from "./pages/apps/PeopleHome";
+import { PeopleRecordsPage } from "./pages/PeopleRecordsPage";
 
 import { LowStockPage } from "./pages/LowStockPage";
 import { ExpiryPage } from "./pages/ExpiryPage";
@@ -344,6 +345,7 @@ function App() {
               />
               <Route path="/finance/tenant-settings" element={forFinance(<TenantSettingsPage />)} />
               <Route path="/people" element={forHR(<PeopleHome />)} />
+              <Route path="/people/records" element={forHR(<PeopleRecordsPage />)} />
               <Route path="/people/employees" element={forHR(<EmployeesPage />)} />
               <Route path="/people/employees/:id" element={forHR(<EmployeeDetailPage />)} />
               <Route path="/people/payroll" element={forHR(<PayrollPage />)} />

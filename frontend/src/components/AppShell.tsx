@@ -579,6 +579,7 @@ const NAV: NavGroup[] = [
     items: [
       { to: "/people", label: "Overview", icon: Users, end: true },
       { to: "/people/employees", label: "Employees", icon: UserCog },
+      { to: "/people/records", label: "Employee records", icon: ClipboardList },
       { to: "/people/attendance", label: "Time & attendance", icon: Clock },
       { to: "/people/leave", label: "Leave & Accrual", icon: UserCheck },
       { to: "/people/payroll", label: "Payroll", icon: Wallet },
