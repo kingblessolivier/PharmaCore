@@ -17,6 +17,7 @@ import { Badge, Button } from "../components/ui";
 import { api } from "../lib/api";
 import { money } from "../lib/format";
 import { CounterCover } from "../components/CounterCover";
+import { SafetyCheck, type Screening } from "../components/SafetyCheck";
 import type { Quote } from "../lib/insurance";
 import {
   enqueue,
@@ -237,6 +238,12 @@ export function PosPage() {
      person at the counter actually has to hand over: the scheme's share is not
      collected here, it is claimed. */
   const [quote, setQuote] = useState<Quote | null>(null);
+  /* A major interaction is not a warning to scroll past. The sale is held until
+     somebody acknowledges it — the pharmacist keeps the judgement, but the
+     system stops pretending it never noticed. */
+  const [screening, setScreening] = useState<Screening | null>(null);
+  const [overrideNote, setOverrideNote] = useState("");
+  const blocked = screening?.requires_override === true && overrideNote.trim().length === 0;
   const [memberNumber, setMemberNumber] = useState("");
   const covered = quote?.eligible === true;
   const due = covered ? Number(quote?.patient_pays ?? net) : net;
@@ -461,13 +468,15 @@ export function PosPage() {
     setDiscount(0);
     setQuote(null);
     setMemberNumber("");
+    setScreening(null);
+    setOverrideNote("");
     setCouponCode("");
     focusScan();
   };
 
   const takePayment = useCallback(
     async (dispensing?: Record<string, string>) => {
-      if (lines.length === 0 || tendered < due) return;
+      if (lines.length === 0 || tendered < due || blocked) return;
 
       const sale: QueuedSale = {
         client_reference: newClientReference(),
@@ -482,6 +491,9 @@ export function PosPage() {
         // Carried so the sale can be reconciled against the claim the scheme
         // will settle, rather than the two being matched up by hand later.
         member_number: memberNumber || undefined,
+        // Kept with the sale: a dispensing decision that overrode a major
+        // interaction has to be answerable for afterwards.
+        screening_override: overrideNote.trim() || undefined,
         queued_at: new Date().toISOString(),
         attempts: 0,
       };
@@ -499,7 +511,7 @@ export function PosPage() {
           : { text: `Sale complete. Change ${money(tendered - due)}.`, tone: "info" },
       );
     },
-    [lines, tendered, due, tenders, orgId, drain, refreshQueue, memberNumber],
+    [lines, tendered, due, tenders, orgId, drain, refreshQueue, memberNumber, blocked],
   );
 
   /* ---------------------------------------------------------------- keyboard */
@@ -826,6 +838,32 @@ export function PosPage() {
             </dl>
           </div>
 
+          {/* Screened before dispensing, not after. The catalogue has carried
+              interactions, duplicate therapy and contraindications all along
+              and nothing ever asked it. */}
+          <SafetyCheck products={lines.map((l) => l.product)} onResult={setScreening} />
+
+          {screening?.requires_override && (
+            <div className="rounded-lg border border-danger-200 bg-danger-50 p-3">
+              <label
+                htmlFor="dur-override"
+                className="mb-1 block text-xs font-semibold text-danger-900"
+              >
+                Why is this being dispensed anyway?
+              </label>
+              <input
+                id="dur-override"
+                className="field-control w-full"
+                placeholder="Prescriber contacted, INR monitoring arranged…"
+                value={overrideNote}
+                onChange={(e) => setOverrideNote(e.target.value)}
+              />
+              <p className="mt-1 text-[11px] text-danger-800">
+                The sale is held until this is filled in. It is kept with the sale.
+              </p>
+            </div>
+          )}
+
           <CounterCover
             lines={lines.map((l) => ({
               product: l.product,
@@ -932,7 +970,7 @@ export function PosPage() {
             <Button
               className="flex-1"
               onClick={() => (needsPharmacist ? setDispensingOpen(true) : void takePayment())}
-              disabled={lines.length === 0 || outstanding > 0}
+              disabled={lines.length === 0 || outstanding > 0 || blocked}
             >
               {needsPharmacist ? "Dispense & pay" : "Take payment"} (F9)
             </Button>

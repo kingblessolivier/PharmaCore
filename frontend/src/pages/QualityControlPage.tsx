@@ -13,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Check, ShieldCheck, X } from "lucide-react";
 import { useState } from "react";
 import { DataGrid, type Column } from "../components/DataGrid";
+import { BatchPaperwork } from "../components/BatchPaperwork";
 import { Drawer, ErrorNote, Facts, Field, Section, Textarea } from "../components/RecordKit";
 import { Badge, Button, PageHeader } from "../components/ui";
 import { shortDate } from "../lib/format";
@@ -214,6 +215,15 @@ export function QualityControlPage() {
             </div>
           }
         >
+          {/* Releasing a lot is the moment its paperwork has to exist — a
+              Certificate of Analysis is issued for this batch, and a
+              manufacturer's GMP certificate does not answer for it. */}
+          {decision.row.batch != null && (
+            <div className="mb-4">
+              <BatchPaperwork batchId={decision.row.batch} />
+            </div>
+          )}
+
           <Section title="What you are deciding on">
             <Facts
               rows={[
