@@ -567,6 +567,7 @@ export function ReceivablesPage() {
         }
       />
       <AgingStrip orgId={orgId} />
+      <CustomerCredits orgId={orgId} />
       <DataGrid
         rows={invoicesQ.data?.results ?? []}
         columns={columns}
@@ -610,6 +611,78 @@ export function ReceivablesPage() {
       {cancelling && (
         <CancelInvoiceModal invoice={cancelling} onClose={() => setCancelling(null)} />
       )}
+    </div>
+  );
+}
+
+/* Money the pharmacy owes a customer — an overpayment, or a credit note issued
+ * against a return. It sits against the customer until it is set off, and it
+ * had no screen at all: a customer in credit still looked like a customer who
+ * owed, because only the invoices were visible. */
+interface CustomerCredit {
+  id: number;
+  customer_name: string;
+  amount: string;
+  balance: string;
+  source: string;
+  notes: string;
+  created_at: string;
+}
+
+function CustomerCredits({ orgId }: { orgId: number }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["customer-credits", orgId],
+    enabled: orgId > 0,
+    queryFn: () =>
+      api<Paginated<CustomerCredit>>(`/api/finance/customer-credits/?organization=${orgId}`),
+  });
+  const rows = (data?.results ?? []).filter((c) => Number(c.balance) > 0);
+  if (rows.length === 0) return null;
+
+  const total = rows.reduce((sum, c) => sum + Number(c.balance), 0);
+
+  return (
+    <div className="mb-4 rounded-lg border border-line bg-surface-0">
+      <div className="flex items-center justify-between border-b border-line px-4 py-3">
+        <div>
+          <div className="text-sm font-semibold text-ink-900">Credit owed to customers</div>
+          <div className="text-xs text-ink-500">
+            Overpayments and credit notes not yet set off. A customer in credit is not a customer
+            who owes.
+          </div>
+        </div>
+        <div className="text-lg font-semibold tabular-nums text-ink-900">{money(total)}</div>
+      </div>
+      <DataGrid
+        rows={rows}
+        getRowId={(r) => r.id}
+        loading={isLoading}
+        storageKey="customer-credits"
+        exportName="customer-credits"
+        emptyMessage="No customer is in credit."
+        columns={[
+          { key: "customer_name", header: "Customer", value: (r) => r.customer_name },
+          { key: "source", header: "Why", value: (r) => r.source },
+          {
+            key: "amount",
+            header: "Raised",
+            numeric: true,
+            align: "right",
+            defaultHidden: true,
+            value: (r) => Number(r.amount),
+            render: (r) => <span className="tabular-nums">{money(Number(r.amount))}</span>,
+          },
+          {
+            key: "balance",
+            header: "Still owed to them",
+            numeric: true,
+            align: "right",
+            value: (r) => Number(r.balance),
+            render: (r) => <span className="tabular-nums">{money(Number(r.balance))}</span>,
+          },
+          { key: "notes", header: "Notes", defaultHidden: true, value: (r) => r.notes || "—" },
+        ]}
+      />
     </div>
   );
 }

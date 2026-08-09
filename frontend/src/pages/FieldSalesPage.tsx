@@ -30,6 +30,24 @@ import { money, pct, shortDate } from "../lib/format";
 import { useDefaultOrg } from "../lib/recordData";
 import type { Paginated } from "../lib/types";
 
+interface VanStockRow {
+  id: number;
+  rep_name: string;
+  product_name: string;
+  batch_number: string;
+  quantity: number;
+}
+
+interface VanMovement {
+  id: number;
+  product_name: string;
+  batch_number: string;
+  kind: string;
+  quantity: number;
+  reference: string;
+  created_at: string;
+}
+
 interface JourneyPlan {
   id: number;
   rep_username: string;
@@ -84,6 +102,18 @@ export function FieldSalesPage() {
     queryKey: ["visit-logs", orgId],
     enabled: orgId != null,
     queryFn: () => api<Paginated<VisitLog>>("/api/distribution/visit-logs/?page_size=100"),
+  });
+
+  const vanStock = useQuery({
+    queryKey: ["van-stock", orgId],
+    enabled: orgId != null,
+    queryFn: () => api<Paginated<VanStockRow>>("/api/distribution/van-stock/?page_size=200"),
+  });
+
+  const vanMoves = useQuery({
+    queryKey: ["van-movements", orgId],
+    enabled: orgId != null,
+    queryFn: () => api<Paginated<VanMovement>>("/api/distribution/van-movements/?page_size=200"),
   });
 
   const performance = useQuery({
@@ -250,6 +280,83 @@ export function FieldSalesPage() {
           storageKey="journey-plans"
           exportName="journey-plans"
           emptyMessage="No calls planned."
+        />
+      </section>
+
+      {/* Everything currently aboard, across every van. The per-rep manifest
+          lives in the drawer; this is the question a stock controller asks —
+          how much of the warehouse is out on the road right now. */}
+      <section>
+        <h2 className="mb-2 text-base font-semibold tracking-tight text-ink-900">
+          Stock out on the road
+        </h2>
+        <DataGrid
+          rows={vanStock.data?.results ?? []}
+          columns={[
+            { key: "rep_name", header: "Rep", value: (r) => r.rep_name },
+            { key: "product_name", header: "Medicine", value: (r) => r.product_name },
+            {
+              key: "batch_number",
+              header: "Batch",
+              value: (r) => r.batch_number,
+              render: (r) => <span className="font-mono text-xs">{r.batch_number}</span>,
+            },
+            {
+              key: "quantity",
+              header: "Aboard",
+              numeric: true,
+              align: "right",
+              value: (r) => Number(r.quantity),
+            },
+          ]}
+          getRowId={(r) => r.id}
+          loading={vanStock.isLoading}
+          storageKey="van-stock"
+          exportName="van-stock"
+          emptyMessage="No stock loaded on any van."
+        />
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-base font-semibold tracking-tight text-ink-900">Van movements</h2>
+        <DataGrid
+          rows={vanMoves.data?.results ?? []}
+          columns={[
+            { key: "created_at", header: "When", value: (r) => shortDate(r.created_at) },
+            { key: "kind", header: "What", value: (r) => r.kind },
+            { key: "product_name", header: "Medicine", value: (r) => r.product_name },
+            {
+              key: "batch_number",
+              header: "Batch",
+              defaultHidden: true,
+              value: (r) => r.batch_number,
+            },
+            {
+              key: "quantity",
+              header: "Quantity",
+              numeric: true,
+              align: "right",
+              // Signed: loading adds to the van, selling and returning take away.
+              value: (r) => Number(r.quantity),
+              render: (r) => (
+                <span className={`tabular-nums ${Number(r.quantity) < 0 ? "text-danger-700" : ""}`}>
+                  {Number(r.quantity) > 0 ? "+" : ""}
+                  {Number(r.quantity).toLocaleString()}
+                </span>
+              ),
+            },
+            {
+              key: "reference",
+              header: "Reference",
+              defaultHidden: true,
+              value: (r) => r.reference || "—",
+            },
+          ]}
+          getRowId={(r) => r.id}
+          loading={vanMoves.isLoading}
+          storageKey="van-movements"
+          exportName="van-movements"
+          emptyMessage="Nothing has moved on or off a van."
         />
       </section>
 

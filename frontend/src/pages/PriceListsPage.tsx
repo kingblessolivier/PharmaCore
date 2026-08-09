@@ -4,16 +4,58 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Badge, Button, PageHeader, SelectField, TextField } from "../components/ui";
 import { api } from "../lib/api";
-import { shortDate } from "../lib/format";
+import { money, shortDate } from "../lib/format";
+import { useDefaultOrg } from "../lib/recordData";
 import type { Paginated, PriceList } from "../lib/types";
 import { DataGrid } from "../components/DataGrid";
 import { Drawer } from "../components/RecordKit";
 
+interface Coverage {
+  active_lists: number;
+  products_stocked: number;
+  priced_by_list: number;
+  falling_back: number;
+}
+
+function Stat({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: number;
+  hint?: string;
+  tone?: "warning";
+}) {
+  return (
+    <div className="rounded-lg border border-line bg-surface-0 px-4 py-3">
+      <div className="text-xs text-ink-500">{label}</div>
+      <div
+        className={`mt-0.5 text-2xl font-semibold tabular-nums ${
+          tone === "warning" ? "text-warning-700" : "text-ink-900"
+        }`}
+      >
+        {value.toLocaleString()}
+      </div>
+      {hint && <div className="text-xs text-ink-500">{hint}</div>}
+    </div>
+  );
+}
+
 export function PriceListsPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { orgId } = useDefaultOrg();
+
+  const coverage = useQuery({
+    queryKey: ["price-coverage", orgId],
+    enabled: orgId != null,
+    queryFn: () => api<Coverage>(`/api/catalog/price/coverage/?organization=${orgId}`),
+  });
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<PriceList | null>(null);
+  const [opened, setOpened] = useState<PriceList | null>(null);
 
   const [name, setName] = useState("");
   const [listType, setListType] = useState<"WHOLESALE" | "RETAIL" | "PROMOTIONAL" | "CONTRACT">(
@@ -94,6 +136,22 @@ export function PriceListsPage() {
         action={
           <Button onClick={startCreate}>
             <Plus className="h-4 w-4" /> Create Price List
+            {/* What the lists are actually doing. A pharmacy can keep three price
+          lists and still sell almost everything at the fallback price, and
+          nothing said so. */}
+            {coverage.data && (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <Stat label="Medicines stocked" value={coverage.data.products_stocked} />
+                <Stat label="Priced by a list" value={coverage.data.priced_by_list} />
+                <Stat
+                  label="Falling back"
+                  value={coverage.data.falling_back}
+                  tone={coverage.data.falling_back > 0 ? "warning" : undefined}
+                  hint="sold at the shelf price instead"
+                />
+                <Stat label="Active lists" value={coverage.data.active_lists} />
+              </div>
+            )}
           </Button>
         }
       />
@@ -234,6 +292,8 @@ export function PriceListsPage() {
         </Drawer>
       )}
 
+      {opened && <PriceListRows list={opened} onClose={() => setOpened(null)} />}
+
       {editing && (
         <Drawer title="Edit Price List" onClose={() => setEditing(null)}>
           <form onSubmit={submitUpdate} className="flex flex-col gap-4">
@@ -276,5 +336,63 @@ export function PriceListsPage() {
         </Drawer>
       )}
     </div>
+  );
+}
+
+/* What a list actually prices.
+ *
+ * `/api/catalog/product-prices/` served the rows the whole time with nothing
+ * listing them, so a price list could be created, activated and relied on
+ * without anyone being able to see a single price inside it. */
+interface ProductPrice {
+  id: number;
+  product_generic_name: string;
+  unit_price: string;
+  min_quantity: number;
+}
+
+function PriceListRows({ list, onClose }: { list: PriceList; onClose: () => void }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["product-prices", list.id],
+    queryFn: () =>
+      api<Paginated<ProductPrice>>(`/api/catalog/product-prices/?price_list=${list.id}`),
+  });
+  const rows = data?.results ?? [];
+
+  return (
+    <Drawer title={list.name} subtitle={`${list.list_type} price list`} onClose={onClose}>
+      <DataGrid
+        rows={rows}
+        getRowId={(r) => r.id}
+        loading={isLoading}
+        storageKey="product-prices"
+        exportName={`prices-${list.id}`}
+        searchPlaceholder="Search medicines…"
+        emptyMessage="Nothing priced on this list — every medicine falls back to the shelf price."
+        columns={[
+          { key: "product", header: "Medicine", value: (r) => r.product_generic_name },
+          {
+            // A break is what makes a list worth having: buy fifty, pay less
+            // each. Hiding it makes every row look like a flat price.
+            key: "min_quantity",
+            header: "From quantity",
+            numeric: true,
+            align: "right",
+            value: (r) => r.min_quantity,
+            render: (r) => (
+              <span className="tabular-nums">{r.min_quantity > 1 ? r.min_quantity : "any"}</span>
+            ),
+          },
+          {
+            key: "unit_price",
+            header: "Price each",
+            numeric: true,
+            align: "right",
+            value: (r) => Number(r.unit_price),
+            render: (r) => <span className="tabular-nums">{money(Number(r.unit_price))}</span>,
+          },
+        ]}
+      />
+    </Drawer>
   );
 }
