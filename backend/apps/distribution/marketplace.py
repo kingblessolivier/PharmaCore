@@ -97,6 +97,7 @@ def _implicit_offer(*, depot_id: int, product_id: int, free: int) -> Availabilit
             available=0,
             price=ZERO,
             min_order_qty=1,
+            order_multiple=1,
             is_listed=False,
             reason="not offered by this depot",
         )
@@ -108,6 +109,7 @@ def _implicit_offer(*, depot_id: int, product_id: int, free: int) -> Availabilit
         available=free,
         price=Decimal(offer.wholesale_price),
         min_order_qty=1,
+        order_multiple=1,
         is_listed=True,
         reason="" if free else "out of stock",
     )
@@ -124,6 +126,9 @@ class Availability:
     available: int
     price: Decimal
     min_order_qty: int
+    #: Orders must be a whole multiple of this. A case is not opened to fill an
+    #: order, so a depot shipping by the case sells 5 or 10, never 7.
+    order_multiple: int
     is_listed: bool
     reason: str = ""
 
@@ -162,6 +167,7 @@ def availability(
             available=0,
             price=listing.price_per_unit,
             min_order_qty=listing.min_order_qty,
+            order_multiple=listing.order_multiple,
             is_listed=False,
             reason="withdrawn from sale by the depot",
         )
@@ -175,6 +181,7 @@ def availability(
             available=0,
             price=listing.price_per_unit,
             min_order_qty=listing.min_order_qty,
+            order_multiple=listing.order_multiple,
             is_listed=False,
             reason=f"restricted to {listing.customer_segment} customers",
         )
@@ -195,6 +202,7 @@ def availability(
         available=available,
         price=price_for(depot=depot_id, product=product_id, buyer=buyer, listing=listing),
         min_order_qty=listing.min_order_qty,
+        order_multiple=listing.order_multiple,
         is_listed=True,
         reason=reason,
     )
@@ -309,6 +317,12 @@ class LineDecision:
         return self.backordered > 0
 
 
+def _depot_label(avail: Availability) -> str:
+    """The depot's name for a refusal message, from what we already loaded."""
+    listing = avail.listing
+    return listing.depot.name if listing is not None else "The depot"
+
+
 def decide_line(
     *,
     depot: Organization | int,
@@ -351,6 +365,28 @@ def decide_line(
                 f"{avail.min_order_qty}"
             ),
         )
+
+    # Round down to a whole multiple of what the depot ships in. A case is not
+    # opened to fill an order, so asking for 7 of something sold in fives gets 5
+    # shipped and 2 recorded as demand — rather than a quantity the depot cannot
+    # actually pick, discovered on the loading bay.
+    multiple = max(1, avail.order_multiple)
+    if multiple > 1:
+        shippable = (sellable // multiple) * multiple
+        if shippable < avail.min_order_qty:
+            return LineDecision(
+                product=product,
+                requested=quantity,
+                fulfillable=0,
+                backordered=quantity if allow_backorder else 0,
+                price=avail.price,
+                availability=avail,
+                note=(
+                    f"{_depot_label(avail)} ships in multiples of {multiple}; "
+                    f"{sellable} rounds below the minimum order of {avail.min_order_qty}"
+                ),
+            )
+        sellable = shippable
 
     short = quantity - sellable
     return LineDecision(

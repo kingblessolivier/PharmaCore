@@ -8,6 +8,7 @@ Cancellable pre-dispatch. Later slices add allocation, shipment, and GRN.
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Any
 
 from django.conf import settings
 from django.db import models
@@ -285,6 +286,20 @@ class DepotProductListing(models.Model):
     #: catalogue picture; a buyer browsing a storefront of text alone has no way
     #: to tell one white box from another.
     image_url = models.CharField(max_length=500, blank=True, default="")
+    #: Who confirmed this photo is of this medicine, and when.
+    #:
+    #: An unverified picture is worse than none: a buyer trusts it, and a wrong
+    #: photo on a listing sells the wrong medicine. Upload and verification are
+    #: deliberately separate acts, as they are for batch paperwork — attaching a
+    #: file is not the same as somebody checking it is the right file.
+    image_verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    image_verified_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -293,6 +308,26 @@ class DepotProductListing(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["depot", "product"], name="uniq_depot_product_listing")
         ]
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Changing the photo clears its verification.
+
+        Otherwise the check is a one-off: verify a correct picture once, swap it
+        for anything later, and the tick stays. The verification has to belong to
+        the image it was given, not to the row.
+        """
+        if self.pk:
+            previous = type(self).objects.filter(pk=self.pk).values_list("image_url", flat=True)
+            was = next(iter(previous), None)
+            if was is not None and was != self.image_url:
+                self.image_verified_by = None
+                self.image_verified_at = None
+        super().save(*args, **kwargs)
+
+    @property
+    def image_is_trusted(self) -> bool:
+        """Whether this photo may be shown to a buyer as this medicine."""
+        return bool(self.image_url) and self.image_verified_at is not None
 
     def __str__(self) -> str:
         return f"{self.depot.name} · {self.product} (Offered: {self.offered_qty})"
