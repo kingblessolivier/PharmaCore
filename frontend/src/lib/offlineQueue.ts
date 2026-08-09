@@ -26,6 +26,10 @@ const STORE = "queued-sales";
 export interface QueuedSaleLine {
   product: number;
   quantity: number;
+  /** Which packaging level the quantity counts — a box, a strip, a tablet.
+   *  Absent means the product's default sale unit, which is how every line
+   *  behaved before units existed. */
+  unit?: string;
   unit_price: string;
   tax_rate?: string;
   label?: string;

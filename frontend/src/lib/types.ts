@@ -2271,13 +2271,29 @@ export interface InventoryValuation {
 }
 
 /** One candidate from typing a name at the till. */
+/** A packaging level this medicine may be sold in. */
+export interface SaleUnit {
+  id: number;
+  code: string;
+  label: string;
+  factor_to_base: string;
+  is_base: boolean;
+  is_default: boolean;
+  unit_price: string;
+}
+
 export interface CounterSearchHit {
   product: number;
   label: string;
   brand_name: string;
   dosage_form: string;
   pack_size: string;
-  units: number;
+  /** Box, strip, tablet — so the counter offers the unit rather than guessing
+   *  which one the number meant. */
+  sale_units: SaleUnit[];
+  /** 1 whole only, 2 halves, 4 quarters. Approved per product by a pharmacist. */
+  divisibility: number;
+  split_note: string;
   unit_price: string;
   price_source: string;
   on_hand: number;

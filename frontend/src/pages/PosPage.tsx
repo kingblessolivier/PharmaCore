@@ -28,12 +28,20 @@ import {
 } from "../lib/offlineQueue";
 import { useDefaultOrg } from "../lib/recordData";
 import type { ActivePromotion, ScanResult } from "../lib/retail";
-import type { CounterSearchHit, CounterSearchResponse } from "../lib/types";
+import type { CounterSearchHit, CounterSearchResponse, SaleUnit } from "../lib/types";
 
 interface Line {
   product: number;
   label: string;
-  quantity: number;
+  /** The pack sizes this medicine is sold in. */
+  sale_units: SaleUnit[];
+  /** How many of each pack size, keyed by unit code. A customer taking three
+   *  boxes and four loose tablets is one line with two entries, not two lines
+   *  for the same medicine. */
+  quantities: Record<string, number>;
+  /** 1 whole only, 2 halves, 4 quarters — approved per product. */
+  divisibility: number;
+  split_note: string;
   unit_price: string;
   tax_rate: string;
   requires_prescription: boolean;
@@ -49,18 +57,75 @@ const TENDERS: { key: Tender; label: string; hotkey: string; icon: typeof Bankno
   { key: "CARD", label: "Card", hotkey: "F4", icon: CreditCard },
 ];
 
-/* -------------------------------------------------------------------------- */
+/** What one line comes to, and how many single units it draws off the shelf.
+ *
+ * A customer taking three boxes and four loose tablets is one line: the boxes
+ * and the loose tablets are the same medicine at two pack sizes, and a receipt
+ * that splits them into two lines reads as two purchases. */
+/** One item per pack size actually taken.
+ *
+ * The screen shows one line per medicine; the sale records what left the shelf
+ * at each size, because three boxes and four loose tablets come off stock
+ * differently and are priced differently. */
+function saleItems(line: Line) {
+  const sizes = line.sale_units.length
+    ? line.sale_units
+    : [{ code: "", unit_price: line.unit_price } as SaleUnit];
+  return sizes
+    .filter((u) => (line.quantities[u.code] ?? 0) > 0)
+    .map((u) => ({
+      product: line.product,
+      quantity: line.quantities[u.code],
+      unit: u.code || undefined,
+      unit_price: u.unit_price || line.unit_price,
+      tax_rate: line.tax_rate,
+      label: line.label,
+    }));
+}
 
-/** The till's own arithmetic. Recomputed locally so the totals keep working
- *  with no connection — the server agrees, it does not decide. */
+/** What one single unit costs — what the insurer's split is quoted against. */
+function baseUnitPrice(line: Line): string {
+  const base = line.sale_units.find((u) => u.is_base);
+  return base?.unit_price ?? line.unit_price;
+}
+
+function lineTotals(line: Line) {
+  let money = 0;
+  let dispensed = 0;
+  for (const unit of line.sale_units) {
+    const qty = line.quantities[unit.code] ?? 0;
+    if (!qty) continue;
+    money += Number(unit.unit_price) * qty;
+    dispensed += Number(unit.factor_to_base) * qty;
+  }
+  // A medicine with no pack sizes recorded behaves as it always did.
+  if (line.sale_units.length === 0) {
+    const qty = line.quantities[""] ?? 0;
+    money += Number(line.unit_price) * qty;
+    dispensed += qty;
+  }
+  return { money, dispensed };
+}
+
+/** How much one press of +/- moves a pack size.
+ *
+ * A single tablet a pharmacist has approved for halving steps by a half. A box
+ * always steps by a whole box: half a box of a hundred is fifty tablets, and
+ * the person meant one of those two things. */
+function step(line: Line, unit: SaleUnit | undefined, direction: 1 | -1): number {
+  const current = line.quantities[unit?.code ?? ""] ?? 0;
+  const splittable = (unit?.is_base ?? true) && line.divisibility > 1;
+  const size = splittable ? 1 / line.divisibility : 1;
+  return Math.max(0, Math.round((current + direction * size) * 1000) / 1000);
+}
+
 function totals(lines: Line[], discount: number) {
-  const gross = lines.reduce((s, l) => s + Number(l.unit_price) * l.quantity, 0);
+  const gross = lines.reduce((s, l) => s + lineTotals(l).money, 0);
   const net = Math.max(gross - discount, 0);
   const tax = lines.reduce((s, l) => {
     const rate = Number(l.tax_rate);
     if (rate <= 0) return s;
-    const lineTotal = Number(l.unit_price) * l.quantity;
-    return s + (lineTotal * rate) / (100 + rate);
+    return s + (lineTotals(l).money * rate) / (100 + rate);
   }, 0);
   return { gross, net, tax };
 }
@@ -235,7 +300,11 @@ export function PosPage() {
       const existing = current.findIndex((l) => l.product === hit.product);
       if (existing >= 0) {
         const copy = [...current];
-        copy[existing] = { ...copy[existing], quantity: copy[existing].quantity + hit.units };
+        const line = copy[existing];
+        copy[existing] = {
+          ...line,
+          quantities: { ...line.quantities, "": (line.quantities[""] ?? 0) + hit.units },
+        };
         return copy;
       }
       return [
@@ -244,7 +313,10 @@ export function PosPage() {
           product: hit.product,
           label: hit.label,
           // A carton barcode adds the carton, not one tablet.
-          quantity: hit.units,
+          quantities: { "": hit.units },
+          sale_units: [],
+          divisibility: 1,
+          split_note: "",
           unit_price: hit.unit_price || "0",
           tax_rate: "18",
           requires_prescription: hit.requires_prescription,
@@ -309,30 +381,53 @@ export function PosPage() {
 
   useEffect(() => setHighlight(0), [typed]);
 
+  /* A typed hit carries the medicine's packaging chain, so the line starts on
+     the unit the pharmacy sells by default — a box where boxes are the usual
+     sale, a tablet where they are not — and the cashier can change it per line
+     without retyping the product. */
   const addHit = useCallback(
     (hit: CounterSearchHit) => {
-      addLine({
-        found: true,
-        code: "",
-        product: hit.product,
-        label: hit.label,
-        units: hit.units,
-        packaging_level: "EACH",
-        unit_price: hit.unit_price,
-        price_source: hit.price_source,
-        price_list_name: "",
-        on_hand: hit.on_hand,
-        substitutes: null,
-        requires_prescription: hit.requires_prescription,
-        is_controlled: hit.is_controlled,
-      } as Extract<ScanResult, { found: true }>);
+      const units = hit.sale_units ?? [];
+      const preferred = units.find((u) => u.is_default) ?? units.find((u) => u.is_base);
+
+      setLines((current) => {
+        const at = current.findIndex((l) => l.product === hit.product);
+        if (at >= 0) {
+          // Already on the ticket — add one more of the usual pack size rather
+          // than starting a second line for the same medicine.
+          const copy = [...current];
+          const line = copy[at];
+          const code = preferred?.code ?? "";
+          copy[at] = {
+            ...line,
+            quantities: { ...line.quantities, [code]: (line.quantities[code] ?? 0) + 1 },
+          };
+          return copy;
+        }
+        return [
+          ...current,
+          {
+            product: hit.product,
+            label: hit.label,
+            quantities: { [preferred?.code ?? ""]: 1 },
+            sale_units: units,
+            divisibility: hit.divisibility ?? 1,
+            split_note: hit.split_note ?? "",
+            unit_price: preferred?.unit_price || hit.unit_price || "0",
+            tax_rate: "18",
+            requires_prescription: hit.requires_prescription,
+            is_controlled: hit.is_controlled,
+            on_hand: hit.on_hand,
+          },
+        ];
+      });
       setNotice(
         hit.on_hand <= 0 ? { text: `${hit.label} shows no stock on hand.`, tone: "warn" } : null,
       );
       setCode("");
       focusScan();
     },
-    [addLine, focusScan],
+    [focusScan],
   );
 
   /* -------------------------------------------------------------- promotions */
@@ -377,13 +472,7 @@ export function PosPage() {
       const sale: QueuedSale = {
         client_reference: newClientReference(),
         organization: orgId ?? 0,
-        items: lines.map((l) => ({
-          product: l.product,
-          quantity: l.quantity,
-          unit_price: l.unit_price,
-          tax_rate: l.tax_rate,
-          label: l.label,
-        })),
+        items: lines.flatMap((l) => saleItems(l)),
         payments: TENDERS.filter((t) => Number(tenders[t.key]) > 0).map((t) => ({
           method: t.key,
           amount: tenders[t.key],
@@ -601,46 +690,85 @@ export function PosPage() {
                           <Badge tone="warning">Rx</Badge>
                         )}
                       </div>
-                      <div className="text-xs text-ink-500">
-                        {money(line.unit_price)} each
-                        {line.quantity > line.on_hand && (
-                          <span className="ml-2 text-danger-700">only {line.on_hand} in stock</span>
-                        )}
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-500">
+                        {(() => {
+                          const { dispensed } = lineTotals(line);
+                          const singles = line.sale_units.find((u) => u.is_base)?.label ?? "units";
+                          return dispensed > line.on_hand ? (
+                            <span className="text-danger-700">
+                              needs {dispensed.toLocaleString()} {singles.toLowerCase()} · only{" "}
+                              {line.on_hand.toLocaleString()} on the shelf
+                            </span>
+                          ) : (
+                            <span>
+                              {dispensed.toLocaleString()} {singles.toLowerCase()} ·{" "}
+                              {line.on_hand.toLocaleString()} on the shelf
+                            </span>
+                          );
+                        })()}
+
+                        {/* Which packaging level this line counts. Switching it
+                            reprices the line, because a box is not a hundred
+                            times a loose tablet — breaking a pack costs the
+                            pharmacy the ability to sell or return it sealed. */}
+                        {/* One row per pack size this medicine is sold in, so a
+                            customer taking three boxes and four loose tablets is
+                            one line with two counts. */}
+                      </div>
+
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                        {(line.sale_units.length
+                          ? line.sale_units
+                          : [{ code: "", label: "Units", is_base: true } as SaleUnit]
+                        ).map((unit) => {
+                          const qty = line.quantities[unit.code] ?? 0;
+                          const change = (direction: 1 | -1) => {
+                            setLines((c) =>
+                              c
+                                .map((l, i) =>
+                                  i === index
+                                    ? {
+                                        ...l,
+                                        quantities: {
+                                          ...l.quantities,
+                                          [unit.code]: step(l, unit, direction),
+                                        },
+                                      }
+                                    : l,
+                                )
+                                .filter((l) => lineTotals(l).dispensed > 0),
+                            );
+                            focusScan();
+                          };
+                          return (
+                            <span key={unit.code || "each"} className="flex items-center gap-1">
+                              <button
+                                aria-label={`One less ${unit.label}`}
+                                disabled={qty <= 0}
+                                className="rounded border border-line p-1 text-ink-600 hover:bg-surface-100 disabled:opacity-40"
+                                onClick={() => change(-1)}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </button>
+                              <span className="w-10 text-center tabular-nums text-ink-900">
+                                {qty % 1 === 0 ? qty : qty.toFixed(2)}
+                              </span>
+                              <button
+                                aria-label={`One more ${unit.label}`}
+                                className="rounded border border-line p-1 text-ink-600 hover:bg-surface-100"
+                                onClick={() => change(+1)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                              <span className="text-xs text-ink-600">{unit.label}</span>
+                            </span>
+                          );
+                        })}
                       </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <button
-                        aria-label="Less"
-                        className="rounded border border-line p-1 text-ink-600 hover:bg-surface-100"
-                        onClick={() => {
-                          setLines((c) =>
-                            c
-                              .map((l, i) => (i === index ? { ...l, quantity: l.quantity - 1 } : l))
-                              .filter((l) => l.quantity > 0),
-                          );
-                          focusScan();
-                        }}
-                      >
-                        <Minus className="h-3.5 w-3.5" />
-                      </button>
-                      <span className="w-10 text-center tabular-nums text-ink-900">
-                        {line.quantity}
-                      </span>
-                      <button
-                        aria-label="More"
-                        className="rounded border border-line p-1 text-ink-600 hover:bg-surface-100"
-                        onClick={() => {
-                          setLines((c) =>
-                            c.map((l, i) => (i === index ? { ...l, quantity: l.quantity + 1 } : l)),
-                          );
-                          focusScan();
-                        }}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    <span className="w-24 shrink-0 text-right tabular-nums text-ink-900">
-                      {money(Number(line.unit_price) * line.quantity)}
+
+                    <span className="w-28 shrink-0 text-right tabular-nums text-ink-900">
+                      {money(lineTotals(line).money)}
                     </span>
                     <button
                       aria-label="Remove"
@@ -701,8 +829,8 @@ export function PosPage() {
           <CounterCover
             lines={lines.map((l) => ({
               product: l.product,
-              quantity: l.quantity,
-              unit_price: l.unit_price,
+              quantity: lineTotals(l).dispensed,
+              unit_price: baseUnitPrice(l),
             }))}
             quote={quote}
             onQuote={(q, member) => {

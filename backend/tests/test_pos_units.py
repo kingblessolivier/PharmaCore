@@ -207,3 +207,34 @@ def test_completing_a_box_sale_draws_a_hundred_from_the_batch(org):
 
     batch.refresh_from_db()
     assert batch.quantity_available == Decimal("900.000"), "one box is a hundred tablets"
+
+
+# ---------------------------------------------------------------------------
+# What the till is actually sent, and what it gets back
+# ---------------------------------------------------------------------------
+
+
+def test_the_counter_search_offers_the_packaging_levels(org):
+    """The till cannot offer a box unless the search says one exists."""
+    from apps.iam.models import User
+    from rest_framework.test import APIClient
+
+    product = make_product()
+    PharmacyProduct.objects.create(
+        organization=org, product=product, retail_price=Decimal("50"), is_active=True
+    )
+    stock(org, product, 500)
+    user = User.objects.create_superuser(username="till", password="pw", organization=org)
+    client = APIClient()
+    client.force_authenticate(user=user)
+
+    body = client.get(f"/api/retail/counter/search/?organization={org.pk}&q=Para").json()
+    assert body["results"], body
+    hit = body["results"][0]
+
+    levels = {u["code"]: u for u in hit["sale_units"]}
+    assert set(levels) == {"TABLET", "STRIP", "PACK"}
+    # A box of 100 costs a hundred tablets' worth unless priced in its own right.
+    assert levels["PACK"]["unit_price"] == "5000.00"
+    assert levels["TABLET"]["is_default"] is True
+    assert hit["divisibility"] == 1

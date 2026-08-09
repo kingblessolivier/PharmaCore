@@ -207,7 +207,14 @@ def test_the_endpoint_answers_a_typed_query(cashier, org):
     row = body["results"][0]
     assert row["label"] == "Amoxicillin 500mg"
     assert row["on_hand"] == 50
-    assert row["units"] == 1
+    # `units: 1` used to be hardcoded here — a name search had no packaging to
+    # read. The row now carries the pack sizes the medicine is actually sold in,
+    # which is what lets the till offer a box instead of guessing that the
+    # number meant one tablet.
+    # A medicine with no pack sizes recorded yet offers none, and the till
+    # falls back to selling in singles exactly as it did before units existed.
+    assert row["sale_units"] == []
+    assert row["divisibility"] == 1
     assert body["exact"] is None
 
 
