@@ -126,6 +126,10 @@ class StorefrontView(APIView):
                 # How it is packed, so ordering "1" is not a guess.
                 "pack_units": [
                     {
+                        # The id is what an order line references — without it
+                        # a buyer can see the pack levels and cannot order in
+                        # one, which is how "10" stayed dimensionless.
+                        "id": u.pk,
                         "code": u.code,
                         "label": u.name or u.get_code_display(),
                         "factor_to_base": str(u.factor_to_base),

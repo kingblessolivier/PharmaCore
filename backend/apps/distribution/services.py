@@ -38,15 +38,29 @@ def _product_label(product: object) -> str:
     return f"{product.generic_name} {product.strength}".strip()  # type: ignore[attr-defined]
 
 
+def _base_unit_label(product: Any) -> str:
+    """What this medicine is ultimately counted in — tablets, vials, bottles."""
+    base = next((u for u in product.units.all() if u.is_base), None)
+    if base is None:
+        return "units"
+    return base.name or base.get_code_display()
+
+
 def generate_po_document(*, order: StockOrder, user: User | None) -> Document:
+    # The unit travels with the quantity. A depot reading "10" cannot tell ten
+    # cartons from ten tablets, and picking the wrong one is an error of
+    # whatever the carton holds.
     lines = [
         {
             "name": _product_label(i.product),
             "qty": i.quantity_ordered,
-            "price": i.price_per_unit,
+            "unit_label": i.unit_label,
+            "base_quantity": i.quantity_base or i.quantity_ordered,
+            "base_unit": _base_unit_label(i.product),
+            "price": i.price_per_ordered_unit,
             "total": i.line_total,
         }
-        for i in order.items.select_related("product").all()
+        for i in order.items.select_related("product", "unit").all()
     ]
     return generate_document(
         organization=order.retail,
@@ -56,6 +70,11 @@ def generate_po_document(*, order: StockOrder, user: User | None) -> Document:
             "seller_name": order.depot.name,
             "lines": lines,
             "total": order.total_amount,
+            "po_number": order.order_number,
+            "order_date": order.created_at,
+            "expected_delivery": order.expected_delivery,
+            "notes": order.notes,
+            "currency": order.retail.currency,
         },
         reference_type="stock_order",
         reference_id=str(order.pk),

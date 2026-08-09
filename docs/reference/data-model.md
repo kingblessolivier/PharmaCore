@@ -543,6 +543,8 @@ Table `distribution_orderitem`.
 | `quantity_shipped` | Decimal(16,3) |  |
 | `quantity_received` | Decimal(16,3) |  |
 | `price_per_unit` | Decimal(14,2) |  |
+| `unit` | FK → catalog.ProductUnit | optional · on delete: protect |
+| `quantity_base` | Decimal(16,3) |  |
 
 
 ### `OrderPayment`

@@ -296,11 +296,14 @@ export function LineArea({
   title,
   count,
   actions,
+  note,
   children,
 }: {
   title: string;
   count?: number;
   actions?: ReactNode;
+  /** A line under the header, for what the controls above will do. */
+  note?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -314,6 +317,11 @@ export function LineArea({
         </h2>
         {actions && <div className="flex items-center gap-1.5">{actions}</div>}
       </header>
+      {note && (
+        <p className="border-b border-line bg-surface-50 px-3 py-1 text-right text-xs text-ink-600">
+          {note}
+        </p>
+      )}
       <div className="overflow-x-auto">{children}</div>
     </section>
   );

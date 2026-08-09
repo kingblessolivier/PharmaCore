@@ -179,6 +179,14 @@ export interface OrderItem {
   id?: number;
   product: number;
   product_name?: string;
+  product_image?: string;
+  /** The packing level the buyer counted in; null means base units. */
+  unit?: number | null;
+  unit_code?: string;
+  unit_label?: string;
+  pack_factor?: string | null;
+  /** The same quantity in base units — what actually gets picked. */
+  quantity_base?: string;
   quantity_ordered: number;
   quantity_approved?: number;
   quantity_shipped?: number;
@@ -234,6 +242,8 @@ export interface StockOrder {
   /** What this order asked for that the depot could not supply. */
   backorders: OrderBackorder[];
   created_at: string;
+  /** The order document the depot was sent, once the order is approved. */
+  document: { doc_number: string; generated_at: string; download_url: string } | null;
 }
 
 /** A line the depot could not fill, kept as demand rather than refused. */
