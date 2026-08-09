@@ -109,7 +109,7 @@ export function ApprovalsInboxPage() {
         ))}
       </div>
 
-      {error && <p className="mb-3 text-sm text-danger">{error}</p>}
+      {error && <p className="mb-3 text-sm text-danger-700">{error}</p>}
 
       {q.isLoading && (
         <div className="flex justify-center py-10">

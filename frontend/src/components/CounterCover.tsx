@@ -115,13 +115,13 @@ export function CounterCover({
 
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-md border border-line px-3 py-2">
-              <div className="text-[11px] uppercase tracking-wide text-ink-500">Patient pays</div>
+              <div className="text-[11px] text-ink-500">Patient pays</div>
               <div className="text-lg font-semibold tabular-nums text-ink-900">
                 {money(Number(quote.patient_pays ?? 0))}
               </div>
             </div>
             <div className="rounded-md border border-line px-3 py-2">
-              <div className="text-[11px] uppercase tracking-wide text-ink-500">Scheme pays</div>
+              <div className="text-[11px] text-ink-500">Scheme pays</div>
               <div className="text-lg font-semibold tabular-nums text-ink-900">
                 {money(Number(quote.insurer_pays ?? 0))}
               </div>

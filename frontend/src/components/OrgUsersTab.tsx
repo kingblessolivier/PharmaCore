@@ -133,7 +133,7 @@ function UserModal({
         <div className="grid grid-cols-2 gap-3">
           <TextField label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium uppercase tracking-wide text-ink-500">
+            <span className="text-xs font-medium text-ink-500">
               Department
             </span>
             <select
@@ -151,7 +151,7 @@ function UserModal({
           </label>
         </div>
         <div>
-          <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-ink-500">
+          <span className="mb-1.5 block text-xs font-medium text-ink-500">
             Roles
           </span>
           <RoleChecklist
@@ -220,7 +220,7 @@ export function OrgUsersTab({ organizationId }: { organizationId: number }) {
       {users.data && (
         <div className="overflow-hidden rounded-lg border border-line bg-surface-0">
           <table className="w-full text-sm">
-            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
+            <thead className="border-b border-line text-left text-xs text-ink-500">
               <tr>
                 <th className="px-4 py-2.5">Username</th>
                 <th className="px-4 py-2.5">Name</th>

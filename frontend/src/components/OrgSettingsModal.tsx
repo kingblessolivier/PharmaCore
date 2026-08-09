@@ -83,7 +83,7 @@ export function OrgSettingsModal({
               ))}
             </SelectField>
             <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium uppercase tracking-wide text-ink-500">
+              <span className="text-xs font-medium text-ink-500">
                 Brand colour
               </span>
               <div className="flex items-center gap-2">
@@ -105,7 +105,7 @@ export function OrgSettingsModal({
           </div>
 
           <div>
-            <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-ink-500">
+            <span className="mb-1.5 block text-xs font-medium text-ink-500">
               Features enabled for this pharmacy
             </span>
             <div className="grid grid-cols-1 gap-1.5 rounded-lg border border-line p-3 sm:grid-cols-2">
@@ -123,7 +123,7 @@ export function OrgSettingsModal({
             </div>
           </div>
 
-          {error && <p className="text-sm text-danger">{error}</p>}
+          {error && <p className="text-sm text-danger-700">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={onClose}>
               Cancel

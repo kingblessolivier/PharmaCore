@@ -116,13 +116,13 @@ export function PermissionMatrixPage() {
           </Button>
         )}
       </div>
-      {error && <p className="mb-3 text-sm text-danger">{error}</p>}
+      {error && <p className="mb-3 text-sm text-danger-700">{error}</p>}
 
       <div className="overflow-x-auto rounded-lg border border-line bg-surface-0">
         <table className="data-grid">
           <thead>
             <tr className="border-b border-line">
-              <th className="sticky left-0 z-10 bg-surface-0 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-ink-500">
+              <th className="sticky left-0 z-10 bg-surface-0 px-4 py-2.5 text-left text-xs font-semibold text-ink-500">
                 Permission
               </th>
               {roles.map((r) => (
@@ -148,7 +148,7 @@ export function PermissionMatrixPage() {
                 <tr className="bg-surface-100">
                   <td
                     colSpan={roles.length + 2}
-                    className="px-4 py-1 text-[11px] font-semibold uppercase tracking-wide text-ink-500"
+                    className="px-4 py-1 text-[11px] font-semibold text-ink-500"
                   >
                     {resource}
                   </td>

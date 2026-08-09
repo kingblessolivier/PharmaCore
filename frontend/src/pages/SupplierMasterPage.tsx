@@ -331,7 +331,7 @@ export function LicencesTab({ profile }: { profile: SupplierProfile }) {
 
         <div className="overflow-x-auto rounded-lg border border-line">
           <table className="w-full min-w-[720px] text-sm">
-            <thead className="border-b border-line bg-surface-50 text-left text-[11px] uppercase tracking-wide text-ink-500">
+            <thead className="border-b border-line bg-surface-50 text-left text-[11px] text-ink-500">
               <tr>
                 <th className="px-2.5 py-2">Licence</th>
                 <th className="px-2.5 py-2">Authority</th>
@@ -527,7 +527,7 @@ export function PriceAgreementsTab({ profile }: { profile: SupplierProfile }) {
 
         <div className="overflow-x-auto rounded-lg border border-line">
           <table className="w-full min-w-[680px] text-sm">
-            <thead className="border-b border-line bg-surface-50 text-left text-[11px] uppercase tracking-wide text-ink-500">
+            <thead className="border-b border-line bg-surface-50 text-left text-[11px] text-ink-500">
               <tr>
                 <th className="px-2.5 py-2">Product</th>
                 <th className="px-2.5 py-2 text-right">From qty</th>
@@ -722,7 +722,7 @@ export function PerformanceTab({ profile }: { profile: SupplierProfile }) {
         ) : (
           <div className="overflow-x-auto rounded-lg border border-line">
             <table className="w-full min-w-[620px] text-sm">
-              <thead className="border-b border-line bg-surface-50 text-left text-[11px] uppercase tracking-wide text-ink-500">
+              <thead className="border-b border-line bg-surface-50 text-left text-[11px] text-ink-500">
                 <tr>
                   <th className="px-2.5 py-2">Period</th>
                   <th className="px-2.5 py-2 text-right">Orders</th>

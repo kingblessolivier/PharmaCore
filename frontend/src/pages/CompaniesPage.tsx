@@ -102,7 +102,7 @@ function CompanyModal({ company, onClose }: { company?: Company; onClose: () => 
           shape="wide"
           hint="Heads every document the group issues — a branch without its own logo falls back to this one."
         />
-        {error && <p className="text-sm text-danger">{error}</p>}
+        {error && <p className="text-sm text-danger-700">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancel
@@ -310,7 +310,7 @@ export function CompaniesPage() {
             value: (c) => (c.is_active ? "Active" : "Inactive"),
             render: (c) =>
               c.is_active ? (
-                <span className="text-success">Active</span>
+                <span className="text-success-700">Active</span>
               ) : (
                 <span className="text-ink-500">Inactive</span>
               ),

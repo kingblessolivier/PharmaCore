@@ -100,11 +100,11 @@ function DocumentsModal({ user, onClose }: { user: UserAdmin; onClose: () => voi
                   <td className="px-3 py-2 text-ink-700">{d.expiry_date || "—"}</td>
                   <td className="px-3 py-2">
                     {d.is_verified ? (
-                      <span className="inline-flex items-center gap-1 text-success">
+                      <span className="inline-flex items-center gap-1 text-success-700">
                         <BadgeCheck className="h-3.5 w-3.5" /> Verified
                       </span>
                     ) : (
-                      <span className="text-warning">Pending</span>
+                      <span className="text-warning-700">Pending</span>
                     )}
                   </td>
                   <td className="px-3 py-2">
@@ -137,7 +137,7 @@ function DocumentsModal({ user, onClose }: { user: UserAdmin; onClose: () => voi
         </div>
 
         <div className="rounded-lg border border-line bg-surface-50 p-3">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">
+          <div className="mb-2 text-xs font-semibold text-ink-500">
             Add a document
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -165,7 +165,7 @@ function DocumentsModal({ user, onClose }: { user: UserAdmin; onClose: () => voi
               </Button>
             </div>
           </div>
-          {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+          {error && <p className="mt-2 text-sm text-danger-700">{error}</p>}
         </div>
       </div>
     </Drawer>
@@ -374,7 +374,7 @@ function UserModal({
         </p>
 
         <div>
-          <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-ink-500">
+          <span className="mb-1.5 block text-xs font-medium text-ink-500">
             Roles
           </span>
           <div className="grid grid-cols-2 gap-1.5">
@@ -457,7 +457,7 @@ function ActivityModal({ userId, onClose }: { userId: number; onClose: () => voi
                   className="rounded-lg border border-line bg-surface-0 px-2 py-2 text-center"
                 >
                   <div className="text-lg font-semibold text-ink-900">{perf.data![k]}</div>
-                  <div className="text-[11px] uppercase tracking-wide text-ink-500">{label}</div>
+                  <div className="text-[11px] text-ink-500">{label}</div>
                 </div>
               ))}
             </div>

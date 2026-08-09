@@ -269,7 +269,7 @@ export function FinanceStatementsPage() {
               ["Net profit", plQ.data.net_profit],
             ].map(([label, v]) => (
               <div key={label} className="rounded-lg border border-line bg-surface-0 px-4 py-3">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-ink-500">
+                <div className="text-[11px] font-medium text-ink-500">
                   {label}
                 </div>
                 <div className="mt-0.5 font-mono text-lg font-semibold tabular-nums text-ink-900">
@@ -341,7 +341,7 @@ export function FinanceStatementsPage() {
               ["Net change", cfQ.data.net_change],
             ].map(([label, v]) => (
               <div key={label} className="rounded-lg border border-line bg-surface-0 px-4 py-3">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-ink-500">
+                <div className="text-[11px] font-medium text-ink-500">
                   {label}
                 </div>
                 <div
@@ -469,7 +469,7 @@ export function FinanceStatementsPage() {
             />
           </div>
           <table className="w-full text-sm">
-            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
+            <thead className="border-b border-line text-left text-xs text-ink-500">
               <tr>
                 <th className="px-4 py-2">Code</th>
                 <th className="px-4 py-2">Account</th>
@@ -547,7 +547,7 @@ export function FinanceStatementsPage() {
           )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
+              <thead className="border-b border-line text-left text-xs text-ink-500">
                 <tr>
                   <th className="px-4 py-2">Branch</th>
                   <th className="px-4 py-2 text-right">Revenue</th>
@@ -778,7 +778,7 @@ function PeriodClosePanel({ orgId, start, end }: { orgId: number; start: string;
           <Lock className="h-4 w-4" /> {close.isPending ? "Closing…" : "Close this period"}
         </Button>
       </div>
-      {error && <p className="text-sm text-danger">{error}</p>}
+      {error && <p className="text-sm text-danger-700">{error}</p>}
 
       {current && <ChecklistPanel period={current} />}
 

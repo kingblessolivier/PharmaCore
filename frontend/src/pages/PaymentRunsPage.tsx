@@ -84,7 +84,7 @@ function NewRunModal({ onClose, orgId }: { onClose: () => void; orgId: number })
 
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-medium uppercase tracking-wide text-ink-500">
+            <p className="text-xs font-medium text-ink-500">
               Bills to settle
             </p>
             <button
@@ -100,7 +100,7 @@ function NewRunModal({ onClose, orgId }: { onClose: () => void; orgId: number })
           <div className="max-h-80 overflow-y-auto rounded-md border border-line">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-surface-100">
-                <tr className="text-left text-xs uppercase tracking-wide text-ink-500">
+                <tr className="text-left text-xs text-ink-500">
                   <th className="w-10 px-3 py-2"></th>
                   <th className="px-3 py-2">Supplier</th>
                   <th className="px-3 py-2">Bill</th>
@@ -190,19 +190,19 @@ function RunDetail({ run, onClose }: { run: PaymentRun; onClose: () => void }) {
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div>
-            <p className="text-xs uppercase tracking-wide text-ink-500">Status</p>
+            <p className="text-xs text-ink-500">Status</p>
             <StatusChip status={run.status} />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wide text-ink-500">Total</p>
+            <p className="text-xs text-ink-500">Total</p>
             <p className="font-semibold tabular-nums">RWF {money(run.total_amount)}</p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wide text-ink-500">Channel</p>
+            <p className="text-xs text-ink-500">Channel</p>
             <p>{run.method.replace("_", " ").toLowerCase()}</p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wide text-ink-500">Approvals</p>
+            <p className="text-xs text-ink-500">Approvals</p>
             <p className="tabular-nums">
               {run.approvals_received} of {run.approvals_required}
             </p>
@@ -216,7 +216,7 @@ function RunDetail({ run, onClose }: { run: PaymentRun; onClose: () => void }) {
         <div className="overflow-x-auto rounded-md border border-line">
           <table className="w-full text-sm">
             <thead className="bg-surface-100">
-              <tr className="text-left text-xs uppercase tracking-wide text-ink-500">
+              <tr className="text-left text-xs text-ink-500">
                 <th className="px-3 py-2">Supplier</th>
                 <th className="px-3 py-2">Bill</th>
                 <th className="px-3 py-2">Payee account</th>

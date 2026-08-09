@@ -68,7 +68,7 @@ function Kpi({
   const Arrow = up ? TrendingUp : TrendingDown;
   return (
     <div className="rounded-lg border border-line bg-surface-0 px-4 py-3">
-      <div className="text-[11px] font-medium uppercase tracking-wide text-ink-500">{label}</div>
+      <div className="text-[11px] font-medium text-ink-500">{label}</div>
       <div className="mt-0.5 text-2xl font-semibold tabular-nums text-ink-900">{value}</div>
       {has && (
         <div

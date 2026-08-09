@@ -64,7 +64,7 @@ export function StatTile({
 
   return (
     <div className="rounded-lg border border-line bg-surface-0 px-4 py-3">
-      <div className="text-[11px] font-medium uppercase tracking-wide text-ink-500">{label}</div>
+      <div className="text-[11px] font-medium text-ink-500">{label}</div>
       <div className="mt-0.5 text-2xl font-semibold tabular-nums text-ink-900">{value}</div>
       {hasDelta && deltaPct === null && deltaContext && (
         <div className="mt-0.5 text-xs text-ink-500">— no {deltaContext} to compare</div>
@@ -227,7 +227,7 @@ export function ReadinessCard({
         </span>
         {/* The chip repeats the state in words — the colour is never the only signal. */}
         <span
-          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${t.chip}`}
+          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${t.chip}`}
         >
           {t.text}
         </span>
@@ -288,7 +288,7 @@ export function WorkQueue({
   }
   return (
     <div className="mb-6 space-y-1.5">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+      <div className="text-[11px] font-semibold text-ink-500">
         Waiting on you
       </div>
       {items.map((item) => (

@@ -256,7 +256,7 @@ export function DataGrid<T>({
       <div className="overflow-auto rounded-lg border border-line bg-surface-0">
         <table className="list-grid w-full text-form">
           <thead className="sticky top-0 z-10">
-            <tr className="text-left text-micro uppercase tracking-wide">
+            <tr className="text-left text-micro">
               {selectable && (
                 <th className="w-8 px-3 py-2">
                   <input

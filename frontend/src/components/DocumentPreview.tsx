@@ -115,7 +115,7 @@ export function DocumentPreview({
                 href={blobUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface-0 px-2.5 py-1.5 text-sm font-medium text-ink-700 hover:bg-surface-1"
+                className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface-0 px-2.5 py-1.5 text-sm font-medium text-ink-700 hover:bg-surface-50"
               >
                 <ExternalLink className="h-4 w-4" /> Open in a tab
               </a>
@@ -123,7 +123,7 @@ export function DocumentPreview({
           </div>
         </div>
 
-        <div className="h-[70vh] overflow-hidden rounded-lg border border-line bg-surface-1">
+        <div className="h-[70vh] overflow-hidden rounded-lg border border-line bg-surface-50">
           {error ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
               <AlertTriangle className="h-6 w-6 text-danger-600" aria-hidden />

@@ -201,7 +201,7 @@ function WeekView({
             >
               <div className="mb-2 flex items-baseline justify-between">
                 <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+                  <div className="text-[11px] font-semibold text-ink-500">
                     {DAY_NAMES[index]}
                   </div>
                   <div

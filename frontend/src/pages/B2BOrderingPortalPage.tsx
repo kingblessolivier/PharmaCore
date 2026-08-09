@@ -268,7 +268,7 @@ export function B2BOrderingPortalPage() {
                   "rounded-full border px-3 py-1 text-sm transition " +
                   (s.id === activeDepot
                     ? "border-brand-500 bg-brand-50 text-brand-700"
-                    : "border-line text-ink-600 hover:bg-surface-1")
+                    : "border-line text-ink-600 hover:bg-surface-50")
                 }
               >
                 {s.name}
@@ -417,7 +417,7 @@ export function B2BOrderingPortalPage() {
               ]}
             />
             {toSource > 0 && (
-              <div className="mt-2 flex items-start gap-2 rounded-md bg-surface-1 p-2.5 text-xs text-ink-600">
+              <div className="mt-2 flex items-start gap-2 rounded-md bg-surface-50 p-2.5 text-xs text-ink-600">
                 <PackageSearch className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
                   You are only invoiced for what ships. The {toSource} unit(s) the wholesaler cannot

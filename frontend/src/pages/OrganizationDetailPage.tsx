@@ -22,7 +22,7 @@ type Tab =
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div>
-      <div className="text-xs font-medium uppercase tracking-wide text-ink-500">{label}</div>
+      <div className="text-xs font-medium text-ink-500">{label}</div>
       <div className="mt-0.5 text-sm text-ink-900">{value || "—"}</div>
     </div>
   );

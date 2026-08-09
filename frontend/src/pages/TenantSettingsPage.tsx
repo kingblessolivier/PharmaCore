@@ -283,8 +283,8 @@ export function TenantSettingsPage() {
             </Card>
           </div>
 
-          {error && <p className="mt-3 text-sm text-danger">{error}</p>}
-          {save.isSuccess && !error && <p className="mt-3 text-sm text-success">Saved.</p>}
+          {error && <p className="mt-3 text-sm text-danger-700">{error}</p>}
+          {save.isSuccess && !error && <p className="mt-3 text-sm text-success-700">Saved.</p>}
 
           <div className="mt-5 flex justify-end gap-2">
             <Button

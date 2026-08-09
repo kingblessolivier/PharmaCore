@@ -130,7 +130,7 @@ function RequestLeaveDrawer({ onClose }: { onClose: () => void }) {
               ["Available", selected.available],
             ].map(([label, value]) => (
               <div key={String(label)} className="rounded-lg border border-line px-3 py-2">
-                <div className="text-[11px] uppercase tracking-wide text-ink-500">{label}</div>
+                <div className="text-[11px] text-ink-500">{label}</div>
                 <div className="text-lg font-semibold tabular-nums">{value}</div>
               </div>
             ))}

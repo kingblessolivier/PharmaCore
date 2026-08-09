@@ -20,7 +20,7 @@ const DOC_TYPES: { value: string; label: string }[] = [
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[11px] font-medium uppercase tracking-wide text-ink-500">{label}</div>
+      <div className="text-[11px] font-medium text-ink-500">{label}</div>
       <div className="text-sm text-ink-900">{value || "—"}</div>
     </div>
   );
@@ -70,7 +70,7 @@ function AddDocumentModal({ onClose, employeeId }: { onClose: () => void; employ
           onChange={(e) => setUrl(e.target.value)}
           required
         />
-        {error && <p className="text-sm text-danger">{error}</p>}
+        {error && <p className="text-sm text-danger-700">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancel
@@ -137,7 +137,7 @@ function TerminateModal({ onClose, employeeId }: { onClose: () => void; employee
             required
             autoFocus
           />
-          {error && <p className="text-sm text-danger">{error}</p>}
+          {error && <p className="text-sm text-danger-700">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>
               Cancel
