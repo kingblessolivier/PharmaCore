@@ -455,6 +455,24 @@ export function PosPage() {
     },
   });
 
+  /* Clearing a coupon has to reach the server too. Zeroing the discount locally
+     leaves the promotion still held against the basket there, so the next
+     recalculation puts it back — and a customer who changed their mind is
+     charged the discounted price anyway. */
+  const clearCoupon = useMutation({
+    mutationFn: () =>
+      api<{ cleared: boolean }>("/api/retail/counter/clear-promotion/", {
+        method: "POST",
+        body: JSON.stringify({ organization: orgId }),
+      }),
+    onSuccess: () => {
+      setDiscount(0);
+      setCouponCode("");
+      setNotice({ text: "Coupon removed.", tone: "info" });
+      focusScan();
+    },
+  });
+
   /* ---------------------------------------------------------------- checkout */
 
   const setTender = (key: Tender, value: string) =>
@@ -932,6 +950,15 @@ export function PosPage() {
               >
                 Apply
               </Button>
+              {discount > 0 && (
+                <Button
+                  variant="ghost"
+                  onClick={() => clearCoupon.mutate()}
+                  disabled={clearCoupon.isPending || !online}
+                >
+                  Remove
+                </Button>
+              )}
             </div>
             {promotions.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">

@@ -19,6 +19,7 @@ import { BarChart, ChartFrame, VizRoot } from "../components/Charts";
 import { api } from "../lib/api";
 import { money } from "../lib/format";
 import { useDefaultOrg } from "../lib/recordData";
+import { FinanceOperations } from "../components/FinanceOperations";
 
 interface BreakEven {
   start: string;
@@ -289,6 +290,18 @@ export function FinanceRiskPage() {
             />
           </ChartFrame>
         </VizRoot>
+      </section>
+
+      {/* --- The postings that act on all of the above -------------------- */}
+      <section>
+        <h2 className="mb-2 text-base font-semibold tracking-tight text-ink-900">
+          Month-end postings
+        </h2>
+        <p className="mb-3 text-xs text-ink-500">
+          Beside the figures they act on, so the number and the thing you do about it are not on
+          different screens.
+        </p>
+        {on && <FinanceOperations orgId={orgId} />}
       </section>
 
       {/* --- FX ----------------------------------------------------------- */}

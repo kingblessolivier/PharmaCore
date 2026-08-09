@@ -12,7 +12,7 @@
 /* looking finished while most of it was closed.                               */
 /* -------------------------------------------------------------------------- */
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import {
   Award,
@@ -23,7 +23,8 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PageHeader } from "../components/ui";
+import { Button, PageHeader, SelectField } from "../components/ui";
+import { useState } from "react";
 import { DataGrid, type Column } from "../components/DataGrid";
 import { api } from "../lib/api";
 import type { Paginated } from "../lib/types";
@@ -215,41 +216,92 @@ function Grid<T extends { id: number }>({
 }
 
 function OnboardingTab() {
+  const qc = useQueryClient();
   const { data, isLoading } = useRows<Onboarding>("hr-onboarding", "/api/hr/onboarding/");
+  const [employeeId, setEmployeeId] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const employees = useQuery({
+    queryKey: ["employees-for-onboarding"],
+    queryFn: () =>
+      api<Paginated<{ id: number; first_name: string; last_name: string }>>(
+        "/api/hr/employees/?page_size=200",
+      ),
+  });
+
+  /* Starting a checklist was implemented and unreachable, so somebody who had
+     joined could be listed as onboarding only if a row already existed —
+     which nothing created. */
+  const start = useMutation({
+    mutationFn: () =>
+      api<Onboarding>("/api/hr/onboarding/start/", {
+        method: "POST",
+        body: JSON.stringify({ employee: Number(employeeId) }),
+      }),
+    onSuccess: () => {
+      setEmployeeId("");
+      setError(null);
+      void qc.invalidateQueries({ queryKey: ["hr-onboarding"] });
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Could not start onboarding."),
+  });
+
   return (
-    <Grid
-      rows={data?.results ?? []}
-      storageKey="hr-onboarding"
-      loading={isLoading}
-      empty="Nobody is part-way through onboarding."
-      columns={[
-        { key: "employee_name", header: "Employee", value: (r) => r.employee_name },
-        { key: "started_on", header: "Started", value: (r) => shortDate(r.started_on) },
-        { key: "target", header: "Due", value: (r) => shortDate(r.target_completion) },
-        {
-          key: "progress",
-          header: "Progress",
-          align: "right",
-          value: (r) => r.progress_pct,
-          render: (r) => (
-            <span className="flex items-center justify-end gap-2">
-              <span className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-200">
-                <span
-                  className="block h-full bg-brand-600"
-                  style={{ width: `${Math.min(100, r.progress_pct)}%` }}
-                />
+    <>
+      <div className="mb-3 flex flex-wrap items-end gap-2 rounded-lg border border-line bg-surface-0 p-3">
+        <div className="min-w-[16rem] flex-1">
+          <SelectField
+            label="Start onboarding for"
+            value={employeeId}
+            onChange={(e) => setEmployeeId(e.target.value)}
+          >
+            <option value="">Choose an employee…</option>
+            {(employees.data?.results ?? []).map((e) => (
+              <option key={e.id} value={e.id}>
+                {`${e.first_name} ${e.last_name}`.trim()}
+              </option>
+            ))}
+          </SelectField>
+        </div>
+        <Button onClick={() => start.mutate()} disabled={!employeeId || start.isPending}>
+          {start.isPending ? "Starting…" : "Start checklist"}
+        </Button>
+        {error && <p className="w-full text-sm text-danger-700">{error}</p>}
+      </div>
+      <Grid
+        rows={data?.results ?? []}
+        storageKey="hr-onboarding"
+        loading={isLoading}
+        empty="Nobody is part-way through onboarding."
+        columns={[
+          { key: "employee_name", header: "Employee", value: (r) => r.employee_name },
+          { key: "started_on", header: "Started", value: (r) => shortDate(r.started_on) },
+          { key: "target", header: "Due", value: (r) => shortDate(r.target_completion) },
+          {
+            key: "progress",
+            header: "Progress",
+            align: "right",
+            value: (r) => r.progress_pct,
+            render: (r) => (
+              <span className="flex items-center justify-end gap-2">
+                <span className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-200">
+                  <span
+                    className="block h-full bg-brand-600"
+                    style={{ width: `${Math.min(100, r.progress_pct)}%` }}
+                  />
+                </span>
+                <span className="tabular-nums">{r.progress_pct}%</span>
               </span>
-              <span className="tabular-nums">{r.progress_pct}%</span>
-            </span>
-          ),
-        },
-        {
-          key: "state",
-          header: "State",
-          value: (r) => (r.completed_at ? "Complete" : "In progress"),
-        },
-      ]}
-    />
+            ),
+          },
+          {
+            key: "state",
+            header: "State",
+            value: (r) => (r.completed_at ? "Complete" : "In progress"),
+          },
+        ]}
+      />
+    </>
   );
 }
 

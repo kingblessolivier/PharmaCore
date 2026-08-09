@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { LogIn, LogOut, Plus } from "lucide-react";
 import { useState } from "react";
 import { DataGrid } from "../components/DataGrid";
 import {
@@ -144,6 +144,8 @@ function LogDrawer({ orgId, onClose }: { orgId: number | null; onClose: () => vo
 /* -------------------------------------------------------------------------- */
 
 export function AttendancePage() {
+  const qc = useQueryClient();
+  const [clockNote, setClockNote] = useState<{ text: string; bad: boolean } | null>(null);
   const { orgId } = useDefaultOrg();
   const [status, setStatus] = useState("");
   const [recording, setRecording] = useState(false);
@@ -155,16 +157,59 @@ export function AttendancePage() {
 
   const rows = (data?.results ?? []).filter((r) => !status || r.status === status);
 
+  const clock = useMutation({
+    mutationFn: (direction: "IN" | "OUT") =>
+      api<{ detail?: string }>("/api/hr/attendance/clock/", {
+        method: "POST",
+        body: JSON.stringify({ direction }),
+      }),
+    onSuccess: (_data, direction) => {
+      setClockNote({ text: `Clocked ${direction.toLowerCase()}.`, bad: false });
+      void qc.invalidateQueries({ queryKey: ["attendance"] });
+    },
+    onError: (e) =>
+      setClockNote({
+        text: e instanceof Error ? e.message : "Could not clock you in.",
+        bad: true,
+      }),
+  });
+
   return (
     <div>
       <PageHeader
         title="Time & attendance"
         action={
-          <Button onClick={() => setRecording(true)}>
-            <Plus className="h-4 w-4" /> Record attendance
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Clocking yourself in and out was implemented and unreachable, so
+                the only way onto the register was somebody else typing you in
+                after the fact — which is how a timesheet drifts from the day
+                actually worked. */}
+            <Button
+              variant="secondary"
+              onClick={() => clock.mutate("IN")}
+              disabled={clock.isPending}
+            >
+              <LogIn className="h-4 w-4" /> Clock in
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => clock.mutate("OUT")}
+              disabled={clock.isPending}
+            >
+              <LogOut className="h-4 w-4" /> Clock out
+            </Button>
+            <Button onClick={() => setRecording(true)}>
+              <Plus className="h-4 w-4" /> Record attendance
+            </Button>
+          </div>
         }
       />
+
+      {clockNote && (
+        <p className={`mb-3 text-sm ${clockNote.bad ? "text-danger-700" : "text-success-700"}`}>
+          {clockNote.text}
+        </p>
+      )}
 
       <DataGrid<AttendanceLog>
         rows={rows}
