@@ -18,23 +18,23 @@ type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
  * outside the token gate; it now uses the danger ramp like everything else. */
 const buttonStyles: Record<ButtonVariant, string> = {
   primary:
-    "border border-brand-700 bg-gradient-to-b from-brand-500 to-brand-700 text-white " +
-    "hover:from-brand-400 hover:to-brand-600 active:shadow-[inset_1px_1px_3px_rgba(0,0,0,0.3)]",
+    "border border-brand-700 bg-brand-600 text-white " +
+    "hover:bg-brand-700 ",
   secondary:
-    "border border-chrome-600 bg-gradient-to-b from-surface-0 to-chrome-300 text-chrome-900 " +
-    "hover:to-chrome-400 active:bg-chrome-400 active:shadow-[inset_1px_1px_3px_#6b8298]",
-  ghost: "border border-transparent text-ink-700 hover:border-chrome-600 hover:bg-chrome-200",
+    "border border-chrome-600 bg-surface-0 text-chrome-900 " +
+    "hover:to-chrome-400 active:bg-chrome-400 ",
+  ghost: "text-ink-700 hover:bg-chrome-200",
   danger:
-    "border border-danger-700 bg-gradient-to-b from-danger-500 to-danger-700 text-white " +
-    "hover:from-danger-500 hover:to-danger-800 active:shadow-[inset_1px_1px_3px_rgba(0,0,0,0.3)]",
+    "border border-danger-700 bg-danger-600 text-white " +
+    "hover:bg-danger-700 ",
 };
 
 /** `sm` is for buttons that live inside a table row or a dense toolbar, where a
  * full-height control would push the row out of rhythm. */
 type ButtonSize = "sm" | "md";
 const buttonSizes: Record<ButtonSize, string> = {
-  sm: "h-[21px] px-2 text-[11px] gap-1",
-  md: "h-[25px] px-2.5 text-[12px] gap-1.5",
+  sm: "h-8 px-3 text-[12px] gap-1.5",
+  md: "h-9 px-4 text-[13px] gap-2",
 };
 
 export function Button({
@@ -49,7 +49,7 @@ export function Button({
 }) {
   return (
     <button
-      className={`inline-flex items-center justify-center rounded-[2px] font-medium transition-colors disabled:opacity-40 disabled:shadow-none ${buttonSizes[size]} ${buttonStyles[variant]} ${className}`}
+      className={`inline-flex items-center justify-center rounded-md font-medium transition-colors disabled:opacity-40 ${buttonSizes[size]} ${buttonStyles[variant]} ${className}`}
       {...props}
     >
       {children}
@@ -118,25 +118,20 @@ export function Card({
   title?: ReactNode;
   action?: ReactNode;
 }) {
-  /* 2px radius, not 12. A rounded card reads as a marketing tile; a panel with
-     a hard edge and a titled bar reads as part of an instrument. */
+  /* Border over shadow. A hairline against the page tint separates a panel
+     without the floating-card look, which at twelve panels on a dashboard
+     turns into visual noise. */
+  const shell = `rounded-lg border border-chrome-500 bg-surface-0 shadow-[0_1px_2px_rgba(15,23,42,0.04)]`;
   if (!title) {
-    return (
-      <div className={`rounded-[2px] border border-chrome-500 bg-surface-0 ${className}`}>
-        {children}
-      </div>
-    );
+    return <div className={`${shell} ${className}`}>{children}</div>;
   }
   return (
-    <div className={`rounded-[2px] border border-chrome-500 bg-surface-0 ${className}`}>
-      {/* The titled bar is bordered and bevelled on purpose: with twelve
-          panels on a dashboard it is the bar, not the whitespace, that tells a
-          reader where one ends and the next begins. */}
-      <div className="flex h-[25px] items-center justify-between gap-2 border-b border-chrome-500 bg-gradient-to-b from-chrome-200 to-chrome-400 px-2 shadow-[inset_0_1px_0_#fff]">
-        <h3 className="text-[12px] font-semibold text-chrome-900">{title}</h3>
+    <div className={`${shell} ${className}`}>
+      <div className="flex items-center justify-between gap-2 border-b border-chrome-500 px-4 py-3">
+        <h3 className="text-[14px] font-semibold text-ink-900">{title}</h3>
         {action}
       </div>
-      <div className="p-2.5">{children}</div>
+      <div className="p-4">{children}</div>
     </div>
   );
 }
@@ -202,17 +197,17 @@ export function Modal({
         {/* The same bevelled title bar as every panel and page header, so a
             dialog reads as part of the application rather than a web overlay
             that happens to be open. */}
-        <div className="flex h-[25px] shrink-0 items-center justify-between border-b border-chrome-500 bg-gradient-to-b from-chrome-200 to-chrome-400 px-2 shadow-[inset_0_1px_0_#fff]">
-          <h2 className="text-[12px] font-semibold text-chrome-900">{title}</h2>
+        <div className="flex shrink-0 items-center justify-between border-b border-chrome-500 px-5 py-4">
+          <h2 className="text-[16px] font-semibold text-ink-900">{title}</h2>
           <button
             onClick={onClose}
-            className="rounded-[2px] border border-transparent px-1 text-chrome-900 hover:border-chrome-600 hover:bg-chrome-100"
+            className="rounded-md p-1.5 text-ink-500 hover:bg-chrome-200 hover:text-ink-900"
             aria-label="Close"
           >
-            <X size={13} />
+            <X size={16} strokeWidth={1.8} />
           </button>
         </div>
-        <div className="overflow-y-auto p-3">{children}</div>
+        <div className="overflow-y-auto p-5">{children}</div>
       </Card>
     </div>
   );
@@ -254,17 +249,13 @@ export function ConfirmModal({
 }
 
 /**
- * The transaction header every screen opens with.
+ * The header every screen opens with.
  *
- * A bordered, bevelled band rather than a floating heading — 94 screens use
- * this, so it is what gives the application one frame instead of ninety-four
- * pages. The border matters more than it looks: without it the title sits on
- * the same plane as the content below and a reader has nothing telling them
- * where the screen begins.
- *
- * `subtitle` and `facts` exist because an ERP header carries data, not just a
- * name — the document number, the branch, the total. That is what a user reads
- * before doing anything else.
+ * Title, one line of what the screen is for, and the actions on the right —
+ * used by 94 screens, so it is what gives the application one identity rather
+ * than ninety-four. No fill and no bevel: on a light neutral ground the type
+ * hierarchy alone separates it from the content, and a coloured band would
+ * spend the page's one strong accent on furniture.
  */
 export function PageHeader({
   title,
@@ -278,21 +269,21 @@ export function PageHeader({
   facts?: { label: string; value: ReactNode }[];
 }) {
   return (
-    <div className="mb-2 border border-chrome-500 bg-gradient-to-b from-chrome-200 to-chrome-400 px-3 py-1.5 shadow-[inset_0_1px_0_#fff]">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <h1 className="text-[14px] font-semibold text-chrome-900">{title}</h1>
-        {subtitle && <span className="text-[11px] text-ink-600">{subtitle}</span>}
+    <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h1 className="text-[20px] font-semibold tracking-tight text-ink-900">{title}</h1>
+        {subtitle && <p className="mt-0.5 text-[13px] text-ink-500">{subtitle}</p>}
         {facts.length > 0 && (
-          <div className="flex flex-wrap items-center gap-x-4">
+          <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1">
             {facts.map((fact) => (
-              <span key={fact.label} className="text-[11px] text-ink-600">
+              <span key={fact.label} className="text-[12px] text-ink-500">
                 {fact.label} <b className="font-semibold text-ink-800">{fact.value}</b>
               </span>
             ))}
           </div>
         )}
-        {action && <div className="ml-auto flex items-center gap-1.5">{action}</div>}
       </div>
+      {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
     </div>
   );
 }

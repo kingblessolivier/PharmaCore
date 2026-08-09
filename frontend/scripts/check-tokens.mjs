@@ -15,10 +15,13 @@ const FAMILIES = ["brand", "ink", "surface", "danger", "warning", "success", "in
  * check only looked for families it already knew about. Anything named here is
  * reported wherever it appears. */
 const UNREGISTERED = ["app", "accent", "muted", "paper"];
+/* Single-value colours: no numeric step, so they are listed by name. */
+const SINGLETONS = ["page"];
 const css = readFileSync("src/index.css", "utf8");
 const defined = new Set([...css.matchAll(/--([a-z]+-(?:\d{1,3}|strong)):/g)].map((m) => m[1]));
 defined.add("line");
 defined.add("line-strong");
+defined.add("page");
 
 const walk = (dir) =>
   readdirSync(dir).flatMap((name) => {
@@ -36,7 +39,7 @@ const walk = (dir) =>
  *
  * The family list is interpolated with `source`, which keeps its escapes.
  */
-const FAMILY_ALT = new RegExp([...FAMILIES, ...UNREGISTERED].join("|")).source;
+const FAMILY_ALT = new RegExp([...FAMILIES, ...UNREGISTERED, ...SINGLETONS].join("|")).source;
 const pattern = new RegExp(
   String.raw`\b(?:text|bg|border|ring|from|to|via|divide|placeholder|decoration|fill|stroke)-` +
     String.raw`((?:${FAMILY_ALT})(?:-(?:\d{1,3}|strong))?)\b`,

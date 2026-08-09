@@ -104,7 +104,7 @@ export function WorkbenchHeader({
   return (
     <div
       ref={ref}
-      className="sticky top-0 z-20 border-b border-chrome-500 bg-gradient-to-b from-chrome-200 to-chrome-400"
+      className="sticky top-0 z-20 border-b border-chrome-500 bg-chrome-100"
     >
       <div className="flex flex-wrap items-start gap-x-6 gap-y-3 px-4 py-3">
         <div className="min-w-0 flex-1">
@@ -183,7 +183,7 @@ export function WorkbenchTabs({
         role="tablist"
         aria-label="Document sections"
         style={{ top: headerHeight }}
-        className="sticky z-10 flex gap-px overflow-x-auto border-b border-chrome-500 bg-gradient-to-b from-chrome-100 to-chrome-300 px-1 pt-1"
+        className="sticky z-10 flex gap-1 overflow-x-auto border-b border-chrome-500 bg-surface-0 px-3"
       >
         {tabs.map((tab) => {
           const on = tab.id === active;
@@ -195,19 +195,15 @@ export function WorkbenchTabs({
               aria-selected={on}
               aria-controls={`${name}-panel-${tab.id}`}
               onClick={() => setActive(tab.id)}
-              /* Folder tabs, not an underline. The selected one joins the
-                 panel below it by losing its bottom border, which is what
-                 makes a transaction screen read as a stack of cards rather
-                 than a nav bar with a highlight. */
-              className={`-mb-px flex items-center gap-1.5 whitespace-nowrap rounded-t-[2px] border border-b-0 px-3 py-1 text-[11.5px] transition-colors ${
+              className={`-mb-px flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2.5 text-[13px] transition-colors ${
                 on
-                  ? "border-chrome-500 bg-surface-0 font-semibold text-chrome-900"
-                  : "border-chrome-500 bg-gradient-to-b from-chrome-100 to-chrome-300 text-ink-600 hover:to-chrome-200"
+                  ? "border-brand-600 font-semibold text-brand-700"
+                  : "border-transparent text-ink-600 hover:border-chrome-600 hover:text-ink-900"
               }`}
             >
               {tab.label}
               {tab.badge !== undefined && tab.badge !== null && (
-                <span className="rounded-[2px] bg-chrome-200 px-1 text-[10px] font-semibold tabular-nums text-chrome-900">
+                <span className="rounded-full bg-chrome-200 px-2 text-[11px] font-semibold tabular-nums text-ink-700">
                   {tab.badge}
                 </span>
               )}
@@ -258,8 +254,8 @@ export function Fieldset({
   className?: string;
 }) {
   return (
-    <section className={`rounded-[2px] border border-chrome-500 bg-surface-0 ${className}`}>
-      <header className="flex h-[25px] items-center justify-between gap-3 border-b border-chrome-500 bg-gradient-to-b from-chrome-200 to-chrome-400 px-2 shadow-[inset_0_1px_0_#fff]">
+    <section className={`rounded-lg border border-chrome-500 bg-surface-0 ${className}`}>
+      <header className="flex items-center justify-between gap-3 border-b border-chrome-500 px-4 py-3">
         <div className="min-w-0">
           <h2 className="truncate text-form font-semibold text-ink-800">{title}</h2>
           {hint && <p className="truncate text-micro text-ink-500">{hint}</p>}
@@ -366,7 +362,7 @@ export function Workbench({ children }: { children: ReactNode }) {
   const [headerHeight, setHeaderHeight] = useState(0);
   return (
     <StickyCtx.Provider value={{ headerHeight, setHeaderHeight }}>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2px] border border-chrome-600 bg-chrome-100 shadow-[inset_0_1px_0_#fff]">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-chrome-500 bg-surface-0">
         {children}
       </div>
     </StickyCtx.Provider>

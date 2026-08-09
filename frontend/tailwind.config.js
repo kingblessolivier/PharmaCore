@@ -27,6 +27,9 @@ export default {
         // status bar. Never used for data, so a reader can always tell the
         // furniture from the figures.
         chrome: ramp("chrome", [50, 100, 200, 300, 400, 500, 600, 700, 900]),
+        // The ground the panels sit on — one step below the white surfaces,
+        // which is what gives depth without a shadow.
+        page: "var(--app-bg)",
         line: {
           DEFAULT: "var(--line-200)",
           200: "var(--line-200)",
@@ -39,13 +42,16 @@ export default {
        * wants a hard edge, because the corner is competing with a 24px row for
        * the same few pixels. `rounded-full` is left alone — badges and avatars
        * are meant to be round. */
+      /* Modern-enterprise radii: soft enough to read as a product, tight
+       * enough that a 44px row does not look like a consumer app. Set once
+       * here, so all 425 usages move together. */
       borderRadius: {
-        DEFAULT: "2px",
-        sm: "2px",
-        md: "3px",
-        lg: "4px",
-        xl: "5px",
-        "2xl": "6px",
+        DEFAULT: "6px",
+        sm: "6px",
+        md: "8px",
+        lg: "10px",
+        xl: "12px",
+        "2xl": "12px",
       },
       spacing: {
         // Row heights an ERP grid is built on — a screen read for eight hours
