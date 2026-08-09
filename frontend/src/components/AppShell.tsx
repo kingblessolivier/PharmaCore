@@ -664,7 +664,20 @@ export function AppShell() {
   // and SYS_ADMIN, so no separate admin bypass is needed here.
   const canSee = (needs: "all" | string[] | undefined) =>
     needs === undefined || needs === "all" || needs.some((code) => can(user, code));
-  const visible = NAV.filter((g) => canSee(g.needs)).map((g) => ({
+
+  /* A depot is not a shop, so it is not offered a counter.
+   *
+   * The till refuses a depot at the door (apps/retail/views_counter._org), and
+   * a menu entry that leads only to a refusal is worse than no entry — it reads
+   * as a bug rather than as a rule. A depot moves stock on B2B orders; the two
+   * book revenue differently and neither should be able to post the other's
+   * transactions. */
+  const sellsOverTheCounter = !["DEPOT", "HQ", "DISTRIBUTOR"].includes(
+    user?.organization_type ?? "",
+  );
+  const visible = NAV.filter(
+    (g) => canSee(g.needs) && (sellsOverTheCounter || g.label !== "Retail"),
+  ).map((g) => ({
     ...g,
     items: g.items.filter((i) => canSee(i.needs ?? g.needs)),
   }));

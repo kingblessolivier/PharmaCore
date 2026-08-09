@@ -33,6 +33,10 @@ from apps.retail.counter import (
 from apps.retail.lines import build_line
 from apps.retail.models import ClinicalServiceRecord, Sale
 
+#: Organization types that do not serve the public over a counter. A depot
+#: moves stock on B2B orders and a head office does not hold stock at all.
+_NOT_A_SHOP = ("DEPOT", "HQ", "DISTRIBUTOR")
+
 
 def _org(request: Request) -> Organization:
     user = cast(User, request.user)
@@ -49,6 +53,22 @@ def _org(request: Request) -> Organization:
         or organization in organizations_visible_to(user)
     ):
         raise PermissionDenied("You may not trade on behalf of that pharmacy.")
+
+    # A depot is not a shop.
+    #
+    # The counter was gated on the `sale.create` permission alone, never on what
+    # kind of organization was trading — so a depot with one permissive role got
+    # a till and could ring up a walk-in customer. That is not a UI slip: a depot
+    # sells cases to pharmacies on account and books wholesale revenue and trade
+    # receivables, while a shop sells singles to the public for cash and books
+    # retail revenue, VAT at the till and a drawer to reconcile. Letting one post
+    # the other's transactions puts both sets of books wrong at once.
+    if organization.type in _NOT_A_SHOP:
+        raise PermissionDenied(
+            f"{organization.name} is a {organization.get_type_display().lower()}, "
+            "not a retail pharmacy. Bulk stock leaves a depot on a B2B order, "
+            "not over a counter."
+        )
     return organization
 
 
