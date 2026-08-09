@@ -139,7 +139,7 @@ class EligibilityView(APIView):
             lines.append(
                 {
                     "product": product,
-                    "quantity": int(raw.get("quantity", 0)),
+                    "quantity": Decimal(str(raw.get("quantity", 0))),
                     "unit_price": Decimal(str(raw.get("unit_price", "0"))),
                 }
             )

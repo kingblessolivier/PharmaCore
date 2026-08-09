@@ -277,6 +277,14 @@ class DepotProductListing(models.Model):
     is_published = models.BooleanField(default=True)
     customer_segment = models.CharField(max_length=50, blank=True, default="ALL")
     min_order_qty = models.PositiveIntegerField(default=1)
+    #: Orders must be a whole multiple of this. A case is not opened to fill an
+    #: order, so a depot that ships by the case sells 5 or 10, never 7 — and a
+    #: pharmacy that can place an unfillable quantity only finds out on delivery.
+    order_multiple = models.PositiveIntegerField(default=1)
+    #: A depot's own photograph of the stock it is offering. Falls back to the
+    #: catalogue picture; a buyer browsing a storefront of text alone has no way
+    #: to tell one white box from another.
+    image_url = models.CharField(max_length=500, blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

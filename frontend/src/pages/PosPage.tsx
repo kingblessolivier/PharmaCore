@@ -16,6 +16,8 @@ import { Drawer, ErrorNote, Field, Grid, Input, Section } from "../components/Re
 import { Badge, Button } from "../components/ui";
 import { api } from "../lib/api";
 import { money } from "../lib/format";
+import { CounterCover } from "../components/CounterCover";
+import type { Quote } from "../lib/insurance";
 import {
   enqueue,
   flush,
@@ -165,6 +167,14 @@ export function PosPage() {
   const [pending, setPending] = useState(0);
 
   const { gross, net, tax } = useMemo(() => totals(lines, discount), [lines, discount]);
+
+  /* The insurer's answer, obtained before the goods move. `due` is what the
+     person at the counter actually has to hand over: the scheme's share is not
+     collected here, it is claimed. */
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [memberNumber, setMemberNumber] = useState("");
+  const covered = quote?.eligible === true;
+  const due = covered ? Number(quote?.patient_pays ?? net) : net;
   const tendered = useMemo(
     () => Object.values(tenders).reduce((s, v) => s + Number(v || 0), 0),
     [tenders],
@@ -346,7 +356,7 @@ export function PosPage() {
     setTenders((current) => ({ ...current, [key]: value }));
 
   const payExactly = (key: Tender) => {
-    const outstanding = Math.max(net - tendered, 0);
+    const outstanding = Math.max(due - tendered, 0);
     if (outstanding > 0) setTender(key, String(outstanding));
   };
 
@@ -354,13 +364,15 @@ export function PosPage() {
     setLines([]);
     setTenders({ CASH: "", MOBILE_MONEY: "", CARD: "" });
     setDiscount(0);
+    setQuote(null);
+    setMemberNumber("");
     setCouponCode("");
     focusScan();
   };
 
   const takePayment = useCallback(
     async (dispensing?: Record<string, string>) => {
-      if (lines.length === 0 || tendered < net) return;
+      if (lines.length === 0 || tendered < due) return;
 
       const sale: QueuedSale = {
         client_reference: newClientReference(),
@@ -377,7 +389,10 @@ export function PosPage() {
           amount: tenders[t.key],
         })),
         dispensing,
-        total: String(net),
+        total: String(due),
+        // Carried so the sale can be reconciled against the claim the scheme
+        // will settle, rather than the two being matched up by hand later.
+        member_number: memberNumber || undefined,
         queued_at: new Date().toISOString(),
         attempts: 0,
       };
@@ -392,10 +407,10 @@ export function PosPage() {
       setNotice(
         result.failed > 0
           ? { text: "Sale held offline — it will sync when the connection returns.", tone: "warn" }
-          : { text: `Sale complete. Change ${money(tendered - net)}.`, tone: "info" },
+          : { text: `Sale complete. Change ${money(tendered - due)}.`, tone: "info" },
       );
     },
-    [lines, tendered, net, tenders, orgId, drain, refreshQueue],
+    [lines, tendered, due, tenders, orgId, drain, refreshQueue, memberNumber],
   );
 
   /* ---------------------------------------------------------------- keyboard */
@@ -431,8 +446,8 @@ export function PosPage() {
 
   /* ------------------------------------------------------------------ render */
 
-  const outstanding = Math.max(net - tendered, 0);
-  const change = Math.max(tendered - net, 0);
+  const outstanding = Math.max(due - tendered, 0);
+  const change = Math.max(tendered - due, 0);
 
   return (
     <div className="flex h-[calc(100vh-7rem)] flex-col gap-3">
@@ -666,8 +681,35 @@ export function PosPage() {
                 <dt>Total</dt>
                 <dd className="tabular-nums">{money(net)}</dd>
               </div>
+              {/* When a scheme is paying part of it, the counter collects the
+                  patient's share only — the rest is claimed, not taken. */}
+              {covered && (
+                <>
+                  <div className="flex justify-between text-ink-500">
+                    <dt>Scheme pays</dt>
+                    <dd className="tabular-nums">−{money(Number(quote?.insurer_pays ?? 0))}</dd>
+                  </div>
+                  <div className="flex justify-between border-t border-line pt-2 text-lg font-semibold text-brand-700">
+                    <dt>Patient pays</dt>
+                    <dd className="tabular-nums">{money(due)}</dd>
+                  </div>
+                </>
+              )}
             </dl>
           </div>
+
+          <CounterCover
+            lines={lines.map((l) => ({
+              product: l.product,
+              quantity: l.quantity,
+              unit_price: l.unit_price,
+            }))}
+            quote={quote}
+            onQuote={(q, member) => {
+              setQuote(q);
+              setMemberNumber(member);
+            }}
+          />
 
           <div className="rounded-lg border border-line bg-surface-0 p-3">
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">
