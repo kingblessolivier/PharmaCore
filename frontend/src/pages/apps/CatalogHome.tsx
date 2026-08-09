@@ -164,7 +164,7 @@ export function CatalogHome() {
             )}
           </div>
           <Link
-            to="/orders"
+            to="/distribution/orders"
             className="mt-4 flex items-center justify-center gap-2 rounded-md bg-brand-50 py-2 text-xs font-medium text-brand-700 hover:bg-brand-100"
           >
             <ShoppingCart className="h-3.5 w-3.5" /> Raise Purchase Order

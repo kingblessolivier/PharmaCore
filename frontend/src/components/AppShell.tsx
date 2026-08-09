@@ -339,8 +339,8 @@ function NotificationsBell() {
                   onClick={() => {
                     setOpen(false);
                     const dest: Record<string, string> = {
-                      stock_order: "/orders",
-                      orders: "/orders",
+                      stock_order: "/distribution/orders",
+                      orders: "/distribution/orders",
                       dashboard: "/",
                     };
                     const to = dest[n.link_entity_type];

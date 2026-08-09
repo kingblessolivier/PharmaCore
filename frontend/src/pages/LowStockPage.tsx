@@ -98,7 +98,7 @@ export function LowStockPage() {
             sortable: false,
             render: () => (
               <Link
-                to="/orders"
+                to="/distribution/orders"
                 className="inline-flex items-center gap-1 rounded bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100"
               >
                 Reorder
