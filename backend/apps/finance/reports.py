@@ -793,7 +793,7 @@ def inventory_valuation(organization: Organization) -> dict[str, Any]:
     from apps.inventory.models import InventoryBatch
 
     total = Decimal("0")
-    total_units = 0
+    total_units = Decimal(0)
     per_product: dict[int, dict[str, Any]] = {}
     rows = InventoryBatch.objects.filter(
         organization=organization,

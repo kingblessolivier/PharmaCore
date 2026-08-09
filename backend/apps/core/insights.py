@@ -176,7 +176,7 @@ def expiry_exposure(*, org_ids: list[int], horizon_days: int = 90) -> dict[str, 
     ).values("expiry_date", "quantity_available", "wholesale_cost")
 
     bands = {"expired": ZERO, "within_30": ZERO, "within_60": ZERO, "within_90": ZERO}
-    units = {key: 0 for key in bands}
+    units: dict[str, Decimal] = {key: Decimal(0) for key in bands}
     for row in batches:
         value = Decimal(str(row["wholesale_cost"] or 0)) * row["quantity_available"]
         days = (row["expiry_date"] - today).days

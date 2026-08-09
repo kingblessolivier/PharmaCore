@@ -247,7 +247,7 @@ def build_pick_tasks(
     built: list[PickTask] = []
     for demand in demands:
         product = demand["product"]
-        remaining = int(demand["quantity"])
+        remaining = Decimal(str(demand["quantity"]))
         if remaining <= 0:
             continue
         batches = (
@@ -271,7 +271,7 @@ def build_pick_tasks(
             if remaining <= 0:
                 break
             free = batch.quantity_available - batch.quantity_reserved
-            take = min(remaining, max(free, 0))
+            take = min(remaining, max(free, Decimal(0)))
             if take <= 0:
                 continue
             built.append(
@@ -377,7 +377,7 @@ def confirm_pick(
 
     if task.batch_id:
         batch = InventoryBatch.objects.select_for_update().get(pk=task.batch_id)
-        batch.quantity_reserved = max(0, batch.quantity_reserved - task.quantity_requested)
+        batch.quantity_reserved = max(Decimal(0), batch.quantity_reserved - task.quantity_requested)
         if quantity_picked:
             batch.quantity_reserved += quantity_picked
         batch.save(update_fields=["quantity_reserved", "updated_at"])
@@ -412,7 +412,9 @@ def cancel_wave(*, wave: PickWave, user: User | None = None) -> PickWave:
     for task in wave.tasks.select_for_update().select_related("batch"):
         batch = task.batch
         if task.status == PickTask.Status.ASSIGNED and batch is not None:
-            batch.quantity_reserved = max(0, batch.quantity_reserved - task.quantity_requested)
+            batch.quantity_reserved = max(
+                Decimal(0), batch.quantity_reserved - task.quantity_requested
+            )
             batch.save(update_fields=["quantity_reserved", "updated_at"])
         if task.status != PickTask.Status.PICKED:
             task.status = PickTask.Status.CANCELLED

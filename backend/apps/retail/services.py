@@ -42,7 +42,9 @@ def _q(value: Decimal) -> Decimal:
 class InsufficientStock(Exception):
     """Raised when a sale line asks for more sellable units than are on hand."""
 
-    def __init__(self, product_label: str, requested: int, available: int) -> None:
+    def __init__(
+        self, product_label: str, requested: Decimal | int, available: Decimal | int
+    ) -> None:
         self.product_label = product_label
         self.requested = requested
         self.available = available
@@ -64,18 +66,22 @@ def _product_label(product: Any) -> str:
     return f"{product.generic_name} {product.strength}".strip()
 
 
-def _free(batch: InventoryBatch) -> int:
+def _free(batch: InventoryBatch) -> Decimal:
     """Units free to sell — on hand minus any held for B2B orders."""
     return batch.quantity_available - batch.quantity_reserved
 
 
 def _fefo_consume(item: SaleItem, org_id: int, user: User | None) -> None:
-    """Draw ``item.quantity`` from the org's ACTIVE, non-expired batches, soonest-
+    """Draw the line's stock from the org's ACTIVE, non-expired batches, soonest-
     expiring first, recording allocations and one SALE movement per batch touched.
+
+    Consumes ``quantity_base``, never ``quantity``: the line records what the
+    customer asked for — one box — and the shelf gives up what that box holds.
+    Drawing ``quantity`` would take one tablet off the shelf for a box sold.
 
     Expired batches (expiry date already passed) are never sold — they are skipped
     entirely, so a lot that lapsed yesterday cannot leave the counter."""
-    remaining = item.quantity
+    remaining = item.quantity_base or item.quantity
     batches = (
         InventoryBatch.objects.select_for_update()
         .filter(
@@ -86,9 +92,9 @@ def _fefo_consume(item: SaleItem, org_id: int, user: User | None) -> None:
         )
         .order_by("expiry_date", "batch_number")  # FEFO
     )
-    available = sum(max(0, _free(b)) for b in batches)
+    available = sum((max(Decimal(0), _free(b)) for b in batches), Decimal(0))
     if available < remaining:
-        raise InsufficientStock(_product_label(item.product), item.quantity, available)
+        raise InsufficientStock(_product_label(item.product), remaining, available)
 
     for batch in batches:
         if remaining <= 0:
@@ -287,7 +293,7 @@ def complete_sale(
     return sale
 
 
-def _return_to_stock(item: SaleItem, quantity: int, user: User | None) -> None:
+def _return_to_stock(item: SaleItem, quantity: Decimal, user: User | None) -> None:
     """Put returned units back on the shelf — onto the batch(es) they were sold
     from where those still exist, else the product's earliest-expiring batch."""
     remaining = quantity
@@ -353,7 +359,7 @@ def return_sale_items(
     any_line = False
     for line in lines:
         item = sale.items.select_for_update().get(pk=line["sale_item"])
-        qty = int(line.get("quantity", 0))
+        qty = Decimal(str(line.get("quantity", 0)))
         if qty <= 0:
             continue
         if qty > item.returnable:

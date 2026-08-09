@@ -75,7 +75,9 @@ def demand_statistics(organization: Organization, *, days: int = 90) -> dict[int
     a product whose weekly draw barely changes has a low CV; one that moves in
     unpredictable bursts has a high one.
     """
-    per_product_per_day: dict[int, dict[date, int]] = defaultdict(lambda: defaultdict(int))
+    per_product_per_day: dict[int, dict[date, Decimal]] = defaultdict(
+        lambda: defaultdict(lambda: Decimal(0))
+    )
     last_seen: dict[int, date] = {}
 
     for mv in _demand_rows(organization, days=days).values_list(
@@ -90,7 +92,10 @@ def demand_statistics(organization: Organization, *, days: int = 90) -> dict[int
     stats: dict[int, dict[str, Any]] = {}
     for product_id, by_day in per_product_per_day.items():
         # Zero-demand days count: they are exactly what makes demand erratic.
-        series = [by_day.get(timezone.localdate() - timedelta(days=i), 0) for i in range(days)]
+        series = [
+            float(by_day.get(timezone.localdate() - timedelta(days=i), Decimal(0)))
+            for i in range(days)
+        ]
         total = sum(series)
         mean = total / days if days else 0.0
         variance = sum((v - mean) ** 2 for v in series) / days if days else 0.0

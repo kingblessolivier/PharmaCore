@@ -19,6 +19,7 @@ here rather than being reachable by assigning ``batch.status`` from anywhere.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
@@ -46,7 +47,7 @@ class QualityOutcome:
 
     check: QualityCheck
     batch: InventoryBatch
-    released_units: int
+    released_units: Decimal
     previous_status: str
 
 
@@ -148,7 +149,9 @@ def reject(*, check: QualityCheck, reason: str, user: User | None = None) -> Qua
         entity_id=str(check.pk),
         changes={"batch": batch.batch_number, "reason": reason, "from_status": previous},
     )
-    return QualityOutcome(check=check, batch=batch, released_units=0, previous_status=previous)
+    return QualityOutcome(
+        check=check, batch=batch, released_units=Decimal(0), previous_status=previous
+    )
 
 
 def quarantine_queue(*, organization: Any) -> list[dict[str, Any]]:

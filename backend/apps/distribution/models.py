@@ -77,9 +77,9 @@ class OrderItem(models.Model):
     order = models.ForeignKey(StockOrder, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT)
     quantity_ordered = models.PositiveIntegerField()
-    quantity_approved = models.PositiveIntegerField(default=0)
-    quantity_shipped = models.PositiveIntegerField(default=0)
-    quantity_received = models.PositiveIntegerField(default=0)
+    quantity_approved = models.DecimalField(max_digits=16, decimal_places=3, default=0)
+    quantity_shipped = models.DecimalField(max_digits=16, decimal_places=3, default=0)
+    quantity_received = models.DecimalField(max_digits=16, decimal_places=3, default=0)
     price_per_unit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
 
     class Meta:
@@ -121,7 +121,7 @@ class ShipmentItem(models.Model):
     product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT)
     batch_number = models.CharField(max_length=100)
     expiry_date = models.DateField()
-    quantity = models.PositiveIntegerField()
+    quantity = models.DecimalField(max_digits=16, decimal_places=3)
 
     class Meta:
         ordering = ["id"]
@@ -148,7 +148,7 @@ class InTransitStock(models.Model):
     product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT)
     batch_number = models.CharField(max_length=100)
     expiry_date = models.DateField()
-    quantity = models.PositiveIntegerField()
+    quantity = models.DecimalField(max_digits=16, decimal_places=3)
     driver_name = models.CharField(max_length=150, blank=True, default="")
     vehicle_plate = models.CharField(max_length=50, blank=True, default="")
     dispatched_at = models.DateTimeField(auto_now_add=True)
@@ -199,9 +199,9 @@ class GRNLine(models.Model):
     product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT)
     batch_number = models.CharField(max_length=100)
     expiry_date = models.DateField()
-    quantity_expected = models.PositiveIntegerField()
-    quantity_received = models.PositiveIntegerField(default=0)
-    quantity_damaged = models.PositiveIntegerField(default=0)
+    quantity_expected = models.DecimalField(max_digits=16, decimal_places=3)
+    quantity_received = models.DecimalField(max_digits=16, decimal_places=3, default=0)
+    quantity_damaged = models.DecimalField(max_digits=16, decimal_places=3, default=0)
 
     class Meta:
         ordering = ["id"]
@@ -249,7 +249,7 @@ class Reservation(models.Model):
     batch = models.ForeignKey(
         "inventory.InventoryBatch", on_delete=models.PROTECT, related_name="reservations"
     )
-    quantity = models.PositiveIntegerField()
+    quantity = models.DecimalField(max_digits=16, decimal_places=3)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -419,8 +419,8 @@ class TenderContract(models.Model):
     )
     product = models.ForeignKey("catalog.Product", on_delete=models.CASCADE)
     contract_price = models.DecimalField(max_digits=14, decimal_places=2)
-    total_committed_qty = models.PositiveIntegerField()
-    drawn_qty = models.PositiveIntegerField(default=0)
+    total_committed_qty = models.DecimalField(max_digits=16, decimal_places=3)
+    drawn_qty = models.DecimalField(max_digits=16, decimal_places=3, default=0)
     valid_until = models.DateField()
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -432,8 +432,8 @@ class TenderContract(models.Model):
         return f"Tender {self.tender_number} · {self.client_org.name}"
 
     @property
-    def remaining_qty(self) -> int:
-        return max(0, self.total_committed_qty - self.drawn_qty)
+    def remaining_qty(self) -> Decimal:
+        return max(Decimal(0), self.total_committed_qty - self.drawn_qty)
 
 
 class CustomerReturn(models.Model):
