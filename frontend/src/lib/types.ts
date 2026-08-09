@@ -7,6 +7,9 @@ export interface Me {
   last_name: string;
   phone: string;
   organization: number | null;
+  /** What kind of place this person works in. A depot does not serve the
+   *  public, so it is not offered a till it would be refused at. */
+  organization_type?: string;
   department: number | null;
   is_active: boolean;
   is_staff: boolean;

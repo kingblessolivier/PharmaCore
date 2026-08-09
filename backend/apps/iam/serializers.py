@@ -217,6 +217,10 @@ class DepartmentSerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
+    #: What kind of place this person works in. The nav needs it: a depot does
+    #: not serve the public, so it should not be offered a till it would be
+    #: refused at.
+    organization_type = serializers.CharField(source="organization.type", read_only=True)
     roles = serializers.SerializerMethodField()
 
     class Meta:
@@ -233,6 +237,7 @@ class UserSerializer(serializers.ModelSerializer):
             "payroll_email",
             "reports_to",
             "organization",
+            "organization_type",
             "department",
             "is_active",
             "is_staff",
