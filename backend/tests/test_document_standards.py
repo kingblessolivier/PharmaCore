@@ -617,3 +617,35 @@ class TestTotalsBlocksUseTheFullPageWidth:
         missing = tokens - set(hits)
         assert not missing, f"figures never reached the page: {sorted(missing)}"
         assert hits["2,227.00"] > width * 0.65
+
+    def test_a_caller_omitting_figures_cannot_collapse_the_column(
+        self, issuer: Organization
+    ) -> None:
+        """The B2B order's context, which is thinner than procurement's.
+
+        Both use this template. One passed `total` alone, so Subtotal, Tax,
+        Shipping and Other rendered empty — and an empty cell lets the renderer
+        size the column from nothing and squeeze it to a sliver. Each figure
+        now falls back to a dash, which holds the column open.
+        """
+        tokens = {"dmkn", "Subtotal", "7,500.00"}
+        hits, width = self._positions(
+            "documents/purchase_order.html",
+            {
+                "organization": issuer,
+                "doc_number": "PO-1",
+                "doc_type_label": "Purchase Order",
+                "generated_at": timezone.now(),
+                "po_number": "PO-00014",
+                "buyer_name": issuer.name,
+                "seller_name": "A Depot",
+                "notes": "dmkn",
+                "total": "7,500.00",
+                "currency": "RWF",
+                "lines": [],
+            },
+            tokens,
+        )
+        assert not tokens - set(hits), f"missing: {sorted(tokens - set(hits))}"
+        assert hits["dmkn"] < width * 0.2
+        assert hits["7,500.00"] > width * 0.65

@@ -138,7 +138,7 @@ invoice, and a buyer's auditor looks for exactly those words.
       {% if terms_conditions %}<b>Terms &amp; conditions.</b> {{ terms_conditions }}{% endif %}
     </td>
     <td class="right">Sub total</td>
-    <td class="right">{{ subtotal }}</td>
+    <td class="right">{% firstof subtotal "&mdash;" %}</td>
   </tr>
   {% for band in vat_bands %}
   <tr>
@@ -150,13 +150,13 @@ invoice, and a buyer's auditor looks for exactly those words.
   <tr>
     <td class="cont">&nbsp;</td>
     <td class="right">Tax</td>
-    <td class="right">{{ tax_total }}</td>
+    <td class="right">{% firstof tax_total "&mdash;" %}</td>
   </tr>
   {% endfor %}
   <tr>
     <td class="cont">&nbsp;</td>
     <td class="right grandcell">Total ({{ currency|default:"RWF" }})</td>
-    <td class="right grandcell">{{ total }}</td>
+    <td class="right grandcell">{% firstof total "&mdash;" %}</td>
   </tr>
   <tr>
     <td class="cont">&nbsp;</td>

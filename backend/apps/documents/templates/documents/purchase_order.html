@@ -142,10 +142,15 @@ Two constraints from the renderer shape the markup:
     <th style="width:24%">&nbsp;</th>
     <th style="width:18%">&nbsp;</th>
   </tr>
+  {% comment %}
+  Each figure falls back to a dash rather than an empty string. An empty cell
+  lets the renderer size the column from nothing and collapse it to a sliver —
+  which is how a caller omitting one key silently wrecked the whole block.
+  {% endcomment %}
   <tr>
     <td class="contfirst">{{ notes }}</td>
     <td class="right">Subtotal</td>
-    <td class="right">{{ subtotal }}</td>
+    <td class="right">{% firstof subtotal "&mdash;" %}</td>
   </tr>
   {% if discount_amount and discount_amount != "0.00" %}
   <tr>
@@ -157,22 +162,22 @@ Two constraints from the renderer shape the markup:
   <tr>
     <td class="cont">&nbsp;</td>
     <td class="right">Tax</td>
-    <td class="right">{{ tax_total }}</td>
+    <td class="right">{% firstof tax_total "&mdash;" %}</td>
   </tr>
   <tr>
     <td class="cont">&nbsp;</td>
     <td class="right">Shipping</td>
-    <td class="right">{{ freight_amount }}</td>
+    <td class="right">{% firstof freight_amount "&mdash;" %}</td>
   </tr>
   <tr>
     <td class="cont">&nbsp;</td>
     <td class="right">Other</td>
-    <td class="right">{{ other_charges }}</td>
+    <td class="right">{% firstof other_charges "&mdash;" %}</td>
   </tr>
   <tr>
     <td class="contlast">&nbsp;</td>
     <td class="right grandcell">Total ({{ currency|default:"RWF" }})</td>
-    <td class="right grandcell">{{ total }}</td>
+    <td class="right grandcell">{% firstof total "&mdash;" %}</td>
   </tr>
 </table>
 
