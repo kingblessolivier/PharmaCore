@@ -12,10 +12,24 @@ import { api } from "./api";
 
 /* --------------------------------- types --------------------------------- */
 
+/** A packaging level a medicine is sold in. */
+export interface PackUnit {
+  code: string;
+  label: string;
+  factor_to_base: string;
+  is_base: boolean;
+}
+
 export interface StorefrontRow {
   listing: number;
   product: number;
   product_name: string;
+  /** The depot's photo, falling back to the catalogue's. */
+  image: string;
+  /** False until somebody has confirmed the photo is of this medicine. */
+  image_is_trusted: boolean;
+  pack_units: PackUnit[];
+  order_multiple: number;
   price: string;
   available: number;
   offered_qty: number;

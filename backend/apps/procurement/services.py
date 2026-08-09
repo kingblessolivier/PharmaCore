@@ -741,16 +741,47 @@ def send_order(*, order: PurchaseOrder, user: User | None, method: str = "EMAIL"
         doc_type=DocType.PURCHASE_ORDER,
         context={
             "buyer_name": order.organization.name,
+            "buyer_phone": order.organization.phone,
             "seller_name": order.supplier.name,
+            "seller_contact": getattr(order.supplier, "contact_person", ""),
+            "seller_address": getattr(order.supplier, "address", ""),
+            "seller_phone": getattr(order.supplier, "phone", ""),
+            "seller_email": getattr(order.supplier, "email", ""),
+            "deliver_to_name": order.deliver_to.name if order.deliver_to is not None else "",
+            "deliver_to_address": order.delivery_address,
+            "po_number": order.po_number,
+            "order_date": order.order_date,
+            "expected_delivery": order.expected_delivery,
+            "payment_terms_days": order.payment_terms_days,
+            "incoterm": order.incoterm,
+            "currency": order.currency,
+            "terms": order.terms,
+            "notes": order.notes,
             "lines": [
                 {
                     "name": f"{ln.product.generic_name} {ln.product.strength}".strip(),
-                    "qty": ln.quantity_ordered,
+                    "qty": normalise(ln.quantity_ordered),
+                    # The unit the quantity is counted in, and what it comes to
+                    # on the shelf. A supplier reading "10" needs to know it
+                    # means ten cartons, and the buyer's stock controller needs
+                    # to know that is 24,000 tablets.
+                    "unit_label": (ln.unit.name or ln.unit.get_code_display()) if ln.unit else "",
+                    "base_quantity": normalise(ln.quantity_ordered_base),
+                    "base_unit": (
+                        ln.product.base_unit.get_code_display().lower()
+                        if ln.product.base_unit
+                        else "units"
+                    ),
                     "price": ln.unit_price,
                     "total": ln.line_total,
                 }
-                for ln in order.lines.select_related("product").all()
+                for ln in order.lines.select_related("product", "unit").all()
             ],
+            "subtotal": order.subtotal,
+            "tax_total": order.tax_total,
+            "freight_amount": order.freight_amount,
+            "other_charges": order.other_charges,
+            "discount_amount": order.discount_amount,
             "total": order.total_amount,
         },
         reference_type="purchase_order",
