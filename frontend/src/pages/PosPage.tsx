@@ -18,6 +18,7 @@ import { api } from "../lib/api";
 import { money } from "../lib/format";
 import { CounterCover } from "../components/CounterCover";
 import { SafetyCheck, type Screening } from "../components/SafetyCheck";
+import { Substitutes } from "../components/Substitutes";
 import type { Quote } from "../lib/insurance";
 import {
   enqueue,
@@ -242,6 +243,8 @@ export function PosPage() {
      somebody acknowledges it — the pharmacist keeps the judgement, but the
      system stops pretending it never noticed. */
   const [screening, setScreening] = useState<Screening | null>(null);
+  /** Which line is asking for an alternative, if any. */
+  const [substitutesFor, setSubstitutesFor] = useState<number | null>(null);
   const [overrideNote, setOverrideNote] = useState("");
   const blocked = screening?.requires_override === true && overrideNote.trim().length === 0;
   const [memberNumber, setMemberNumber] = useState("");
@@ -707,10 +710,25 @@ export function PosPage() {
                           const { dispensed } = lineTotals(line);
                           const singles = line.sale_units.find((u) => u.is_base)?.label ?? "units";
                           return dispensed > line.on_hand ? (
-                            <span className="text-danger-700">
-                              needs {dispensed.toLocaleString()} {singles.toLowerCase()} · only{" "}
-                              {line.on_hand.toLocaleString()} on the shelf
-                            </span>
+                            <>
+                              <span className="text-danger-700">
+                                needs {dispensed.toLocaleString()} {singles.toLowerCase()} · only{" "}
+                                {line.on_hand.toLocaleString()} on the shelf
+                              </span>
+                              {/* An empty shelf was a dead end: the customer
+                                  left for a pharmacy holding the same molecule
+                                  under a different brand. */}
+                              <button
+                                onClick={() =>
+                                  setSubstitutesFor(
+                                    substitutesFor === line.product ? null : line.product,
+                                  )
+                                }
+                                className="text-brand-600 hover:underline"
+                              >
+                                {substitutesFor === line.product ? "Hide" : "What else can I give?"}
+                              </button>
+                            </>
                           ) : (
                             <span>
                               {dispensed.toLocaleString()} {singles.toLowerCase()} ·{" "}
@@ -794,6 +812,25 @@ export function PosPage() {
                     </button>
                   </li>
                 ))}
+                {/* Rendered per line rather than in a modal: the alternative
+                    belongs next to the medicine it is standing in for. */}
+                {substitutesFor !== null && orgId != null && orgId > 0 && (
+                  <li className="border-t border-line bg-surface-50 px-3 py-3">
+                    <Substitutes
+                      productId={substitutesFor}
+                      organizationId={orgId}
+                      productName={lines.find((l) => l.product === substitutesFor)?.label}
+                      onPick={(option) => {
+                        // Put it in the search box rather than adding it
+                        // silently: substituting is a decision, and the
+                        // cashier should see what they are about to ring up.
+                        setCode(option.product_name);
+                        setSubstitutesFor(null);
+                        focusScan();
+                      }}
+                    />
+                  </li>
+                )}
               </ul>
             )}
           </div>
