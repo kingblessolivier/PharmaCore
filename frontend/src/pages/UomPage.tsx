@@ -1,322 +1,338 @@
+/* -------------------------------------------------------------------------- */
+/* A product's packaging chain.                                                */
+/*                                                                             */
+/* This screen used to edit ProductUomConversion — a table with the right       */
+/* shape, zero rows, and no readers anywhere in the system. It now edits        */
+/* ProductUnit, which pricing, the till, FEFO allocation and every stock        */
+/* figure actually convert through.                                            */
+/*                                                                             */
+/* The rule the form enforces: every level states its size in BASE units, not   */
+/* in the level below. A case of 24 boxes of 100 is 2400, not 24 — measuring    */
+/* against the base is what keeps a conversion one multiplication instead of a  */
+/* walk that compounds rounding at every hop.                                   */
+/* -------------------------------------------------------------------------- */
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Edit2, Layers, Plus, Trash2 } from "lucide-react";
+import { Boxes, Info, Layers, Plus, Scissors, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
-import { Badge, Button, PageHeader, SelectField, TextField } from "../components/ui";
+import { Button, PageHeader, SelectField, TextField } from "../components/ui";
 import { api } from "../lib/api";
-import type { Paginated, Product, ProductUomConversion } from "../lib/types";
-import { DataGrid } from "../components/DataGrid";
+import type { Paginated, Product, ProductUnit } from "../lib/types";
 import { Drawer } from "../components/RecordKit";
 
+const UNIT_CODES = [
+  { value: "TABLET", label: "Tablet" },
+  { value: "CAPSULE", label: "Capsule" },
+  { value: "SACHET", label: "Sachet" },
+  { value: "SUPPOSITORY", label: "Suppository" },
+  { value: "BOTTLE", label: "Bottle" },
+  { value: "TUBE", label: "Tube" },
+  { value: "VIAL", label: "Vial" },
+  { value: "AMPOULE", label: "Ampoule" },
+  { value: "DEVICE", label: "Device" },
+  { value: "BAG", label: "Bag" },
+  { value: "STRIP", label: "Strip" },
+  { value: "PACK", label: "Pack" },
+  { value: "CASE", label: "Case" },
+  { value: "CARTON", label: "Carton" },
+  { value: "ML", label: "Millilitre" },
+  { value: "G", label: "Gram" },
+  { value: "UNIT", label: "Unit" },
+];
+
+const SPLITS = [
+  { value: "1", label: "Whole units only" },
+  { value: "2", label: "May be halved" },
+  { value: "4", label: "May be quartered" },
+];
+
 export function UomPage() {
-  const navigate = useNavigate();
   const qc = useQueryClient();
-  const [search, setSearch] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [editing, setEditing] = useState<ProductUomConversion | null>(null);
+  const [productId, setProductId] = useState(0);
+  const [adding, setAdding] = useState(false);
 
-  const [productId, setProductId] = useState<number>(0);
-  const [unitName, setUnitName] = useState("");
-  const [conversionFactor, setConversionFactor] = useState("10");
-  const [pricePerUnit, setPricePerUnit] = useState("");
-  const [isDefault, setIsDefault] = useState(false);
-
-  const { data, isLoading } = useQuery({
-    queryKey: ["product-uom-conversions"],
-    queryFn: () => api<Paginated<ProductUomConversion>>("/api/catalog/product-uom-conversions/"),
-  });
-
-  const productsQuery = useQuery({
+  const products = useQuery({
     queryKey: ["all-products"],
-    queryFn: () => api<Paginated<Product>>("/api/catalog/products/?page_size=100"),
+    queryFn: () => api<Paginated<Product>>("/api/catalog/products/?page_size=500"),
   });
+  const product = (products.data?.results ?? []).find((p) => p.id === productId);
 
-  const createMutation = useMutation({
-    mutationFn: () =>
-      api<ProductUomConversion>("/api/catalog/product-uom-conversions/", {
-        method: "POST",
-        body: JSON.stringify({
-          product: productId,
-          unit_name: unitName,
-          conversion_factor: Number(conversionFactor),
-          price_per_unit: pricePerUnit ? Number(pricePerUnit) : null,
-          is_default_dispensing: isDefault,
-        }),
-      }),
-    onSuccess: () => {
-      setCreating(false);
-      void qc.invalidateQueries({ queryKey: ["product-uom-conversions"] });
-    },
+  const units = useQuery({
+    queryKey: ["product-units", productId],
+    enabled: productId > 0,
+    queryFn: () => api<Paginated<ProductUnit>>(`/api/catalog/product-units/?product=${productId}`),
   });
+  const rows = [...(units.data?.results ?? [])].sort((a, b) => a.level - b.level);
+  const hasBase = rows.some((u) => u.is_base);
 
-  const updateMutation = useMutation({
-    mutationFn: () =>
-      api<ProductUomConversion>(`/api/catalog/product-uom-conversions/${editing?.id}/`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          unit_name: unitName,
-          conversion_factor: Number(conversionFactor),
-          price_per_unit: pricePerUnit ? Number(pricePerUnit) : null,
-          is_default_dispensing: isDefault,
-        }),
-      }),
-    onSuccess: () => {
-      setEditing(null);
-      void qc.invalidateQueries({ queryKey: ["product-uom-conversions"] });
-    },
-  });
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: ["product-units", productId] });
+    void qc.invalidateQueries({ queryKey: ["all-products"] });
+  };
 
-  const deleteMutation = useMutation({
+  const remove = useMutation({
     mutationFn: (id: number) =>
-      api<void>(`/api/catalog/product-uom-conversions/${id}/`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["product-uom-conversions"] }),
+      api<void>(`/api/catalog/product-units/${id}/`, { method: "DELETE" }),
+    onSuccess: invalidate,
   });
 
-  function startCreate() {
-    setProductId(productsQuery.data?.results[0]?.id ?? 0);
-    setUnitName("Strip");
-    setConversionFactor("10");
-    setPricePerUnit("");
-    setIsDefault(false);
-    setCreating(true);
-  }
-
-  function startEdit(u: ProductUomConversion) {
-    setEditing(u);
-    setUnitName(u.unit_name);
-    setConversionFactor(String(u.conversion_factor));
-    setPricePerUnit(u.price_per_unit ? String(u.price_per_unit) : "");
-    setIsDefault(u.is_default_dispensing);
-  }
-
-  function submitCreate(e: FormEvent) {
-    e.preventDefault();
-    if (productId && unitName) createMutation.mutate();
-  }
-
-  function submitUpdate(e: FormEvent) {
-    e.preventDefault();
-    if (editing && unitName) updateMutation.mutate();
-  }
-
-  const filtered = (data?.results ?? []).filter(
-    (u) =>
-      u.unit_name.toLowerCase().includes(search.toLowerCase()) ||
-      String(u.product).includes(search),
-  );
+  const setSplit = useMutation({
+    mutationFn: (divisibility: number) =>
+      api<Product>(`/api/catalog/products/${productId}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ divisibility }),
+      }),
+    onSuccess: invalidate,
+  });
 
   return (
-    <div>
-      <button
-        onClick={() => navigate("/catalog")}
-        className="mb-3 flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900"
-      >
-        <ArrowLeft className="h-4 w-4" /> Catalog Home
-      </button>
-
+    <div className="space-y-4">
       <PageHeader
-        title="Units of Measure & OTC Increment Pricing Directory"
+        title="Pack sizes"
         action={
-          <Button onClick={startCreate}>
-            <Plus className="h-4 w-4" /> Add UoM Conversion
+          <Button onClick={() => setAdding(true)} disabled={productId === 0}>
+            <Plus className="h-4 w-4" /> Add a pack size
           </Button>
         }
       />
 
-      <div className="mb-4 flex items-center gap-2 rounded-md border border-line bg-surface-0 px-3 py-2">
-        <input
-          className="w-full bg-transparent text-sm outline-none"
-          placeholder="Filter by unit name (e.g. Strip, Tablet, Box)..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="max-w-md">
+        <SelectField
+          label="Medicine"
+          value={String(productId)}
+          onChange={(e) => setProductId(Number(e.target.value))}
+        >
+          <option value="0">Choose a medicine…</option>
+          {(products.data?.results ?? []).map((p) => (
+            <option key={p.id} value={p.id}>
+              {`${p.generic_name} ${p.strength}`.trim()}
+            </option>
+          ))}
+        </SelectField>
       </div>
 
-      <DataGrid<ProductUomConversion>
-        rows={filtered}
-        loading={isLoading}
-        getRowId={(r) => r.id}
-        storageKey="uom-conversions"
-        exportName="uom-conversions"
-        searchPlaceholder="Search units…"
-        emptyMessage="No unit conversions recorded."
-        columns={[
-          {
-            key: "unit_name",
-            header: "Unit",
-            value: (u) => u.unit_name,
-            render: (u) => (
-              <span className="flex items-center gap-2 font-medium text-ink-900">
-                <Layers className="h-4 w-4 text-brand-600" />
-                {u.unit_name}
-              </span>
-            ),
-          },
-          {
-            key: "conversion_factor",
-            header: "Conversion",
-            align: "right",
-            numeric: true,
-            value: (u) => Number(u.conversion_factor),
-            render: (u) => (
-              <span className="font-mono text-ink-700">{u.conversion_factor}x per pack</span>
-            ),
-          },
-          {
-            key: "price_per_unit",
-            header: "Unit price",
-            align: "right",
-            numeric: true,
-            value: (u) => Number(u.price_per_unit ?? 0),
-            render: (u) => (
-              <span className="font-mono text-ink-700">
-                {u.price_per_unit ? `RWF ${u.price_per_unit}` : "—"}
-              </span>
-            ),
-          },
-          {
-            key: "is_default_dispensing",
-            header: "Default dispensing unit",
-            value: (u) => (u.is_default_dispensing ? "Yes" : "No"),
-            render: (u) =>
-              u.is_default_dispensing ? (
-                <Badge tone="success">Default</Badge>
-              ) : (
-                <span className="text-xs text-ink-500">No</span>
-              ),
-          },
-          {
-            key: "actions",
-            header: "",
-            align: "right",
-            fixed: true,
-            sortable: false,
-            render: (u) => (
-              <div className="flex items-center justify-end gap-1">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    startEdit(u);
-                  }}
-                  className="rounded-md p-1.5 text-ink-500 hover:bg-surface-200 hover:text-ink-900"
-                  aria-label="Edit"
-                >
-                  <Edit2 className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteMutation.mutate(u.id);
-                  }}
-                  className="rounded-md p-1.5 text-ink-500 hover:bg-danger-50 hover:text-danger-600"
-                  aria-label="Delete"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ),
-          },
-        ]}
-      />
+      {productId === 0 && (
+        <div className="rounded-lg border border-dashed border-line py-12 text-center text-sm text-ink-500">
+          Choose a medicine to see how it is packed.
+        </div>
+      )}
 
-      {creating && (
-        <Drawer title="Add UoM Conversion" onClose={() => setCreating(false)}>
-          <form onSubmit={submitCreate} className="flex flex-col gap-4">
+      {productId > 0 && (
+        <>
+          {!hasBase && !units.isLoading && (
+            <div className="flex items-start gap-2 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-900">
+              <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              <span>
+                No single unit recorded yet. Start with the smallest amount you can dispense —
+                one tablet, one bottle, one vial — then add the boxes and cartons.
+              </span>
+            </div>
+          )}
+
+          <div className="overflow-x-auto rounded-lg border border-line bg-surface-0">
+            <table className="w-full text-sm">
+              <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
+                <tr>
+                  <th className="px-4 py-2">#</th>
+                  <th className="px-3 py-2">Pack size</th>
+                  <th className="px-3 py-2">Printed on the box</th>
+                  <th className="px-3 py-2 text-right">How many it contains</th>
+                  <th className="px-3 py-2">Barcode</th>
+                  <th className="px-3 py-2 text-right">Price</th>
+                  <th className="px-3 py-2">Default for</th>
+                  <th className="px-4 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((u) => (
+                  <tr key={u.id} className="border-b border-line last:border-0">
+                    <td className="px-4 py-2 tabular-nums text-ink-500">{u.level}</td>
+                    <td className="px-3 py-2 font-medium text-ink-900">
+                      <span className="flex items-center gap-1.5">
+                        {u.is_base ? (
+                          <Layers className="h-3.5 w-3.5 text-brand-600" aria-hidden />
+                        ) : (
+                          <Boxes className="h-3.5 w-3.5 text-ink-400" aria-hidden />
+                        )}
+                        {u.code_display}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-ink-600">{u.name || "—"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {Number(u.factor_to_base).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs text-ink-500">{u.barcode || "—"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-ink-600">
+                      {u.price ? Number(u.price).toLocaleString() : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-ink-500">
+                      {[
+                        u.is_base && "the single",
+                        u.is_purchase_default && "ordering",
+                        u.is_sale_default && "dispensing",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || "—"}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <button
+                        onClick={() => remove.mutate(u.id)}
+                        className="text-ink-400 hover:text-danger-600"
+                        aria-label={`Remove ${u.code_display}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {rows.length === 0 && !units.isLoading && (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-8 text-center text-ink-500">
+                      Nothing recorded yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Splitting is a clinical decision, so it belongs to the medicine
+              rather than to a packaging level. A score line is not authority to
+              split — an enteric or modified-release coating destroyed by
+              halving doses the whole thing at once. */}
+          <div className="max-w-xl rounded-lg border border-line bg-surface-0 p-4">
+            <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-ink-900">
+              <Scissors className="h-4 w-4 text-ink-500" aria-hidden />
+              May this be split?
+            </div>
+            <p className="mb-3 text-xs text-ink-500">
+              Only a scored, immediate-release tablet may be halved. Enteric-coated and
+              modified-release forms may not.
+            </p>
             <SelectField
-              label="Target Medicine"
-              value={productId}
-              onChange={(e) => setProductId(Number(e.target.value))}
+              label="Dispensing"
+              value={String(product?.divisibility ?? 1)}
+              onChange={(e) => setSplit.mutate(Number(e.target.value))}
             >
-              {(productsQuery.data?.results ?? []).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.generic_name} {p.strength} ({p.dosage_form})
+              {SPLITS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
                 </option>
               ))}
             </SelectField>
-            <TextField
-              label="Unit Name"
-              value={unitName}
-              onChange={(e) => setUnitName(e.target.value)}
-              placeholder="e.g. Strip, Tablet, Ampoule"
-              required
-            />
-            <TextField
-              label="Conversion Factor (Units per Pack)"
-              type="number"
-              value={conversionFactor}
-              onChange={(e) => setConversionFactor(e.target.value)}
-              required
-            />
-            <TextField
-              label="Unit Price (RWF)"
-              type="number"
-              value={pricePerUnit}
-              onChange={(e) => setPricePerUnit(e.target.value)}
-              placeholder="e.g. 100"
-            />
-            <label className="flex items-center gap-2 text-sm text-ink-900">
-              <input
-                type="checkbox"
-                checked={isDefault}
-                onChange={(e) => setIsDefault(e.target.checked)}
-                className="rounded border-line"
-              />
-              Default Dispensing Unit
-            </label>
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setCreating(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending ? "Adding…" : "Add Conversion"}
-              </Button>
-            </div>
-          </form>
-        </Drawer>
+          </div>
+        </>
       )}
 
-      {editing && (
-        <Drawer title="Edit UoM Conversion" onClose={() => setEditing(null)}>
-          <form onSubmit={submitUpdate} className="flex flex-col gap-4">
-            <TextField
-              label="Unit Name"
-              value={unitName}
-              onChange={(e) => setUnitName(e.target.value)}
-              required
-            />
-            <TextField
-              label="Conversion Factor (Units per Pack)"
-              type="number"
-              value={conversionFactor}
-              onChange={(e) => setConversionFactor(e.target.value)}
-              required
-            />
-            <TextField
-              label="Unit Price (RWF)"
-              type="number"
-              value={pricePerUnit}
-              onChange={(e) => setPricePerUnit(e.target.value)}
-            />
-            <label className="flex items-center gap-2 text-sm text-ink-900">
-              <input
-                type="checkbox"
-                checked={isDefault}
-                onChange={(e) => setIsDefault(e.target.checked)}
-                className="rounded border-line"
-              />
-              Default Dispensing Unit
-            </label>
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setEditing(null)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={updateMutation.isPending}>
-                {updateMutation.isPending ? "Saving…" : "Save Changes"}
-              </Button>
-            </div>
-          </form>
-        </Drawer>
+      {adding && (
+        <AddLevel
+          productId={productId}
+          hasBase={hasBase}
+          nextLevel={rows.length ? Math.max(...rows.map((r) => r.level)) + 1 : 0}
+          onClose={() => setAdding(false)}
+          onSaved={() => {
+            invalidate();
+            setAdding(false);
+          }}
+        />
       )}
     </div>
+  );
+}
+
+function AddLevel({
+  productId,
+  hasBase,
+  nextLevel,
+  onClose,
+  onSaved,
+}: {
+  productId: number;
+  hasBase: boolean;
+  nextLevel: number;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [code, setCode] = useState(hasBase ? "PACK" : "TABLET");
+  const [name, setName] = useState("");
+  const [factor, setFactor] = useState(hasBase ? "100" : "1");
+  const [barcode, setBarcode] = useState("");
+  const [price, setPrice] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const save = useMutation({
+    mutationFn: () =>
+      api<ProductUnit>("/api/catalog/product-units/", {
+        method: "POST",
+        body: JSON.stringify({
+          product: productId,
+          code,
+          name,
+          factor_to_base: factor,
+          level: hasBase ? nextLevel : 0,
+          is_base: !hasBase,
+          barcode,
+          price: price || null,
+        }),
+      }),
+    onSuccess: onSaved,
+    onError: (e) => setError(e instanceof Error ? e.message : "Could not save that level."),
+  });
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    save.mutate();
+  };
+
+  return (
+    <Drawer title={hasBase ? "Add a pack size" : "What is the single unit?"} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <p className="text-xs text-ink-500">
+          {hasBase
+            ? "How many singles are inside — a carton of 24 boxes of 100 tablets contains 2400 tablets, not 24 boxes."
+            : "The smallest amount you can dispense: one tablet, one bottle, one vial."}
+        </p>
+        <SelectField label="Pack size" value={code} onChange={(e) => setCode(e.target.value)}>
+          {UNIT_CODES.map((u) => (
+            <option key={u.value} value={u.value}>
+              {u.label}
+            </option>
+          ))}
+        </SelectField>
+        <TextField
+          label="Printed on the box"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Box of 100 tablets"
+        />
+        <TextField
+          label="How many singles it contains"
+          value={factor}
+          onChange={(e) => setFactor(e.target.value)}
+          disabled={!hasBase}
+        />
+        <TextField
+          label="Barcode on this pack size"
+          value={barcode}
+          onChange={(e) => setBarcode(e.target.value)}
+        />
+        <TextField
+          label="Price for one (optional)"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          placeholder="Leave blank to scale from the base price"
+        />
+        {error && <p className="text-sm text-danger-700">{error}</p>}
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={save.isPending}>
+            Save
+          </Button>
+        </div>
+      </form>
+    </Drawer>
   );
 }

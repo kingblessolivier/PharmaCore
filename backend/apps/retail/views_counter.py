@@ -7,6 +7,7 @@ scan resolves on every keystroke burst from the scanner.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, cast
 
 from rest_framework import status, viewsets
@@ -104,6 +105,31 @@ def _scan_payload(organization: Organization, result: counter.ScanResult) -> dic
     }
 
 
+def _sale_units(product: Any, base_price: Any) -> list[dict[str, Any]]:
+    """The levels this product may be sold in, cheapest-per-base first.
+
+    A unit priced in its own right keeps that price; otherwise the base price
+    scales, which is what a pharmacy that has not priced packs separately means
+    by "a box of a hundred".
+    """
+    from apps.retail.lines import price_for
+
+    rows = []
+    for unit in sorted(product.units.all(), key=lambda u: u.level):
+        rows.append(
+            {
+                "id": unit.pk,
+                "code": unit.code,
+                "label": unit.name or unit.get_code_display(),
+                "factor_to_base": str(unit.factor_to_base),
+                "is_base": unit.is_base,
+                "is_default": unit.is_sale_default,
+                "unit_price": str(price_for(unit=unit, base_price=Decimal(str(base_price or 0)))),
+            }
+        )
+    return rows
+
+
 class CounterViewSet(viewsets.ViewSet):
     """Actions performed at the till."""
 
@@ -160,8 +186,12 @@ class CounterViewSet(viewsets.ViewSet):
                         "brand_name": m.product.brand_name,
                         "dosage_form": m.product.dosage_form,
                         "pack_size": m.product.pack_size,
-                        # One unit: a name search has no packaging level to read.
-                        "units": 1,
+                        # The packaging levels this medicine may be sold in, so
+                        # the counter can offer a box, a strip or a single
+                        # tablet instead of guessing which the number meant.
+                        "sale_units": _sale_units(m.product, m.unit_price),
+                        "divisibility": m.product.divisibility,
+                        "split_note": m.product.split_note,
                         "unit_price": str(m.unit_price) if m.unit_price else "",
                         "price_source": m.price_source,
                         "on_hand": m.on_hand,
