@@ -1,30 +1,22 @@
-import { useQuery } from "@tanstack/react-query";
 import { ShieldCheck } from "lucide-react";
 import { useState } from "react";
-import { api } from "../../lib/api";
-import type { Paginated } from "../../lib/types";
-import { AppHeader, StatTile, WorkQueue } from "../../components/AppHome";
+import { AppHeader, WorkQueue } from "../../components/AppHome";
 import { useModuleWork } from "../../lib/modulework";
 import { ApiKeysModal } from "../../components/ApiKeysModal";
 import { ModuleInsights } from "../../components/ModuleInsights";
 
-// Only the count is needed for the overview — fetch a single row.
-function useCount(key: string, path: string) {
-  return useQuery({
-    queryKey: ["count", key],
-    queryFn: () => api<Paginated<unknown>>(path),
-    select: (d) => d.count,
-  });
-}
+/* -------------------------------------------------------------------------- */
+/* Admin — the control room.                                                   */
+/*                                                                             */
+/* The four hand-rolled count tiles that used to sit here (companies,          */
+/* organizations, users, departments) each cost a page-size-1 request and two  */
+/* of them then appeared a second time in the figures below. They now come     */
+/* from the one aggregate, so the page states each number once.                */
+/* -------------------------------------------------------------------------- */
 
 export function AdminHome() {
   const work = useModuleWork("admin");
   const [apiKeysOpen, setApiKeysOpen] = useState(false);
-  const companies = useCount("companies", "/api/companies/?page_size=1");
-  const orgs = useCount("orgs", "/api/organizations/?page_size=1");
-  const users = useCount("users", "/api/users/?page_size=1");
-  const depts = useCount("departments", "/api/departments/?page_size=1");
-  const n = (q: { data?: number; isLoading: boolean }) => (q.isLoading ? "…" : (q.data ?? 0));
 
   return (
     <div>
@@ -32,18 +24,15 @@ export function AdminHome() {
 
       <WorkQueue items={work.items} loading={work.loading} />
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Companies" value={n(companies)} />
-        <StatTile label="Organizations" value={n(orgs)} />
-        <StatTile label="Users" value={n(users)} />
-        <StatTile label="Departments" value={n(depts)} />
-      </div>
-
       <div>
         <h2 className="mb-3 text-base font-semibold tracking-tight text-ink-900">
-          Who is in the system, and what is expiring
+          The system at a glance
         </h2>
-        <ModuleInsights module="admin" />
+        <ModuleInsights
+          module="admin"
+          trendTitle="System activity, last 14 days"
+          trendSubtitle="Sign-ins against records actually changed."
+        />
       </div>
       {apiKeysOpen && <ApiKeysModal onClose={() => setApiKeysOpen(false)} />}
     </div>

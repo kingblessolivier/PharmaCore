@@ -589,23 +589,77 @@ def _finance(org_ids: list[int]) -> dict[str, Any]:
 
 
 def _admin(org_ids: list[int]) -> dict[str, Any]:
-    from apps.iam.models import License, Organization, User
+    """The control room: who is in the system, what it is made of, and what it is doing.
+
+    Admin is the one module whose subject is the system itself, so this is
+    deliberately the broadest of the nine — access, estate, compliance and
+    activity, rather than one business process.
+    """
+    from apps.iam.models import AuditLog, Company, Department, License, Organization, User
+
+    today = timezone.localdate()
+    start = today - timedelta(days=13)
 
     users = User.objects.filter(organization_id__in=org_ids, is_active=True)
     roles = users.values("roles__code").annotate(n=Count("id"))
-    orgs = Organization.objects.filter(pk__in=org_ids).values("type").annotate(n=Count("id"))
-    today = timezone.localdate()
+    orgs = Organization.objects.filter(pk__in=org_ids)
     licences = License.objects.filter(organization_id__in=org_ids)
+    expiring = licences.filter(expiry_date__gte=today, expiry_date__lte=today + timedelta(days=60))
+    audit = AuditLog.objects.filter(organization_id__in=org_ids)
+
+    # Fourteen days of activity, split into the two reads that matter: people
+    # arriving, and records changing. A quiet day on both is a system nobody is
+    # using; a busy day on sign-ins alone is a system people log into and leave.
+    recent = audit.filter(created_at__date__gte=start)
+    by_day: dict[Any, dict[str, int]] = {
+        start + timedelta(days=i): {"sign_ins": 0, "changes": 0} for i in range(14)
+    }
+    for row in recent.values("created_at", "action"):
+        day = timezone.localtime(row["created_at"]).date()
+        bucket = by_day.get(day)
+        if bucket is None:
+            continue
+        if row["action"] in ("LOGIN", "LOGIN_FAILED"):
+            bucket["sign_ins"] += 1
+        elif row["action"] in ("CREATE", "UPDATE", "DELETE"):
+            bucket["changes"] += 1
+
+    # A failed sign-in rate is a security read, not a usage one, so it gets its
+    # own tile rather than hiding inside the activity total.
+    sign_in_attempts = audit.filter(action__in=("LOGIN", "LOGIN_FAILED")).count()
+    failed = audit.filter(action="LOGIN_FAILED").count()
+
+    busiest = (
+        audit.exclude(user=None).values("user__username").annotate(n=Count("id")).order_by("-n")[:8]
+    )
+    where = (
+        users.values("organization__name")
+        .annotate(n=Count("id"))
+        .filter(n__gt=0)
+        .order_by("-n")[:8]
+    )
 
     return {
         "tiles": [
             {"label": "Active users", "value": users.count()},
+            {"label": "Organizations", "value": orgs.count()},
+            {
+                "label": "Companies",
+                "value": Company.objects.filter(branches__in=orgs).distinct().count(),
+            },
+            {
+                "label": "Departments",
+                "value": Department.objects.filter(organization__in=orgs).count(),
+            },
             {
                 "label": "Licences expiring",
-                "value": licences.filter(
-                    expiry_date__gte=today, expiry_date__lte=today + timedelta(days=60)
-                ).count(),
+                "value": expiring.count(),
                 "hint": "within 60 days",
+            },
+            {
+                "label": "Failed sign-ins",
+                "value": failed,
+                "hint": f"of {sign_in_attempts} attempt(s)",
             },
         ],
         "donuts": [
@@ -617,11 +671,50 @@ def _admin(org_ids: list[int]) -> dict[str, Any]:
             {
                 "title": "Organizations by type",
                 "subtitle": "The shape of the group",
-                "slices": _slices(orgs, "type"),
+                "slices": _slices(orgs.values("type").annotate(n=Count("id")), "type"),
+            },
+            {
+                "title": "What is being worked on",
+                "subtitle": "Records changed, by kind",
+                "slices": _slices(
+                    audit.filter(action__in=("CREATE", "UPDATE", "DELETE"))
+                    .exclude(entity_type="")
+                    .values("entity_type")
+                    .annotate(n=Count("id"))
+                    .order_by("-n")[:8],
+                    "entity_type",
+                ),
+            },
+            {
+                "title": "Licences by status",
+                "subtitle": "An expired licence is a pharmacy that cannot legally trade",
+                "slices": _slices(licences.values("status").annotate(n=Count("id")), "status"),
             },
         ],
-        "bars": [],
-        "trend": [],
+        "bars": [
+            {
+                "title": "Where the people are",
+                "subtitle": "Active accounts per organization",
+                "data": [
+                    {"label": row["organization__name"] or "—", "value": row["n"]} for row in where
+                ],
+            },
+            {
+                "title": "Busiest accounts",
+                "subtitle": "Recorded actions per person — an audit read, not a league table",
+                "data": [
+                    {"label": row["user__username"] or "—", "value": row["n"]} for row in busiest
+                ],
+            },
+        ],
+        "trend_series": ["Sign-ins", "Records changed"],
+        "trend": [
+            {
+                "label": day.isoformat(),
+                "values": [counts["sign_ins"], counts["changes"]],
+            }
+            for day, counts in sorted(by_day.items())
+        ],
     }
 
 

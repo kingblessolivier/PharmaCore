@@ -360,6 +360,33 @@ def test_medicines_stocked_never_exceeds_the_catalogue(org):
     assert tiles["Medicines stocked"] <= tiles["In the catalogue"]
 
 
+def test_admin_reports_the_system_not_one_process(org):
+    """Admin's subject is the system itself, so it is the broadest of the nine."""
+    boss = person(org, "root", "organization.manage")
+    payload = moduleinsights.insights_for(boss, "admin")
+
+    labels = {t["label"] for t in payload["tiles"]}
+    assert {"Active users", "Organizations", "Licences expiring", "Failed sign-ins"} <= labels
+    assert payload["trend_series"] == ["Sign-ins", "Records changed"]
+    assert len(payload["trend"]) == 14
+    # Four compositions and two rankings — access, estate, compliance, activity.
+    assert len(payload["donuts"]) == 4
+    assert len(payload["bars"]) == 2
+
+
+def test_a_failed_sign_in_is_reported_separately_from_usage(org):
+    """Mixing them would hide a password-guessing run inside a busy morning."""
+    from apps.iam.models import AuditLog
+
+    boss = person(org, "root", "organization.manage")
+    for action in ("LOGIN", "LOGIN", "LOGIN_FAILED"):
+        AuditLog.objects.create(organization=org, user=boss, action=action, entity_type="auth")
+
+    tiles = {t["label"]: t for t in moduleinsights.insights_for(boss, "admin")["tiles"]}
+    assert tiles["Failed sign-ins"]["value"] == 1
+    assert "3 attempt(s)" in tiles["Failed sign-ins"]["hint"]
+
+
 # ---------------------------------------------------------------------------
 # Over HTTP — the screen reaches it the same way
 # ---------------------------------------------------------------------------
