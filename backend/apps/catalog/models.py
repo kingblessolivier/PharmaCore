@@ -145,6 +145,19 @@ class Product(models.Model):
         max_length=30, choices=LifecycleStatus.choices, default=LifecycleStatus.ACTIVE
     )
 
+    #: How finely one base unit may legitimately be divided when dispensing.
+    #:
+    #: 1 means whole units only, 2 means halves, 4 means quarters. It defaults to
+    #: 1 and is opt-in per product, because divisibility is a property of the
+    #: physical tablet — only a *scored*, immediate-release tablet may be split.
+    #: Halving an enteric-coated or modified-release tablet converts a 24-hour
+    #: dose into an immediate one, which is a clinical harm rather than an
+    #: inventory rounding, so the safe default is to refuse.
+    divisibility = models.PositiveSmallIntegerField(default=1)
+    #: Shown when a split is refused, so the refusal explains itself rather than
+    #: looking like a bug at the counter.
+    split_note = models.CharField(max_length=255, blank=True, default="")
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -152,9 +165,120 @@ class Product(models.Model):
     class Meta:
         ordering = ["generic_name", "brand_name"]
         indexes = [models.Index(fields=["generic_name"]), models.Index(fields=["gtin"])]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(divisibility__in=(1, 2, 3, 4)),
+                name="product_divisibility_is_a_real_split",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"{self.generic_name} {self.strength}".strip()
+
+    @property
+    def base_unit(self) -> ProductUnit | None:
+        """The smallest unit this product is counted in. Stock is always in these."""
+        return next((u for u in self.units.all() if u.is_base), None)
+
+
+class ProductUnit(models.Model):
+    """One level of a product's packaging chain.
+
+    A medicine is not counted in one unit; it is counted in a chain of them, and
+    each party in the trade transacts at a different link. An importer buys a
+    carton, a depot picks a case, a pharmacy shelves a pack, a counter sells a
+    strip, and a patient swallows a tablet. Those are the same goods measured
+    five ways, and a system that stores a bare number has thrown away which one
+    was meant — so a depot shipping "10" and a pharmacy receiving "10" can agree
+    on the number and disagree by a factor of a hundred.
+
+    Every level states its size in **base units**, never in the level above, so a
+    conversion is one multiplication and cannot compound rounding through the
+    chain.
+    """
+
+    class Code(models.TextChoices):
+        # Discrete forms
+        TABLET = "TABLET", "Tablet"
+        CAPSULE = "CAPSULE", "Capsule"
+        SACHET = "SACHET", "Sachet"
+        SUPPOSITORY = "SUPPOSITORY", "Suppository"
+        # Containers that are themselves the sellable thing
+        BOTTLE = "BOTTLE", "Bottle"
+        TUBE = "TUBE", "Tube"
+        VIAL = "VIAL", "Vial"
+        AMPOULE = "AMPOULE", "Ampoule"
+        DEVICE = "DEVICE", "Device"
+        BAG = "BAG", "Bag"
+        # Packaging levels
+        STRIP = "STRIP", "Strip"
+        PACK = "PACK", "Pack"
+        CASE = "CASE", "Case"
+        CARTON = "CARTON", "Carton"
+        # Measured, not counted
+        ML = "ML", "Millilitre"
+        G = "G", "Gram"
+        UNIT = "UNIT", "Unit"
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="units")
+    code = models.CharField(max_length=20, choices=Code.choices)
+    #: What a human calls it — "Box of 100", "Strip of 10".
+    name = models.CharField(max_length=100, blank=True, default="")
+    #: How many base units this level contains. Decimal so a dose unit (5 mL of a
+    #: 100 mL bottle) can be expressed as well as a packaging one.
+    factor_to_base = models.DecimalField(max_digits=14, decimal_places=3, default=1)
+    #: 0 is the base; larger is further out. Used only for ordering a menu.
+    level = models.PositiveSmallIntegerField(default=0)
+    is_base = models.BooleanField(default=False)
+    #: What procurement orders in, and what the counter sells in by default.
+    is_purchase_default = models.BooleanField(default=False)
+    is_sale_default = models.BooleanField(default=False)
+    #: Under GS1 each packaging level carries its own GTIN, so a scanner can tell
+    #: a case from the pack inside it.
+    barcode = models.CharField(max_length=64, blank=True, default="")
+    #: Price for one of *this* unit. Null falls back to the resolved base price
+    #: times the factor, which is what a pharmacy that does not price packs
+    #: separately actually wants.
+    price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+
+    class Meta:
+        ordering = ["product__generic_name", "level"]
+        constraints = [
+            models.UniqueConstraint(fields=["product", "code"], name="uniq_product_unit_code"),
+            # One base, one purchase default, one sale default — per product.
+            # Without these the conversion has no defined starting point and
+            # "which unit did they mean" comes back as a different answer each
+            # time depending on row order.
+            models.UniqueConstraint(
+                fields=["product"],
+                condition=models.Q(is_base=True),
+                name="uniq_product_base_unit",
+            ),
+            models.UniqueConstraint(
+                fields=["product"],
+                condition=models.Q(is_purchase_default=True),
+                name="uniq_product_purchase_unit",
+            ),
+            models.UniqueConstraint(
+                fields=["product"],
+                condition=models.Q(is_sale_default=True),
+                name="uniq_product_sale_unit",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(factor_to_base__gt=0),
+                name="product_unit_factor_is_positive",
+            ),
+            # The base unit is the one everything else is measured against, so
+            # its own factor can only be 1.
+            models.CheckConstraint(
+                condition=~models.Q(is_base=True) | models.Q(factor_to_base=1),
+                name="product_base_unit_factor_is_one",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        label = self.name or self.get_code_display()
+        return f"{self.product} · {label} ({self.factor_to_base}×)"
 
 
 class ProductIngredient(models.Model):
