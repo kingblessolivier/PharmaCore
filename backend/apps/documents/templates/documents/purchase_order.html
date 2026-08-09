@@ -1,9 +1,11 @@
 {% extends "documents/base.html" %}
-{# A purchase order is an offer to buy, so it has to carry everything the
+{% comment %}
+A purchase order is an offer to buy, so it has to carry everything the
    supplier needs to accept it and ship against it: who to invoice, where to
    deliver, what terms, and — the part that was missing — what unit each
    quantity is counted in. "10" means ten cartons or ten tablets, and a supplier
-   guessing wrong sends 24,000 tablets or ten. #}
+   guessing wrong sends 24,000 tablets or ten.
+{% endcomment %}
 {% block content %}
 
 <table class="parties">
@@ -18,7 +20,12 @@
     </td>
     <td style="width:50%">
       <div class="plabel">Deliver to</div>
-      <b>{{ deliver_to_name|default:buyer_name }}</b>
+      {% comment %}
+        firstof, not |default:buyer_name — the filter resolves its argument as a
+        variable and raises when the caller has not supplied one, which takes
+        the whole document down rather than falling back.
+      {% endcomment %}
+      <b>{% firstof deliver_to_name buyer_name "the buyer" %}</b>
       {% if deliver_to_address %}<br>{{ deliver_to_address }}{% endif %}
       {% if buyer_phone %}<br>Tel {{ buyer_phone }}{% endif %}
     </td>
@@ -56,8 +63,10 @@
     <td>{{ forloop.counter }}</td>
     <td>
       {{ l.name }}
-      {# What the quantity converts to on the shelf. A carton is only useful to
-         a stock controller once it is stated in the units they count. #}
+      {% comment %}
+What the quantity converts to on the shelf. A carton is only useful to
+         a stock controller once it is stated in the units they count.
+{% endcomment %}
       {% if l.unit_label and l.base_quantity %}
         <div class="muted">{{ l.base_quantity }} {{ l.base_unit }} in total</div>
       {% endif %}
@@ -70,8 +79,10 @@
   {% endfor %}
 </table>
 
-{# Flat, not nested. A totals table inside a table cell left the renderer
-   computing a negative width and producing no page at all. #}
+{% comment %}
+Flat, not nested. A totals table inside a table cell left the renderer
+   computing a negative width and producing no page at all.
+{% endcomment %}
 <table style="margin-top:8pt;">
   <tr><th colspan="2">Summary</th></tr>
   <tr><td>Subtotal</td><td class="right">{{ subtotal }}</td></tr>

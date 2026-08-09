@@ -1,17 +1,155 @@
 {% extends "documents/base.html" %}
+{% comment %}
+A tax invoice is a statutory document, not a styled receipt. Rwanda's VAT law
+and every jurisdiction like it require the same short list, and the previous
+version carried barely half of it:
+
+  * the words "Tax Invoice", the number and the date        — had
+  * the supplier's name, address and TIN                    — had
+  * **the customer's name and TIN**                          — missing; a VAT-
+    registered buyer cannot reclaim input VAT without their own TIN on the
+    invoice, so the document was unusable to them
+  * description, quantity, **unit**, unit price per line     — no unit at all
+  * **the taxable amount and the VAT separately**            — only a single
+    "Total", which is the one thing a tax invoice may not do
+  * **VAT broken down by rate**                              — a line at 18%
+    and a line exempt cannot be summed into one figure
+  * **amount due and when**                                  — no due date
+
+Amounts are pre-formatted by the caller. Doing arithmetic in a template is how
+a document and the ledger behind it come to disagree.
+{% endcomment %}
+
+{% block title %}TAX INVOICE{% endblock %}
+
+{% block docmeta %}
+  <b>{{ invoice_number|default:doc_number }}</b><br>
+  Issued {{ invoice_date|date:"d M Y"|default:generated_at|date:"d M Y" }}<br>
+  {% if due_date %}Payment due {{ due_date|date:"d M Y" }}{% endif %}
+{% endblock %}
+
 {% block content %}
+
 <table class="parties">
   <tr>
-    <td style="width:50%"><div class="plabel">Seller (depot)</div>{{ seller_name }}</td>
-    <td style="width:50%"><div class="plabel">Bill to (pharmacy)</div>{{ buyer_name }}</td>
+    <td style="width:50%">
+      <div class="plabel">Supplier</div>
+      <div class="party">
+        <b>{{ seller_name }}</b>
+        {% if seller_address %}<br>{{ seller_address }}{% endif %}
+        {% if seller_tin %}<br>TIN {{ seller_tin }}{% endif %}
+        {% if seller_phone %}<br>Tel {{ seller_phone }}{% endif %}
+      </div>
+    </td>
+    <td style="width:50%">
+      <div class="plabel">Customer</div>
+      <div class="party">
+        <b>{{ buyer_name }}</b>
+        {% if buyer_address %}<br>{{ buyer_address }}{% endif %}
+        {% comment %}
+        Without the customer's TIN a VAT-registered buyer cannot reclaim the
+        input VAT on this invoice, which makes the document worthless to them.
+        Saying so is better than leaving a silent blank.
+        {% endcomment %}
+        {% if buyer_tin %}<br>TIN {{ buyer_tin }}
+        {% else %}<br><span class="warn">TIN not on record</span>{% endif %}
+        {% if buyer_phone %}<br>Tel {{ buyer_phone }}{% endif %}
+      </div>
+    </td>
   </tr>
 </table>
-<table>
-  <tr><th>#</th><th>Product</th><th>Tax</th><th class="right">Qty</th><th class="right">Unit price</th><th class="right">Line total</th></tr>
+
+<table class="lines">
+  <tr>
+    <th style="width:4%">#</th>
+    <th>Description</th>
+    <th style="width:9%" class="right">Qty</th>
+    <th style="width:15%">Unit</th>
+    <th style="width:14%" class="right">Unit price</th>
+    <th style="width:8%" class="center">VAT</th>
+    <th style="width:16%" class="right">Amount</th>
+  </tr>
   {% for l in lines %}
-  <tr><td>{{ forloop.counter }}</td><td>{{ l.name }}</td><td>{{ l.tax_class }}</td><td class="right">{{ l.qty }}</td><td class="right">{{ l.price }}</td><td class="right">{{ l.total }}</td></tr>
+  <tr{% if forloop.counter|divisibleby:2 %} class="alt"{% endif %}>
+    <td>{{ forloop.counter }}</td>
+    <td>
+      {{ l.name }}
+      {% comment %}
+      What the quantity converts to on the shelf. A carton is only useful to a
+      stock controller once it is stated in the units they count.
+      {% endcomment %}
+      {% if l.unit_label and l.base_quantity %}
+        <div class="sub">{{ l.base_quantity }} {{ l.base_unit|default:"units" }} in total</div>
+      {% endif %}
+      {% if l.batch %}<div class="sub">Batch {{ l.batch }}{% if l.expiry %} &middot; exp {{ l.expiry|date:"m/Y" }}{% endif %}</div>{% endif %}
+    </td>
+    <td class="right">{{ l.qty }}</td>
+    <td>{{ l.unit_label|default:"&mdash;" }}</td>
+    <td class="right">{{ l.price }}</td>
+    <td class="center">{{ l.tax_rate|default:l.tax_class }}</td>
+    <td class="right">{{ l.total }}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="7" class="muted">No lines on this invoice.</td></tr>
   {% endfor %}
-  <tr><td colspan="5" class="right"><b>Total (RWF)</b></td><td class="right"><b>{{ total }}</b></td></tr>
 </table>
-<p class="muted">Tax class per RRA: A exempt &middot; B 18% VAT &middot; C zero-rated. Final EBM fiscalization applies at retail.</p>
+
+<table class="totals">
+  <tr>
+    <td class="lbl">Total excluding VAT</td>
+    <td class="val">{{ subtotal }}</td>
+  </tr>
+  {% if discount_amount and discount_amount != "0.00" %}
+  <tr>
+    <td class="lbl">Discount</td>
+    <td class="val">&minus;{{ discount_amount }}</td>
+  </tr>
+  {% endif %}
+  {% comment %}
+  VAT is broken out by rate because it legally must be: a line at 18% and an
+  exempt line cannot be added into one figure, and the buyer reclaims against
+  the 18% portion only.
+  {% endcomment %}
+  {% for band in vat_bands %}
+  <tr>
+    <td class="lbl">VAT at {{ band.rate }} on {{ band.taxable }}</td>
+    <td class="val">{{ band.amount }}</td>
+  </tr>
+  {% empty %}
+  <tr>
+    <td class="lbl">VAT</td>
+    <td class="val">{{ tax_total }}</td>
+  </tr>
+  {% endfor %}
+  <tr class="grand">
+    <td class="lbl">Total due ({{ currency|default:"RWF" }})</td>
+    <td class="val">{{ total }}</td>
+  </tr>
+  {% if amount_paid and amount_paid != "0.00" %}
+  <tr>
+    <td class="lbl">Already paid</td>
+    <td class="val">&minus;{{ amount_paid }}</td>
+  </tr>
+  <tr class="grand">
+    <td class="lbl">Balance</td>
+    <td class="val">{{ balance }}</td>
+  </tr>
+  {% endif %}
+</table>
+
+{% if amount_in_words %}
+<p class="muted" style="margin-top:6pt;">
+  <b>{{ currency|default:"RWF" }} {{ amount_in_words }}</b>
+</p>
+{% endif %}
+
+<div class="note">
+  {% if payment_terms %}<b>Payment terms.</b> {{ payment_terms }}<br>{% endif %}
+  {% if bank_details %}<b>Pay to.</b> {{ bank_details }}<br>{% endif %}
+  Tax classes follow RRA practice: <b>A</b> exempt &middot; <b>B</b> standard-rated 18%
+  &middot; <b>C</b> zero-rated &middot; <b>D</b> special.
+  {% if not fiscalised %}Final EBM fiscalisation applies at the point of retail sale.{% endif %}
+  {% if notes %}<br>{{ notes }}{% endif %}
+</div>
+
 {% endblock %}

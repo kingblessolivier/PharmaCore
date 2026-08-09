@@ -33,6 +33,7 @@ from typing import Any
 
 from django.db import transaction
 
+from apps.documents import invoicing
 from apps.documents.models import DocType, Document
 from apps.documents.services import generate_document
 from apps.iam.models import Organization, User
@@ -135,25 +136,30 @@ def customer_invoice_document(*, invoice: CustomerInvoice, user: User | None = N
         reference_id=str(invoice.pk),
         user=user,
         reuse_existing=True,
-        context={
-            "buyer_name": invoice.customer.name,
-            "seller_name": invoice.organization.name,
-            "order_number": invoice.invoice_number,
-            "invoice_date": invoice.invoice_date,
-            "due_date": invoice.due_date,
-            "lines": [
+        context=invoicing.invoice_context(
+            seller=invoice.organization,
+            buyer=invoice.customer,
+            lines=[
                 {
                     "name": invoice.notes or "Goods supplied",
                     "tax_class": "B",
+                    "tax_amount": invoice.vat_amount,
+                    "net": net,
                     "qty": 1,
-                    "price": str(net),
-                    "total": str(net),
+                    "unit_label": "",
+                    "price": invoicing.money(net),
+                    "total": invoicing.money(net),
                 }
             ],
-            "subtotal": str(net),
-            "tax_total": str(invoice.vat_amount),
-            "total": str(invoice.total_amount),
-        },
+            subtotal=net,
+            tax_total=invoice.vat_amount,
+            total=invoice.total_amount,
+            currency=invoice.organization.currency or "RWF",
+            invoice_number=invoice.invoice_number,
+            invoice_date=invoice.invoice_date,
+            due_date=invoice.due_date,
+            payment_terms=(f"Payable by {invoice.due_date:%d %b %Y}." if invoice.due_date else ""),
+        ),
     )
 
 
