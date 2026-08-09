@@ -22,6 +22,13 @@ export interface Column<T> {
   width?: string;
   /** Exclude from the column picker (e.g. a row-actions column). */
   fixed?: boolean;
+  /** Off until someone turns it on.
+   *
+   * A record can carry thirty fields and a reader wants eight of them — but
+   * which eight depends on the job. Shipping the rest hidden rather than
+   * omitting them means the data is one click away instead of unavailable,
+   * and the default view stays readable. */
+  defaultHidden?: boolean;
   sortable?: boolean;
 }
 
@@ -71,7 +78,9 @@ export function DataGrid<T>({
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [selected, setSelected] = useState<Set<string | number>>(new Set());
-  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [hidden, setHidden] = useState<Set<string>>(
+    () => new Set(columns.filter((c) => c.defaultHidden).map((c) => c.key)),
+  );
   const [density, setDensity] = useState<Density>(initialDensity);
   const [colsOpen, setColsOpen] = useState(false);
   const colsRef = useRef<HTMLDivElement>(null);

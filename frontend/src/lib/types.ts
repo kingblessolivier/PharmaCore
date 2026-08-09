@@ -1090,6 +1090,7 @@ export interface PriceList {
   effective_to: string | null;
   is_active: boolean;
   items_count: number;
+  created_at: string;
 }
 
 export interface FormularyItem {

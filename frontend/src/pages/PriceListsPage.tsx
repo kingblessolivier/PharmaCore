@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Badge, Button, PageHeader, SelectField, TextField } from "../components/ui";
 import { api } from "../lib/api";
+import { shortDate } from "../lib/format";
 import type { Paginated, PriceList } from "../lib/types";
 import { DataGrid } from "../components/DataGrid";
 import { Drawer } from "../components/RecordKit";
@@ -123,15 +124,46 @@ export function PriceListsPage() {
             value: (pl) => pl.list_type,
             render: (pl) => <Badge tone="neutral">{pl.list_type}</Badge>,
           },
+          /* The dates decide whether a list governs anything. A list flagged
+             active whose window closed last month prices nothing, and the flag
+             alone does not say so. */
+          {
+            key: "effective_from",
+            header: "From",
+            value: (pl) => shortDate(pl.effective_from),
+          },
+          {
+            key: "effective_to",
+            header: "Until",
+            value: (pl) => (pl.effective_to ? shortDate(pl.effective_to) : "open-ended"),
+            render: (pl) =>
+              pl.effective_to ? (
+                <span>{shortDate(pl.effective_to)}</span>
+              ) : (
+                <span className="text-ink-500">open-ended</span>
+              ),
+          },
           {
             key: "is_active",
             header: "Status",
             value: (pl) => (pl.is_active ? "Active" : "Inactive"),
-            render: (pl) => (
-              <Badge tone={pl.is_active ? "success" : "warning"}>
-                {pl.is_active ? "Active" : "Inactive"}
-              </Badge>
-            ),
+            render: (pl) => {
+              const lapsed = pl.effective_to != null && new Date(pl.effective_to) < new Date();
+              if (!pl.is_active) return <Badge tone="warning">Inactive</Badge>;
+              // Active but out of date is the case worth naming: somebody
+              // believes this list is pricing sales and it is not.
+              return lapsed ? (
+                <Badge tone="danger">Lapsed</Badge>
+              ) : (
+                <Badge tone="success">Active</Badge>
+              );
+            },
+          },
+          {
+            key: "created_at",
+            header: "Created",
+            defaultHidden: true,
+            value: (pl) => shortDate(pl.created_at),
           },
           {
             key: "actions",
