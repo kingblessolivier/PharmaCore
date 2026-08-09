@@ -168,7 +168,7 @@ export function SalesHistoryPage() {
                 "what did they actually buy", which is the question somebody
                 opens a past sale to ask. */}
             <div>
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-500">
+              <div className="mb-1 text-xs font-semibold text-ink-500">
                 What was sold
               </div>
               <ul className="divide-y divide-line rounded-lg border border-line">
@@ -190,7 +190,7 @@ export function SalesHistoryPage() {
             </div>
 
             <div>
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-500">
+              <div className="mb-1 text-xs font-semibold text-ink-500">
                 How it was paid
               </div>
               <ul className="divide-y divide-line rounded-lg border border-line">

@@ -139,7 +139,7 @@ export function InsuranceHome() {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
+              <thead className="border-b border-line bg-surface-100 text-left text-xs text-ink-500">
                 <tr>
                   <th className="px-4 py-2">Scheme</th>
                   <th className="px-3 py-2">Settlement</th>

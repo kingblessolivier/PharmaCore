@@ -106,7 +106,7 @@ export function VatPage() {
 
       {/* Period switcher — same UI as FinanceHome. */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-ink-500">Period</span>
+        <span className="text-xs font-medium text-ink-500">Period</span>
         {(["this-month", "last-month", "this-quarter", "ytd", "custom"] as PeriodPreset[]).map(
           (p) => (
             <button
@@ -196,7 +196,7 @@ export function VatPage() {
 
           <Card title="Per-class breakdown" className="mt-4">
             <table className="w-full text-sm">
-              <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
+              <thead className="border-b border-line text-left text-xs text-ink-500">
                 <tr>
                   <th className="py-2">Section</th>
                   <th className="py-2">Class</th>
@@ -286,7 +286,7 @@ function Tile({
             : "border-line bg-surface-0"
       }`}
     >
-      <div className="text-xs font-medium uppercase tracking-wide text-ink-500">{label}</div>
+      <div className="text-xs font-medium text-ink-500">{label}</div>
       <div className="mt-1 text-base font-semibold tabular-nums text-ink-900">{value}</div>
       {hint && <div className="mt-1 text-xs text-ink-500">{hint}</div>}
     </div>

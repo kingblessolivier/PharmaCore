@@ -327,7 +327,7 @@ function EntryDrawer({ entry, onClose }: { entry: JournalEntry; onClose: () => v
       <Section title="Lines">
         <div className="overflow-x-auto rounded-lg border border-line">
           <table className="w-full min-w-[560px] text-sm">
-            <thead className="border-b border-line bg-surface-50 text-left text-[11px] uppercase tracking-wide text-ink-500">
+            <thead className="border-b border-line bg-surface-50 text-left text-[11px] text-ink-500">
               <tr>
                 <th className="px-3 py-2">Account</th>
                 <th className="px-3 py-2">Cost centre</th>

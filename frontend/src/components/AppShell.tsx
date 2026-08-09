@@ -158,7 +158,7 @@ function AppSwitcher() {
       </button>
       {open && (
         <div className="absolute left-0 top-11 z-50 w-80 rounded-xl border border-line bg-surface-0 p-3 shadow-lg">
-          <div className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+          <div className="px-1 pb-2 text-[11px] font-semibold text-ink-500">
             PharmaCore apps
           </div>
           <div className="grid grid-cols-3 gap-1">
@@ -193,6 +193,27 @@ function AppSwitcher() {
         </div>
       )}
     </div>
+  );
+}
+
+/** The branch this session is posting to, named in the status bar.
+ *
+ * Reads the same query as the switcher above rather than taking a prop, so the
+ * bar and the switcher cannot drift into naming different places. */
+function StatusOrg() {
+  const { user } = useAuth();
+  const { data } = useQuery({
+    queryKey: ["organizations"],
+    queryFn: () => api<Paginated<Organization>>("/api/organizations/"),
+  });
+  const label = user?.is_superuser
+    ? "All organizations"
+    : (data?.results[0]?.name ?? "No branch selected");
+  return (
+    <span className="flex items-center gap-1">
+      <Building2 size={12} className="text-ink-500" aria-hidden />
+      {label}
+    </span>
   );
 }
 
@@ -732,7 +753,7 @@ export function AppShell() {
   return (
     <div className="flex h-screen flex-col overflow-hidden text-ink-900">
       <ViewAsBanner />
-      <header className="z-40 flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface-0 px-4">
+      <header className="z-40 flex h-11 shrink-0 items-center gap-2 border-b border-chrome-600 bg-gradient-to-b from-chrome-100 to-chrome-300 px-2 shadow-[inset_0_1px_0_#fff]">
         <button
           onClick={toggleRail}
           title={railOnly ? "Expand the menu" : "Collapse the menu"}
@@ -791,7 +812,7 @@ export function AppShell() {
 
       <div className="flex min-h-0 flex-1">
         <nav
-          className={`${railOnly ? "w-14" : "w-56"} shrink-0 overflow-y-auto overflow-x-hidden border-r border-line bg-surface-0 p-2 transition-[width] duration-150`}
+          className={`${railOnly ? "w-12" : "w-52"} shrink-0 overflow-y-auto overflow-x-hidden border-r border-chrome-600 bg-chrome-200 p-1 transition-[width] duration-150`}
         >
           {activeApp && (
             <div className="mb-2 border-b border-line pb-2">
@@ -817,7 +838,7 @@ export function AppShell() {
                 className={group.label ? "mb-1 mt-3 first:mt-0" : ""}
               >
                 {group.label && group !== activeApp && !railOnly && (
-                  <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+                  <div className="px-3 pb-1 text-[11px] font-semibold text-ink-500">
                     {group.label}
                   </div>
                 )}
@@ -833,14 +854,17 @@ export function AppShell() {
                     end={end}
                     title={label}
                     className={({ isActive }) =>
-                      `mb-0.5 flex items-center gap-2.5 rounded-md px-3 py-2 text-sm ${
+                      /* 26px rows, not 38. A module with fourteen screens
+                         fits without scrolling the menu, which is the whole
+                         reason a dense ERP nav exists. */
+                      `mb-px flex items-center gap-2 rounded-[2px] px-2 py-1 text-[12px] ${
                         isActive
-                          ? "bg-brand-50 font-semibold text-brand-700"
-                          : "text-ink-700 hover:bg-surface-100"
+                          ? "border border-chrome-500 bg-surface-0 font-semibold text-chrome-900"
+                          : "border border-transparent text-ink-700 hover:bg-chrome-200"
                       }`
                     }
                   >
-                    <Icon className="h-4 w-4 shrink-0" />
+                    <Icon size={14} className="shrink-0" />
                     {!railOnly && label}
                   </NavLink>
                 ))}
@@ -849,7 +873,7 @@ export function AppShell() {
           )}
           {can(user, "organization.manage") && !railOnly && (
             <>
-              <div className="mt-4 px-3 text-[11px] uppercase tracking-wide text-ink-500">
+              <div className="mt-4 px-3 text-[11px] text-ink-500">
                 More modules
               </div>
               {/* Insurance used to be listed here as "soon". It has been built since,
@@ -864,10 +888,29 @@ export function AppShell() {
           )}
         </nav>
 
-        <main className="min-w-0 flex-1 overflow-y-auto p-6">
+        <main className="min-w-0 flex-1 overflow-y-auto bg-chrome-50 p-2.5">
           <Outlet />
         </main>
       </div>
+
+      {/* The status bar.
+
+          An ERP tells you where you are and who you are at the bottom of the
+          window, permanently — not in a toast that fades. Somebody four hours
+          into a shift, working two branches, needs to be able to answer "which
+          pharmacy am I posting this to" without leaving the screen. */}
+      <footer className="flex h-[22px] shrink-0 items-center gap-3 border-t border-chrome-600 bg-gradient-to-b from-chrome-100 to-chrome-300 px-2 text-[11px] text-ink-700">
+        <StatusOrg />
+        <span className="flex items-center gap-1">
+          <Users size={12} className="text-ink-500" aria-hidden />
+          {user?.username}
+          {user?.roles?.[0] && <span className="text-ink-500">· {user.roles[0]}</span>}
+        </span>
+        <span className="ml-auto flex items-center gap-1 text-ink-500">
+          PharmaCore
+          <span className="font-mono">{import.meta.env.MODE === "production" ? "PRD" : "DEV"}</span>
+        </span>
+      </footer>
 
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
       {passwordOpen && <ChangePasswordModal onClose={() => setPasswordOpen(false)} />}

@@ -65,7 +65,7 @@ export function ApiKeysModal({ onClose }: { onClose: () => void }) {
 
         {newKey && (
           <div className="rounded-lg border border-brand-600 bg-brand-50/50 p-3">
-            <div className="text-xs font-semibold uppercase tracking-wide text-brand-700">
+            <div className="text-xs font-semibold text-brand-700">
               New key — copy it now, it won't be shown again
             </div>
             <code className="mt-1 block break-all rounded bg-surface-0 px-2 py-1.5 text-sm">
@@ -76,7 +76,7 @@ export function ApiKeysModal({ onClose }: { onClose: () => void }) {
 
         <div className="overflow-hidden rounded-lg border border-line">
           <table className="w-full text-sm">
-            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
+            <thead className="border-b border-line text-left text-xs text-ink-500">
               <tr>
                 <th className="px-3 py-2">Name</th>
                 <th className="px-3 py-2">Acts as</th>
@@ -124,7 +124,7 @@ export function ApiKeysModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="rounded-lg border border-line bg-surface-50 p-3">
-          <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-500">
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-ink-500">
             <KeyRound className="h-3.5 w-3.5" /> Create a key
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -147,7 +147,7 @@ export function ApiKeysModal({ onClose }: { onClose: () => void }) {
               ))}
             </SelectField>
           </div>
-          {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+          {error && <p className="mt-2 text-sm text-danger-700">{error}</p>}
           <div className="mt-3 flex justify-end">
             <Button onClick={() => create.mutate()} disabled={create.isPending || !name || !userId}>
               <Plus className="h-4 w-4" /> Create key

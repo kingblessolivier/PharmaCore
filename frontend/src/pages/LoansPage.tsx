@@ -355,7 +355,7 @@ export function LoansPage() {
             ) : (
               <div className="overflow-x-auto rounded-lg border border-line">
                 <table className="w-full min-w-[560px] text-sm">
-                  <thead className="border-b border-line bg-surface-50 text-left text-[11px] uppercase tracking-wide text-ink-500">
+                  <thead className="border-b border-line bg-surface-50 text-left text-[11px] text-ink-500">
                     <tr>
                       <th className="px-2.5 py-2">#</th>
                       <th className="px-2.5 py-2">Due</th>

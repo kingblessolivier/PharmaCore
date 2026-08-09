@@ -66,7 +66,7 @@ export function ResetPasswordModal({
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
           />
-          {error && <p className="text-sm text-danger">{error}</p>}
+          {error && <p className="text-sm text-danger-700">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={onClose}>
               Cancel

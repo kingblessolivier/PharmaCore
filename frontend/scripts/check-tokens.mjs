@@ -9,7 +9,12 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const FAMILIES = ["brand", "ink", "surface", "danger", "warning", "success", "info"];
+const FAMILIES = ["brand", "ink", "surface", "danger", "warning", "success", "info", "chrome"];
+/* Families this project invented but never registered with Tailwind. `bg-app`
+ * read like a token, resolved to nothing, and slipped through because the
+ * check only looked for families it already knew about. Anything named here is
+ * reported wherever it appears. */
+const UNREGISTERED = ["app", "accent", "muted", "paper"];
 const css = readFileSync("src/index.css", "utf8");
 const defined = new Set([...css.matchAll(/--([a-z]+-(?:\d{1,3}|strong)):/g)].map((m) => m[1]));
 defined.add("line");
@@ -21,10 +26,43 @@ const walk = (dir) =>
     return statSync(path).isDirectory() ? walk(path) : /\.tsx?$/.test(path) ? [path] : [];
   });
 
+/* Built as a literal, not from a template string.
+ *
+ * It used to be assembled with backticks — where `\b` is a backspace character
+ * and `\d` is a plain "d", so the pattern matched nothing at all. The check
+ * that exists *because* a missing token fails silently in Tailwind was itself
+ * failing silently, and reporting "every utility used resolves" while reading
+ * no utilities. Proven by the self-test below, which is why it is here.
+ *
+ * The family list is interpolated with `source`, which keeps its escapes.
+ */
+const FAMILY_ALT = new RegExp([...FAMILIES, ...UNREGISTERED].join("|")).source;
 const pattern = new RegExp(
-  `\b(?:text|bg|border|ring|from|to|via|divide|placeholder|decoration|fill|stroke)-((?:${FAMILIES.join("|")})(?:-(?:\d{2,3}|strong))?)\b`,
+  String.raw`\b(?:text|bg|border|ring|from|to|via|divide|placeholder|decoration|fill|stroke)-` +
+    String.raw`((?:${FAMILY_ALT})(?:-(?:\d{1,3}|strong))?)\b`,
   "g",
 );
+
+/* The gate checks itself before it checks anything else. A silent regex is the
+ * one failure mode this file cannot afford, and it is invisible from the
+ * outside: a broken pattern and a clean codebase print the same line. */
+for (const [probe, expected] of [
+  ["bg-brand-600", "brand-600"],
+  // One digit. `surface-0` used to capture as bare "surface" and be reported
+  // missing on 89 files, because the step pattern demanded two digits.
+  ["bg-surface-0", "surface-0"],
+  ["text-ink-500", "ink-500"],
+  ["border-chrome-400", "chrome-400"],
+]) {
+  const found = [...probe.matchAll(pattern)].map((m) => m[1]);
+  if (found[0] !== expected) {
+    console.error(
+      `\ncheck-tokens is not matching anything: "${probe}" gave ${JSON.stringify(found)}, ` +
+        `expected ["${expected}"].\nThe pattern is broken, so this gate proves nothing.\n`,
+    );
+    process.exit(2);
+  }
+}
 
 const missing = new Map();
 for (const file of walk("src")) {

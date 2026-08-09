@@ -212,7 +212,7 @@ export function OrgCatalogTab({
       {items.data && (
         <div className="overflow-hidden rounded-lg border border-line bg-surface-0">
           <table className="w-full text-sm">
-            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
+            <thead className="border-b border-line text-left text-xs text-ink-500">
               <tr>
                 <th className="px-4 py-2.5">Medicine</th>
                 <th className="px-4 py-2.5">Form</th>

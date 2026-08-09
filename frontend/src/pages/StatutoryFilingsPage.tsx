@@ -317,7 +317,7 @@ export function StatutoryFilingsPage() {
             ) : (
               <div className="max-h-80 overflow-auto rounded-lg border border-line">
                 <table className="w-full min-w-[760px] text-sm">
-                  <thead className="sticky top-0 border-b border-line bg-surface-50 text-left text-[11px] uppercase tracking-wide text-ink-500">
+                  <thead className="sticky top-0 border-b border-line bg-surface-50 text-left text-[11px] text-ink-500">
                     <tr>
                       <th className="px-2.5 py-2">Employee</th>
                       <th className="px-2.5 py-2">RSSB no.</th>

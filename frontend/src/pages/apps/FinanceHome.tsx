@@ -164,7 +164,7 @@ function MoneyMapPanel({ orgId, start, end }: { orgId: number; start: string; en
       <div className="grid gap-4 sm:grid-cols-3">
         {(["INFLOW", "OUTFLOW", "INTERNAL"] as const).map((direction) => (
           <div key={direction}>
-            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+            <div className="mb-1.5 text-[11px] font-semibold text-ink-500">
               {DIRECTION_LABEL[direction]}
             </div>
             <ul className="space-y-1">
@@ -329,7 +329,7 @@ export function FinanceHome() {
 
       {/* Period switcher — the leader's cockpit can compare across windows. */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-ink-500">Period</span>
+        <span className="text-xs font-medium text-ink-500">Period</span>
         {(["this-month", "last-month", "this-quarter", "ytd", "custom"] as PeriodPreset[]).map(
           (p) => (
             <button

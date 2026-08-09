@@ -76,7 +76,7 @@ export function StatutoryRatesPage() {
                 <p className="mb-3 text-xs text-ink-500">{TYPE_BLURB[key] ?? ""}</p>
                 <div className="overflow-hidden rounded-md border border-line">
                   <table className="w-full text-sm">
-                    <thead className="border-b border-line bg-surface-50 text-left text-xs uppercase tracking-wide text-ink-500">
+                    <thead className="border-b border-line bg-surface-50 text-left text-xs text-ink-500">
                       <tr>
                         <th className="px-3 py-2">Band min (RWF)</th>
                         <th className="px-3 py-2">Band max (RWF)</th>

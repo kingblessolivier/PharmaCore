@@ -933,7 +933,7 @@ export function PosPage() {
           />
 
           <div className="rounded-lg border border-line bg-surface-0 p-3">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">
+            <div className="mb-2 text-xs font-semibold text-ink-500">
               Coupon
             </div>
             <div className="flex gap-2">
@@ -985,7 +985,7 @@ export function PosPage() {
           </div>
 
           <div className="rounded-lg border border-line bg-surface-0 p-3">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">
+            <div className="mb-2 text-xs font-semibold text-ink-500">
               Tender
             </div>
             <div className="space-y-2">

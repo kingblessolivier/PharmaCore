@@ -77,7 +77,7 @@ function MatchPanel({ invoice }: { invoice: SupplierInvoice }) {
       </div>
       <div className="overflow-x-auto rounded-lg border border-line">
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="border-b border-line bg-surface-50 text-left text-[11px] uppercase tracking-wide text-ink-500">
+          <thead className="border-b border-line bg-surface-50 text-left text-[11px] text-ink-500">
             <tr>
               <th className="px-2.5 py-2">Product</th>
               <th className="px-2.5 py-2 text-right">Ordered</th>
@@ -239,7 +239,7 @@ function NotesPanel({ invoice }: { invoice: SupplierInvoice }) {
       ) : (
         <div className="overflow-x-auto rounded-lg border border-line">
           <table className="w-full min-w-[620px] text-sm">
-            <thead className="border-b border-line bg-surface-50 text-left text-[11px] uppercase tracking-wide text-ink-500">
+            <thead className="border-b border-line bg-surface-50 text-left text-[11px] text-ink-500">
               <tr>
                 <th className="px-2.5 py-2">Note</th>
                 <th className="px-2.5 py-2">Reason</th>
@@ -912,7 +912,7 @@ function StatementModal({ onClose }: { onClose: () => void }) {
             </div>
             <div className="max-h-72 overflow-y-auto rounded-lg border border-line">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 border-b border-line bg-surface-50 text-left text-[11px] uppercase tracking-wide text-ink-500">
+                <thead className="sticky top-0 border-b border-line bg-surface-50 text-left text-[11px] text-ink-500">
                   <tr>
                     <th className="px-2.5 py-2">Date</th>
                     <th className="px-2.5 py-2">Document</th>

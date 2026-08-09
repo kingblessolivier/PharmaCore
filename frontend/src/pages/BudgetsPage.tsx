@@ -344,15 +344,15 @@ function VarianceView({ budget, onBack }: { budget: Budget; onBack: () => void }
         {data && (
           <div className="ml-auto flex gap-6 text-sm">
             <div>
-              <div className="text-xs uppercase tracking-wide text-ink-500">Budget</div>
+              <div className="text-xs text-ink-500">Budget</div>
               <div className="tabular-nums text-ink-900">{money(data.total_budget)}</div>
             </div>
             <div>
-              <div className="text-xs uppercase tracking-wide text-ink-500">Actual</div>
+              <div className="text-xs text-ink-500">Actual</div>
               <div className="tabular-nums text-ink-900">{money(data.total_actual)}</div>
             </div>
             <div>
-              <div className="text-xs uppercase tracking-wide text-ink-500">Variance</div>
+              <div className="text-xs text-ink-500">Variance</div>
               <div
                 className={`tabular-nums font-semibold ${
                   Number(data.total_variance) < 0 ? "text-danger-700" : "text-ink-900"

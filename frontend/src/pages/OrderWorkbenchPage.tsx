@@ -16,6 +16,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   ArrowLeft,
+  Printer,
+  RefreshCw,
   Banknote,
   CheckCircle2,
   FileText,
@@ -23,7 +25,7 @@ import {
   Send,
   Truck,
 } from "lucide-react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { Empty, ErrorNote } from "../components/RecordKit";
 import { Button, Spinner } from "../components/ui";
 import {
@@ -42,6 +44,7 @@ import { api } from "../lib/api";
 import { money, shortDate } from "../lib/format";
 import type { StockOrder } from "../lib/types";
 import { StatusChip } from "../components/Status";
+import { SapTool, SapToolSeparator, SapToolbar } from "../components/Sap";
 import {
   DocumentPreview,
   type PreviewableDocument,
@@ -103,14 +106,32 @@ export function OrderWorkbenchPage() {
 
   return (
     <div className="flex h-[calc(100vh-5.5rem)] flex-col">
-      <div className="mb-2 flex items-center gap-2">
-        <Link
-          to="/distribution/orders"
-          className="inline-flex items-center gap-1.5 text-form text-ink-600 hover:text-ink-900"
-        >
-          <Icon as={ArrowLeft} size="sm" /> Orders to depots
-        </Link>
-      </div>
+      {/* The command toolbar: what applies to the whole document, as icons,
+          above it. Separate from the action button in the header, which is the
+          one thing this transaction is waiting for — a user learns which is
+          which by where it sits. */}
+      <SapToolbar>
+        <SapTool icon={ArrowLeft} label="Back to orders" to="/distribution/orders" />
+        <SapToolSeparator />
+        <SapTool
+          icon={RefreshCw}
+          label="Reload this order"
+          onClick={() => void orderQuery.refetch()}
+        />
+        <SapTool
+          icon={FileText}
+          label={order.document ? `Open ${order.document.doc_number}` : "No document yet"}
+          tone="doc"
+          disabled={!order.document}
+          onClick={() => order.document && setPreview(order.document)}
+        />
+        <SapTool
+          icon={Printer}
+          label="Print this order"
+          disabled={!order.document}
+          onClick={() => order.document && setPreview(order.document)}
+        />
+      </SapToolbar>
 
       <Workbench>
         <WorkbenchHeader
@@ -219,7 +240,7 @@ export function OrderWorkbenchPage() {
                 ) : (
                   <table className="w-full text-form">
                     <thead>
-                      <tr className="border-b border-line text-left text-micro uppercase tracking-wide text-ink-500">
+                      <tr className="border-b border-line text-left text-micro text-ink-500">
                         <th className="py-1.5 font-medium">Medicine</th>
                         <th className="py-1.5 font-medium">Batch</th>
                         <th className="py-1.5 font-medium">Expires</th>
@@ -333,7 +354,7 @@ export function OrderWorkbenchPage() {
         <LineArea title="Lines" count={lines.length}>
           <table className="w-full text-form">
             <thead>
-              <tr className="border-b border-line bg-surface-50 text-left text-micro uppercase tracking-wide text-ink-500">
+              <tr className="border-b border-line bg-surface-50 text-left text-micro text-ink-500">
                 <th className="px-3 py-1.5 font-medium">Medicine</th>
                 <th className="px-3 py-1.5 text-right font-medium">Ordered</th>
                 <th className="px-3 py-1.5 font-medium">Unit</th>

@@ -100,7 +100,7 @@ export function OrgOnboardingModal({ org, onClose }: { org: OnboardingOrg; onClo
         {/* Activation gate */}
         <div className="flex items-center justify-between rounded-lg border border-line bg-surface-50 p-3">
           <div>
-            <div className="text-xs font-medium uppercase tracking-wide text-ink-500">Status</div>
+            <div className="text-xs font-medium text-ink-500">Status</div>
             <span
               className={`mt-1 inline-block rounded-md px-2 py-0.5 text-sm font-semibold ${s.cls}`}
             >
@@ -133,7 +133,7 @@ export function OrgOnboardingModal({ org, onClose }: { org: OnboardingOrg; onClo
         {/* Compliance documents */}
         <div className="overflow-hidden rounded-lg border border-line">
           <table className="w-full text-sm">
-            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-500">
+            <thead className="border-b border-line text-left text-xs text-ink-500">
               <tr>
                 <th className="px-3 py-2">Document</th>
                 <th className="px-3 py-2">Number</th>
@@ -157,11 +157,11 @@ export function OrgOnboardingModal({ org, onClose }: { org: OnboardingOrg; onClo
                   <td className="px-3 py-2 text-ink-700">{d.expiry_date || "—"}</td>
                   <td className="px-3 py-2">
                     {d.is_verified ? (
-                      <span className="inline-flex items-center gap-1 text-success">
+                      <span className="inline-flex items-center gap-1 text-success-700">
                         <BadgeCheck className="h-3.5 w-3.5" /> Verified
                       </span>
                     ) : (
-                      <span className="text-warning">Pending</span>
+                      <span className="text-warning-700">Pending</span>
                     )}
                   </td>
                   <td className="px-3 py-2">
@@ -195,7 +195,7 @@ export function OrgOnboardingModal({ org, onClose }: { org: OnboardingOrg; onClo
 
         {/* Add document */}
         <div className="rounded-lg border border-line bg-surface-50 p-3">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">
+          <div className="mb-2 text-xs font-semibold text-ink-500">
             Add a document
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -223,7 +223,7 @@ export function OrgOnboardingModal({ org, onClose }: { org: OnboardingOrg; onClo
               </Button>
             </div>
           </div>
-          {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+          {error && <p className="mt-2 text-sm text-danger-700">{error}</p>}
         </div>
       </div>
     </Modal>

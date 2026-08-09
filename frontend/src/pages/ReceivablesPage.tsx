@@ -243,7 +243,7 @@ function AgingStrip({ orgId }: { orgId: number }) {
     <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
       {buckets.map((b) => (
         <Card key={b.label} className="p-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-ink-500">{b.label}</p>
+          <p className="text-xs font-medium text-ink-500">{b.label}</p>
           <p className={`mt-1 text-lg font-semibold tabular-nums ${b.tone}`}>{money(b.value)}</p>
         </Card>
       ))}
@@ -331,7 +331,7 @@ function InvoiceDetailDrawer({
           )}
 
           <div>
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">
+            <h3 className="mb-2 text-xs font-semibold text-ink-500">
               Receipts posted ({receipts.length})
             </h3>
             {receiptsQ.isLoading ? (
@@ -343,7 +343,7 @@ function InvoiceDetailDrawer({
             ) : (
               <div className="overflow-hidden rounded-md border border-line">
                 <table className="w-full text-sm">
-                  <thead className="bg-surface-50 text-left text-xs uppercase tracking-wide text-ink-500">
+                  <thead className="bg-surface-50 text-left text-xs text-ink-500">
                     <tr>
                       <th className="px-3 py-2">Receipt #</th>
                       <th className="px-3 py-2">Received on</th>
@@ -462,7 +462,7 @@ function CancelInvoiceModal({
           placeholder="e.g. Raised in error · Customer disputed · Wrong pricing"
           autoFocus
         />
-        {error && <p className="text-sm text-danger">{error}</p>}
+        {error && <p className="text-sm text-danger-700">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>
             Keep invoice

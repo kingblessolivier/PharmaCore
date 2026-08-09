@@ -23,15 +23,29 @@ export default {
         warning: ramp("warning", [50, 200, 300, 400, 500, 600, 700, 800, 900]),
         success: ramp("success", [50, 200, 500, 600, 700, 800, 900]),
         info: ramp("info", [50, 200, 500, 600, 700]),
+        // Chrome: the window itself — menu bar, toolbar, section headers,
+        // status bar. Never used for data, so a reader can always tell the
+        // furniture from the figures.
+        chrome: ramp("chrome", [50, 100, 200, 300, 400, 500, 600, 700, 900]),
         line: {
           DEFAULT: "var(--line-200)",
           200: "var(--line-200)",
           strong: "var(--line-strong)",
         },
       },
+      /* Minimal radii, set once here rather than edited across 425 usages.
+       *
+       * A 12px corner reads as a marketing card; a dense transaction screen
+       * wants a hard edge, because the corner is competing with a 24px row for
+       * the same few pixels. `rounded-full` is left alone — badges and avatars
+       * are meant to be round. */
       borderRadius: {
-        md: "8px",
-        lg: "12px",
+        DEFAULT: "2px",
+        sm: "2px",
+        md: "3px",
+        lg: "4px",
+        xl: "5px",
+        "2xl": "6px",
       },
       spacing: {
         // Row heights an ERP grid is built on — a screen read for eight hours

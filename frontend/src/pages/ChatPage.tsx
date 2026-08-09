@@ -114,7 +114,7 @@ export function ChatPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[16rem_1fr]">
         <aside className="rounded-lg border border-line bg-surface-0">
-          <div className="border-b border-line px-3 py-2 text-xs font-semibold uppercase tracking-wide text-ink-500">
+          <div className="border-b border-line px-3 py-2 text-xs font-semibold text-ink-500">
             Spaces
           </div>
           {spaces.isLoading ? (

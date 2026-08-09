@@ -236,7 +236,7 @@ export function InsuranceSchemesPage() {
             ) : (
               <div className="max-h-72 overflow-y-auto rounded-lg border border-line">
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 border-b border-line bg-surface-100 text-left text-xs uppercase tracking-wide text-ink-500">
+                  <thead className="sticky top-0 border-b border-line bg-surface-100 text-left text-xs text-ink-500">
                     <tr>
                       <th className="px-3 py-2">Medicine</th>
                       <th className="px-3 py-2 text-right">Co-pay</th>

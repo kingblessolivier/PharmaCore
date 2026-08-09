@@ -86,7 +86,7 @@ export function ImageUpload({
       <div className="mb-1 text-sm font-medium text-ink-700">{label}</div>
       <div className="flex items-start gap-3">
         <div
-          className={`${frame} flex shrink-0 items-center justify-center overflow-hidden border border-line bg-surface-1`}
+          className={`${frame} flex shrink-0 items-center justify-center overflow-hidden border border-line bg-surface-50`}
         >
           {value ? (
             <img
@@ -118,7 +118,7 @@ export function ImageUpload({
               type="button"
               onClick={() => input.current?.click()}
               disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface-0 px-2.5 py-1.5 text-xs font-medium text-ink-700 hover:bg-surface-1 disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface-0 px-2.5 py-1.5 text-xs font-medium text-ink-700 hover:bg-surface-50 disabled:opacity-60"
             >
               {busy ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />

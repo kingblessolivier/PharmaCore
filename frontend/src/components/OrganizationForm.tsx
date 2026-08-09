@@ -58,7 +58,7 @@ function initial(org?: Organization): OrgFields {
 
 function SectionLabel({ children }: { children: string }) {
   return (
-    <div className="mt-1 border-b border-line pb-1 text-xs font-semibold uppercase tracking-wide text-ink-500">
+    <div className="mt-1 border-b border-line pb-1 text-xs font-semibold text-ink-500">
       {children}
     </div>
   );

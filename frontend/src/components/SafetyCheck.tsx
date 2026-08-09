@@ -149,7 +149,7 @@ export function SafetyCheck({
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="font-semibold">{finding.title}</span>
                   {/* Severity is named, never left to colour alone. */}
-                  <span className="rounded-full bg-surface-0/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+                  <span className="rounded-full bg-surface-0/70 px-1.5 py-0.5 text-[10px] font-semibold">
                     {KIND[finding.kind]} · {tone.label}
                   </span>
                 </div>

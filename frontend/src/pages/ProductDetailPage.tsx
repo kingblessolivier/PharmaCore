@@ -166,7 +166,7 @@ function BarcodesSection({ productId }: { productId: number }) {
           className="flex-1"
         />
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium uppercase tracking-wide text-ink-500">Level</span>
+          <span className="text-xs font-medium text-ink-500">Level</span>
           <select
             className="rounded-md border border-line bg-surface-0 px-3 py-2 text-sm"
             value={level}
