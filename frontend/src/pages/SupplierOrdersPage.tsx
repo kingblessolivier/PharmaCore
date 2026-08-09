@@ -4,6 +4,10 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DataGrid } from "../components/DataGrid";
 import {
+  DocumentPreview,
+  type PreviewableDocument,
+} from "../components/DocumentPreview";
+import {
   Drawer,
   ErrorNote,
   Facts,
@@ -662,6 +666,7 @@ export function SupplierOrdersPage() {
   const [status, setStatus] = useState("");
   const [open, setOpen] = useState<PurchaseOrder | null>(null);
   const [creating, setCreating] = useState(false);
+  const [preview, setPreview] = useState<PreviewableDocument | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["purchase-orders", status],
@@ -784,16 +789,17 @@ export function SupplierOrdersPage() {
             value: (o) => o.document?.doc_number ?? "",
             render: (o) =>
               o.document ? (
-                <a
-                  href={o.document.download_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={(e) => e.stopPropagation()}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPreview(o.document);
+                  }}
                   className="inline-flex items-center gap-1 text-xs text-brand-600 hover:underline"
                 >
                   <FileText className="h-3.5 w-3.5" aria-hidden />
                   {o.document.doc_number}
-                </a>
+                </button>
               ) : (
                 <span className="text-xs text-ink-500">not sent yet</span>
               ),
@@ -850,6 +856,7 @@ export function SupplierOrdersPage() {
 
       {creating && <OrderDrawer order={null} onClose={() => setCreating(false)} />}
       {current && <OrderDrawer order={current} onClose={() => setOpen(null)} />}
+      {preview && <DocumentPreview document={preview} onClose={() => setPreview(null)} />}
     </div>
   );
 }

@@ -1,7 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { Download, FileText, ShieldCheck } from "lucide-react";
+import { useState } from "react";
+import { Download, Eye, FileText, ShieldCheck } from "lucide-react";
 import { PageHeader, Spinner } from "../components/ui";
 import { api, downloadFile } from "../lib/api";
+import {
+  DocumentPreview,
+  type PreviewableDocument,
+} from "../components/DocumentPreview";
 import type { DocumentRecord, Paginated } from "../lib/types";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -15,6 +20,7 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 export function DocumentsPage() {
+  const [preview, setPreview] = useState<PreviewableDocument | null>(null);
   const { data, isLoading, isError } = useQuery({
     queryKey: ["documents"],
     queryFn: () => api<Paginated<DocumentRecord>>("/api/documents/"),
@@ -63,12 +69,23 @@ export function DocumentsPage() {
                     {new Date(d.generated_at).toLocaleString()}
                   </td>
                   <td className="px-4 py-2.5 text-right">
-                    <button
-                      onClick={() => void downloadFile(d.download_url, `${d.doc_number}.pdf`)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-surface-100"
-                    >
-                      <Download className="h-3.5 w-3.5" /> PDF
-                    </button>
+                    <div className="flex justify-end gap-1.5">
+                      {/* Looking at a document is the common case; saving it
+                          is the rarer one. Both are here so neither requires
+                          guessing what the other does. */}
+                      <button
+                        onClick={() => setPreview(d)}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-surface-100"
+                      >
+                        <Eye className="h-3.5 w-3.5" /> View
+                      </button>
+                      <button
+                        onClick={() => void downloadFile(d.download_url, `${d.doc_number}.pdf`)}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-surface-100"
+                      >
+                        <Download className="h-3.5 w-3.5" /> PDF
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -83,6 +100,7 @@ export function DocumentsPage() {
           </table>
         </div>
       )}
+      {preview && <DocumentPreview document={preview} onClose={() => setPreview(null)} />}
     </div>
   );
 }

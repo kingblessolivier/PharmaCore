@@ -83,15 +83,67 @@ class OrderItem(models.Model):
     quantity_received = models.DecimalField(max_digits=16, decimal_places=3, default=0)
     price_per_unit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
 
+    #: What the buyer counted in. A wholesale line saying "10" is meaningless
+    #: on its own — ten cartons and ten tablets differ by a factor of 2,400,
+    #: and the depot picking the order has only the number to go on. Purchase
+    #: orders learned this in #121; B2B orders were still dimensionless.
+    #:
+    #: Null means the line was placed in base units, which is what every line
+    #: written before this field existed meant.
+    unit = models.ForeignKey(
+        "catalog.ProductUnit",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="+",
+    )
+    #: The same quantity in base units — what stock, availability and every
+    #: downstream movement are actually counted in. Stored rather than derived
+    #: so that re-pricing a pack size later cannot retroactively change what an
+    #: order asked for.
+    quantity_base = models.DecimalField(max_digits=16, decimal_places=3, default=0)
+
     class Meta:
         ordering = ["id"]
 
     def __str__(self) -> str:
-        return f"{self.product} ×{self.quantity_ordered}"
+        unit = self.unit
+        suffix = f" {unit.code}" if unit else ""
+        return f"{self.product} ×{self.quantity_ordered}{suffix}"
+
+    @property
+    def unit_label(self) -> str:
+        """How to say this line's unit to a person."""
+        unit = self.unit
+        if unit is None:
+            return ""
+        return unit.name or unit.get_code_display()
+
+    @property
+    def price_per_ordered_unit(self) -> Decimal:
+        """The price of one of whatever the buyer counted in.
+
+        ``price_per_unit`` is the depot's published price for a *base* unit and
+        stays that way — it is the authoritative figure and rescaling it on
+        write would make the stored price depend on how somebody happened to
+        type the order. This is the display figure: a carton costs the base
+        price times what the carton holds.
+        """
+        unit = self.unit
+        factor = Decimal(unit.factor_to_base) if unit else Decimal(1)
+        return (Decimal(self.price_per_unit) * factor).quantize(Decimal("0.01"))
 
     @property
     def line_total(self) -> float:
-        return float(self.price_per_unit) * self.quantity_ordered
+        """What this line costs.
+
+        Computed on the base quantity, not the ordered one. The published price
+        is per base unit, so multiplying it by a pack count would price two
+        cartons as though they were two tablets — an error of whatever the
+        carton holds, silently, in the depot's favour or the buyer's depending
+        on which way round it is read.
+        """
+        return float(self.price_per_unit) * float(self.quantity_base or self.quantity_ordered)
 
 
 class Shipment(models.Model):

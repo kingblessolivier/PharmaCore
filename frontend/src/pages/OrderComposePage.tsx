@@ -29,7 +29,7 @@ import {
   WorkbenchGrid,
   WorkbenchHeader,
 } from "../components/Workbench";
-import { api, ApiError } from "../lib/api";
+import { api, ApiError, assetUrl } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { storefront, tradingPartners } from "../lib/distribution";
 import { money } from "../lib/format";
@@ -40,9 +40,19 @@ interface DraftLine {
   product: number;
   label: string;
   quantity: number;
+  /** The depot's published price for one *base* unit — a tablet, not a carton. */
   price: string;
+  /** Availability, in base units, which is the only unit stock is counted in. */
   available: number;
   minimum: number;
+  multiple: number;
+  /** The packing level the buyer is counting in; null means base units. */
+  unit: number | null;
+  unitLabel: string;
+  packFactor: number;
+  /** So the buyer can see they picked the right medicine before ordering it. */
+  image: string;
+  imageTrusted: boolean;
 }
 
 /* `field-control` is the shared solid control style (see index.css): a real 1px
@@ -61,6 +71,7 @@ export function OrderComposePage() {
   const [lines, setLines] = useState<DraftLine[]>([]);
   const [pick, setPick] = useState(0);
   const [qty, setQty] = useState("10");
+  const [pickUnit, setPickUnit] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const buyers = useQuery({
@@ -81,8 +92,19 @@ export function OrderComposePage() {
   const buyerLocked = Boolean(user?.organization) && user?.organization !== depotId;
   const buyerOptions = (buyers.data ?? []).filter((o) => o.id !== depotId);
 
-  const total = lines.reduce((sum, l) => sum + l.quantity * Number(l.price || 0), 0);
-  const units = lines.reduce((sum, l) => sum + l.quantity, 0);
+  /* Money and stock are both counted in base units. Multiplying a published
+     per-tablet price by a carton count prices a carton as a tablet — an error
+     of whatever the carton holds. */
+  const baseOf = (l: DraftLine) => l.quantity * (l.packFactor || 1);
+  const total = lines.reduce((sum, l) => sum + baseOf(l) * Number(l.price || 0), 0);
+  const units = lines.reduce((sum, l) => sum + baseOf(l), 0);
+
+  /** The pack levels the depot offers for whatever is currently selected. */
+  const pickedOffer = offerings.find((o) => o.product === pick);
+  const pickedUnits = pickedOffer?.pack_units ?? [];
+  const pickedFactor = pickUnit
+    ? Number(pickedUnits.find((u) => u.id === pickUnit)?.factor_to_base ?? 1)
+    : 1;
 
   function addLine() {
     setError(null);
@@ -90,10 +112,26 @@ export function OrderComposePage() {
     if (!offer) return setError("Choose a medicine to add.");
     const n = Number(qty);
     if (!Number.isFinite(n) || n <= 0) return setError("Quantity must be more than zero.");
-    if (offer.min_order_qty && n < offer.min_order_qty)
-      return setError(`${offer.product_name} has a minimum order of ${offer.min_order_qty}.`);
     if (lines.some((l) => l.product === pick))
       return setError(`${offer.product_name} is already on this order — edit the line instead.`);
+
+    const chosen = pickUnit ? pickedUnits.find((u) => u.id === pickUnit) : undefined;
+    const factor = chosen ? Number(chosen.factor_to_base) : 1;
+    /* Every rule the depot publishes is expressed in base units, so the
+       buyer's pack count is restated before any of them is applied. Asking for
+       two cartons against ten tablets has to fail here rather than at the
+       loading bay. */
+    const wanted = n * factor;
+    if (offer.min_order_qty && wanted < offer.min_order_qty)
+      return setError(
+        `${offer.product_name} has a minimum order of ${offer.min_order_qty} — ` +
+          `${n} × ${chosen?.label ?? "unit"} is ${wanted.toLocaleString()}.`,
+      );
+    if (wanted > offer.available)
+      return setError(
+        `${offer.product_name}: ${offer.available.toLocaleString()} available, ` +
+          `and ${n} × ${chosen?.label ?? "unit"} is ${wanted.toLocaleString()}.`,
+      );
 
     setLines((current) => [
       ...current,
@@ -107,10 +145,17 @@ export function OrderComposePage() {
         price: offer.price,
         available: offer.available,
         minimum: offer.min_order_qty,
+        multiple: offer.order_multiple ?? 1,
+        unit: chosen?.id ?? null,
+        unitLabel: chosen?.label ?? "",
+        packFactor: factor,
+        image: offer.image ?? "",
+        imageTrusted: offer.image_is_trusted ?? false,
       },
     ]);
     setPick(0);
     setQty("10");
+    setPickUnit(null);
   }
 
   const create = useMutation({
@@ -121,7 +166,11 @@ export function OrderComposePage() {
           depot: depotId,
           retail: retailId,
           notes,
-          items: lines.map((l) => ({ product: l.product, quantity_ordered: l.quantity })),
+          items: lines.map((l) => ({
+            product: l.product,
+            unit: l.unit,
+            quantity_ordered: l.quantity,
+          })),
         }),
       }),
     onSuccess: (order) => {
@@ -276,15 +325,49 @@ export function OrderComposePage() {
                 aria-label="Quantity"
                 type="number"
                 min={1}
-                className={`${control} w-24 text-right`}
+                className={`${control} w-20 text-right`}
                 value={qty}
                 disabled={!depotId}
                 onChange={(e) => setQty(e.target.value)}
               />
+              {/* The unit is not decoration. "10" is ten cartons or ten
+                  tablets, and the two differ by whatever the carton holds —
+                  so the buyer says which, rather than the depot guessing. */}
+              <select
+                aria-label="Unit of measure"
+                className={`${control} w-44`}
+                value={pickUnit ?? ""}
+                disabled={!pick || pickedUnits.length === 0}
+                onChange={(e) => setPickUnit(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">
+                  {pickedUnits.find((u) => u.is_base)?.label ?? "singles"}
+                </option>
+                {pickedUnits
+                  .filter((u) => !u.is_base)
+                  .map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.label} ({Number(u.factor_to_base).toLocaleString()})
+                    </option>
+                  ))}
+              </select>
               <Button variant="secondary" onClick={addLine} disabled={!depotId}>
                 <Icon as={Plus} size="sm" /> Add
               </Button>
             </div>
+          }
+          note={
+            /* What the number in the box comes to, before it is added. The
+               whole failure this screen had was a quantity nobody could
+               interpret, so the interpretation is shown while it is typed. */
+            pickedOffer && pickedFactor > 1 ? (
+              <span>
+                {Number(qty || 0).toLocaleString()} × {pickedUnits.find((u) => u.id === pickUnit)?.label} ={" "}
+                <b>{(Number(qty || 0) * pickedFactor).toLocaleString()}</b>{" "}
+                {pickedUnits.find((u) => u.is_base)?.label ?? "units"} ·{" "}
+                {pickedOffer.available.toLocaleString()} available
+              </span>
+            ) : undefined
           }
         >
           {lines.length === 0 ? (
@@ -297,8 +380,10 @@ export function OrderComposePage() {
             <table className="data-grid">
               <thead>
                 <tr>
+                  <th className="w-12">Photo</th>
                   <th>Medicine</th>
                   <th className="text-right">Quantity</th>
+                  <th>Unit</th>
                   <th className="text-right">Available</th>
                   <th className="text-right">Unit price</th>
                   <th className="text-right">Line total</th>
@@ -310,10 +395,41 @@ export function OrderComposePage() {
                   /* Ordering beyond what the depot will release is allowed — the
                      shortfall becomes recorded demand — but the buyer has to be
                      told at the moment they do it, not at delivery. */
-                  const over = line.quantity > line.available;
+                  const wanted = line.quantity * (line.packFactor || 1);
+                  const over = wanted > line.available;
                   return (
                     <tr key={line.key}>
-                      <td className="text-ink-900">{line.label}</td>
+                      {/* Somebody ordering by name alone cannot tell one white
+                          box from another. An unverified photo is flagged
+                          rather than presented as fact — a wrong picture on a
+                          listing sells the wrong medicine. */}
+                      <td>
+                        {line.image ? (
+                          <img
+                            src={assetUrl(line.image)}
+                            alt=""
+                            title={
+                              line.imageTrusted
+                                ? "Photo checked against this medicine"
+                                : "Photo not yet checked — confirm the pack yourself"
+                            }
+                            className={`h-9 w-9 rounded border object-contain ${
+                              line.imageTrusted ? "border-line" : "border-warning-400"
+                            }`}
+                            onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+                          />
+                        ) : (
+                          <div className="h-9 w-9 rounded border border-dashed border-line" />
+                        )}
+                      </td>
+                      <td className="text-ink-900">
+                        {line.label}
+                        {line.packFactor > 1 && (
+                          <div className="text-xs text-ink-500">
+                            {wanted.toLocaleString()} singles in total
+                          </div>
+                        )}
+                      </td>
                       <td className="text-right">
                         <input
                           type="number"
@@ -332,6 +448,9 @@ export function OrderComposePage() {
                           }
                         />
                       </td>
+                      <td className="text-ink-700">
+                        {line.unitLabel || <span className="text-ink-400">singles</span>}
+                      </td>
                       <td
                         className={`px-3 py-1 text-right tabular-nums ${
                           over ? "font-semibold text-warning-700" : "text-ink-600"
@@ -342,11 +461,14 @@ export function OrderComposePage() {
                       >
                         {line.available.toLocaleString()}
                       </td>
+                      {/* The price of one of whatever they are counting in.
+                          Showing a per-tablet price beside a carton count reads
+                          as though a carton costs what a tablet does. */}
                       <td className="text-right tabular-nums text-ink-700">
-                        {money(Number(line.price))}
+                        {money(Number(line.price) * (line.packFactor || 1))}
                       </td>
                       <td className="text-right font-medium tabular-nums text-ink-900">
-                        {money(line.quantity * Number(line.price))}
+                        {money(wanted * Number(line.price))}
                       </td>
                       <td className="text-right">
                         <button

@@ -581,7 +581,12 @@ class PurchaseOrderSerializer(_NestedLinesMixin, QuantityAwareModelSerializer[Pu
         return {
             "doc_number": record.doc_number,
             "generated_at": record.generated_at,
-            "download_url": record.file.url if record.file else "",
+            # The authenticated endpoint, never `record.file.url`. The raw
+            # media path is served by the web server with no login at all, so
+            # linking to it would hand a purchase order — supplier, prices,
+            # quantities, the pharmacy's TIN — to anyone who has the URL. The
+            # viewset behind this scopes by organization *and* document type.
+            "download_url": f"/api/documents/{record.pk}/download/",
         }
 
     def get_shipment(self, obj: PurchaseOrder) -> dict[str, Any]:

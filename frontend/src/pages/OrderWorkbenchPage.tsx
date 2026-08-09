@@ -13,7 +13,16 @@
 /* -------------------------------------------------------------------------- */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Banknote, CheckCircle2, PackageCheck, Send, Truck } from "lucide-react";
+import { useState } from "react";
+import {
+  ArrowLeft,
+  Banknote,
+  CheckCircle2,
+  FileText,
+  PackageCheck,
+  Send,
+  Truck,
+} from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Empty, ErrorNote } from "../components/RecordKit";
 import { Button, Spinner } from "../components/ui";
@@ -33,8 +42,13 @@ import { api } from "../lib/api";
 import { money, shortDate } from "../lib/format";
 import type { StockOrder } from "../lib/types";
 import { StatusChip } from "../components/Status";
+import {
+  DocumentPreview,
+  type PreviewableDocument,
+} from "../components/DocumentPreview";
 
 export function OrderWorkbenchPage() {
+  const [preview, setPreview] = useState<PreviewableDocument | null>(null);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -139,6 +153,26 @@ export function OrderWorkbenchPage() {
                   </Row>
                   <Row label="Status">
                     <StatusChip status={order.status} />
+                  </Row>
+                  {/* The order document the depot was sent. It has been
+                      generated, numbered and hashed on approval all along, and
+                      no screen could reach it — so the one artefact the seller
+                      holds was the one thing the buyer could not reopen. */}
+                  <Row label="Order document">
+                    <ReadOnly>
+                      {order.document ? (
+                        <button
+                          type="button"
+                          onClick={() => setPreview(order.document)}
+                          className="inline-flex items-center gap-1 text-brand-600 hover:underline"
+                        >
+                          <Icon as={FileText} size="sm" />
+                          {order.document.doc_number}
+                        </button>
+                      ) : (
+                        "generated when the order is approved"
+                      )}
+                    </ReadOnly>
                   </Row>
                 </Fieldset>
 
@@ -290,6 +324,7 @@ export function OrderWorkbenchPage() {
               <tr className="border-b border-line bg-surface-50 text-left text-micro uppercase tracking-wide text-ink-500">
                 <th className="px-3 py-1.5 font-medium">Medicine</th>
                 <th className="px-3 py-1.5 text-right font-medium">Ordered</th>
+                <th className="px-3 py-1.5 font-medium">Unit</th>
                 <th className="px-3 py-1.5 text-right font-medium">Approved</th>
                 <th className="px-3 py-1.5 text-right font-medium">Shipped</th>
                 <th className="px-3 py-1.5 text-right font-medium">Received</th>
@@ -313,6 +348,23 @@ export function OrderWorkbenchPage() {
                     <td className="px-3 py-1.5 text-ink-900">{line.product_name ?? "—"}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums text-ink-900">
                       {line.quantity_ordered.toLocaleString()}
+                    </td>
+                    {/* The unit the buyer counted in, and what it comes to on
+                        the shelf. A picker reading "2" needs to know whether
+                        that is two cartons or two tablets before they pick. */}
+                    <td className="px-3 py-1.5 text-ink-700">
+                      {line.unit_label ? (
+                        <>
+                          {line.unit_label}
+                          {line.quantity_base && (
+                            <div className="text-micro text-ink-500">
+                              {Number(line.quantity_base).toLocaleString()} singles
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-ink-400">singles</span>
+                      )}
                     </td>
                     <td
                       className={`px-3 py-1.5 text-right tabular-nums ${
@@ -369,6 +421,7 @@ export function OrderWorkbenchPage() {
           Go to in-transit stock →
         </button>
       )}
+      {preview && <DocumentPreview document={preview} onClose={() => setPreview(null)} />}
     </div>
   );
 }

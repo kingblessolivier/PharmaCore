@@ -14,6 +14,8 @@ import { api } from "./api";
 
 /** A packaging level a medicine is sold in. */
 export interface PackUnit {
+  /** What an order line references when the buyer counts in this level. */
+  id: number;
   code: string;
   label: string;
   factor_to_base: string;

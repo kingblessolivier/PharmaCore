@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 from django.db import transaction
@@ -112,11 +113,27 @@ class GRNSerializer(QuantityAwareModelSerializer):
         read_only_fields = fields
 
 
+def unit_label_for(unit: Any) -> str:
+    """How to name a packing level to a person placing an order."""
+    return unit.name or unit.get_code_display()
+
+
 class OrderItemSerializer(QuantityAwareModelSerializer):
     product_name = serializers.SerializerMethodField()
     line_total = serializers.FloatField(read_only=True)
 
     product_image = serializers.CharField(source="product.image_url", read_only=True, default="")
+    #: What the buyer counted in. "10" alone is ten cartons or ten tablets,
+    #: and the depot picking the order has only the number to go on.
+    unit_code = serializers.CharField(source="unit.code", read_only=True, default="")
+    unit_label = serializers.CharField(read_only=True)
+    pack_factor = serializers.DecimalField(
+        source="unit.factor_to_base",
+        max_digits=16,
+        decimal_places=3,
+        read_only=True,
+        default=None,
+    )
 
     class Meta:
         model = OrderItem
@@ -125,6 +142,11 @@ class OrderItemSerializer(QuantityAwareModelSerializer):
             "product",
             "product_name",
             "product_image",
+            "unit",
+            "unit_code",
+            "unit_label",
+            "pack_factor",
+            "quantity_base",
             "quantity_ordered",
             "quantity_approved",
             "quantity_shipped",
@@ -161,6 +183,31 @@ class StockOrderSerializer(QuantityAwareModelSerializer):
     # cannot decide what to import.
     allow_backorder = serializers.BooleanField(write_only=True, required=False, default=True)
     backorders = serializers.SerializerMethodField()
+    #: The order document the depot was actually sent. It has been generated,
+    #: numbered, hashed and stored on approval all along, and no screen could
+    #: reach it — the same gap purchase orders had before #121.
+    document = serializers.SerializerMethodField()
+
+    def get_document(self, obj: StockOrder) -> dict[str, Any] | None:
+        from apps.documents.models import Document
+
+        record = (
+            Document.objects.filter(reference_type="stock_order", reference_id=str(obj.pk))
+            .order_by("-generated_at")
+            .first()
+        )
+        if record is None:
+            return None
+        return {
+            "doc_number": record.doc_number,
+            "generated_at": record.generated_at,
+            # The authenticated endpoint, never `record.file.url`. The raw
+            # media path is served by the web server with no login at all, so
+            # linking to it would hand a purchase order — supplier, prices,
+            # quantities, the pharmacy's TIN — to anyone who has the URL. The
+            # viewset behind this scopes by organization *and* document type.
+            "download_url": f"/api/documents/{record.pk}/download/",
+        }
 
     class Meta:
         model = StockOrder
@@ -185,11 +232,13 @@ class StockOrderSerializer(QuantityAwareModelSerializer):
             "shipments",
             "allow_backorder",
             "backorders",
+            "document",
             "created_at",
         ]
         read_only_fields = [
             "id",
             "order_number",
+            "document",
             "status",
             "total_amount",
             "payment_status",
@@ -234,19 +283,44 @@ class StockOrderSerializer(QuantityAwareModelSerializer):
 
         for item in items:
             product = item["product"]
-            requested = item["quantity_ordered"]
+            unit = item.get("unit")
+            # Availability, stock and every downstream movement are counted in
+            # base units, so the buyer's pack count has to be restated before
+            # any of it is consulted. Ordering "2" of a 2,400-tablet carton
+            # against 10 tablets on hand must fail, and did not: the 2 was
+            # compared against the 10 as though both meant tablets.
+            factor = Decimal(unit.factor_to_base) if unit is not None else Decimal(1)
+            requested_base = Decimal(str(item["quantity_ordered"])) * factor
+
             decision = decide_line(
                 depot=order.depot_id,
                 buyer=order.retail_id,
                 product=product,
-                quantity=requested,
+                quantity=int(requested_base),
                 allow_backorder=allow_backorder,
             )
 
-            if decision.fulfillable > 0:
+            # A depot does not open a carton to part-fill an order. So when the
+            # buyer counted in packs, what can be supplied is floored to a
+            # whole number of them — ten tablets against an order for two
+            # cartons is not "partly filled", it is nothing, and recording it
+            # as a line for zero cartons is worse than recording nothing.
+            fulfillable_base = Decimal(decision.fulfillable)
+            whole_packs = int(fulfillable_base / factor)
+            fulfillable_base = Decimal(whole_packs) * factor
+
+            if fulfillable_base > 0:
                 # Authoritative: the depot's published price (or its awarded tender
                 # price), never the buyer's input.
-                line = {**item, "quantity_ordered": decision.fulfillable}
+                #
+                # Recorded both ways — in the unit the buyer ordered, so the
+                # order still reads as they placed it, and in base units, which
+                # is what gets picked.
+                line = {
+                    **item,
+                    "quantity_ordered": whole_packs,
+                    "quantity_base": fulfillable_base,
+                }
                 OrderItem.objects.create(order=order, price_per_unit=decision.price, **line)
                 placed += 1
 
@@ -263,10 +337,21 @@ class StockOrderSerializer(QuantityAwareModelSerializer):
                 )
                 shortfalls.append(f"{product}: {decision.backordered} ({decision.note})")
 
-            if decision.fulfillable == 0 and decision.backordered == 0:
+            if fulfillable_base == 0 and decision.backordered == 0:
+                # Note the flooring, not just the raw availability: a depot
+                # holding 10 tablets against an order for two 2,400-tablet
+                # cartons has nothing it can send, and saying "only 10
+                # available" to somebody counting in cartons is not an answer
+                # in the unit they asked the question in.
+                detail = decision.note
+                if decision.fulfillable > 0 and unit is not None:
+                    detail = (
+                        f"only {decision.fulfillable} available, "
+                        f"less than one {unit_label_for(unit)}"
+                    )
                 raise serializers.ValidationError(
                     f"'{product}' cannot be ordered from {order.depot.name}"
-                    f"{' — ' + decision.note if decision.note else ''}."
+                    f"{' — ' + detail if detail else ''}."
                 )
 
         if placed == 0 and not shortfalls:
@@ -310,6 +395,9 @@ class DepotProductListingSerializer(QuantityAwareModelSerializer):
         """The levels this medicine is packed in, smallest first."""
         return [
             {
+                # The id is what an order line has to reference — without it a
+                # buyer can see the pack levels and cannot order in one.
+                "id": unit.pk,
                 "code": unit.code,
                 "label": unit.name or unit.get_code_display(),
                 "factor_to_base": str(unit.factor_to_base),
