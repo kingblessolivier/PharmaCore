@@ -774,3 +774,121 @@ class TestEmptyCommentsDoNotCollapseTheBlock:
             hits["Subtotal"] > width * 0.5
         ), f"labels collapsed left with notes={notes!r} — the column lost its width"
         assert hits["7,500.00"] > width * 0.75
+
+
+class TestRenderingNeverGoesToTheNetwork:
+    """A document generator must not make outbound requests.
+
+    One production log showed all three failure modes at once: a dead host cost
+    three DNS retries and held the request open for ~3 seconds — long enough
+    for the user to press the button again and collect a 400 from the duplicate
+    — while `logo_url` being user-settable made the fetch a server-side request
+    forgery vector pointed at our own network.
+
+    Returning "" from `link_callback` is not sufficient: xhtml2pdf resolves an
+    absolute http(s) source through its own file layer and never consults the
+    callback. The markup has to be cleaned before it reaches the renderer.
+    """
+
+    @pytest.mark.parametrize(
+        "markup",
+        [
+            '<img src="https://example.test/logo.png" alt="x">',
+            "<img src='http://10.0.0.1/internal.png'>",
+            '<IMG  SRC = "https://cdn.example/a.png" >',
+        ],
+    )
+    def test_a_remote_image_is_removed(self, markup: str) -> None:
+        from apps.documents.renderer import strip_remote_images
+
+        assert strip_remote_images(markup) == ""
+
+    @pytest.mark.parametrize(
+        "markup",
+        [
+            '<img src="/media/uploads/logo/a.png">',
+            '<img src="data:image/png;base64,AAAA">',
+        ],
+    )
+    def test_our_own_images_are_kept(self, markup: str) -> None:
+        from apps.documents.renderer import strip_remote_images
+
+        assert strip_remote_images(markup) == markup
+
+    def test_rendering_resolves_no_hostnames(self) -> None:
+        """The guarantee, measured rather than assumed."""
+        import socket
+
+        lookups: list[tuple] = []
+        original = socket.getaddrinfo
+
+        def counting(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+            lookups.append(args[:2])
+            return original(*args, **kwargs)
+
+        socket.getaddrinfo = counting
+        try:
+            pdf = render_pdf(
+                '<html><body><img src="https://example.test/logo.png">'
+                "<p>Document</p></body></html>"
+            )
+        finally:
+            socket.getaddrinfo = original
+
+        assert pdf, "the document must still render, just without the image"
+        assert lookups == [], f"rendering reached for the network: {lookups}"
+
+    def test_a_document_with_an_unreachable_logo_still_renders(self, issuer: Organization) -> None:
+        # A supplier's CDN going down must not stop a pharmacy issuing orders.
+        issuer.logo_url = "https://example.test/logo.png"
+        html = render_to_string(
+            "documents/purchase_order.html",
+            {
+                "organization": issuer,
+                "doc_number": "PO-1",
+                "doc_type_label": "Purchase Order",
+                "generated_at": timezone.now(),
+                "po_number": "PO-1",
+                "lines": [],
+            },
+        )
+        assert render_pdf(html)
+
+
+class TestDocumentTitlesFitOnOneLine:
+    """ "GOODS RECEIPT NOTE" was breaking across two lines.
+
+    The title is the first thing a reader identifies a document by, and the
+    longest of them did not fit the column it was given. Nothing failed — it
+    just looked like a mistake, which on a document sent to a supplier is the
+    same thing.
+    """
+
+    @pytest.mark.parametrize(
+        ("template", "title"),
+        [
+            ("documents/grn.html", "GOODS RECEIPT NOTE"),
+            ("documents/purchase_order.html", "PURCHASE ORDER"),
+            ("documents/delivery_note.html", "DELIVERY NOTE"),
+            ("documents/tax_invoice.html", "INVOICE"),
+        ],
+    )
+    def test_the_title_is_not_broken_across_lines(
+        self, issuer: Organization, template: str, title: str
+    ) -> None:
+        import io
+
+        from pypdf import PdfReader
+
+        html = render_to_string(
+            template,
+            {
+                "organization": issuer,
+                "doc_number": "SPEC-1",
+                "doc_type_label": "Specimen",
+                "generated_at": timezone.now(),
+                "lines": [],
+            },
+        )
+        text = PdfReader(io.BytesIO(render_pdf(html))).pages[0].extract_text() or ""
+        assert title in text, f"{title} wrapped — it must sit on one line"

@@ -173,7 +173,10 @@ def _generate_grn_and_invoice(grn: GoodsReceivedNote, user: User | None) -> None
     receipt_value = Decimal("0")
     for line in grn.lines.select_related("product", "order_item", "order_item__unit").all():
         item = line.order_item
-        unit_label = item.unit_label if item else ""
+        # A line received in base units still has a unit — the base one. The
+        # purchase order and delivery note already said so; the receipt that
+        # closes the loop between them printed "—".
+        unit_label = (item.unit_label if item else "") or _base_unit_label(line.product)
         price = Decimal(str(item.price_per_unit)) if item else Decimal("0")
         value = price * Decimal(str(line.quantity_received))
         receipt_value += value
