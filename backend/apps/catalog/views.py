@@ -26,6 +26,7 @@ from apps.catalog.models import (
     ProductInteraction,
     ProductPrice,
     ProductSubstitute,
+    ProductUnit,
     ProductUomConversion,
     Supplier,
 )
@@ -41,6 +42,7 @@ from apps.catalog.serializers import (
     ProductPriceSerializer,
     ProductSerializer,
     ProductSubstituteSerializer,
+    ProductUnitSerializer,
     ProductUomConversionSerializer,
     SupplierSerializer,
 )
@@ -313,6 +315,19 @@ class FormularyItemViewSet(_AuditedAdminViewSet):
     search_fields = ["scheme_name", "product__generic_name"]
 
     def get_queryset(self) -> QuerySet[FormularyItem]:
+        qs = super().get_queryset()
+        product = self.request.query_params.get("product")
+        return qs.filter(product_id=product) if product else qs
+
+
+class ProductUnitViewSet(_AuditedAdminViewSet):
+    """A product's packaging chain — the levels it is bought, stocked and sold in."""
+
+    entity_type = "product_unit"
+    serializer_class = ProductUnitSerializer
+    queryset = ProductUnit.objects.select_related("product").all()
+
+    def get_queryset(self) -> QuerySet[ProductUnit]:
         qs = super().get_queryset()
         product = self.request.query_params.get("product")
         return qs.filter(product_id=product) if product else qs

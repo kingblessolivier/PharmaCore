@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+from typing import Any
+
 from rest_framework import serializers
 
 from apps.catalog.models import (
@@ -16,6 +19,7 @@ from apps.catalog.models import (
     ProductInteraction,
     ProductPrice,
     ProductSubstitute,
+    ProductUnit,
     ProductUomConversion,
     Supplier,
 )
@@ -103,6 +107,8 @@ class ProductSerializer(serializers.ModelSerializer):
             "is_essential",
             "rxnorm_id",
             "lifecycle_status",
+            "divisibility",
+            "split_note",
             "is_active",
             "created_at",
             "updated_at",
@@ -197,6 +203,71 @@ class FormularyItemSerializer(serializers.ModelSerializer):
             "notes",
         ]
         read_only_fields = ["id", "product_generic_name"]
+
+
+class ProductUnitSerializer(serializers.ModelSerializer):
+    """One level of a product's packaging chain."""
+
+    code_display = serializers.CharField(source="get_code_display", read_only=True)
+
+    class Meta:
+        model = ProductUnit
+        fields = [
+            "id",
+            "product",
+            "code",
+            "code_display",
+            "name",
+            "factor_to_base",
+            "level",
+            "is_base",
+            "is_purchase_default",
+            "is_sale_default",
+            "barcode",
+            "price",
+        ]
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Catch what the database constraints would reject, with a readable reason.
+
+        The constraints are the real guarantee; this exists so the screen says
+        "that product already has a base unit" instead of surfacing an
+        IntegrityError.
+        """
+        product = attrs.get("product") or getattr(self.instance, "product", None)
+        if product is None:
+            return attrs
+
+        existing = ProductUnit.objects.filter(product=product)
+        if isinstance(self.instance, ProductUnit):
+            existing = existing.exclude(pk=self.instance.pk)
+
+        is_base = attrs.get("is_base", getattr(self.instance, "is_base", False))
+        factor = attrs.get("factor_to_base", getattr(self.instance, "factor_to_base", 1))
+
+        if is_base:
+            if Decimal(str(factor)) != 1:
+                raise serializers.ValidationError(
+                    {"factor_to_base": "The base unit measures one of itself."}
+                )
+            if existing.filter(is_base=True).exists():
+                raise serializers.ValidationError(
+                    {"is_base": f"{product} already has a base unit. Change that one instead."}
+                )
+        elif Decimal(str(factor)) <= 1 and not existing.filter(is_base=True).exists():
+            raise serializers.ValidationError(
+                {"factor_to_base": "Record the base unit first, then the levels above it."}
+            )
+
+        for flag, label in (("is_purchase_default", "purchase"), ("is_sale_default", "sale")):
+            if (
+                attrs.get(flag, getattr(self.instance, flag, False))
+                and existing.filter(**{flag: True}).exists()
+            ):
+                raise serializers.ValidationError(
+                    {flag: f"Only one {label} unit per product — clear the other one first."}
+                )
+        return attrs
 
 
 class ProductUomConversionSerializer(serializers.ModelSerializer):
