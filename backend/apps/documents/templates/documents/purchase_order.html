@@ -1,75 +1,112 @@
 {% extends "documents/base.html" %}
+{% load documents %}
 {% comment %}
-A purchase order is an offer to buy, so it has to carry everything the
-   supplier needs to accept it and ship against it: who to invoice, where to
-   deliver, what terms, and — the part that was missing — what unit each
-   quantity is counted in. "10" means ten cartons or ten tablets, and a supplier
-   guessing wrong sends 24,000 tablets or ten.
+A purchase order, in the arrangement the trade uses.
+
+The layout is not decoration. A purchase order is an offer to buy, and a
+supplier has to be able to accept it and ship against it without asking a
+question — so it states who to invoice, where to deliver, how the goods travel,
+on whose terms, and what unit every quantity is counted in. "10" means ten
+cartons or ten tablets, and a supplier guessing wrong sends 24,000 tablets or
+ten.
+
+Two constraints from the renderer shape the markup:
+
+  * xhtml2pdf supports neither flexbox nor grid, so "comments on the left,
+    totals on the right" is a table, not a `display: grid`.
+  * It cannot nest a table inside a table cell — it computes a negative
+    available width and produces no page at all. That bottom block is
+    therefore ONE table: the comments cell spans the totals rows beside it.
+    Do not be tempted to nest.
 {% endcomment %}
+
+{% block title %}PURCHASE ORDER{% endblock %}
+
+{% block docmeta %}
+  <table style="margin-top:5pt;">
+    <tr>
+      <td class="metakey">Date</td>
+      <td class="metaval">{{ order_date|date:"d M Y" }}</td>
+    </tr>
+    <tr>
+      <td class="metakey">PO&nbsp;#</td>
+      <td class="metaval"><b>{{ po_number }}</b></td>
+    </tr>
+    {% if supplier_reference %}
+    <tr>
+      <td class="metakey">Your ref</td>
+      <td class="metaval">{{ supplier_reference }}</td>
+    </tr>
+    {% endif %}
+  </table>
+{% endblock %}
+
 {% block content %}
 
 <table class="parties">
   <tr>
     <td style="width:50%">
       <div class="plabel">Vendor</div>
-      <b>{{ seller_name }}</b>
-      {% if seller_contact %}<br>{{ seller_contact }}{% endif %}
-      {% if seller_address %}<br>{{ seller_address }}{% endif %}
-      {% if seller_phone %}<br>Tel {{ seller_phone }}{% endif %}
-      {% if seller_email %}<br>{{ seller_email }}{% endif %}
+      <div class="party">
+        <b>{{ seller_name }}</b>
+        {% if seller_contact %}<br>Attn: {{ seller_contact }}{% endif %}
+        {% if seller_address %}<br>{{ seller_address }}{% endif %}
+        {% if seller_phone %}<br>Tel {{ seller_phone }}{% endif %}
+        {% if seller_email %}<br>{{ seller_email }}{% endif %}
+        {% if seller_tin %}<br>TIN {{ seller_tin }}{% endif %}
+      </div>
     </td>
-    <td style="width:50%">
-      <div class="plabel">Deliver to</div>
-      {% comment %}
-        firstof, not |default:buyer_name — the filter resolves its argument as a
-        variable and raises when the caller has not supplied one, which takes
-        the whole document down rather than falling back.
-      {% endcomment %}
-      <b>{% firstof deliver_to_name buyer_name "the buyer" %}</b>
-      {% if deliver_to_address %}<br>{{ deliver_to_address }}{% endif %}
-      {% if buyer_phone %}<br>Tel {{ buyer_phone }}{% endif %}
+    <td style="width:50%" class="last">
+      <div class="plabel">Ship to</div>
+      <div class="party">
+        <b>{% firstof deliver_to_name buyer_name "the buyer" %}</b>
+        {% if buyer_contact %}<br>Attn: {{ buyer_contact }}{% endif %}
+        {% if deliver_to_address %}<br>{{ deliver_to_address }}{% endif %}
+        {% if buyer_phone %}<br>Tel {{ buyer_phone }}{% endif %}
+      </div>
     </td>
   </tr>
 </table>
 
-<table style="margin-top:10pt;">
+<table class="lines">
   <tr>
-    <th>Our reference</th>
-    <th>Order date</th>
-    <th>Expected</th>
-    <th>Payment terms</th>
-    <th>Incoterm</th>
+    <th style="width:25%">Requisition #</th>
+    <th style="width:25%">Ship via</th>
+    <th style="width:18%">F.O.B.</th>
+    <th style="width:32%">Shipping terms</th>
   </tr>
   <tr>
-    <td>{{ po_number }}</td>
-    <td>{{ order_date|date:"d M Y" }}</td>
-    <td>{% if expected_delivery %}{{ expected_delivery|date:"d M Y" }}{% else %}&mdash;{% endif %}</td>
-    <td>{% if payment_terms_days %}{{ payment_terms_days }} days{% else %}On delivery{% endif %}</td>
+    <td>{{ requisition_number|default:"&mdash;" }}</td>
+    <td>{{ ship_via|default:"&mdash;" }}</td>
     <td>{{ incoterm|default:"&mdash;" }}</td>
+    <td>
+      {% if payment_terms_days %}{{ payment_terms_days }} days from invoice{% else %}On delivery{% endif %}
+    </td>
   </tr>
 </table>
 
-<table style="margin-top:10pt;">
+<table class="lines">
   <tr>
-    <th style="width:5%">#</th>
+    <th style="width:14%">Item #</th>
     <th>Description</th>
-    <th class="right" style="width:11%">Qty</th>
-    <th style="width:16%">Unit</th>
-    <th class="right" style="width:13%">Unit price</th>
-    <th class="right" style="width:14%">Line total</th>
+    <th style="width:8%" class="right">Qty</th>
+    <th style="width:15%">Unit</th>
+    <th style="width:14%" class="right">Unit price</th>
+    <th style="width:15%" class="right">Total</th>
   </tr>
   {% for l in lines %}
   <tr>
-    <td>{{ forloop.counter }}</td>
+    <td>{{ l.item_number|default:"&mdash;" }}</td>
     <td>
       {{ l.name }}
       {% comment %}
-What the quantity converts to on the shelf. A carton is only useful to
-         a stock controller once it is stated in the units they count.
-{% endcomment %}
+      What the quantity converts to on the shelf. A carton is only useful to a
+      stock controller once it is stated in the units they count.
+      {% endcomment %}
       {% if l.unit_label and l.base_quantity %}
-        <div class="muted">{{ l.base_quantity }} {{ l.base_unit }} in total</div>
+        <div class="sub">{{ l.base_quantity }} {{ l.base_unit|default:"units" }} in total</div>
       {% endif %}
+      {% if l.notes %}<div class="sub">{{ l.notes }}</div>{% endif %}
     </td>
     <td class="right">{{ l.qty }}</td>
     <td>{{ l.unit_label|default:"&mdash;" }}</td>
@@ -77,37 +114,86 @@ What the quantity converts to on the shelf. A carton is only useful to
     <td class="right">{{ l.total }}</td>
   </tr>
   {% endfor %}
+  {% comment %}
+  The grid continues past the last item, as a printed order form does: the
+  totals then sit in the same place on every copy, and there is no blank gap
+  under the last line for somebody to write an extra one into.
+  {% endcomment %}
+  {% for _ in lines|blank_rows:12 %}
+  <tr>
+    <td class="blank">&nbsp;</td><td class="blank">&nbsp;</td><td class="blank">&nbsp;</td>
+    <td class="blank">&nbsp;</td><td class="blank">&nbsp;</td><td class="blank right">&mdash;</td>
+  </tr>
+  {% endfor %}
 </table>
 
-{% comment %}
-Flat, not nested. A totals table inside a table cell left the renderer
-   computing a negative width and producing no page at all.
-{% endcomment %}
-<table style="margin-top:8pt;">
-  <tr><th colspan="2">Summary</th></tr>
-  <tr><td>Subtotal</td><td class="right">{{ subtotal }}</td></tr>
+<table class="lines">
+  {% comment %}
+  No rowspan anywhere in this file. xhtml2pdf emits the text of a spanned
+  table but cannot compute the column widths around it — the table collapses
+  to the width of its longest word and the value column is clipped to nothing,
+  which is exactly the squeezed, empty-figures block this replaced.
+
+  The comments cell is continued instead by suppressing its internal borders,
+  so it reads as one tall box while every row keeps its full three cells.
+  {% endcomment %}
+  <tr>
+    <th style="width:58%">Comments or special instructions</th>
+    <th style="width:24%">&nbsp;</th>
+    <th style="width:18%">&nbsp;</th>
+  </tr>
+  {% comment %}
+  Each figure falls back to a dash rather than an empty string. An empty cell
+  lets the renderer size the column from nothing and collapse it to a sliver —
+  which is how a caller omitting one key silently wrecked the whole block.
+  {% endcomment %}
+  <tr>
+    <td class="contfirst">{{ notes }}</td>
+    <td class="right">Subtotal</td>
+    <td class="right">{% firstof subtotal "&mdash;" %}</td>
+  </tr>
   {% if discount_amount and discount_amount != "0.00" %}
-  <tr><td>Discount</td><td class="right">&minus;{{ discount_amount }}</td></tr>
-  {% endif %}
-  <tr><td>Tax</td><td class="right">{{ tax_total }}</td></tr>
-  <tr><td>Freight</td><td class="right">{{ freight_amount }}</td></tr>
-  {% if other_charges and other_charges != "0.00" %}
-  <tr><td>Other charges</td><td class="right">{{ other_charges }}</td></tr>
+  <tr>
+    <td class="cont">&nbsp;</td>
+    <td class="right">Discount</td>
+    <td class="right">&minus;{{ discount_amount }}</td>
+  </tr>
   {% endif %}
   <tr>
-    <td><b>Total ({{ currency|default:"RWF" }})</b></td>
-    <td class="right"><b>{{ total }}</b></td>
+    <td class="cont">&nbsp;</td>
+    <td class="right">Tax</td>
+    <td class="right">{% firstof tax_total "&mdash;" %}</td>
+  </tr>
+  <tr>
+    <td class="cont">&nbsp;</td>
+    <td class="right">Shipping</td>
+    <td class="right">{% firstof freight_amount "&mdash;" %}</td>
+  </tr>
+  <tr>
+    <td class="cont">&nbsp;</td>
+    <td class="right">Other</td>
+    <td class="right">{% firstof other_charges "&mdash;" %}</td>
+  </tr>
+  <tr>
+    <td class="contlast">&nbsp;</td>
+    <td class="right grandcell">Total ({{ currency|default:"RWF" }})</td>
+    <td class="right grandcell">{% firstof total "&mdash;" %}</td>
   </tr>
 </table>
 
-<div style="margin-top:10pt;">
-  <div class="plabel">Comments or special instructions</div>
-  <div style="border:0.5pt solid #cbd5e1; min-height:46pt; padding:5pt;">{{ notes|default:"" }}</div>
-</div>
+{% if amount_in_words %}
+<p class="muted" style="margin-top:5pt;"><b>{{ currency|default:"RWF" }} {{ amount_in_words }}</b></p>
+{% endif %}
 
-<p class="muted" style="margin-top:10pt;">
-  This purchase order is a legal offer to buy the goods listed above on the terms stated.
+<p class="muted" style="margin-top:8pt;">
+  This purchase order is an offer to buy the goods listed above on the terms stated.
   Quote <b>{{ po_number }}</b> on your invoice and on every delivery note.
   {% if terms %}<br>{{ terms }}{% endif %}
 </p>
+{% endblock %}
+
+{% block footer_note %}
+  If you have any questions about this purchase order, please contact
+  <b>{% firstof buyer_contact organization.contact_person organization.name %}</b>{% if organization.phone %}, {{ organization.phone }}{% endif %}{% if organization.email %}, {{ organization.email }}{% endif %}.<br>
+  Issued by <b>{{ organization.name }}</b>{% if organization.tin %}, TIN {{ organization.tin }}{% endif %} &middot; reference {{ doc_number }}.
 {% endblock %}

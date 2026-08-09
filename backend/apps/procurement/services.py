@@ -40,6 +40,7 @@ from apps.approvals import registry
 from apps.approvals.models import ApprovalRequest
 from apps.approvals.services import request_approval
 from apps.catalog.units import normalise
+from apps.documents import invoicing
 from apps.documents.models import DocType, Document
 from apps.documents.services import generate_document
 from apps.finance.models import Account, JournalLine, SupplierBill
@@ -736,6 +737,7 @@ def send_order(*, order: PurchaseOrder, user: User | None, method: str = "EMAIL"
     """Issue the approved PO to the supplier and vault the signed PDF."""
     if order.status != PurchaseOrder.Status.APPROVED:
         raise ProcurementError("Only an approved purchase order can be sent to the supplier.")
+    profile = SupplierProfile.objects.filter(supplier=order.supplier).first()
     document = generate_document(
         organization=order.organization,
         doc_type=DocType.PURCHASE_ORDER,
@@ -743,12 +745,34 @@ def send_order(*, order: PurchaseOrder, user: User | None, method: str = "EMAIL"
             "buyer_name": order.organization.name,
             "buyer_phone": order.organization.phone,
             "seller_name": order.supplier.name,
-            "seller_contact": getattr(order.supplier, "contact_person", ""),
-            "seller_address": getattr(order.supplier, "address", ""),
-            "seller_phone": getattr(order.supplier, "phone", ""),
-            "seller_email": getattr(order.supplier, "email", ""),
+            # Address and contact are on the profile, not on Supplier — which
+            # carries only a name, TIN, phone and email. Reading them off the
+            # supplier meant the vendor block on every purchase order was
+            # missing the address to ship from and the person to ring.
+            "seller_contact": profile.contact_person if profile else "",
+            "seller_address": ", ".join(
+                part for part in ((profile.address, profile.city) if profile else ()) if part
+            ),
+            "seller_phone": (
+                (profile.contact_phone if profile and profile.contact_phone else "")
+                or order.supplier.phone
+            ),
+            "seller_email": (
+                (profile.contact_email if profile and profile.contact_email else "")
+                or order.supplier.email
+            ),
             "deliver_to_name": order.deliver_to.name if order.deliver_to is not None else "",
             "deliver_to_address": order.delivery_address,
+            "buyer_contact": order.organization.contact_person,
+            "seller_tin": getattr(order.supplier, "tin", ""),
+            # How the goods travel. Distinct from the incoterm, which says who
+            # bears the risk — a supplier reading "DAP" still does not know
+            # whether to book a courier or wait for our truck.
+            "ship_via": order.ship_via,
+            "requisition_number": (
+                order.requisition.requisition_number if order.requisition else ""
+            ),
+            "supplier_reference": order.supplier_reference,
             "po_number": order.po_number,
             "order_date": order.order_date,
             "expected_delivery": order.expected_delivery,
@@ -759,7 +783,14 @@ def send_order(*, order: PurchaseOrder, user: User | None, method: str = "EMAIL"
             "notes": order.notes,
             "lines": [
                 {
+                    # A code the supplier can quote back. Their own catalogue
+                    # number if we hold one, otherwise ours — an order line a
+                    # supplier cannot reference is one they will ring about.
+                    "item_number": (
+                        ln.product.rra_item_code or ln.product.gtin or f"P{ln.product_id}"
+                    ),
                     "name": f"{ln.product.generic_name} {ln.product.strength}".strip(),
+                    "notes": ln.notes,
                     "qty": normalise(ln.quantity_ordered),
                     # The unit the quantity is counted in, and what it comes to
                     # on the shelf. A supplier reading "10" needs to know it
@@ -772,17 +803,23 @@ def send_order(*, order: PurchaseOrder, user: User | None, method: str = "EMAIL"
                         if ln.product.base_unit
                         else "units"
                     ),
-                    "price": ln.unit_price,
-                    "total": ln.line_total,
+                    "price": invoicing.money(ln.unit_price),
+                    "total": invoicing.money(ln.line_total),
                 }
                 for ln in order.lines.select_related("product", "unit").all()
             ],
-            "subtotal": order.subtotal,
-            "tax_total": order.tax_total,
-            "freight_amount": order.freight_amount,
-            "other_charges": order.other_charges,
-            "discount_amount": order.discount_amount,
-            "total": order.total_amount,
+            # Formatted here, not in the template. A supplier's copy showing
+            # "45000.0" where it should read "45,000.00" is the sort of thing
+            # that gets a purchase order queried rather than filled.
+            "subtotal": invoicing.money(order.subtotal),
+            "tax_total": invoicing.money(order.tax_total),
+            "freight_amount": invoicing.money(order.freight_amount),
+            "other_charges": invoicing.money(order.other_charges),
+            "discount_amount": invoicing.money(order.discount_amount),
+            "total": invoicing.money(order.total_amount),
+            "amount_in_words": invoicing.in_words(
+                order.total_amount, currency=order.currency or "RWF"
+            ),
         },
         reference_type="purchase_order",
         reference_id=str(order.pk),

@@ -59,22 +59,42 @@ def generate_po_document(*, order: StockOrder, user: User | None) -> Document:
             "unit_label": i.unit_label,
             "base_quantity": i.quantity_base or i.quantity_ordered,
             "base_unit": _base_unit_label(i.product),
-            "price": i.price_per_ordered_unit,
-            "total": i.line_total,
+            "price": invoicing.money(i.price_per_ordered_unit),
+            "total": invoicing.money(i.line_total),
         }
         for i in order.items.select_related("product", "unit").all()
     ]
+    # Every figure the form has a row for, formatted, and never a bare float.
+    # This context used to carry `total` alone — so a B2B order printed with
+    # Subtotal, Tax, Shipping and Other blank and a total reading "7500.0".
+    # The template is shared with procurement's purchase order; a shared
+    # template needs the whole context, not the part one caller happens to use.
+    buyer = invoicing.party(order.retail)
+    seller = invoicing.party(order.depot)
+    net = Decimal(str(order.total_amount))
     return generate_document(
         organization=order.retail,
         doc_type=DocType.PURCHASE_ORDER,
         context={
-            "buyer_name": order.retail.name,
-            "seller_name": order.depot.name,
+            "buyer_name": buyer["name"],
+            "buyer_phone": buyer.get("phone", ""),
+            "deliver_to_address": buyer.get("address", ""),
+            "seller_name": seller["name"],
+            "seller_address": seller.get("address", ""),
+            "seller_phone": seller.get("phone", ""),
+            "seller_tin": seller.get("tin", ""),
             "lines": lines,
-            "total": order.total_amount,
+            "subtotal": invoicing.money(net),
+            "tax_total": invoicing.money(0),
+            "freight_amount": invoicing.money(0),
+            "other_charges": invoicing.money(0),
+            "discount_amount": invoicing.money(0),
+            "total": invoicing.money(net),
+            "amount_in_words": invoicing.in_words(net, currency=order.retail.currency or "RWF"),
             "po_number": order.order_number,
             "order_date": order.created_at,
             "expected_delivery": order.expected_delivery,
+            "payment_terms_days": None,
             "notes": order.notes,
             "currency": order.retail.currency,
         },
@@ -238,9 +258,14 @@ def _generate_grn_and_invoice(grn: GoodsReceivedNote, user: User | None) -> None
             invoice_date=order.created_at,
             due_date=order.payment_due_date,
             payment_terms=(
-                f"Due {order.payment_due_date:%d %b %Y}."
-                if order.payment_due_date
-                else "Due on delivery."
+                f"{order.payment_due_date:%d %b %Y}" if order.payment_due_date else "On delivery"
+            ),
+            # Balance due, not just the total. A customer paying in stages
+            # needs the invoice to say what is still owed on it, and a single
+            # "total" answers a different question.
+            amount_paid=invoicing.money(order.amount_paid),
+            balance=invoicing.money(
+                Decimal(str(net_total + vat_total)) - Decimal(str(order.amount_paid))
             ),
             notes=order.notes,
         ),

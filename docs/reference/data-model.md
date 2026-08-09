@@ -3663,6 +3663,7 @@ Table `procurement_purchaseorder`.
 | `currency` | Char(3) |  |
 | `exchange_rate` | Decimal(12,6) | Units of RWF per 1 unit of the order currency. |
 | `incoterm` | Char(3) | one of: EXW, FCA, FAS, FOB, CFR, CIF … |
+| `ship_via` | Char(120) | Carrier or mode — e.g. DHL, own vehicle, Volcano bus. |
 | `payment_terms_days` | PositiveInteger |  |
 | `payment_terms_note` | Char(255) |  |
 | `freight_amount` | Decimal(14,2) |  |
