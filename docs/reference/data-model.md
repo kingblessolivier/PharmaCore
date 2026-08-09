@@ -144,6 +144,11 @@ Table `catalog_product`.
 | `leaflet_url` | Char(200) |  |
 | `min_temp_c` | Decimal(4,1) | optional |
 | `max_temp_c` | Decimal(4,1) | optional |
+| `hazard_class` | Char(20) | one of: NONE, CYTOTOXIC, FLAMMABLE, CORROSIVE, BIOHAZARD · Handling hazard — drives segregation, PPE and who may pick it. |
+| `light_sensitive` | Boolean | Degrades in daylight. Keep in its carton; do not display on an open shelf. |
+| `humidity_sensitive` | Boolean | Absorbs moisture. Keep the desiccant; do not break the blister early. |
+| `dose_unit` | Char(20) | one of: ML, MG, DROP, PUFF, SACHET, UNIT · The unit a prescription is written in, when it differs from the stock unit. |
+| `doses_per_base_unit` | Decimal(12,3) | optional · How many dose units one base stock unit holds — e.g. 100 mL in one bottle. |
 | `ddd` | Char(50) |  |
 | `is_essential` | Boolean |  |
 | `rxnorm_id` | Char(50) |  |
@@ -298,6 +303,8 @@ Table `catalog_productunit`.
 | `is_sale_default` | Boolean |  |
 | `barcode` | Char(64) |  |
 | `price` | Decimal(14,2) | optional |
+| `gross_weight_g` | Decimal(12,2) | optional · Weight of one of this unit, packaging included, in grams. |
+| `volume_ml` | Decimal(12,2) | optional · Space one of this unit occupies, in millilitres (1 L = 1,000). |
 
 **Invariants**
 
@@ -2662,6 +2669,7 @@ Table `iam_organization`.
 | `plan` | Char(20) | one of: BASIC, STANDARD, PREMIUM, ENTERPRISE |
 | `brand_color` | Char(9) |  |
 | `feature_flags` | JSON |  |
+| `require_coa_before_release` | Boolean | Refuse to release a lot from quarantine unless its Certificate of Analysis is on file and verified. |
 | `created_at` | DateTime |  |
 | `updated_at` | DateTime |  |
 

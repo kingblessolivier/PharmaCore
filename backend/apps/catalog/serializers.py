@@ -7,6 +7,7 @@ from typing import Any
 
 from rest_framework import serializers
 
+from apps.catalog.handling import requirements_for
 from apps.catalog.models import (
     ActiveIngredient,
     FormularyItem,
@@ -73,6 +74,24 @@ class ManufacturerSerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     manufacturer_name = serializers.SerializerMethodField()
+    handling = serializers.SerializerMethodField()
+
+    def get_handling(self, obj: Product) -> list[dict[str, object]]:
+        """Everything that changes how this is stored, picked or packed.
+
+        Derived rather than stored, and served with the product so a screen
+        never has to assemble the wording itself — that is how two screens end
+        up disagreeing about what a cytotoxic needs.
+        """
+        return [
+            {
+                "code": item.code,
+                "label": item.label,
+                "detail": item.detail,
+                "critical": item.critical,
+            }
+            for item in requirements_for(obj)
+        ]
 
     class Meta:
         model = Product
@@ -101,6 +120,12 @@ class ProductSerializer(serializers.ModelSerializer):
             "rra_item_code",
             "image_url",
             "leaflet_url",
+            "hazard_class",
+            "light_sensitive",
+            "humidity_sensitive",
+            "dose_unit",
+            "doses_per_base_unit",
+            "handling",
             "min_temp_c",
             "max_temp_c",
             "ddd",
@@ -225,6 +250,10 @@ class ProductUnitSerializer(serializers.ModelSerializer):
             "is_sale_default",
             "barcode",
             "price",
+            # What one of these physically is, so freight and cold-box capacity
+            # can be worked out before the goods arrive.
+            "gross_weight_g",
+            "volume_ml",
         ]
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:

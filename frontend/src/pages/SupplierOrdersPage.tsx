@@ -799,6 +799,41 @@ export function SupplierOrdersPage() {
               ),
           },
           {
+            /* How big this order physically is. Freight is billed on whichever
+               of weight and volume is larger, and a cold box holds a fixed
+               number of litres — so this is the number that decides what the
+               shipment costs and whether it fits. An order with unmeasured
+               pack sizes says so rather than reporting a total that is only a
+               floor. */
+            key: "shipment",
+            header: "Size",
+            defaultHidden: true,
+            sortable: false,
+            value: (o) => o.shipment?.chargeable_weight_kg ?? "",
+            render: (o) => {
+              const s = o.shipment;
+              if (!s || Number(s.chargeable_weight_kg) === 0) {
+                return <span className="text-xs text-ink-400">—</span>;
+              }
+              return (
+                <span
+                  className="text-xs"
+                  title={
+                    s.is_complete
+                      ? `${s.gross_weight_kg} kg over ${s.volume_litres} L`
+                      : `Not measured: ${s.unmeasured.join("; ")}`
+                  }
+                >
+                  <span className="tabular-nums">{s.chargeable_weight_kg} kg</span>
+                  {s.cold_boxes > 0 && (
+                    <span className="text-ink-500"> · {s.cold_boxes} cold box(es)</span>
+                  )}
+                  {!s.is_complete && <span className="text-warning-700"> · at least</span>}
+                </span>
+              );
+            },
+          },
+          {
             key: "flags",
             header: "",
             fixed: true,

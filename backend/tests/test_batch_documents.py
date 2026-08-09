@@ -168,3 +168,85 @@ def test_a_lot_in_another_organization_is_not_visible(batch):
     rows = api.get(URL).json()
     results = rows["results"] if isinstance(rows, dict) else rows
     assert results == []
+
+
+class TestReleasePolicy:
+    """Whether a missing CoA blocks a release, or is merely recorded.
+
+    This was a hardcoded "record it" with a comment saying the strict reading
+    was one line away and the choice belonged to the pharmacy. It now *is* the
+    pharmacy's choice — which is the only way that comment could stop being
+    true.
+    """
+
+    def _check(self, batch, org):
+        from apps.inventory.models import QualityCheck
+
+        inspector = User.objects.create_user(
+            username=f"inspector-{batch.pk}",
+            password="pw",  # noqa: S106 - test fixture
+            organization=org,
+        )
+        return QualityCheck.objects.create(
+            batch=batch,
+            inspector=inspector,
+            inspection_date=timezone.localdate(),
+            status=QualityCheck.Status.PENDING_REVIEW,
+        )
+
+    def test_by_default_a_missing_coa_is_recorded_not_refused(self, batch, org, keeper):
+        """The default has to let a pharmacy start using the system.
+
+        Turning enforcement on before any CoAs are loaded would stop it
+        releasing stock at all, on day one.
+        """
+        from apps.inventory import quality
+
+        assert org.require_coa_before_release is False
+        outcome = quality.release(check=self._check(batch, org), user=keeper)
+        assert outcome.batch.status == InventoryBatch.Status.ACTIVE
+        assert "Released without: Certificate of Analysis" in outcome.check.inspection_notes
+
+    def test_with_the_rule_on_the_release_is_refused(self, batch, org, keeper):
+        from apps.inventory import quality
+
+        org.require_coa_before_release = True
+        org.save(update_fields=["require_coa_before_release"])
+
+        with pytest.raises(quality.QualityError, match="Certificate of Analysis"):
+            quality.release(check=self._check(batch, org), user=keeper)
+
+        batch.refresh_from_db()
+        assert batch.status == InventoryBatch.Status.QUARANTINE, "the lot must stay held"
+
+    def test_with_the_rule_on_a_verified_coa_lets_it_through(self, batch, org, keeper):
+        from apps.inventory import quality
+
+        org.require_coa_before_release = True
+        org.save(update_fields=["require_coa_before_release"])
+        BatchDocument.objects.create(
+            batch=batch,
+            doc_type=BatchDocument.DocType.CERTIFICATE_OF_ANALYSIS,
+            document_url="/media/uploads/product/coa.png",
+            is_verified=True,
+            verified_by=keeper,
+            verified_at=timezone.now(),
+        )
+        outcome = quality.release(check=self._check(batch, org), user=keeper)
+        assert outcome.batch.status == InventoryBatch.Status.ACTIVE
+
+    def test_an_unverified_coa_does_not_satisfy_the_rule(self, batch, org, keeper):
+        # Attaching a file is not the same as somebody checking it is the right
+        # file for this lot — the distinction the whole document model rests on.
+        from apps.inventory import quality
+
+        org.require_coa_before_release = True
+        org.save(update_fields=["require_coa_before_release"])
+        BatchDocument.objects.create(
+            batch=batch,
+            doc_type=BatchDocument.DocType.CERTIFICATE_OF_ANALYSIS,
+            document_url="/media/uploads/product/coa.png",
+            is_verified=False,
+        )
+        with pytest.raises(quality.QualityError):
+            quality.release(check=self._check(batch, org), user=keeper)

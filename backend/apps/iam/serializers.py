@@ -203,6 +203,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "plan",
             "brand_color",
             "feature_flags",
+            "require_coa_before_release",
             "created_at",
             "updated_at",
         ]

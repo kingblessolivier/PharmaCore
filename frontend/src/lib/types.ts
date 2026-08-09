@@ -65,6 +65,8 @@ export interface Organization {
   latitude: string | null;
   longitude: string | null;
   is_active: boolean;
+  /** Whether quarantine release refuses without a verified CoA, or records the gap. */
+  require_coa_before_release: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -311,6 +313,14 @@ export interface MentionableUser {
 
 export type TaxClass = "A" | "B" | "C" | "D";
 
+export interface HandlingRequirement {
+  code: string;
+  label: string;
+  detail: string;
+  /** Ignoring this ruins the medicine or hurts the handler. */
+  critical: boolean;
+}
+
 export interface Product {
   id: number;
   /** How finely one base unit may be split when dispensing: 1 whole, 2 halves,
@@ -336,6 +346,14 @@ export interface Product {
   is_controlled_substance: boolean;
   controlled_schedule: string;
   storage_condition: string;
+  hazard_class: string;
+  light_sensitive: boolean;
+  humidity_sensitive: boolean;
+  /** The unit a prescription is written in, when it differs from the stock unit. */
+  dose_unit: string;
+  doses_per_base_unit: string | null;
+  /** Derived server-side so no two screens word "cytotoxic" differently. */
+  handling: HandlingRequirement[];
   reorder_level: number;
   reorder_quantity: number;
   rra_item_code: string;

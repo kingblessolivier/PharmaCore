@@ -541,6 +541,9 @@ class PurchaseOrderSerializer(_NestedLinesMixin, QuantityAwareModelSerializer[Pu
     #: screen could reach it — so the one artefact the supplier actually
     #: receives was the one thing the buyer could not open again.
     document = serializers.SerializerMethodField()
+    #: How big this order physically is — the question a freight forwarder asks
+    #: and procurement could not answer until the goods were on a loading bay.
+    shipment = serializers.SerializerMethodField()
     organization_name = serializers.CharField(source="organization.name", read_only=True)
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
     deliver_to_name = serializers.CharField(source="deliver_to.name", read_only=True, default=None)
@@ -581,6 +584,26 @@ class PurchaseOrderSerializer(_NestedLinesMixin, QuantityAwareModelSerializer[Pu
             "download_url": record.file.url if record.file else "",
         }
 
+    def get_shipment(self, obj: PurchaseOrder) -> dict[str, Any]:
+        """Weight, volume and what an airline would actually bill for.
+
+        Reported alongside `unmeasured`, because a line whose pack size has no
+        weight recorded contributes nothing to the total and would otherwise
+        make a half-measured order look light. A freight quote built on a
+        silent undercount is worse than no quote.
+        """
+        from apps.catalog.handling import cold_boxes_needed, measure
+
+        result = measure((line.unit, line.quantity_ordered) for line in obj.lines.all())
+        return {
+            "gross_weight_kg": str(result.gross_weight_kg),
+            "volume_litres": str(result.volume_litres),
+            "chargeable_weight_kg": str(result.chargeable_weight_kg),
+            "cold_boxes": cold_boxes_needed(result),
+            "is_complete": result.is_complete,
+            "unmeasured": result.unmeasured,
+        }
+
     class Meta:
         model = PurchaseOrder
         fields = [
@@ -590,6 +613,7 @@ class PurchaseOrderSerializer(_NestedLinesMixin, QuantityAwareModelSerializer[Pu
             "organization_name",
             "supplier",
             "document",
+            "shipment",
             "supplier_name",
             "status",
             "status_display",

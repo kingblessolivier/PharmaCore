@@ -27,6 +27,7 @@ interface OrgFields {
   latitude: string;
   longitude: string;
   is_active: boolean;
+  require_coa_before_release: boolean;
 }
 
 function initial(org?: Organization): OrgFields {
@@ -51,6 +52,7 @@ function initial(org?: Organization): OrgFields {
     latitude: org?.latitude ?? "",
     longitude: org?.longitude ?? "",
     is_active: org?.is_active ?? true,
+    require_coa_before_release: org?.require_coa_before_release ?? false,
   };
 }
 
@@ -228,6 +230,26 @@ export function OrganizationForm({
           onChange={(e) => set("longitude", e.target.value)}
         />
       </div>
+
+      <SectionLabel>Quality control</SectionLabel>
+      {/* Whether a missing Certificate of Analysis *blocks* a release is the
+          pharmacy's call, not ours. Turning it on before any CoAs are loaded
+          would stop this branch releasing stock at all, on its first day — so
+          it starts off, recording the gap on every release, and is switched on
+          once the paperwork has caught up. */}
+      <SelectField
+        label="Releasing a lot without a verified Certificate of Analysis"
+        value={f.require_coa_before_release ? "1" : "0"}
+        onChange={(e) => set("require_coa_before_release", e.target.value === "1")}
+      >
+        <option value="0">Allowed — the gap is recorded on the release</option>
+        <option value="1">Refused — the lot stays in quarantine until the CoA is on file</option>
+      </SelectField>
+      <p className="-mt-1 text-xs text-ink-500">
+        {f.require_coa_before_release
+          ? "Stricter, and what GDP expects. Load your CoAs before turning this on, or releases will start failing."
+          : "Every release without paperwork is still recorded and auditable — it is not silent."}
+      </p>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex justify-end gap-2">

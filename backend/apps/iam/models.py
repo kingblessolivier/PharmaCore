@@ -158,6 +158,23 @@ class Organization(models.Model):
     # Per-tenant feature toggles, e.g. {"online_store": true, "insurance": false}.
     feature_flags = models.JSONField(default=dict, blank=True)
 
+    #: Whether quarantine release *refuses* without a verified Certificate of
+    #: Analysis, or releases and records the gap.
+    #:
+    #: Refusing is the stricter reading of GDP and the right end state. It is
+    #: not the right default: switching it on before a pharmacy has loaded any
+    #: CoAs would stop it releasing stock at all, on the day it starts using
+    #: the system. So the gap is recorded from the outset — visible and
+    #: auditable — and the pharmacy turns enforcement on when its paperwork has
+    #: caught up. Which is a decision for whoever runs it, not for us.
+    require_coa_before_release = models.BooleanField(
+        default=False,
+        help_text=(
+            "Refuse to release a lot from quarantine unless its Certificate of "
+            "Analysis is on file and verified."
+        ),
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

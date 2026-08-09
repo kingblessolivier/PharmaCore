@@ -258,6 +258,8 @@ function AddLevel({
   const [factor, setFactor] = useState(hasBase ? "100" : "1");
   const [barcode, setBarcode] = useState("");
   const [price, setPrice] = useState("");
+  const [weight, setWeight] = useState("");
+  const [volume, setVolume] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const save = useMutation({
@@ -273,6 +275,11 @@ function AddLevel({
           is_base: !hasBase,
           barcode,
           price: price || null,
+          // Blank is "not measured", which is a null. A zero would claim the
+          // carton weighs nothing, and a freight total built on that is worse
+          // than no total at all.
+          gross_weight_g: weight || null,
+          volume_ml: volume || null,
         }),
       }),
     onSuccess: onSaved,
@@ -323,6 +330,25 @@ function AddLevel({
           onChange={(e) => setPrice(e.target.value)}
           placeholder="Leave blank to scale from the base price"
         />
+        {/* Recorded per level because a carton is not twenty times the volume
+            of the box inside it — packaging and voids are most of the
+            difference. Freight is billed on whichever of the two is larger. */}
+        <div className="grid grid-cols-2 gap-3">
+          <TextField
+            label="Weight of one (g)"
+            type="number"
+            value={weight}
+            onChange={(e) => setWeight(e.target.value)}
+            placeholder="Packaging included"
+          />
+          <TextField
+            label="Space it takes (mL)"
+            type="number"
+            value={volume}
+            onChange={(e) => setVolume(e.target.value)}
+            placeholder="1 litre = 1000"
+          />
+        </div>
         {error && <p className="text-sm text-danger-700">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={onClose}>
