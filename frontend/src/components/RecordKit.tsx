@@ -53,25 +53,25 @@ export function Drawer({
         role="dialog"
         aria-label={title}
       >
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-chrome-500 bg-gradient-to-b from-chrome-200 to-chrome-400 px-3 py-1.5 shadow-[inset_0_1px_0_#fff]">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-chrome-500 px-5 py-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="truncate text-[13px] font-semibold text-chrome-900">{title}</h2>
+              <h2 className="truncate text-[16px] font-semibold text-ink-900">{title}</h2>
               {badge}
             </div>
-            {subtitle && <div className="text-[11px] text-ink-600">{subtitle}</div>}
+            {subtitle && <div className="mt-0.5 text-[13px] text-ink-500">{subtitle}</div>}
           </div>
           <button
             onClick={onClose}
-            className="rounded-[2px] border border-transparent p-1 text-chrome-900 hover:border-chrome-600 hover:bg-chrome-100"
+            className="rounded-md p-1.5 text-ink-500 hover:bg-chrome-200 hover:text-ink-900"
             aria-label="Close"
           >
-            <X size={14} />
+            <X size={16} strokeWidth={1.8} />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto bg-chrome-50 px-3 py-2.5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
         {footer && (
-          <div className="flex shrink-0 items-center justify-end gap-1.5 border-t border-chrome-500 bg-gradient-to-b from-chrome-100 to-chrome-300 px-3 py-1.5">
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-chrome-500 bg-chrome-100 px-5 py-3">
             {footer}
           </div>
         )}
@@ -96,7 +96,7 @@ export function Section({
     <section className="mb-5">
       <div className="mb-2 flex items-center justify-between">
         <div>
-          <h3 className="text-[12px] font-semibold text-chrome-900">
+          <h3 className="text-[14px] font-semibold text-ink-900">
             {title}
           </h3>
           {hint && <p className="text-xs text-ink-500">{hint}</p>}
@@ -385,7 +385,7 @@ export function LineEditor<T>({
     <div className="rounded-lg border border-line">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[640px] text-sm">
-          <thead className="border-b border-chrome-500 bg-gradient-to-b from-chrome-100 to-chrome-300 text-left text-[11px] font-semibold text-chrome-900">
+          <thead className="border-b border-chrome-500 bg-chrome-100 text-left text-[12px] font-semibold text-ink-600">
             <tr>
               {columns.map((c) => (
                 <th

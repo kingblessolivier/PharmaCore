@@ -753,7 +753,7 @@ export function AppShell() {
   return (
     <div className="flex h-screen flex-col overflow-hidden text-ink-900">
       <ViewAsBanner />
-      <header className="z-40 flex h-11 shrink-0 items-center gap-2 border-b border-chrome-600 bg-gradient-to-b from-chrome-100 to-chrome-300 px-2 shadow-[inset_0_1px_0_#fff]">
+      <header className="z-40 flex h-14 shrink-0 items-center gap-3 border-b border-chrome-500 bg-surface-0 px-4">
         <button
           onClick={toggleRail}
           title={railOnly ? "Expand the menu" : "Collapse the menu"}
@@ -812,7 +812,7 @@ export function AppShell() {
 
       <div className="flex min-h-0 flex-1">
         <nav
-          className={`${railOnly ? "w-12" : "w-52"} shrink-0 overflow-y-auto overflow-x-hidden border-r border-chrome-600 bg-chrome-200 p-1 transition-[width] duration-150`}
+          className={`${railOnly ? "w-[68px]" : "w-[248px]"} shrink-0 overflow-y-auto overflow-x-hidden border-r border-chrome-500 bg-chrome-100 p-2 transition-[width] duration-150`}
         >
           {activeApp && (
             <div className="mb-2 border-b border-line pb-2">
@@ -857,14 +857,14 @@ export function AppShell() {
                       /* 26px rows, not 38. A module with fourteen screens
                          fits without scrolling the menu, which is the whole
                          reason a dense ERP nav exists. */
-                      `mb-px flex items-center gap-2 rounded-[2px] px-2 py-1 text-[12px] ${
+                      `mb-0.5 flex h-[38px] items-center gap-2.5 rounded-md border-l-2 px-2.5 text-[13px] ${
                         isActive
-                          ? "border border-chrome-500 bg-surface-0 font-semibold text-chrome-900"
-                          : "border border-transparent text-ink-700 hover:bg-chrome-200"
+                          ? "border-l-brand-600 bg-brand-50 font-medium text-brand-700"
+                          : "border-l-transparent text-ink-700 hover:bg-chrome-200"
                       }`
                     }
                   >
-                    <Icon size={14} className="shrink-0" />
+                    <Icon size={18} strokeWidth={1.8} className="shrink-0" />
                     {!railOnly && label}
                   </NavLink>
                 ))}
@@ -888,7 +888,7 @@ export function AppShell() {
           )}
         </nav>
 
-        <main className="min-w-0 flex-1 overflow-y-auto bg-chrome-50 p-2.5">
+        <main className="min-w-0 flex-1 overflow-y-auto bg-page p-6">
           <Outlet />
         </main>
       </div>
@@ -899,7 +899,7 @@ export function AppShell() {
           window, permanently — not in a toast that fades. Somebody four hours
           into a shift, working two branches, needs to be able to answer "which
           pharmacy am I posting this to" without leaving the screen. */}
-      <footer className="flex h-[22px] shrink-0 items-center gap-3 border-t border-chrome-600 bg-gradient-to-b from-chrome-100 to-chrome-300 px-2 text-[11px] text-ink-700">
+      <footer className="flex h-8 shrink-0 items-center gap-4 border-t border-chrome-500 bg-surface-0 px-4 text-[12px] text-ink-600">
         <StatusOrg />
         <span className="flex items-center gap-1">
           <Users size={12} className="text-ink-500" aria-hidden />

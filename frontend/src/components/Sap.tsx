@@ -1,4 +1,19 @@
 /* -------------------------------------------------------------------------- */
+/* The transaction chrome: toolbar, header, sections, tabs, status bar.        */
+/*                                                                            */
+/* These are the parts a document screen is assembled from — the command       */
+/* toolbar above a purchase order, the section that groups eight fields, the   */
+/* status line that says what just happened. The *structure* is the classic    */
+/* enterprise transaction pattern, because a forty-field pharmaceutical        */
+/* document genuinely needs it. The *skin* is modern enterprise: flat          */
+/* surfaces, hairline borders, 8–12px radii, teal reserved for the one thing   */
+/* that matters on the screen.                                                 */
+/*                                                                            */
+/* An earlier version of this file was skeuomorphic — blue-grey gradients,     */
+/* bevels, 2px corners, 24px rows. It read as software from 2005. Structure    */
+/* and skin are separable, and only the skin was wrong.                        */
+/* -------------------------------------------------------------------------- */
+
 /* The window the application is made of.                                      */
 /*                                                                            */
 /* This is a classic enterprise transaction UI — the pattern SAP GUI, Oracle   */
@@ -28,7 +43,7 @@ import { Link } from "react-router-dom";
 /** The outer window: one bevelled plane the whole transaction sits on. */
 export function SapWindow({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden border border-chrome-600 bg-chrome-100 shadow-[inset_0_1px_0_#fff]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden border border-chrome-500 bg-surface-0">
       {children}
     </div>
   );
@@ -44,7 +59,7 @@ export function SapWindow({ children }: { children: ReactNode }) {
  */
 export function SapToolbar({ children }: { children: ReactNode }) {
   return (
-    <div className="flex h-[30px] shrink-0 items-center gap-px border-b border-chrome-600 bg-gradient-to-b from-chrome-100 to-chrome-300 px-1">
+    <div className="flex h-11 shrink-0 items-center gap-1 border-b border-chrome-500 bg-surface-0 px-3">
       {children}
     </div>
   );
@@ -62,7 +77,7 @@ export function SapToolbar({ children }: { children: ReactNode }) {
 export type ToolTone = "neutral" | "go" | "stop" | "doc" | "warn";
 
 const TOOL_TONE: Record<ToolTone, string> = {
-  neutral: "text-chrome-900",
+  neutral: "text-ink-600",
   go: "text-success-700",
   stop: "text-danger-600",
   doc: "text-info-600",
@@ -89,14 +104,14 @@ export function SapTool({
   to?: string;
 }) {
   const className =
-    `inline-flex h-[25px] w-[26px] items-center justify-center rounded-[2px] border border-transparent ${TOOL_TONE[tone]} ` +
-    "hover:border-chrome-600 hover:bg-gradient-to-b hover:from-surface-0 hover:to-chrome-200 " +
-    "active:bg-chrome-400 active:shadow-[inset_1px_1px_2px_#6b8298] " +
-    "disabled:opacity-40 disabled:hover:border-transparent disabled:hover:bg-transparent";
+    `inline-flex h-8 w-8 items-center justify-center rounded-md ${TOOL_TONE[tone]} ` +
+    "hover:bg-chrome-200 " +
+    
+    "disabled:opacity-40 disabled:hover:bg-transparent";
   if (to) {
     return (
       <Link to={to} className={className} title={label} aria-label={label}>
-        <Icon size={15} />
+        <Icon size={16} strokeWidth={1.8} />
       </Link>
     );
   }
@@ -109,14 +124,14 @@ export function SapTool({
       title={label}
       aria-label={label}
     >
-      <Icon size={15} />
+      <Icon size={16} strokeWidth={1.8} />
     </button>
   );
 }
 
 /** A hairline rule between groups of tools, so a toolbar reads as clusters. */
 export function SapToolSeparator() {
-  return <span className="mx-1 h-[18px] w-px bg-chrome-500" aria-hidden />;
+  return <span className="mx-1.5 h-5 w-px bg-chrome-500" aria-hidden />;
 }
 
 /**
@@ -138,9 +153,9 @@ export function SapHeader({
   facts?: { label: string; value: ReactNode; emphasis?: boolean }[];
 }) {
   return (
-    <div className="shrink-0 border-b border-chrome-500 bg-gradient-to-b from-chrome-200 to-chrome-400 px-3 py-1.5">
+    <div className="shrink-0 border-b border-chrome-500 bg-surface-0 px-5 py-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <h1 className="text-[13px] font-semibold text-chrome-900">{title}</h1>
+        <h1 className="text-[20px] font-semibold tracking-tight text-ink-900">{title}</h1>
         {subtitle && <span className="text-[11px] text-ink-600">{subtitle}</span>}
         {status}
         {facts.length > 0 && (
@@ -185,9 +200,9 @@ export function SapSection({
   children: ReactNode;
 }) {
   return (
-    <section className="border border-chrome-500 bg-surface-0">
-      <header className="flex h-[25px] items-center gap-2 border-b border-chrome-500 bg-gradient-to-b from-chrome-200 to-chrome-400 px-2 shadow-[inset_0_1px_0_#fff]">
-        <h2 className="text-[12px] font-semibold text-chrome-900">{title}</h2>
+    <section className="rounded-lg border border-chrome-500 bg-surface-0">
+      <header className="flex items-center gap-2 border-b border-chrome-500 px-4 py-3">
+        <h2 className="text-[14px] font-semibold text-ink-900">{title}</h2>
         {hint && <span className="truncate text-[11px] text-ink-600">{hint}</span>}
         {actions && <div className="ml-auto flex items-center gap-1">{actions}</div>}
       </header>
@@ -210,7 +225,7 @@ export function SapField({
 }) {
   return (
     <label className="flex items-baseline gap-2 py-[3px]">
-      <span className="w-[38%] shrink-0 text-right text-[11px] text-ink-700">
+      <span className="w-[38%] shrink-0 text-right text-[12px] font-medium text-ink-700">
         {label}
         {required && <span className="text-danger-600"> *</span>}
       </span>
@@ -233,9 +248,8 @@ export function SapFields({ cols = 2, children }: { cols?: 1 | 2 | 3; children: 
 /* Inset, square-ish, 24px. The sunken well is what makes a field look like
    somewhere you type rather than somewhere you read. */
 const CONTROL =
-  "h-[24px] w-full rounded-[2px] border border-chrome-600 bg-surface-0 px-1.5 text-[12px] text-ink-900 " +
-  "shadow-[inset_1px_1px_2px_rgba(0,0,0,0.12)] outline-none " +
-  "focus:border-brand-600 focus:shadow-[inset_1px_1px_2px_rgba(0,0,0,0.12),0_0_0_1px_var(--brand-400)] " +
+  "h-9 w-full rounded-md border border-chrome-600 bg-surface-0 px-3 text-[13px] text-ink-900 " +
+  "outline-none focus:border-brand-600 focus:shadow-[0_0_0_3px_var(--brand-100)] " +
   "disabled:bg-surface-100 disabled:text-ink-500";
 
 export function SapInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
@@ -268,12 +282,12 @@ export function SapButton({
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "default" | "primary" }) {
   const base =
-    "inline-flex h-[25px] items-center gap-1.5 rounded-[2px] border px-2.5 text-[12px] font-medium " +
+    "inline-flex h-9 items-center gap-2 rounded-md border px-4 text-[13px] font-medium " +
     "disabled:opacity-50 disabled:shadow-none";
   const skin =
     variant === "primary"
-      ? "border-brand-700 bg-gradient-to-b from-brand-500 to-brand-700 text-white hover:from-brand-400 hover:to-brand-600 active:shadow-[inset_1px_1px_3px_rgba(0,0,0,0.3)]"
-      : "border-chrome-600 bg-gradient-to-b from-surface-0 to-chrome-300 text-chrome-900 hover:to-chrome-400 active:bg-chrome-400 active:shadow-[inset_1px_1px_3px_#6b8298]";
+      ? "border-brand-600 bg-brand-600 text-white hover:bg-brand-700"
+      : "border-chrome-600 bg-surface-0 text-ink-800 hover:bg-chrome-200";
   return (
     <button {...props} className={`${base} ${skin} ${props.className ?? ""}`}>
       {children}
@@ -296,7 +310,7 @@ export function SapTabs({
   return (
     <div
       role="tablist"
-      className="flex shrink-0 items-end gap-px border-b border-chrome-500 bg-gradient-to-b from-chrome-100 to-chrome-300 px-1 pt-1"
+      className="flex shrink-0 items-end gap-1 border-b border-chrome-500 bg-surface-0 px-3"
     >
       {tabs.map((tab) => {
         const selected = tab.id === active;
@@ -307,10 +321,10 @@ export function SapTabs({
             aria-selected={selected}
             onClick={() => onSelect(tab.id)}
             className={
-              "rounded-t-[2px] border border-b-0 px-3 py-1 text-[11.5px] " +
+              "-mb-px border-b-2 px-4 py-2.5 text-[13px] " +
               (selected
-                ? "border-chrome-500 bg-surface-0 font-semibold text-chrome-900"
-                : "border-chrome-500 bg-gradient-to-b from-chrome-100 to-chrome-300 text-ink-600 hover:to-chrome-200")
+                ? "border-brand-600 font-semibold text-brand-700"
+                : "border-transparent text-ink-600 hover:border-chrome-600 hover:text-ink-900")
             }
           >
             {tab.label}
@@ -351,7 +365,7 @@ export function SapStatusBar({
           ? "text-success-700"
           : "text-ink-700";
   return (
-    <div className="flex h-[22px] shrink-0 items-center gap-2 border-t border-chrome-500 bg-gradient-to-b from-chrome-100 to-chrome-300 px-2 text-[11px]">
+    <div className="flex h-9 shrink-0 items-center gap-3 border-t border-chrome-500 bg-chrome-100 px-4 text-[12px]">
       <span className={`truncate ${ink}`}>{message}</span>
       {right && <span className="ml-auto shrink-0 text-ink-600">{right}</span>}
     </div>
@@ -362,7 +376,7 @@ export function SapStatusBar({
 
 /** The scrolling middle. Only this scrolls; the chrome stays put. */
 export function SapWorkArea({ children }: { children: ReactNode }) {
-  return <div className="min-h-0 flex-1 overflow-auto bg-chrome-50 p-2">{children}</div>;
+  return <div className="min-h-0 flex-1 overflow-auto bg-page p-5">{children}</div>;
 }
 
 /**
@@ -386,8 +400,8 @@ export function SapLineArea({
 }) {
   return (
     <section className="flex min-h-0 flex-col border-t border-chrome-500 bg-surface-0">
-      <header className="flex h-[26px] shrink-0 items-center gap-2 border-b border-chrome-500 bg-gradient-to-b from-chrome-200 to-chrome-400 px-2">
-        <h2 className="text-[12px] font-semibold text-chrome-900">
+      <header className="flex shrink-0 items-center gap-2 border-b border-chrome-500 px-4 py-3">
+        <h2 className="text-[14px] font-semibold text-ink-900">
           {title}
           {count !== undefined && (
             <span className="ml-1 font-normal tabular-nums text-ink-600">({count})</span>
@@ -396,7 +410,7 @@ export function SapLineArea({
         {toolbar && <div className="ml-auto flex items-center gap-1">{toolbar}</div>}
       </header>
       {note && (
-        <p className="shrink-0 border-b border-chrome-300 bg-chrome-50 px-2 py-1 text-right text-[11px] text-ink-600">
+        <p className="shrink-0 border-b border-chrome-500 bg-chrome-100 px-4 py-2 text-right text-[12px] text-ink-600">
           {note}
         </p>
       )}

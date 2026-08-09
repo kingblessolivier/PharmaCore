@@ -60,7 +60,7 @@
      pure-white card on #f1f5f9 has a 1.03:1 edge — the card is technically
      white and reads as nothing at all. At #e6ebf2 the white is unmistakably
      white, which is the whole point of putting a document on a desk. */
-  --app-bg: #dee5ee;
+  --app-bg: #f6f8fb;
   /* Strong enough to draw the edge of a card against the page rather than
      dissolving into it. */
   --line-200: #d6dde7;
@@ -75,16 +75,15 @@
      They are chrome only. Nothing that carries meaning — a status, a total, a
      warning — is ever drawn in them, because a reader has to be able to tell
      the furniture from the data. */
-  --chrome-50: #f2f7fb;
-  --chrome-100: #eaf1f7;
-  --chrome-200: #dcebf7;
-  --chrome-300: #c8d9e7;
-  --chrome-400: #b7cee1;
-  --chrome-500: #9eb4c7;
-  --chrome-600: #8ca4b8;
-  --chrome-700: #6b8298;
-  /* Text on chrome. Dark enough on --chrome-200 for a 12px label: 9.4:1. */
-  --chrome-900: #1d3446;
+  --chrome-50: #ffffff;
+  --chrome-100: #f8fafc;
+  --chrome-200: #f1f5f9;
+  --chrome-300: #e2e8f0;
+  --chrome-400: #e2e8f0;
+  --chrome-500: #e2e8f0;
+  --chrome-600: #cbd5e1;
+  --chrome-700: #94a3b8;
+  --chrome-900: #0f172a;
 
   /* --- Status. Reserved: never reused as a chart series or a brand accent. */
   /* danger — money lost, stock expired, a regulation broken. */
@@ -125,14 +124,12 @@
   --info-700: #1d4ed8;
 
   /* --- Density. An ERP is read at arm's length for eight hours. --------- */
-  /* An ERP grid is read all day and has to show a whole document at
-     once. At 32px a laptop fitted fourteen lines; at 24px it fits
-     twenty, which is the difference between seeing an order and
-     scrolling one. */
-  --row-h: 24px;
-  --row-h-compact: 21px;
-  /* Controls come down with the rows they sit beside. */
-  --field-h: 26px;
+  /* Comfortable by default, compact for warehouse screens where the operator
+     wants the whole document at once. 24px was too tight to hit reliably with
+     a mouse; 48px is the readable default the spec asks for. */
+  --row-h: 48px;
+  --row-h-compact: 40px;
+  --field-h: 36px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -182,15 +179,15 @@
        theme so every gradient still runs the right way. Without them the
        window furniture stayed pale blue on a dark page, which is the one part
        of a dark theme nobody forgives. */
-    --chrome-50: #131b25;
-    --chrome-100: #1a2432;
-    --chrome-200: #223040;
-    --chrome-300: #2b3b4d;
-    --chrome-400: #34465a;
-    --chrome-500: #445a72;
-    --chrome-600: #536b85;
-    --chrome-700: #6b8298;
-    --chrome-900: #dbe4ef;
+    --chrome-50: #0f1720;
+    --chrome-100: #151e2a;
+    --chrome-200: #1a2432;
+    --chrome-300: #253141;
+    --chrome-400: #2c3a4c;
+    --chrome-500: #2c3a4c;
+    --chrome-600: #3f4c5e;
+    --chrome-700: #64748b;
+    --chrome-900: #e8edf4;
 
     --danger-50: #2a1416;
     --danger-200: #7f1d1d;
@@ -240,23 +237,20 @@
    a white fill that separates the field from the panel behind it, and cell
    borders on the line grids. Denser and crisper, not older.
 --------------------------------------------------------------------------- */
-/* A sunken well, not a flat box.
-   The inset shadow is what tells a reader at a glance that a control is
-   somewhere to type rather than somewhere to read — which on a screen holding
-   forty fields is the difference between finding the editable ones and
-   hunting. The radius is 2px: anything rounder reads as a marketing site. */
+/* Flat, bordered, with a focus ring. The spec's rule is "border > shadow":
+   an inset well reads as a 2005 desktop application, and on a light neutral
+   ground a 1px border against white is already enough to say "type here". */
 .field-control {
   height: var(--field-h);
   width: 100%;
   border: 1px solid var(--chrome-600);
-  border-radius: 2px;
+  border-radius: 8px;
   background: var(--surface-0);
   color: var(--ink-900);
-  padding: 0 6px;
-  font-size: 12px;
-  line-height: 17px;
+  padding: 0 10px;
+  font-size: 13px;
+  line-height: 20px;
   outline: none;
-  box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.12);
 }
 .field-control:hover:not(:disabled) {
   border-color: var(--chrome-700);
@@ -266,7 +260,7 @@
   /* A ring rather than a thicker border: a border that changes width on focus
      shifts every neighbouring control by a pixel. The inset is kept so the
      field does not appear to pop out of the page when it takes focus. */
-  box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 2px var(--brand-100);
+  box-shadow: 0 0 0 3px var(--brand-100);
 }
 .field-control:disabled {
   background: var(--surface-100);
@@ -281,44 +275,41 @@ select.field-control {
 }
 
 /* Line grids read as a grid: ruled both ways, with a shaded header. */
-/* The grid, in the classic dense-ERP idiom: every cell ruled, a bevelled
-   gradient header, and rows short enough that a whole document fits on one
-   screen. The ruling matters as much as the height — in a table of figures the
-   vertical line is what keeps the eye on one column across twenty rows. */
+/* The table, in the modern-enterprise idiom.
+   Horizontal rules only — a fully ruled grid reads as a spreadsheet, and the
+   vertical lines fight the eye far more than they guide it once rows are
+   48px apart. The header is a tint, not a bevel; the hover is what tracks a
+   row across, so banding is not needed as well. */
 .data-grid {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 13px;
 }
 .data-grid th,
 .data-grid td {
-  border: 1px solid var(--line-200);
-  padding: 2px 6px;
+  border-bottom: 1px solid var(--chrome-500);
+  padding: 0 12px;
   height: var(--row-h);
+  text-align: left;
 }
 .data-grid thead th {
-  background: linear-gradient(to bottom, var(--chrome-100), var(--chrome-300));
-  border-color: var(--chrome-500);
-  box-shadow: inset 0 1px 0 #ffffff;
+  background: var(--chrome-100);
+  border-bottom: 1px solid var(--chrome-600);
   font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 0.01em;
-  color: var(--chrome-900);
-  text-align: left;
-  text-transform: none;
-  height: 23px;
+  font-size: 12px;
+  color: var(--ink-600);
+  height: 40px;
+  white-space: nowrap;
 }
-/* Banding, not just hover. Twenty ruled rows of numbers are hard to track
-   across; alternating the ground is the oldest fix there is. */
-.data-grid tbody tr:nth-child(even) td {
-  background: var(--surface-50);
+.data-grid tbody tr:last-child td {
+  border-bottom: none;
 }
 .data-grid tbody tr:hover td {
-  background: var(--brand-50);
+  background: var(--chrome-200);
 }
 .data-grid tfoot td {
-  background: linear-gradient(to bottom, var(--chrome-100), var(--chrome-300));
-  border-color: var(--chrome-500);
+  background: var(--chrome-100);
+  border-top: 1px solid var(--chrome-600);
   font-weight: 600;
 }
 
