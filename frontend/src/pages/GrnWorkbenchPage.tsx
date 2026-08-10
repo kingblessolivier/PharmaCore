@@ -100,7 +100,7 @@ export function GrnWorkbenchPage() {
   const coldChainFailed = !grn.cold_chain_intact || !grn.packaging_intact;
 
   return (
-    <div className="flex h-[calc(100vh-5.5rem)] flex-col">
+    <div className="flex h-full flex-col">
       <div className="mb-2">
         <Link
           to="/procurement/receipts"
@@ -342,77 +342,83 @@ export function GrnWorkbenchPage() {
               </Fieldset>
             </WorkbenchPanel>
           </WorkbenchTabs>
-        </div>
 
-        <LineArea title="Batches received" count={lines.length}>
-          <table className="data-grid">
-            <thead>
-              <tr>
-                <th>Medicine</th>
-                <th>Batch</th>
-                <th>Expires</th>
-                <th className="text-right">Ordered</th>
-                <th className="text-right">Received</th>
-                <th className="text-right">Rejected</th>
-                <th className="text-right">Unit cost</th>
-                <th className="text-right">Line value</th>
-              </tr>
-            </thead>
-            <tbody>
-              {flagged.map(({ line, flags }) => (
-                <tr key={line.id ?? line.batch_number}>
-                  <td className="text-ink-900">{line.product_name}</td>
-                  <td className="font-mono text-micro text-ink-700">{line.batch_number}</td>
-                  <td
-                    className={flags.shortDated ? "font-semibold text-warning-700" : "text-ink-700"}
-                    title={flags.shortDated ? `Only ${daysUntil(line.expiry_date)} days left` : ""}
-                  >
-                    {shortDate(line.expiry_date)}
-                  </td>
-                  <td className="text-right tabular-nums text-ink-600">{line.quantity_expected}</td>
-                  <td
-                    className={`text-right tabular-nums ${
-                      flags.overDelivered || flags.underDelivered
-                        ? "font-semibold text-warning-700"
-                        : "text-ink-900"
-                    }`}
-                  >
-                    {line.quantity_received}
-                  </td>
-                  <td className="text-right tabular-nums text-danger-700">
-                    {line.quantity_rejected || ""}
-                  </td>
-                  <td className="text-right tabular-nums text-ink-700">
-                    {money(Number(line.unit_cost))}
-                  </td>
-                  <td className="text-right font-medium tabular-nums text-ink-900">
-                    {money(Number(line.line_value ?? 0))}
-                  </td>
-                </tr>
-              ))}
-              {lines.length === 0 && (
+          <LineArea title="Batches received" count={lines.length}>
+            <table className="data-grid">
+              <thead>
                 <tr>
-                  <td colSpan={8} className="py-6 text-center text-ink-500">
-                    Nothing booked against this receipt.
-                  </td>
+                  <th>Medicine</th>
+                  <th>Batch</th>
+                  <th>Expires</th>
+                  <th className="text-right">Ordered</th>
+                  <th className="text-right">Received</th>
+                  <th className="text-right">Rejected</th>
+                  <th className="text-right">Unit cost</th>
+                  <th className="text-right">Line value</th>
                 </tr>
+              </thead>
+              <tbody>
+                {flagged.map(({ line, flags }) => (
+                  <tr key={line.id ?? line.batch_number}>
+                    <td className="text-ink-900">{line.product_name}</td>
+                    <td className="font-mono text-micro text-ink-700">{line.batch_number}</td>
+                    <td
+                      className={
+                        flags.shortDated ? "font-semibold text-warning-700" : "text-ink-700"
+                      }
+                      title={
+                        flags.shortDated ? `Only ${daysUntil(line.expiry_date)} days left` : ""
+                      }
+                    >
+                      {shortDate(line.expiry_date)}
+                    </td>
+                    <td className="text-right tabular-nums text-ink-600">
+                      {line.quantity_expected}
+                    </td>
+                    <td
+                      className={`text-right tabular-nums ${
+                        flags.overDelivered || flags.underDelivered
+                          ? "font-semibold text-warning-700"
+                          : "text-ink-900"
+                      }`}
+                    >
+                      {line.quantity_received}
+                    </td>
+                    <td className="text-right tabular-nums text-danger-700">
+                      {line.quantity_rejected || ""}
+                    </td>
+                    <td className="text-right tabular-nums text-ink-700">
+                      {money(Number(line.unit_cost))}
+                    </td>
+                    <td className="text-right font-medium tabular-nums text-ink-900">
+                      {money(Number(line.line_value ?? 0))}
+                    </td>
+                  </tr>
+                ))}
+                {lines.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="py-6 text-center text-ink-500">
+                      Nothing booked against this receipt.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              {lines.length > 0 && (
+                <tfoot>
+                  <tr>
+                    <td colSpan={4}>{grn.total_received.toLocaleString()} units in</td>
+                    <td colSpan={3} className="text-right">
+                      Goods value
+                    </td>
+                    <td className="text-right text-base tabular-nums">
+                      {money(Number(grn.goods_value_base))}
+                    </td>
+                  </tr>
+                </tfoot>
               )}
-            </tbody>
-            {lines.length > 0 && (
-              <tfoot>
-                <tr>
-                  <td colSpan={4}>{grn.total_received.toLocaleString()} units in</td>
-                  <td colSpan={3} className="text-right">
-                    Goods value
-                  </td>
-                  <td className="text-right text-base tabular-nums">
-                    {money(Number(grn.goods_value_base))}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </LineArea>
+            </table>
+          </LineArea>
+        </div>
       </Workbench>
 
       <ErrorNote error={act.error} />

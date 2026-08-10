@@ -572,7 +572,7 @@ export function PosPage() {
   const change = Math.max(tendered - due, 0);
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] flex-col gap-3">
+    <div className="flex h-full flex-col gap-3">
       {/* Connection and queue state, always visible. A cashier must know the
           till is holding sales without having to go looking. */}
       <div className="flex flex-wrap items-center gap-3">

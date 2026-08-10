@@ -45,10 +45,7 @@ import { money, shortDate } from "../lib/format";
 import type { StockOrder } from "../lib/types";
 import { StatusChip } from "../components/Status";
 import { SapTool, SapToolSeparator, SapToolbar } from "../components/Sap";
-import {
-  DocumentPreview,
-  type PreviewableDocument,
-} from "../components/DocumentPreview";
+import { DocumentPreview, type PreviewableDocument } from "../components/DocumentPreview";
 
 export function OrderWorkbenchPage() {
   const [preview, setPreview] = useState<PreviewableDocument | null>(null);
@@ -105,7 +102,7 @@ export function OrderWorkbenchPage() {
           : null;
 
   return (
-    <div className="flex h-[calc(100vh-5.5rem)] flex-col">
+    <div className="flex h-full flex-col">
       {/* The command toolbar: what applies to the whole document, as icons,
           above it. Separate from the action button in the header, which is the
           one thing this transaction is waiting for — a user learns which is
@@ -346,103 +343,103 @@ export function OrderWorkbenchPage() {
               </Fieldset>
             </WorkbenchPanel>
           </WorkbenchTabs>
-        </div>
 
-        {/* The lines stay put whichever facet is open: they are the document,
+          {/* The lines stay put whichever facet is open: they are the document,
             and checking a quantity against the delivery or the payment is the
             commonest thing anyone does on this screen. */}
-        <LineArea title="Lines" count={lines.length}>
-          <table className="w-full text-form">
-            <thead>
-              <tr className="border-b border-line bg-surface-50 text-left text-micro text-ink-500">
-                <th className="px-3 py-1.5 font-medium">Medicine</th>
-                <th className="px-3 py-1.5 text-right font-medium">Ordered</th>
-                <th className="px-3 py-1.5 font-medium">Unit</th>
-                <th className="px-3 py-1.5 text-right font-medium">Approved</th>
-                <th className="px-3 py-1.5 text-right font-medium">Shipped</th>
-                <th className="px-3 py-1.5 text-right font-medium">Received</th>
-                <th className="px-3 py-1.5 text-right font-medium">Unit price</th>
-                <th className="px-3 py-1.5 text-right font-medium">Line total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((line, i) => {
-                /* A line approved for less than was ordered is the single most
+          <LineArea title="Lines" count={lines.length}>
+            <table className="w-full text-form">
+              <thead>
+                <tr className="border-b border-line bg-surface-50 text-left text-micro text-ink-500">
+                  <th className="px-3 py-1.5 font-medium">Medicine</th>
+                  <th className="px-3 py-1.5 text-right font-medium">Ordered</th>
+                  <th className="px-3 py-1.5 font-medium">Unit</th>
+                  <th className="px-3 py-1.5 text-right font-medium">Approved</th>
+                  <th className="px-3 py-1.5 text-right font-medium">Shipped</th>
+                  <th className="px-3 py-1.5 text-right font-medium">Received</th>
+                  <th className="px-3 py-1.5 text-right font-medium">Unit price</th>
+                  <th className="px-3 py-1.5 text-right font-medium">Line total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((line, i) => {
+                  /* A line approved for less than was ordered is the single most
                    consequential fact on this document, and it was previously
                    two numbers a reader had to compare themselves. */
-                const short =
-                  line.quantity_approved !== undefined &&
-                  line.quantity_approved < line.quantity_ordered;
-                return (
-                  <tr
-                    key={line.id ?? i}
-                    className="border-b border-line last:border-0 hover:bg-surface-50"
-                  >
-                    <td className="px-3 py-1.5 text-ink-900">{line.product_name ?? "—"}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-ink-900">
-                      {line.quantity_ordered.toLocaleString()}
-                    </td>
-                    {/* The unit the buyer counted in, and what it comes to on
+                  const short =
+                    line.quantity_approved !== undefined &&
+                    line.quantity_approved < line.quantity_ordered;
+                  return (
+                    <tr
+                      key={line.id ?? i}
+                      className="border-b border-line last:border-0 hover:bg-surface-50"
+                    >
+                      <td className="px-3 py-1.5 text-ink-900">{line.product_name ?? "—"}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-ink-900">
+                        {line.quantity_ordered.toLocaleString()}
+                      </td>
+                      {/* The unit the buyer counted in, and what it comes to on
                         the shelf. A picker reading "2" needs to know whether
                         that is two cartons or two tablets before they pick. */}
-                    <td className="px-3 py-1.5 text-ink-700">
-                      {line.unit_label ? (
-                        <>
-                          {line.unit_label}
-                          {line.quantity_base && (
-                            <div className="text-micro text-ink-500">
-                              {Number(line.quantity_base).toLocaleString()} singles
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-ink-400">singles</span>
-                      )}
-                    </td>
-                    <td
-                      className={`px-3 py-1.5 text-right tabular-nums ${
-                        short ? "font-semibold text-warning-700" : "text-ink-700"
-                      }`}
-                    >
-                      {line.quantity_approved?.toLocaleString() ?? "—"}
-                    </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-ink-700">
-                      {line.quantity_shipped?.toLocaleString() ?? "—"}
-                    </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-ink-700">
-                      {line.quantity_received?.toLocaleString() ?? "—"}
-                    </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-ink-700">
-                      {money(Number(line.price_per_unit))}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-medium tabular-nums text-ink-900">
-                      {money(Number(line.line_total ?? 0))}
+                      <td className="px-3 py-1.5 text-ink-700">
+                        {line.unit_label ? (
+                          <>
+                            {line.unit_label}
+                            {line.quantity_base && (
+                              <div className="text-micro text-ink-500">
+                                {Number(line.quantity_base).toLocaleString()} singles
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-ink-400">singles</span>
+                        )}
+                      </td>
+                      <td
+                        className={`px-3 py-1.5 text-right tabular-nums ${
+                          short ? "font-semibold text-warning-700" : "text-ink-700"
+                        }`}
+                      >
+                        {line.quantity_approved?.toLocaleString() ?? "—"}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-ink-700">
+                        {line.quantity_shipped?.toLocaleString() ?? "—"}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-ink-700">
+                        {line.quantity_received?.toLocaleString() ?? "—"}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-ink-700">
+                        {money(Number(line.price_per_unit))}
+                      </td>
+                      <td className="px-3 py-1.5 text-right font-medium tabular-nums text-ink-900">
+                        {money(Number(line.line_total ?? 0))}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {lines.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-3 py-6 text-center text-ink-500">
+                      No lines on this order.
                     </td>
                   </tr>
-                );
-              })}
-              {lines.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-ink-500">
-                    No lines on this order.
-                  </td>
-                </tr>
+                )}
+              </tbody>
+              {lines.length > 0 && (
+                <tfoot>
+                  <tr className="border-t border-line-strong bg-surface-50">
+                    <td colSpan={6} className="px-3 py-2 text-right font-medium text-ink-700">
+                      Net value
+                    </td>
+                    <td className="px-3 py-2 text-right text-base font-semibold tabular-nums text-ink-900">
+                      {money(order.total_amount)}
+                    </td>
+                  </tr>
+                </tfoot>
               )}
-            </tbody>
-            {lines.length > 0 && (
-              <tfoot>
-                <tr className="border-t border-line-strong bg-surface-50">
-                  <td colSpan={6} className="px-3 py-2 text-right font-medium text-ink-700">
-                    Net value
-                  </td>
-                  <td className="px-3 py-2 text-right text-base font-semibold tabular-nums text-ink-900">
-                    {money(order.total_amount)}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </LineArea>
+            </table>
+          </LineArea>
+        </div>
       </Workbench>
 
       <ErrorNote error={act.error} />

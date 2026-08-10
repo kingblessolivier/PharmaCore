@@ -56,7 +56,7 @@ export function SupplierWorkbenchPage() {
   const expiredLicences = (profile.licences ?? []).filter((l) => l.is_expired);
 
   return (
-    <div className="flex h-[calc(100vh-5.5rem)] flex-col">
+    <div className="flex h-full flex-col">
       <div className="mb-2">
         <Link
           to="/procurement/suppliers"

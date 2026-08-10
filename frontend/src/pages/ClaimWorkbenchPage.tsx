@@ -121,7 +121,7 @@ export function ClaimWorkbenchPage() {
   const shortfall = Number(claim.shortfall ?? 0);
 
   return (
-    <div className="flex h-[calc(100vh-5.5rem)] flex-col">
+    <div className="flex h-full flex-col">
       <div className="mb-2">
         <Link
           to="/insurance/claims"
@@ -278,67 +278,69 @@ export function ClaimWorkbenchPage() {
               </WorkbenchGrid>
             </WorkbenchPanel>
           </WorkbenchTabs>
-        </div>
 
-        <LineArea title="Items claimed" count={lines.length}>
-          <table className="data-grid">
-            <thead>
-              <tr>
-                <th>Medicine</th>
-                <th className="text-right">Qty</th>
-                <th className="text-right">Unit price</th>
-                <th className="text-right">Gross</th>
-                <th className="text-right">Co-pay</th>
-                <th className="text-right">Patient pays</th>
-                <th className="text-right">Insurer pays</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((line) => (
-                <tr key={line.id}>
-                  <td className="text-ink-900">
-                    {line.product_name}
-                    {line.note && <span className="ml-2 text-micro text-ink-500">{line.note}</span>}
-                  </td>
-                  <td className="text-right tabular-nums">{line.quantity}</td>
-                  <td className="text-right tabular-nums text-ink-700">
-                    {money(Number(line.unit_price))}
-                  </td>
-                  <td className="text-right tabular-nums text-ink-700">
-                    {money(Number(line.gross_amount))}
-                  </td>
-                  <td className="text-right tabular-nums text-ink-600">
-                    {Number(line.copay_pct_applied)}%
-                  </td>
-                  <td className="text-right tabular-nums text-ink-700">
-                    {money(Number(line.patient_amount))}
-                  </td>
-                  <td className="text-right font-medium tabular-nums text-ink-900">
-                    {money(Number(line.insurer_amount))}
-                  </td>
-                </tr>
-              ))}
-              {lines.length === 0 && (
+          <LineArea title="Items claimed" count={lines.length}>
+            <table className="data-grid">
+              <thead>
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-ink-500">
-                    No items on this claim.
-                  </td>
+                  <th>Medicine</th>
+                  <th className="text-right">Qty</th>
+                  <th className="text-right">Unit price</th>
+                  <th className="text-right">Gross</th>
+                  <th className="text-right">Co-pay</th>
+                  <th className="text-right">Patient pays</th>
+                  <th className="text-right">Insurer pays</th>
                 </tr>
+              </thead>
+              <tbody>
+                {lines.map((line) => (
+                  <tr key={line.id}>
+                    <td className="text-ink-900">
+                      {line.product_name}
+                      {line.note && (
+                        <span className="ml-2 text-micro text-ink-500">{line.note}</span>
+                      )}
+                    </td>
+                    <td className="text-right tabular-nums">{line.quantity}</td>
+                    <td className="text-right tabular-nums text-ink-700">
+                      {money(Number(line.unit_price))}
+                    </td>
+                    <td className="text-right tabular-nums text-ink-700">
+                      {money(Number(line.gross_amount))}
+                    </td>
+                    <td className="text-right tabular-nums text-ink-600">
+                      {Number(line.copay_pct_applied)}%
+                    </td>
+                    <td className="text-right tabular-nums text-ink-700">
+                      {money(Number(line.patient_amount))}
+                    </td>
+                    <td className="text-right font-medium tabular-nums text-ink-900">
+                      {money(Number(line.insurer_amount))}
+                    </td>
+                  </tr>
+                ))}
+                {lines.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="py-6 text-center text-ink-500">
+                      No items on this claim.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              {lines.length > 0 && (
+                <tfoot>
+                  <tr>
+                    <td colSpan={5}>{lines.length} item(s)</td>
+                    <td className="text-right tabular-nums">{money(Number(claim.patient_paid))}</td>
+                    <td className="text-right text-base tabular-nums">
+                      {money(Number(claim.claimed_amount))}
+                    </td>
+                  </tr>
+                </tfoot>
               )}
-            </tbody>
-            {lines.length > 0 && (
-              <tfoot>
-                <tr>
-                  <td colSpan={5}>{lines.length} item(s)</td>
-                  <td className="text-right tabular-nums">{money(Number(claim.patient_paid))}</td>
-                  <td className="text-right text-base tabular-nums">
-                    {money(Number(claim.claimed_amount))}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </LineArea>
+            </table>
+          </LineArea>
+        </div>
       </Workbench>
 
       <ErrorNote error={act.error} />

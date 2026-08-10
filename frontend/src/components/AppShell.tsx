@@ -894,7 +894,12 @@ export function AppShell() {
           )}
         </nav>
 
-        <main className="min-w-0 flex-1 overflow-y-auto bg-page p-6">
+        {/* One scroll container, not two.
+            `min-h-0` lets this shrink inside the flex row, which is what gives
+            it a definite height — and a definite height is what lets a
+            workbench page say `h-full` and land exactly, instead of guessing
+            the chrome height with a calc and overflowing by the padding. */}
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-page p-6">
           <Outlet />
         </main>
       </div>
