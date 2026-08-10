@@ -117,20 +117,29 @@ def _distribution(user: Any, org_ids: list[int]) -> list[dict[str, Any] | None]:
     from apps.distribution.models import BackorderLine, CustomerReturn, StockOrder
 
     return [
+        # Counted as orders, so it links to orders. It used to point at
+        # /approvals — the central inbox, which lists ApprovalRequest records.
+        # A B2B stock order awaiting its depot is not one of those, so the tile
+        # said "1 order waiting" and the screen it opened showed a different
+        # queue entirely, of a different length.
         _entry(
             "orders waiting for your approval",
             StockOrder.objects.filter(
                 depot_id__in=org_ids, status=StockOrder.Status.PENDING
             ).count(),
-            "/approvals",
+            "/distribution/orders?status=PENDING",
             "warning",
         ),
+        # Also orders, for the same reason. /distribution/in-transit lists the
+        # batches physically on the lorry (InTransitStock); an order can be in
+        # transit while that table is empty, which is how "1 delivery on the
+        # road" opened a page showing none.
         _entry(
             "deliveries on the road to you",
             StockOrder.objects.filter(
                 retail_id__in=org_ids, status=StockOrder.Status.IN_TRANSIT
             ).count(),
-            "/distribution/in-transit",
+            "/distribution/orders?status=IN_TRANSIT",
         ),
         _entry(
             "unmet demand you could source",

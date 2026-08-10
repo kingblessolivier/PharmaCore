@@ -19,6 +19,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from apps.core.deletion import ExplainsWhyNotDeletableMixin
 from apps.iam.audit import record_audit
 from apps.iam.models import Organization, User
 from apps.iam.scoping import organizations_visible_to
@@ -76,12 +77,12 @@ def _parse_payments(request: Request) -> list[dict[str, Any]]:
     return payments
 
 
-class SaleViewSet(viewsets.ModelViewSet):
+class SaleViewSet(ExplainsWhyNotDeletableMixin, viewsets.ModelViewSet):
     serializer_class = SaleSerializer
     queryset = Sale.objects.select_related("organization", "cashier").prefetch_related(
         "items__product", "payments"
     )
-    http_method_names = ["get", "post", "head", "options"]
+    http_method_names = ["get", "post", "delete", "head", "options"]
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self) -> QuerySet[Sale]:
@@ -249,13 +250,13 @@ class DispensingViewSet(viewsets.ReadOnlyModelViewSet):
         return qs
 
 
-class DrawerSessionViewSet(viewsets.ModelViewSet):
+class DrawerSessionViewSet(ExplainsWhyNotDeletableMixin, viewsets.ModelViewSet):
     """Cash-drawer / till sessions: open with a float, ring up sales, then cash up
     (count the cash → over/short) and close. Org-scoped; one open drawer per cashier."""
 
     serializer_class = DrawerSessionSerializer
     permission_classes = [IsAuthenticated]
-    http_method_names = ["get", "post", "head", "options"]
+    http_method_names = ["get", "post", "delete", "head", "options"]
     queryset = DrawerSession.objects.select_related("organization", "cashier")
 
     def get_queryset(self) -> QuerySet[DrawerSession]:

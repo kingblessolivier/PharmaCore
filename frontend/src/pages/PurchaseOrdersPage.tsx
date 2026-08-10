@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DeleteAction } from "../components/DeleteAction";
 import { ArrowLeft, CreditCard, PackageCheck, Plus, Truck } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -217,6 +218,14 @@ export function PurchaseOrdersPage() {
                     <CreditCard className="h-3.5 w-3.5" /> Record Payment
                   </button>
                 )}
+                {/* Shown only to administrators, and it says why when the
+                    order is too far along to remove. */}
+                <DeleteAction
+                  endpoint={`/api/distribution/orders/${o.id}/`}
+                  name={o.order_number}
+                  what="order"
+                  onDeleted={() => qc.invalidateQueries({ queryKey: ["orders"] })}
+                />
               </div>
             ),
           },
