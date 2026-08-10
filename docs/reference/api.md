@@ -5,7 +5,7 @@
 # API reference
 
 
-**1088 routes.**
+**1118 routes.**
 
 Every route the project serves, generated from the URL resolver.
 For conventions — pagination, errors, auth, idempotency — read
@@ -1248,6 +1248,14 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/quality/^actions/(?P<pk>[^/.]+)/verify\.(?P<format>[a-z0-9]+)/?$` | POST | `CapaActionViewSet` | Actions across every case — the "what is on my plate" list. |
 | `/api/quality/^actions/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | GET | `CapaActionViewSet` | Actions across every case — the "what is on my plate" list. |
 | `/api/quality/^actions\.(?P<format>[a-z0-9]+)/?$` | GET | `CapaActionViewSet` | Actions across every case — the "what is on my plate" list. |
+| `/api/quality/^audits/$` | GET,POST | `AuditEngagementViewSet` |  |
+| `/api/quality/^audits/(?P<pk>[^/.]+)/$` | DELETE,GET,PATCH,PUT | `AuditEngagementViewSet` |  |
+| `/api/quality/^audits/(?P<pk>[^/.]+)/add-finding/$` | POST | `AuditEngagementViewSet` |  |
+| `/api/quality/^audits/(?P<pk>[^/.]+)/add-finding\.(?P<format>[a-z0-9]+)/?$` | POST | `AuditEngagementViewSet` |  |
+| `/api/quality/^audits/(?P<pk>[^/.]+)/close/$` | POST | `AuditEngagementViewSet` |  |
+| `/api/quality/^audits/(?P<pk>[^/.]+)/close\.(?P<format>[a-z0-9]+)/?$` | POST | `AuditEngagementViewSet` |  |
+| `/api/quality/^audits/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | DELETE,GET,PATCH,PUT | `AuditEngagementViewSet` |  |
+| `/api/quality/^audits\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `AuditEngagementViewSet` |  |
 | `/api/quality/^cases/$` | GET,POST | `QualityCaseViewSet` | Complaints, deviations and adverse events — one list, filtered by kind. |
 | `/api/quality/^cases/(?P<pk>[^/.]+)/$` | DELETE,GET,PATCH,PUT | `QualityCaseViewSet` | Complaints, deviations and adverse events — one list, filtered by kind. |
 | `/api/quality/^cases/(?P<pk>[^/.]+)/add-action/$` | POST | `QualityCaseViewSet` | Complaints, deviations and adverse events — one list, filtered by kind. |
@@ -1262,6 +1270,12 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/quality/^cases/workload/$` | GET | `QualityCaseViewSet` | Complaints, deviations and adverse events — one list, filtered by kind. |
 | `/api/quality/^cases/workload\.(?P<format>[a-z0-9]+)/?$` | GET | `QualityCaseViewSet` | Complaints, deviations and adverse events — one list, filtered by kind. |
 | `/api/quality/^cases\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `QualityCaseViewSet` | Complaints, deviations and adverse events — one list, filtered by kind. |
+| `/api/quality/^findings/$` | GET | `AuditFindingViewSet` |  |
+| `/api/quality/^findings/(?P<pk>[^/.]+)/$` | GET | `AuditFindingViewSet` |  |
+| `/api/quality/^findings/(?P<pk>[^/.]+)/respond/$` | POST | `AuditFindingViewSet` |  |
+| `/api/quality/^findings/(?P<pk>[^/.]+)/respond\.(?P<format>[a-z0-9]+)/?$` | POST | `AuditFindingViewSet` |  |
+| `/api/quality/^findings/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | GET | `AuditFindingViewSet` |  |
+| `/api/quality/^findings\.(?P<format>[a-z0-9]+)/?$` | GET | `AuditFindingViewSet` |  |
 
 
 ## `/api/retail`
@@ -1337,6 +1351,29 @@ For conventions — pagination, errors, auth, idempotency — read
 | Path | Methods | View | Purpose |
 | --- | --- | --- | --- |
 | `/api/schema/` | — | `SpectacularAPIView` | OpenApi3 schema for this API. |
+
+
+## `/api/service-desk`
+
+
+| Path | Methods | View | Purpose |
+| --- | --- | --- | --- |
+| `/api/service-desk/` | — | `APIRootView` | The default basic root view for DefaultRouter |
+| `/api/service-desk/<drf_format_suffix:format>` | — | `APIRootView` | The default basic root view for DefaultRouter |
+| `/api/service-desk/^tickets/$` | GET,POST | `TicketViewSet` | The queue, ordered by what is closest to breaching. |
+| `/api/service-desk/^tickets/(?P<pk>[^/.]+)/$` | DELETE,GET,PATCH,PUT | `TicketViewSet` | The queue, ordered by what is closest to breaching. |
+| `/api/service-desk/^tickets/(?P<pk>[^/.]+)/add-note/$` | POST | `TicketViewSet` | The queue, ordered by what is closest to breaching. |
+| `/api/service-desk/^tickets/(?P<pk>[^/.]+)/add-note\.(?P<format>[a-z0-9]+)/?$` | POST | `TicketViewSet` | The queue, ordered by what is closest to breaching. |
+| `/api/service-desk/^tickets/(?P<pk>[^/.]+)/assign/$` | POST | `TicketViewSet` | The queue, ordered by what is closest to breaching. |
+| `/api/service-desk/^tickets/(?P<pk>[^/.]+)/assign\.(?P<format>[a-z0-9]+)/?$` | POST | `TicketViewSet` | The queue, ordered by what is closest to breaching. |
+| `/api/service-desk/^tickets/(?P<pk>[^/.]+)/escalate-to-quality/$` | POST | `TicketViewSet` | The queue, ordered by what is closest to breaching. |
+| `/api/service-desk/^tickets/(?P<pk>[^/.]+)/escalate-to-quality\.(?P<format>[a-z0-9]+)/?$` | POST | `TicketViewSet` | The queue, ordered by what is closest to breaching. |
+| `/api/service-desk/^tickets/(?P<pk>[^/.]+)/resolve/$` | POST | `TicketViewSet` | The queue, ordered by what is closest to breaching. |
+| `/api/service-desk/^tickets/(?P<pk>[^/.]+)/resolve\.(?P<format>[a-z0-9]+)/?$` | POST | `TicketViewSet` | The queue, ordered by what is closest to breaching. |
+| `/api/service-desk/^tickets/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | DELETE,GET,PATCH,PUT | `TicketViewSet` | The queue, ordered by what is closest to breaching. |
+| `/api/service-desk/^tickets/queue/$` | GET | `TicketViewSet` | The queue, ordered by what is closest to breaching. |
+| `/api/service-desk/^tickets/queue\.(?P<format>[a-z0-9]+)/?$` | GET | `TicketViewSet` | The queue, ordered by what is closest to breaching. |
+| `/api/service-desk/^tickets\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `TicketViewSet` | The queue, ordered by what is closest to breaching. |
 
 
 ## `/api/uploads`

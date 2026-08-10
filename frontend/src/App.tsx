@@ -90,6 +90,8 @@ import {
 } from "./pages/workspaces";
 import { OrderWorkbenchPage } from "./pages/OrderWorkbenchPage";
 import { QualityPage } from "./pages/QualityPage";
+import { ServiceDeskPage } from "./pages/ServiceDeskPage";
+import { InternalAuditPage } from "./pages/InternalAuditPage";
 import { GrnPage } from "./pages/GrnPage";
 import { InTransitPage } from "./pages/InTransitPage";
 
@@ -237,6 +239,8 @@ function App() {
               <Route path="/distribution" element={forPharmacy(<DistributionHome />)} />
               <Route path="/distribution/orders" element={forPharmacy(<PurchaseOrdersPage />)} />
               <Route path="/quality" element={<QualityPage />} />
+              <Route path="/quality/audits" element={<InternalAuditPage />} />
+              <Route path="/service-desk" element={<ServiceDeskPage />} />
               <Route path="/distribution/orders/new" element={forPharmacy(<OrderComposePage />)} />
               <Route
                 path="/distribution/orders/:id"
