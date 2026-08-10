@@ -1,6 +1,12 @@
 """Approval lifecycle: request → claim (lock) → decide (approve/reject).
 
-No self-approval: the requester can never claim or decide their own request.
+No self-approval: the requester can never claim or decide their own request —
+**except in a MICRO organisation**, where there is nobody else to ask. Refusing
+there does not produce a second approver; it produces a pharmacy that cannot
+approve its own payroll, so the work moves outside the system and no record
+exists at all. A self-approval is therefore allowed, must carry a written
+reason, and is flagged (`self_approved`) so nobody later mistakes it for a
+decision two people made. See `_may_decide_own`.
 SLA timers: refresh_sla() releases a claim once its deadline has passed so the
 item re-enters the queue unclaimed — nothing is ever silently stuck.
 
@@ -101,10 +107,43 @@ def _require_authority(*, approval: ApprovalRequest, user: User, verb: str) -> N
     raise ApprovalError(f"You cannot {verb} this request. {message}")
 
 
+def _may_decide_own(approval: ApprovalRequest, user: User) -> bool:
+    """Whether this person may act on their own request.
+
+    Only when there is genuinely nobody else who could. Refusing then does not
+    produce a second approver — it produces a pharmacy that cannot approve its
+    own payroll or its own order, so the work happens outside the system and no
+    record exists at all, which is strictly worse than a recorded
+    self-approval.
+
+    Two conditions, and both must hold:
+
+    * the organisation is configured as MICRO, and
+    * **nobody else there could actually decide it** — checked against the
+      users who hold the competence, not against the size field.
+
+    The second is the one that matters. Keying only off the setting would mean
+    a control relaxed by a dropdown: create an organisation, leave it at its
+    default, and self-approval is on. Keying off who exists means the exception
+    applies exactly when it is true, and closes by itself the day a second
+    pharmacist is given an account.
+    """
+    if approval.requested_by_id != user.pk:
+        return False
+    if not approval.organization.is_single_handed:
+        return False
+
+    others = User.objects.filter(organization=approval.organization, is_active=True).exclude(
+        pk=user.pk
+    )
+    permission = authority.required_permission_for(approval.resource_type)
+    return not any(other.has_permission(permission) for other in others)
+
+
 def claim(*, approval: ApprovalRequest, user: User) -> ApprovalRequest:
     if approval.status != ApprovalRequest.Status.PENDING:
         raise ApprovalError("Only pending requests can be claimed.")
-    if approval.requested_by_id == user.pk:
+    if approval.requested_by_id == user.pk and not _may_decide_own(approval, user):
         raise ApprovalError("You cannot claim your own request (no self-approval).")
     if approval.claimed_by_id and approval.claimed_by_id != user.pk:
         raise ApprovalError("Already claimed by another approver.")
@@ -150,8 +189,17 @@ def decide(
 ) -> ApprovalRequest:
     if approval.status != ApprovalRequest.Status.PENDING:
         raise ApprovalError("This request has already been decided.")
-    if approval.requested_by_id == user.pk:
+    self_approving = approval.requested_by_id == user.pk
+    if self_approving and not _may_decide_own(approval, user):
         raise ApprovalError("You cannot decide your own request (no self-approval).")
+    if self_approving and not note.strip():
+        # The reason is the whole of the control that remains. Without a second
+        # person, an unexplained self-approval records only that it happened.
+        raise ApprovalError(
+            "You are approving your own request, which is allowed here because there is "
+            "nobody else to ask. Say why — the note is what an auditor or an inspector "
+            "will read in place of a second signature."
+        )
     if approval.claimed_by_id != user.pk:
         raise ApprovalError("Claim the request before deciding it.")
     # Re-checked at the point of decision, not only at claim: a role or limit can
@@ -165,7 +213,16 @@ def decide(
     approval.decided_by = user
     approval.decided_at = timezone.now()
     approval.decision_note = note
-    approval.save(update_fields=["status", "decided_by", "decided_at", "decision_note"])
+    approval.self_approved = self_approving
+    approval.save(
+        update_fields=[
+            "status",
+            "decided_by",
+            "decided_at",
+            "decision_note",
+            "self_approved",
+        ]
+    )
     if approve:
         registry.apply(approval)
 

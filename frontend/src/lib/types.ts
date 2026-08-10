@@ -10,6 +10,9 @@ export interface Me {
   /** What kind of place this person works in. A depot does not serve the
    *  public, so it is not offered a till it would be refused at. */
   organization_type?: string;
+  /** How this pharmacy is staffed — MICRO | SMALL | MEDIUM | ENTERPRISE.
+   *  The shell reads it to decide how much of the system to offer. */
+  organization_size?: string;
   department: number | null;
   is_active: boolean;
   is_staff: boolean;

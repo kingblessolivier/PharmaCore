@@ -5,7 +5,7 @@
 # API reference
 
 
-**1118 routes.**
+**1119 routes.**
 
 Every route the project serves, generated from the URL resolver.
 For conventions — pagination, errors, auth, idempotency — read
@@ -1120,6 +1120,14 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/inventory/^warehouses\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `WarehouseViewSet` |  |
 | `/api/inventory/intake` | — | `IntakeView` |  |
 | `/api/inventory/overview/` | — | `InventoryOverviewView` | What needs a decision in inventory, rather than what exists in it. |
+
+
+## `/api/pharmacy`
+
+
+| Path | Methods | View | Purpose |
+| --- | --- | --- | --- |
+| `/api/pharmacy/day/` | — | `PharmacyDayView` | The morning briefing for a pharmacy that is one or two people. |
 
 
 ## `/api/procurement`

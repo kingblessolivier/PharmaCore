@@ -222,6 +222,10 @@ class UserSerializer(serializers.ModelSerializer):
     #: not serve the public, so it should not be offered a till it would be
     #: refused at.
     organization_type = serializers.CharField(source="organization.type", read_only=True)
+    #: How this pharmacy is staffed. The shell reads it to decide how much of
+    #: the system to put in front of somebody: a two-person shop gets seven
+    #: menu entries, not forty.
+    organization_size = serializers.CharField(source="organization.size", read_only=True)
     roles = serializers.SerializerMethodField()
 
     class Meta:
@@ -239,6 +243,7 @@ class UserSerializer(serializers.ModelSerializer):
             "reports_to",
             "organization",
             "organization_type",
+            "organization_size",
             "department",
             "is_active",
             "is_staff",

@@ -153,6 +153,49 @@ class Organization(models.Model):
         ENTERPRISE = "ENTERPRISE", "Enterprise"
 
     plan = models.CharField(max_length=20, choices=Plan.choices, default=Plan.STANDARD)
+
+    class Size(models.TextChoices):
+        """How the place is actually staffed — which is not the same as how big it is.
+
+        Most Rwandan community pharmacies are not departmental. One person, or
+        two, does the selling, the ordering, the receiving, the cash and the
+        books. A system that offers them a Procurement Department and a Finance
+        Department is not merely over-featured — it is describing an
+        organisation that does not exist, and every screen then asks them to
+        pretend.
+
+        This is deliberately about *responsibilities*, not headcount alone or
+        revenue. The database, the workflow engine and the permission model are
+        the same at every size; this decides how much of them a person is shown
+        and how many people a control can reasonably demand.
+        """
+
+        MICRO = "MICRO", "One or two people, doing everything"
+        SMALL = "SMALL", "A handful of people, roles overlap"
+        MEDIUM = "MEDIUM", "Distinct roles, one site"
+        ENTERPRISE = "ENTERPRISE", "Departments across sites"
+
+    size = models.CharField(
+        max_length=12,
+        choices=Size.choices,
+        default=Size.MICRO,
+        help_text=(
+            "How this pharmacy is staffed. Drives navigation, the home screen, and "
+            "how many people an approval can require — never what the system can do."
+        ),
+    )
+
+    @property
+    def is_single_handed(self) -> bool:
+        """One person carries every responsibility here.
+
+        The consequence that matters: a control which requires a *second person*
+        cannot be satisfied, so demanding one does not make the pharmacy safer,
+        it makes the pharmacy unable to trade. What remains meaningful at this
+        size is the record — see `apps.approvals.services.decide`.
+        """
+        return self.size == Organization.Size.MICRO
+
     # Primary brand colour (hex, e.g. "#0D9488") — logo_url above is the brand mark.
     brand_color = models.CharField(max_length=9, blank=True, default="")
     # Per-tenant feature toggles, e.g. {"online_store": true, "insurance": false}.
