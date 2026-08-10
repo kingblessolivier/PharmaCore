@@ -18,6 +18,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 
+from apps.core.deletion import AdminDeletableMixin, ExplainsWhyNotDeletableMixin
 from apps.finance import reports
 from apps.finance.budgeting import budget_variance, cost_centre_pnl
 from apps.finance.closing import close_readiness, seed_period_tasks, settle_task
@@ -135,12 +136,22 @@ def _with_balances(qs: QuerySet[Account]) -> QuerySet[Account]:
     ).order_by("code")
 
 
-class AccountViewSet(viewsets.ModelViewSet):
+class AccountViewSet(AdminDeletableMixin, viewsets.ModelViewSet):
 
     permission_classes = [IsAuthenticated, FinanceAccess]
     serializer_class = AccountSerializer
     queryset = Account.objects.select_related("organization", "parent")
-    http_method_names = ["get", "post", "patch", "head", "options"]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def deletion_blocked_by(self, instance: Account) -> str | None:
+        """A GL account that has been posted to is part of the trial balance."""
+        if instance.lines.exists():
+            return (
+                f"Account {instance.code} {instance.name} has journal lines posted to it, "
+                "so removing it would unbalance the ledger. Deactivate it instead — it stops "
+                "appearing on new postings and keeps its history."
+            )
+        return None
 
     def get_queryset(self) -> QuerySet[Account]:
         user = cast(User, self.request.user)
@@ -169,7 +180,7 @@ class AccountViewSet(viewsets.ModelViewSet):
         serializer.save()
 
 
-class JournalEntryViewSet(viewsets.ModelViewSet):
+class JournalEntryViewSet(ExplainsWhyNotDeletableMixin, viewsets.ModelViewSet):
     """Journal entries: read for anyone with finance.view; posting a manual entry
     requires finance.manage. Entries are immutable once created (no update/delete)."""
 
@@ -179,7 +190,7 @@ class JournalEntryViewSet(viewsets.ModelViewSet):
     queryset = JournalEntry.objects.select_related("organization").prefetch_related(
         "lines__account"
     )
-    http_method_names = ["get", "post", "head", "options"]
+    http_method_names = ["get", "post", "delete", "head", "options"]
 
     def get_queryset(self) -> QuerySet[JournalEntry]:
         user = cast(User, self.request.user)
@@ -750,14 +761,14 @@ class FinanceReportsView(viewsets.ViewSet):
         return Response(_money_safe(reports.vat_return(org, start=start, end=end)))
 
 
-class AccountingPeriodViewSet(viewsets.ModelViewSet):
+class AccountingPeriodViewSet(ExplainsWhyNotDeletableMixin, viewsets.ModelViewSet):
     """EOD/EOM/annual closeouts. Closing freezes the window against new postings."""
 
     permission_classes = [IsAuthenticated, FinanceAccess]
 
     serializer_class = AccountingPeriodSerializer
     queryset = AccountingPeriod.objects.select_related("organization", "closed_by")
-    http_method_names = ["get", "post", "head", "options"]
+    http_method_names = ["get", "post", "delete", "head", "options"]
 
     def get_queryset(self) -> QuerySet[AccountingPeriod]:
         user = cast(User, self.request.user)
@@ -1010,7 +1021,7 @@ class TaxCodeViewSet(viewsets.ModelViewSet):
         serializer.save()
 
 
-class TaxPaymentViewSet(viewsets.ModelViewSet):
+class TaxPaymentViewSet(ExplainsWhyNotDeletableMixin, viewsets.ModelViewSet):
     """Register of RRA remittances. Direct write is admin-only (rare); the
     normal path is ``request_tax_payment`` which routes via the approvals
     inbox (no self-approval)."""
@@ -1019,7 +1030,7 @@ class TaxPaymentViewSet(viewsets.ModelViewSet):
 
     serializer_class = TaxPaymentSerializer
     queryset = TaxPayment.objects.select_related("organization")
-    http_method_names = ["get", "post", "head", "options"]
+    http_method_names = ["get", "post", "delete", "head", "options"]
 
     def get_queryset(self) -> QuerySet[TaxPayment]:
         user = cast(User, self.request.user)
@@ -1147,7 +1158,7 @@ class BudgetViewSet(viewsets.ModelViewSet):
         return Response(budget_variance(budget, start=start, end=end, cost_centre=centre))
 
 
-class CustomerInvoiceViewSet(viewsets.ModelViewSet):
+class CustomerInvoiceViewSet(ExplainsWhyNotDeletableMixin, viewsets.ModelViewSet):
     """AR: invoices raised on B2B customers, plus the receipts against them.
 
     Creation and receipting both go through the service layer so the GL entry,
@@ -1158,7 +1169,7 @@ class CustomerInvoiceViewSet(viewsets.ModelViewSet):
 
     serializer_class = CustomerInvoiceSerializer
     queryset = CustomerInvoice.objects.select_related("organization", "customer")
-    http_method_names = ["get", "post", "head", "options"]
+    http_method_names = ["get", "post", "delete", "head", "options"]
 
     def get_queryset(self) -> QuerySet[CustomerInvoice]:
         user = cast(User, self.request.user)

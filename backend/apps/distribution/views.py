@@ -17,6 +17,7 @@ from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
 
+from apps.core.deletion import AdminDeletableMixin
 from apps.distribution.models import (
     CustomerReturn,
     DepotProductListing,
@@ -124,7 +125,7 @@ class AgingView(APIView):
         return Response({"receivables": receivables, "payables": payables})
 
 
-class StockOrderViewSet(viewsets.ModelViewSet):
+class StockOrderViewSet(AdminDeletableMixin, viewsets.ModelViewSet):
     """Purchase orders. A retail org creates orders to a depot; both parties see them.
 
     Scoping: SYS_ADMIN sees all; others see orders where their org is the depot or
@@ -135,7 +136,26 @@ class StockOrderViewSet(viewsets.ModelViewSet):
     queryset = StockOrder.objects.select_related("depot", "retail").prefetch_related(
         "items", "shipments", "order_payments", "in_transit"
     )
-    http_method_names = ["get", "post", "head", "options"]
+    http_method_names = ["get", "post", "delete", "head", "options"]
+
+    def deletion_blocked_by(self, instance: StockOrder) -> str | None:
+        """An order that has moved stock is history, not a draft.
+
+        Once approved, the depot has reserved batches against it; once shipped
+        there are stock movements and a delivery note quoting its number.
+        Deleting it then leaves the ledger pointing at an order nobody can find.
+        """
+        if instance.status not in (
+            StockOrder.Status.DRAFT,
+            StockOrder.Status.PENDING,
+            StockOrder.Status.CANCELLED,
+        ):
+            return (
+                f"{instance.order_number} is {instance.get_status_display().lower()}, so stock "
+                "has already been committed against it. Cancel the order instead — that "
+                "releases the reservations and leaves the history intact."
+            )
+        return None
 
     def get_queryset(self) -> QuerySet[StockOrder]:
         user = cast(User, self.request.user)

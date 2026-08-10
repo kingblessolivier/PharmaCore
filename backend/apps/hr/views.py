@@ -15,6 +15,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 
+from apps.core.deletion import AdminDeletableMixin
 from apps.core.lookups import lookup_pk
 from apps.hr.models import (
     AttendanceLog,
@@ -47,12 +48,23 @@ def _require_hr_manage(user: User) -> None:
         raise PermissionDenied("You may not manage employee records.")
 
 
-class EmployeeViewSet(viewsets.ModelViewSet):
+class EmployeeViewSet(AdminDeletableMixin, viewsets.ModelViewSet):
     serializer_class = EmployeeSerializer
     queryset = Employee.objects.select_related(
         "organization", "department", "license", "user"
     ).prefetch_related("documents")
-    http_method_names = ["get", "post", "patch", "head", "options"]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def deletion_blocked_by(self, instance: Employee) -> str | None:
+        """Somebody who has been paid cannot be un-hired."""
+        paid = instance.payroll_records.count()
+        if paid:
+            return (
+                f"{instance.full_name} appears on {paid} payroll record(s), which are the "
+                "statutory record of what they were paid and what was declared for them. "
+                "Set their employment status to Terminated instead."
+            )
+        return None
 
     def get_queryset(self) -> QuerySet[Employee]:
         user = cast(User, self.request.user)
