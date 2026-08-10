@@ -88,6 +88,16 @@ def submit_payroll_run(*, run: PayrollRun, requested_by: User) -> ApprovalReques
         raise ValueError("Only a draft payroll run can be submitted.")
     if not run.records.exists():
         raise ValueError("This payroll run has no employees to pay.")
+    # A run can hold records and still pay nothing, if the employees on it have
+    # no salary on file. That used to go all the way through — approved, posted
+    # to the GL as a balanced entry of zeros, and issued as payslips for RWF 0.
+    # The employee is the thing that is wrong, so name them.
+    unpaid = [r.employee.full_name for r in run.records.select_related("employee") if r.gross <= 0]
+    if len(unpaid) == run.records.count():
+        raise ValueError(
+            "This payroll run pays nothing — no one on it has a salary on file: "
+            f"{', '.join(sorted(unpaid))}. Set their gross salary before submitting."
+        )
     approval = request_approval(
         resource_type="hr.payroll_run",
         resource_id=str(run.pk),
@@ -120,8 +130,9 @@ def _apply_payroll_run(approval: ApprovalRequest) -> None:
         "maternity_employer": sum((r.maternity_employer for r in records), Decimal("0")),
         "cbhi": sum((r.cbhi for r in records), Decimal("0")),
         # Occupational Hazards + RAMA roll into PayrollRecord once those statutory
-        # lines are added (F3.2). Until then the GL posts a zero, which the
-        # payroll journal helper short-circuits — no orphan zero-valued entries.
+        # lines are added (F3.2). Until then they contribute nothing, and
+        # `post_payroll_journal` omits a statutory line whose total is zero
+        # rather than crediting a payable with nothing.
         "occupational_hazard": Decimal("0"),
         "rama": Decimal("0"),
         "net_pay": sum((r.net_pay for r in records), Decimal("0")),

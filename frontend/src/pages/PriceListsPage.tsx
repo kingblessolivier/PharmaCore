@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Edit2, Plus, Tag, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { StatTile } from "../components/AppHome";
 import { Badge, Button, PageHeader, SelectField, TextField } from "../components/ui";
 import { api } from "../lib/api";
 import { shortDate } from "../lib/format";
@@ -15,32 +16,6 @@ interface Coverage {
   products_stocked: number;
   priced_by_list: number;
   falling_back: number;
-}
-
-function Stat({
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  label: string;
-  value: number;
-  hint?: string;
-  tone?: "warning";
-}) {
-  return (
-    <div className="rounded-lg border border-line bg-surface-0 px-4 py-3">
-      <div className="text-xs text-ink-500">{label}</div>
-      <div
-        className={`mt-0.5 text-2xl font-semibold tabular-nums ${
-          tone === "warning" ? "text-warning-700" : "text-ink-900"
-        }`}
-      >
-        {value.toLocaleString()}
-      </div>
-      {hint && <div className="text-xs text-ink-500">{hint}</div>}
-    </div>
-  );
 }
 
 export function PriceListsPage() {
@@ -132,28 +107,34 @@ export function PriceListsPage() {
 
       <PageHeader
         title="Price Lists & Tiered Pricing Engine"
+        subtitle="What each list charges, and which medicines no list reaches."
         action={
           <Button onClick={startCreate}>
             <Plus className="h-4 w-4" /> Create Price List
-            {/* What the lists are actually doing. A pharmacy can keep three price
-          lists and still sell almost everything at the fallback price, and
-          nothing said so. */}
-            {coverage.data && (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <Stat label="Medicines stocked" value={coverage.data.products_stocked} />
-                <Stat label="Priced by a list" value={coverage.data.priced_by_list} />
-                <Stat
-                  label="Falling back"
-                  value={coverage.data.falling_back}
-                  tone={coverage.data.falling_back > 0 ? "warning" : undefined}
-                  hint="sold at the shelf price instead"
-                />
-                <Stat label="Active lists" value={coverage.data.active_lists} />
-              </div>
-            )}
           </Button>
         }
       />
+
+      {/* What the lists are actually doing. A pharmacy can keep three price lists
+          and still sell almost everything at the fallback price, and nothing
+          said so. A strip of its own, below the header — it is a reading of the
+          catalogue, not a control. */}
+      {coverage.data && (
+        <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatTile
+            label="Medicines stocked"
+            value={coverage.data.products_stocked.toLocaleString()}
+          />
+          <StatTile label="Priced by a list" value={coverage.data.priced_by_list.toLocaleString()} />
+          <StatTile
+            label="Falling back"
+            value={coverage.data.falling_back.toLocaleString()}
+            tone={coverage.data.falling_back > 0 ? "warning" : undefined}
+            hint="sold at the shelf price instead"
+          />
+          <StatTile label="Active lists" value={coverage.data.active_lists.toLocaleString()} />
+        </div>
+      )}
 
       <DataGrid<PriceList>
         rows={data?.results ?? []}

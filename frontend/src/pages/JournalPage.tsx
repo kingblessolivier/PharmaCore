@@ -18,7 +18,7 @@ import { Badge, Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
 import { money, shortDate } from "../lib/format";
 import type { CostCentre } from "../lib/finance";
-import { useFinanceDocument } from "../lib/financeDocuments";
+import { DocumentNotice, useFinanceDocument } from "../lib/financeDocuments";
 import { useDefaultOrg } from "../lib/recordData";
 import type { Account, Paginated } from "../lib/types";
 
@@ -296,14 +296,17 @@ function EntryDrawer({ entry, onClose }: { entry: JournalEntry; onClose: () => v
       onClose={onClose}
       footer={
         <div className="flex justify-between gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => voucher.mutate({ entry: entry.id })}
-            disabled={voucher.isPending}
-          >
-            <FileDown className="h-4 w-4" />
-            {voucher.isPending ? "Preparing…" : "Journal voucher"}
-          </Button>
+          <div className="flex min-w-0 items-center gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => voucher.mutate({ entry: entry.id })}
+              disabled={voucher.isPending}
+            >
+              <FileDown className="h-4 w-4" />
+              {voucher.isPending ? "Preparing…" : "Journal voucher"}
+            </Button>
+            <DocumentNotice doc={voucher} />
+          </div>
           <Button variant="ghost" onClick={onClose}>
             Close
           </Button>
@@ -357,6 +360,7 @@ function EntryDrawer({ entry, onClose }: { entry: JournalEntry; onClose: () => v
           </table>
         </div>
       </Section>
+      {voucher.viewer}
     </Drawer>
   );
 }

@@ -393,6 +393,18 @@ def post_journal(
     )
     if not lines or debit != credit:
         raise ValueError(f"Journal entry does not balance: debits={debit} credits={credit}.")
+    # A nil entry balances perfectly and means nothing. It passed the check
+    # above and posted: a payroll run for an employee whose salary was never
+    # set produced "Dr 6100 RWF 0, Cr 2200 RWF 0 …" — six lines of zero in the
+    # ledger, an audit record, and a journal voucher stating six times that
+    # nothing happened. A posting exists to move money; refuse the ones that do
+    # not, at the point where the caller can still say why.
+    if debit == 0:
+        raise ValueError(
+            "Journal entry posts nothing: every line is zero. "
+            "A posting that moves no money is not a posting — check the amounts "
+            "that produced it."
+        )
 
     # Idempotency check — only when we have a meaningful reference. Empty
     # ``reference_type`` is reserved for manual postings / adjustments which
@@ -465,6 +477,7 @@ def post_payment_journal(*, order: Any, amount: Decimal, user: User | None) -> N
             },
         ],
         reference_type="stock_order",
+        source_module=JournalEntry.Source.TREASURY,
         reference_id=str(order.pk),
         user=user,
     )
@@ -487,6 +500,7 @@ def post_payment_journal(*, order: Any, amount: Decimal, user: User | None) -> N
             },
         ],
         reference_type="stock_order",
+        source_module=JournalEntry.Source.TREASURY,
         reference_id=str(order.pk),
         user=user,
     )
@@ -593,6 +607,7 @@ def post_payroll_journal(
             *employee_credit_lines,
         ],
         reference_type="payroll_run",
+        source_module=JournalEntry.Source.PAYROLL,
         reference_id=reference_id,
         user=user,
     )
@@ -692,6 +707,7 @@ def _employer_post(
             },
         ],
         reference_type="payroll_employer",
+        source_module=JournalEntry.Source.PAYROLL,
         reference_id=f"{reference_id}:{statute}",
         user=user,
     )
@@ -837,6 +853,7 @@ def record_supplier_bill(
         description=f"Supplier bill {bill.bill_number or bill.pk} — {supplier.name}",
         lines=lines,
         reference_type="supplier_bill",
+        source_module=JournalEntry.Source.PROCUREMENT,
         reference_id=str(bill.pk),
         user=user,
     )
@@ -884,6 +901,7 @@ def record_supplier_bill_payment(
         # owns ("supplier_bill", bill.pk) — sharing it silently swallowed every
         # payment entry, so AP was never relieved.
         reference_type="supplier_bill_payment",
+        source_module=JournalEntry.Source.TREASURY,
         reference_id=str(payment.pk),
         user=user,
     )
@@ -961,6 +979,7 @@ def create_bank_account(
                 },
             ],
             reference_type="bank_account",
+            source_module=JournalEntry.Source.TREASURY,
             reference_id=str(account.pk),
             user=user,
         )
@@ -1485,6 +1504,7 @@ def post_inventory_adjustment(
         organization=batch.organization,
         description=f"Inventory variance — batch {batch.batch_number} ({reason})",
         lines=lines,
+        source_module=JournalEntry.Source.INVENTORY,
         reference_type=reference_type,
         reference_id=reference_id,
         user=user,
@@ -1544,6 +1564,7 @@ def post_writeoff(
     entry = post_journal(
         organization=batch.organization,
         description=f"Stock writeoff — batch {batch.batch_number} ({reason})",
+        source_module=JournalEntry.Source.INVENTORY,
         lines=[
             {
                 "account": accounts["5100"],
@@ -1663,6 +1684,7 @@ def record_tax_payment(
             },
         ],
         reference_type="tax_payment",
+        source_module=JournalEntry.Source.TAX,
         reference_id=str(payment.pk),
         user=user,
     )
@@ -1746,6 +1768,7 @@ def mirror_ebm_to_ledger(*, tax_record: Any, user: User | None) -> JournalEntry:
             },
         ],
         reference_type="tax_record",
+        source_module=JournalEntry.Source.TAX,
         reference_id=str(tax_record.pk),
         user=user,
     )
@@ -2093,6 +2116,7 @@ def _apply_opening_balances(*, organization: Organization, user: User | None) ->
                 description="Opening trial balance",
                 lines=lines,
                 reference_type="opening_balance",
+                source_module=JournalEntry.Source.CLOSE,
                 reference_id=f"gl-{organization.pk}",
                 user=user,
             )
@@ -2261,6 +2285,7 @@ def record_customer_invoice(
         description=f"Customer invoice {invoice.invoice_number}",
         lines=lines,
         reference_type="customer_invoice",
+        source_module=JournalEntry.Source.SALES,
         reference_id=str(invoice.pk),
         user=user,
     )
@@ -2375,6 +2400,7 @@ def record_customer_receipt(
         description=f"Customer receipt {receipt.receipt_number}",
         lines=lines,
         reference_type="customer_receipt",
+        source_module=JournalEntry.Source.TREASURY,
         reference_id=str(receipt.pk),
         user=user,
     )
@@ -2450,6 +2476,7 @@ def cancel_customer_invoice(
         description=f"Cancel customer invoice {invoice.invoice_number}",
         lines=lines,
         reference_type="customer_invoice_cancel",
+        source_module=JournalEntry.Source.SALES,
         reference_id=str(invoice.pk),
         user=user,
     )
@@ -2656,6 +2683,7 @@ def dispose_fixed_asset(
         description=f"Dispose fixed asset {asset.asset_number}",
         lines=lines,
         reference_type="fixed_asset_dispose",
+        source_module=JournalEntry.Source.CLOSE,
         reference_id=str(asset.pk),
         user=user,
     )

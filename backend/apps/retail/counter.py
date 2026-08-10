@@ -594,7 +594,7 @@ def bill_clinical_service(*, record: Any, user: User | None = None) -> Any:
 
     Idempotent on the encounter.
     """
-    from apps.finance.models import JournalLine
+    from apps.finance.models import JournalEntry, JournalLine
     from apps.finance.services import ensure_default_accounts, post_journal
 
     if record.is_paid:
@@ -627,7 +627,7 @@ def bill_clinical_service(*, record: Any, user: User | None = None) -> Any:
         ],
         reference_type="clinical_service",
         reference_id=str(record.pk),
-        source_module="SALES",
+        source_module=JournalEntry.Source.SALES,
         user=user,
     )
     record.is_paid = True

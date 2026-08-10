@@ -304,7 +304,7 @@ def _post_settlement(*, claim: Claim, amount: Decimal, user: User | None) -> Non
     """
     if amount <= ZERO:
         return
-    from apps.finance.models import JournalLine
+    from apps.finance.models import JournalEntry, JournalLine
     from apps.finance.services import ensure_default_accounts, post_journal
 
     accounts = ensure_default_accounts(claim.organization)
@@ -326,6 +326,7 @@ def _post_settlement(*, claim: Claim, amount: Decimal, user: User | None) -> Non
             },
         ],
         reference_type="insurance_settlement",
+        source_module=JournalEntry.Source.TREASURY,
         reference_id=str(claim.pk),
         user=user,
     )
@@ -343,7 +344,7 @@ def _post_write_off(*, claim: Claim, user: User | None) -> None:
     owed = claim.claimed_amount - claim.paid_amount
     if owed <= ZERO:
         return
-    from apps.finance.models import JournalLine
+    from apps.finance.models import JournalEntry, JournalLine
     from apps.finance.services import ensure_default_accounts, post_journal
 
     accounts = ensure_default_accounts(claim.organization)
@@ -368,6 +369,7 @@ def _post_write_off(*, claim: Claim, user: User | None) -> None:
             },
         ],
         reference_type="insurance_write_off",
+        source_module=JournalEntry.Source.SALES,
         reference_id=str(claim.pk),
         user=user,
     )

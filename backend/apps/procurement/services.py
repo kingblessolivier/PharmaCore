@@ -43,7 +43,7 @@ from apps.catalog.units import normalise
 from apps.documents import invoicing
 from apps.documents.models import DocType, Document
 from apps.documents.services import generate_document
-from apps.finance.models import Account, JournalLine, SupplierBill
+from apps.finance.models import Account, JournalEntry, JournalLine, SupplierBill
 from apps.finance.services import JournalLineInput, ensure_default_accounts, post_journal
 from apps.iam.audit import record_audit
 from apps.iam.models import Organization, User
@@ -1299,6 +1299,7 @@ def _post_receipt_journal(receipt: GoodsReceipt, user: User | None) -> None:
             },
         ],
         reference_type="goods_receipt",
+        source_module=JournalEntry.Source.PROCUREMENT,
         reference_id=str(receipt.pk),
         user=user,
     )
@@ -1611,6 +1612,7 @@ def post_supplier_invoice(*, invoice: SupplierInvoice, user: User | None) -> Sup
         description=f"Supplier invoice {invoice.invoice_number} — {invoice.supplier.name}",
         lines=cast(list[JournalLineInput], lines),
         reference_type="supplier_invoice",
+        source_module=JournalEntry.Source.PROCUREMENT,
         reference_id=str(invoice.pk),
         user=user,
     )
@@ -1691,6 +1693,7 @@ def issue_supplier_note(*, note: SupplierNote, user: User | None) -> SupplierNot
             },
         ],
         reference_type="supplier_note",
+        source_module=JournalEntry.Source.PROCUREMENT,
         reference_id=str(note.pk),
         user=user,
     )

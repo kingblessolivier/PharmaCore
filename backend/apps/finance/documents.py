@@ -114,6 +114,28 @@ def _ledger_lines(entry: JournalEntry | None) -> list[dict[str, str]]:
     ]
 
 
+def _voucher_lines(entry: JournalEntry) -> list[dict[str, str]]:
+    """The same lines as `_ledger_lines`, split for a printed voucher.
+
+    Code and name go in separate columns because that is how a voucher is read:
+    the eye runs down the codes to check the split, not down the names. The
+    money is formatted here — a template that renders `str(Decimal)` prints
+    "1500.00" where a voucher says "1,500.00", and the two are not the same
+    document to whoever signs it.
+    """
+    return [
+        {
+            "code": line.account.code,
+            "name": line.account.name,
+            "cost_centre": line.cost_centre.code if line.cost_centre else "",
+            "memo": line.memo,
+            "debit": invoicing.money(line.amount) if line.side == JournalLine.Side.DEBIT else "",
+            "credit": invoicing.money(line.amount) if line.side == JournalLine.Side.CREDIT else "",
+        }
+        for line in entry.lines.select_related("account", "cost_centre")
+    ]
+
+
 def _entry_for(organization: Organization, reference_type: str, reference_id: Any) -> Any:
     return JournalEntry.objects.filter(
         organization=organization, reference_type=reference_type, reference_id=str(reference_id)
@@ -349,9 +371,16 @@ def journal_voucher_document(*, entry: JournalEntry, user: User | None = None) -
     """A signed slip for a posting.
 
     Manual journals are the entries a human typed, so they are the ones most worth
-    being able to defend later.
+    being able to defend later. Everything an auditor asks of a voucher is
+    assembled here rather than in the template: the account split, whether the
+    two sides agree, the total in words, and what this entry reverses or was
+    reversed by. A template that works any of that out is a second, invisible
+    implementation of the ledger.
     """
-    lines = _ledger_lines(entry)
+    lines = _voucher_lines(entry)
+    debit = Decimal(str(entry.total_debit or 0))
+    credit = Decimal(str(entry.total_credit or 0))
+    reversal = entry.reversals.first()
     return generate_document(
         organization=entry.organization,
         doc_type=DocType.JOURNAL_VOUCHER,
@@ -362,12 +391,39 @@ def journal_voucher_document(*, entry: JournalEntry, user: User | None = None) -
         context={
             "entry_number": entry.entry_number,
             "entry_date": entry.entry_date,
-            "description": entry.description,
+            "description": entry.description or "—",
             "source": entry.get_source_module_display(),
+            # What raised it. "payroll_run · 1" is what somebody follows back to
+            # the thing that caused the posting, and a manual journal has none —
+            # which is itself worth stating rather than leaving blank.
+            "origin": (
+                f"{entry.reference_type} · {entry.reference_id}"
+                if entry.reference_type
+                else "Typed directly — no source document"
+            ),
+            # The footer claims this voucher is the whole of the evidence. That
+            # is only true when nothing else documents the posting, so it keys
+            # off the absent source document rather than off `source_module` —
+            # which said "Manual journal" on 23 machine-generated postings until
+            # the call sites were corrected, and could drift again.
+            "is_manual": not entry.reference_type,
             "lines": lines,
-            "total_debit": f"{entry.total_debit:.2f}",
-            "total_credit": f"{entry.total_credit:.2f}",
-            "posted_by": getattr(entry.posted_by, "get_full_name", lambda: "—")() or "—",
+            "line_count": len(lines),
+            "currency": "RWF",
+            "total_debit": invoicing.money(debit),
+            "total_credit": invoicing.money(credit),
+            #: A voucher whose sides disagree is not a voucher. It cannot arise
+            #: through `post_journal`, which refuses it — but a document that
+            #: silently prints an unbalanced pair would hide the day it did.
+            "balanced": debit == credit,
+            "difference": invoicing.money(abs(debit - credit)),
+            "total_words": amount_in_words(debit),
+            "status": entry.get_status_display(),
+            "is_reversed": entry.status == JournalEntry.Status.REVERSED,
+            "reverses": entry.reversal_of.entry_number if entry.reversal_of else "",
+            "reversed_by": reversal.entry_number if reversal else "",
+            "posted_by": getattr(entry.posted_by, "get_full_name", lambda: "")() or "—",
+            "posted_at": entry.created_at,
         },
     )
 
