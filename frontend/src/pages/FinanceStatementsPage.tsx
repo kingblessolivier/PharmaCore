@@ -14,7 +14,7 @@ import { DataGrid } from "../components/DataGrid";
 import { Drawer, ErrorNote, Input, ProgressBar } from "../components/RecordKit";
 import { Badge, Button, PageHeader, Spinner } from "../components/ui";
 import { api, ApiError } from "../lib/api";
-import { useFinanceDocument } from "../lib/financeDocuments";
+import { DocumentNotice, useFinanceDocument } from "../lib/financeDocuments";
 import { useAuth } from "../lib/auth";
 import type { CloseReadiness, PeriodTask } from "../lib/finance";
 import type {
@@ -215,11 +215,8 @@ export function FinanceStatementsPage() {
           {pack.isPending ? "Preparing…" : "Statements PDF"}
         </Button>
       </div>
-      {pack.data && (
-        <p className="text-xs text-ink-500">
-          Issued as <strong>{pack.data.doc_number}</strong>.
-        </p>
-      )}
+      <DocumentNotice doc={pack} />
+      {pack.viewer}
 
       {tab === "pl" && plQ.data && (
         <VizRoot>

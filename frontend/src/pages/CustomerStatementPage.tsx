@@ -6,7 +6,7 @@ import { Facts, Field, Input, Section, Select } from "../components/RecordKit";
 import { Badge, Button, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
 import { money, shortDate } from "../lib/format";
-import { useFinanceDocument } from "../lib/financeDocuments";
+import { DocumentNotice, useFinanceDocument } from "../lib/financeDocuments";
 import { useDefaultOrg } from "../lib/recordData";
 import type {
   ArAging,
@@ -221,12 +221,8 @@ export function CustomerStatementPage() {
                 {statementPdf.isPending ? "Preparing…" : "Statement PDF"}
               </Button>
             </div>
-            {statementPdf.data && (
-              <p className="text-xs text-ink-500">
-                Issued as <strong>{statementPdf.data.doc_number}</strong> — numbered, hashed and
-                QR-verifiable, so the customer can check it was not altered.
-              </p>
-            )}
+            <DocumentNotice doc={statementPdf} />
+            {statementPdf.viewer}
             <DataGrid<CustomerStatementLine>
               rows={statement.lines}
               getRowId={(l) => `${l.date}:${l.reference}:${l.balance}`}

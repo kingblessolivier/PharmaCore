@@ -1,23 +1,184 @@
 {% extends "documents/base.html" %}
+{% comment %}
+A journal voucher, laid out the way an accountant expects to receive one.
+
+What it is *for* drives the shape. A journal voucher is the authorisation slip
+for a posting that no invoice, receipt or delivery produced — most often one a
+human typed. It is the piece of paper an auditor asks for when they want to know
+why a number moved, so it has to answer four questions on its face:
+
+  what was posted    the account split, code and name, debit against credit
+  why                the narration, and the document that caused it
+  by whom            named, with room for the second signature that authorises it
+  is it still true   posted, or reversed by a later entry — and which one
+
+The previous version answered the first and roughly half of the second. It had
+no totals check, no amount in words, no reversal state, no signature block worth
+the name, and it printed `str(Decimal)` — "1500.00" where a voucher says
+"1,500.00". It was a table with a heading, not a voucher.
+
+Two constraints inherited from the base template: no nested tables (this
+renderer computes column widths up front and produces no page at all when a
+table sits inside a cell), and comments must be {% templatetag openblock %} comment {% templatetag closeblock %} tags — the hash
+form is single-line only, and a multi-line one prints.
+{% endcomment %}
+
+{% block title %}JOURNAL VOUCHER{% endblock %}
+
+{% block docmeta %}
+  <b>{{ entry_number|default:doc_number }}</b><br>
+  {{ entry_date|date:"d M Y" }}<br>
+  {% if is_reversed %}
+    <span class="warn">REVERSED</span>
+  {% elif not balanced %}
+    <span class="warn">DOES NOT BALANCE</span>
+  {% else %}
+    Posted
+  {% endif %}
+{% endblock %}
+
 {% block content %}
+
 <table class="parties">
   <tr>
-    <td style="width:55%"><div class="plabel">Entry</div>{{ entry_number }}<br><span class="muted">{{ description }}</span></td>
-    <td style="width:45%"><div class="plabel">Posted</div>{{ entry_date }}<br><span class="muted">Source: {{ source }}</span></td>
+    <td style="width:50%">
+      <div class="plabel">Narration</div>
+      <div class="party">
+        <b>{{ description }}</b><br>
+        Source: {{ source }}<br>
+        Raised by: {{ origin }}
+      </div>
+    </td>
+    <td style="width:50%" class="last">
+      <div class="plabel">Posting</div>
+      <div class="party">
+        Voucher no. <b>{{ entry_number|default:doc_number }}</b><br>
+        Value date: {{ entry_date|date:"d M Y" }}<br>
+        Entered: {{ posted_at|date:"d M Y H:i" }} &middot; {{ line_count }} line{{ line_count|pluralize }}
+      </div>
+    </td>
   </tr>
 </table>
-<table>
-  <tr><th>Account</th><th>Cost centre</th><th>Memo</th><th class="right">Debit</th><th class="right">Credit</th></tr>
-  {% for l in lines %}
-  <tr><td>{{ l.account }}</td><td>{{ l.cost_centre }}</td><td>{{ l.memo }}</td><td class="right">{{ l.debit }}</td><td class="right">{{ l.credit }}</td></tr>
-  {% endfor %}
-  <tr><td colspan="3" class="right"><b>Totals</b></td><td class="right"><b>{{ total_debit }}</b></td><td class="right"><b>{{ total_credit }}</b></td></tr>
-</table>
-<p class="muted">A posted entry is immutable. Corrections are made by a new reversing entry, never by editing this one.</p>
-<table class="parties" style="margin-top:24px">
+
+{% comment %}
+Code and name in separate columns: an accountant checking a split runs their eye
+down the codes, not the names. Memo carries the per-line reason, which on a
+payroll or a settlement posting is the only thing distinguishing six credits to
+six payables.
+{% endcomment %}
+<table class="lines">
   <tr>
-    <td style="width:50%"><div class="plabel">Prepared by</div>{{ posted_by }}<br><br>___________________</td>
-    <td style="width:50%"><div class="plabel">Reviewed by</div><br><br>___________________</td>
+    <th style="width:4%">#</th>
+    <th style="width:9%">A/C code</th>
+    <th style="width:22%">Account</th>
+    <th style="width:9%">Cost centre</th>
+    <th style="width:13%">Memo</th>
+    <th style="width:14%" class="right">Debit</th>
+    <th style="width:14%" class="right">Credit</th>
+  </tr>
+  {% for l in lines %}
+  <tr>
+    <td>{{ forloop.counter }}</td>
+    <td>{{ l.code }}</td>
+    <td>{{ l.name }}</td>
+    <td>{{ l.cost_centre|default:"&mdash;" }}</td>
+    <td>{{ l.memo|default:"&mdash;" }}</td>
+    <td class="right">{{ l.debit }}</td>
+    <td class="right">{{ l.credit }}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="7" class="muted">This entry has no lines.</td></tr>
+  {% endfor %}
+  {% comment %}
+  Ruled blank rows, so the grid does not stop at the last posting and leave a
+  space somebody can write an eighth line into after it was signed.
+  {% endcomment %}
+  {% if line_count < 6 %}
+    {% for _ in "xx" %}
+    <tr>
+      <td class="blank">&nbsp;</td><td class="blank">&nbsp;</td><td class="blank">&nbsp;</td>
+      <td class="blank">&nbsp;</td><td class="blank">&nbsp;</td><td class="blank">&nbsp;</td>
+      <td class="blank">&nbsp;</td>
+    </tr>
+    {% endfor %}
+  {% endif %}
+  <tr>
+    <td colspan="5" class="right"><b>TOTALS ({{ currency }})</b></td>
+    <td class="right grandcell">{{ total_debit }}</td>
+    <td class="right grandcell">{{ total_credit }}</td>
   </tr>
 </table>
+
+{% comment %}
+The balance check, stated rather than left to the reader to perform. `post_journal`
+refuses an unbalanced entry, so this line should always read as agreeing — which
+is precisely why it is printed: on the day it does not, the voucher says so
+instead of looking like every other voucher.
+{% endcomment %}
+{% if balanced %}
+<p class="muted" style="margin-top:6pt;">
+  Debits equal credits at {{ total_debit }} {{ currency }}. Double entry complete.
+</p>
+{% else %}
+<p class="warn" style="margin-top:6pt;">
+  THIS VOUCHER DOES NOT BALANCE — debits {{ total_debit }} against credits {{ total_credit }},
+  a difference of {{ difference }} {{ currency }}. Do not file it. Refer it to the financial
+  controller before this posting is relied on.
+</p>
+{% endif %}
+
+<div class="note">
+  <b>Amount in words</b><br>{{ total_words }}
+</div>
+
+{% if is_reversed or reverses %}
+<p class="warn" style="margin-top:8pt;">
+  {% if is_reversed %}
+    This entry has been REVERSED{% if reversed_by %} by voucher {{ reversed_by }}{% endif %}. It no
+    longer affects the ledger balances and must not be presented as a live posting.
+  {% else %}
+    This entry is itself a reversal of voucher {{ reverses }}.
+  {% endif %}
+</p>
+{% endif %}
+
+{% comment %}
+Three signatures, because that is the control a journal voucher exists to
+evidence: the person who worked it out is not the person who authorises it, and
+neither is the person who put it into the ledger. A manual journal is the one
+posting with no invoice behind it, so the countersignature *is* the control.
+{% endcomment %}
+<table class="sig">
+  <tr>
+    <th style="width:17%">&nbsp;</th>
+    <th style="width:25%">Prepared by</th>
+    <th style="width:25%">Checked by</th>
+    <th>Authorised by</th>
+  </tr>
+  <tr>
+    <td class="rowlabel">Name in print</td>
+    <td>{{ posted_by }}</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td class="rowlabel">Signature</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td class="rowlabel">Date</td>
+    <td>{{ posted_at|date:"d M Y" }}</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+</table>
+
+<p class="muted" style="margin-top:8pt;">
+  A posted entry is immutable. Corrections are made by a new reversing entry, never by
+  editing this one{% if is_manual %} — and a manual journal carries no source document, so this
+  voucher is the whole of the evidence for it{% endif %}.
+  Retained as the authorisation record for the posting shown above.
+</p>
 {% endblock %}

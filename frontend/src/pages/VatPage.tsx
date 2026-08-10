@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, FileDown, Download, FileBarChart } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
-import { useFinanceDocument } from "../lib/financeDocuments";
+import { DocumentNotice, useFinanceDocument } from "../lib/financeDocuments";
 import { useAuth } from "../lib/auth";
 import type { VatReturn } from "../lib/types";
 import { Badge, Button, Card, PageHeader, Spinner } from "../components/ui";
@@ -103,6 +103,8 @@ export function VatPage() {
           </Button>
         }
       />
+      <DocumentNotice doc={filed} />
+      {filed.viewer}
 
       {/* Period switcher — same UI as FinanceHome. */}
       <div className="mb-4 flex flex-wrap items-center gap-2">

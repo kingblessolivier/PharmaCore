@@ -49,6 +49,7 @@ export function StatTile({
   deltaContext,
   /** Set when a rise is bad (expenses, DSO) so the colour follows meaning, not sign. */
   invertDelta = false,
+  tone,
 }: {
   label: string;
   value: ReactNode;
@@ -56,6 +57,10 @@ export function StatTile({
   deltaPct?: number | null;
   deltaContext?: string;
   invertDelta?: boolean;
+  /** Colours the figure itself when the number *is* the problem — a count of
+   *  medicines nobody priced, an overdue balance. Never colour alone: the hint
+   *  line has to say what is wrong, as it does everywhere this is used. */
+  tone?: "warning" | "danger";
 }) {
   const hasDelta = deltaPct !== undefined;
   const up = (deltaPct ?? 0) >= 0;
@@ -65,7 +70,17 @@ export function StatTile({
   return (
     <div className="rounded-lg border border-line bg-surface-0 px-4 py-3">
       <div className="text-[11px] font-medium text-ink-500">{label}</div>
-      <div className="mt-0.5 text-2xl font-semibold tabular-nums text-ink-900">{value}</div>
+      <div
+        className={`mt-0.5 text-2xl font-semibold tabular-nums ${
+          tone === "danger"
+            ? "text-danger-700"
+            : tone === "warning"
+              ? "text-warning-700"
+              : "text-ink-900"
+        }`}
+      >
+        {value}
+      </div>
       {hasDelta && deltaPct === null && deltaContext && (
         <div className="mt-0.5 text-xs text-ink-500">— no {deltaContext} to compare</div>
       )}

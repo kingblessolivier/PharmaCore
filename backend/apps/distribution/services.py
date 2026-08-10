@@ -362,7 +362,28 @@ def dispatch_order(
     *, order: StockOrder, driver_name: str, vehicle_registration: str, user: User | None
 ) -> Shipment:
     """Dispatch a picked order: consume its reservations, deduct depot stock via
-    TRANSFER_OUT ledger movements, record the packing manifest, and create a shipment."""
+    TRANSFER_OUT ledger movements, record the packing manifest, and create a shipment.
+
+    Refuses an empty dispatch. ``approve_and_allocate`` reserves what the depot
+    can cover and says the shortfall "surfaces at picking/dispatch" — it did
+    not. A depot with no stock for the order reserved nothing, this function
+    dispatched nothing, and every step afterwards reported success: an empty
+    shipment, a delivery note listing no goods, IN_TRANSIT, a goods receipt with
+    no lines, DELIVERED. Fifteen orders in the development database completed
+    that way, each with paperwork saying medicine had moved.
+
+    A lorry does not leave with nothing on it. If the depot cannot fill a single
+    line, that is the fact the depot has to be told, at the moment it tries.
+    """
+    if not order.reservations.exists():
+        short = ", ".join(
+            item.product.generic_name for item in order.items.select_related("product")
+        )
+        raise ValueError(
+            "Nothing can be dispatched for this order — the depot has no stock reserved "
+            f"against {short or 'any line on it'}. "
+            "Receive stock into the depot, or cancel the order; it cannot ship empty."
+        )
     shipment = Shipment.objects.create(
         order=order,
         driver_name=driver_name,
@@ -515,7 +536,19 @@ def finalize_grn(
     *, grn: GoodsReceivedNote, lines_data: dict[int, dict[str, Any]], user: User | None
 ) -> GoodsReceivedNote:
     """Finalize a GRN: write good stock into retail inventory (TRANSFER_IN), record
-    discrepancies, and move the order to DELIVERED / PARTIALLY_RECEIVED."""
+    discrepancies, and move the order to DELIVERED / PARTIALLY_RECEIVED.
+
+    A goods receipt with no lines is not a receipt. It was finalizable, and
+    doing so marked the order DELIVERED, issued a numbered GRN document reading
+    "No lines recorded on this receipt", and landed no stock — so the pharmacy
+    held paperwork for a delivery it never got, and the order looked complete.
+    """
+    if not grn.lines.exists():
+        raise ValueError(
+            f"{grn.grn_number or 'This goods receipt'} has no lines, so there is nothing to "
+            "receive. It was opened against a shipment carrying no goods — check what the "
+            "depot actually dispatched before finalising it."
+        )
     received_per_item: dict[int, Decimal] = defaultdict(lambda: Decimal(0))
     any_discrepancy = False
     for line in grn.lines.select_related("order_item", "product").all():

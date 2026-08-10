@@ -99,9 +99,39 @@ def strip_remote_images(html: str) -> str:
     return _REMOTE_IMAGE.sub("", html)
 
 
+#: A table cell with nothing in it — no text, only whitespace or comments.
+#: Written with String-safe raw strings and proved by the self-test in
+#: tests/test_document_layout.py, not by reading.
+_EMPTY_CELL = re.compile(r"(<(t[dh])\b[^>]*>)(\s*)(</\2>)", re.IGNORECASE)
+
+
+def fill_empty_cells(html: str) -> str:
+    """Put a non-breaking space in every empty table cell.
+
+    xhtml2pdf collapses a column containing an empty cell to zero width, and
+    takes the neighbouring columns down with it. On a journal voucher — where a
+    debit line has no credit and a credit line has no debit, so an empty cell is
+    not an edge case but the normal shape of a ledger — the Debit and Credit
+    columns ended up ten points apart, printing the two figures on top of each
+    other: "7,5060.00". The same collapse merged "Delivered by" and "Received
+    by" on every goods receipt where the driver's name had not been typed in.
+
+    I first blamed this on declared column widths summing to 100%, which is a
+    real constraint of this renderer but was not the cause: a seven-column table
+    at 100% renders correctly, and the same table with one empty middle cell
+    does not. Filling that one cell fixes it.
+
+    The fix belongs here rather than in fifteen templates. A template author
+    cannot reasonably be expected to know that ``{{ line.credit }}`` resolving
+    to "" destroys the layout of the whole table, and every template that gets
+    written later would have to remember.
+    """
+    return _EMPTY_CELL.sub(r"\1&nbsp;\4", html)
+
+
 def render_pdf(html: str) -> bytes:
     """Render an HTML string to PDF bytes."""
-    html = strip_remote_images(html)
+    html = fill_empty_cells(strip_remote_images(html))
     out = io.BytesIO()
     result = pisa.CreatePDF(src=html, dest=out, encoding="utf-8", link_callback=_resolve_asset)
     if result.err:
