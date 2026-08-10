@@ -4,8 +4,8 @@ import { useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button, PageHeader, SelectField, TextField } from "../components/ui";
 import { DataGrid } from "../components/DataGrid";
-import { Drawer, Empty, Facts, Section } from "../components/RecordKit";
-import { money, shortDate } from "../lib/format";
+import { Drawer } from "../components/RecordKit";
+
 import { api } from "../lib/api";
 import type { Paginated, StockOrder } from "../lib/types";
 import { StatusChip } from "../components/Status";
@@ -14,7 +14,6 @@ export function PurchaseOrdersPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const qc = useQueryClient();
-  const [viewing, setViewing] = useState<StockOrder | null>(null);
   const [payingOrderId, setPayingOrderId] = useState<number | null>(null);
 
   /* The order builder — parties, cart, line helpers — moved to
@@ -263,102 +262,7 @@ export function PurchaseOrdersPage() {
         </Drawer>
       )}
 
-      {viewing && (
-        <Drawer
-          title={viewing.order_number}
-          subtitle={`${viewing.depot_name} → ${viewing.retail_name}`}
-          badge={<StatusChip status={viewing.status} />}
-          onClose={() => setViewing(null)}
-        >
-          <Section title="Order">
-            <Facts
-              rows={[
-                ["Order", viewing.order_number],
-                ["Status", viewing.status],
-                ["Total", money(viewing.total_amount)],
-                ["Paid", money(viewing.amount_paid)],
-                ["Outstanding", money(viewing.amount_due)],
-                ["Raised", shortDate(viewing.created_at)],
-              ]}
-            />
-          </Section>
 
-          <Section
-            title="Lines being supplied"
-            hint="Priced from the depot's storefront — an awarded tender price overrides it."
-          >
-            {(viewing.items ?? []).length === 0 ? (
-              <Empty message="Nothing on this order could be supplied — see what was recorded as demand below." />
-            ) : (
-              <div className="overflow-x-auto rounded-lg border border-line">
-                <table className="w-full text-sm">
-                  <thead className="border-b border-line bg-surface-100 text-left text-xs text-ink-500">
-                    <tr>
-                      <th className="px-3 py-2">Medicine</th>
-                      <th className="px-3 py-2 text-right">Ordered</th>
-                      <th className="px-3 py-2 text-right">Shipped</th>
-                      <th className="px-3 py-2 text-right">Received</th>
-                      <th className="px-3 py-2 text-right">Unit price</th>
-                      <th className="px-3 py-2 text-right">Line total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(viewing.items ?? []).map((i) => (
-                      <tr key={i.id} className="border-b border-line last:border-0">
-                        <td className="px-3 py-2 text-ink-900">{i.product_name}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{i.quantity_ordered}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{i.quantity_shipped}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{i.quantity_received}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {money(i.price_per_unit)}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">{money(i.line_total)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Section>
-
-          <Section
-            title="Recorded as demand"
-            hint="What this order asked for that the depot could not supply. It is not lost — it is what the depot imports against."
-          >
-            {(viewing.backorders ?? []).length === 0 ? (
-              <p className="text-sm text-ink-600">Everything asked for could be supplied.</p>
-            ) : (
-              <ul className="space-y-1.5 text-sm">
-                {(viewing.backorders ?? []).map((b) => (
-                  <li key={b.id} className="flex items-start justify-between gap-3">
-                    <span className="text-ink-900">
-                      {b.product_name} × {b.quantity.toLocaleString()}
-                      {b.note && <span className="block text-xs text-ink-500">{b.note}</span>}
-                    </span>
-                    <StatusChip status={b.status} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Section>
-
-          {(viewing.order_payments ?? []).length > 0 && (
-            <Section title="Settlement">
-              <ul className="space-y-1 text-sm">
-                {(viewing.order_payments ?? []).map((pm) => (
-                  <li key={pm.id} className="flex justify-between">
-                    <span className="text-ink-600">
-                      {pm.method}
-                      {pm.reference ? ` · ${pm.reference}` : ""}
-                    </span>
-                    <span className="tabular-nums text-ink-900">{money(pm.amount)}</span>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
-        </Drawer>
-      )}
     </div>
   );
 }
