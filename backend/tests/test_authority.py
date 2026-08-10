@@ -279,7 +279,18 @@ def test_no_amount_means_competence_alone_decides(org):
 
 
 def test_self_approval_is_still_refused_first(org):
+    """Ordering: the self-approval check fires before the authority check.
+
+    The pharmacy is staffed on purpose. A MICRO organisation with nobody else
+    holding the competence is now *allowed* to self-approve — refusing there
+    produces no second approver, only a pharmacy that cannot run its own
+    payroll. This test is about which refusal comes first when a second person
+    does exist, so it makes sure one does.
+    """
+    org.size = Organization.Size.MEDIUM
+    org.save(update_fields=["size"])
     hr = person("sarah_hr", org, "HR_MANAGER", limit=Decimal("99000000"))
+    person("frank_hr", org, "HR_MANAGER", limit=Decimal("99000000"))
     with pytest.raises(services.ApprovalError) as exc:
         services.claim(approval=payroll(org, hr, "100"), user=hr)
     assert "self-approval" in str(exc.value)

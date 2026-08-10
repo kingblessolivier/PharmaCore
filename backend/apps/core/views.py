@@ -22,6 +22,23 @@ from apps.inventory.models import InventoryBatch, PharmacyProduct
 from apps.retail.models import Sale
 
 
+class PharmacyDayView(APIView):
+    """The morning briefing for a pharmacy that is one or two people.
+
+    Composed rather than assembled by the client: a small pharmacy's home
+    screen was otherwise seven separate requests, each of which could arrive
+    late or fail on its own, producing a page that filled in raggedly and
+    sometimes disagreed with itself about the date.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        from apps.core.pharmacy_day import pharmacy_day
+
+        return Response(pharmacy_day(cast(User, request.user)))
+
+
 class HealthView(APIView):
     """Liveness probe — confirms the API is up."""
 

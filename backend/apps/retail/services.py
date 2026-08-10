@@ -205,6 +205,30 @@ def complete_sale(
     if not sale.items.exists():
         raise ValueError("Cannot complete an empty sale.")
 
+    # A line with no price is a medicine given away.
+    #
+    # `pricing.resolve` returns zero with source "NONE" when neither a price
+    # list nor the pharmacy's own listing prices a product, and the till rang
+    # it up at nothing: SALE-000018 in the development database took RWF 0 for
+    # a paracetamol that had cost RWF 300 to buy. The stock left the shelf, no
+    # money arrived, and the only trace was a negative gross profit at the end
+    # of the month.
+    #
+    # In a two-person pharmacy nobody else is going to notice. Refused here, at
+    # the till, where the person can still put a price on it — a deliberate
+    # free issue is a discount to 100%, recorded as such, not an empty price.
+    unpriced = [
+        item.product.generic_name or str(item.product)
+        for item in sale.items.select_related("product")
+        if item.unit_price <= 0
+    ]
+    if unpriced:
+        raise ValueError(
+            f"No price is set for {', '.join(sorted(set(unpriced)))}, so this sale would "
+            "give the medicine away. Set a selling price on the product, or record a "
+            "full discount if you mean to issue it free."
+        )
+
     needs_pharmacist = _sale_needs_pharmacist(sale)
     if needs_pharmacist:
         if not _is_pharmacist(user):

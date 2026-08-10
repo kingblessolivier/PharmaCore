@@ -6,6 +6,7 @@ import { Spinner } from "./components/ui";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { isAdmin } from "./lib/roles";
 import { DashboardPage } from "./pages/DashboardPage";
+import { PharmacyDayPage } from "./pages/PharmacyDayPage";
 import { DepartmentsPage } from "./pages/DepartmentsPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -152,6 +153,17 @@ const forProcurement = (el: ReactNode) => (
   </RequireRoles>
 );
 
+/** Whichever home fits the pharmacy.
+ *
+ * A two-person shop opening on a departmental dashboard has to read past six
+ * panels it will never act on before it finds today's takings. Nothing is
+ * hidden — /apps and every route still work — this is only which page the
+ * front door leads to. */
+function Home() {
+  const { user } = useAuth();
+  return user?.organization_size === "MICRO" ? <PharmacyDayPage /> : <DashboardPage />;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -160,7 +172,12 @@ function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route element={<Protected />}>
-              <Route path="/" element={<DashboardPage />} />
+              {/* Home is whichever home fits the pharmacy.
+                  A two-person shop opening on a departmental dashboard has to
+                  read past six panels it will never act on to find today's
+                  takings. Same route, same permissions — a different page for
+                  a different kind of place. */}
+              <Route path="/" element={<Home />} />
               <Route path="/retail" element={<RetailHome />} />
               <Route path="/retail/prescriptions" element={forPharmacy(<PrescriptionsPage />)} />
               <Route

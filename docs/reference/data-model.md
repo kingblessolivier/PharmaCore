@@ -37,6 +37,7 @@ Table `approvals_approvalrequest`.
 | `decided_by` | FK → iam.User | optional · on delete: set_null |
 | `decided_at` | DateTime | optional |
 | `decision_note` | Char(300) |  |
+| `self_approved` | Boolean |  |
 | `created_at` | DateTime |  |
 
 
@@ -2669,6 +2670,7 @@ Table `iam_organization`.
 | `is_active` | Boolean |  |
 | `onboarding_status` | Char(20) | one of: DRAFT, PENDING_REVIEW, ACTIVE, SUSPENDED |
 | `plan` | Char(20) | one of: BASIC, STANDARD, PREMIUM, ENTERPRISE |
+| `size` | Char(12) | one of: MICRO, SMALL, MEDIUM, ENTERPRISE · How this pharmacy is staffed. Drives navigation, the home screen, and how many people an approval can require — never what the system can do. |
 | `brand_color` | Char(9) |  |
 | `feature_flags` | JSON |  |
 | `require_coa_before_release` | Boolean | Refuse to release a lot from quarantine unless its Certificate of Analysis is on file and verified. |

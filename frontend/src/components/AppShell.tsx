@@ -654,6 +654,82 @@ const NAV: NavGroup[] = [
   },
 ];
 
+/* -------------------------------------------------------------------------- */
+/* The same system, for a pharmacy that is two people.                        */
+/*                                                                            */
+/* NAV above describes an organisation with departments: procurement,         */
+/* distribution, quality, people, insurance, a service desk. Most Rwandan     */
+/* community pharmacies have none of those. An owner and perhaps one employee */
+/* between them do the selling, the ordering, the receiving, the cash and the */
+/* books — and handing that person forty menu entries is not generosity, it   */
+/* is a description of an organisation that does not exist, which they then   */
+/* have to navigate around to reach the till.                                 */
+/*                                                                            */
+/* So a MICRO pharmacy gets this instead. Nothing is removed from the system  */
+/* and nothing is disabled: every screen above is still reachable by URL and  */
+/* still governed by the same permissions. This is what is *offered*.         */
+/* "Everything else" at the bottom is the way back, so the choice is never a  */
+/* trap.                                                                      */
+/* -------------------------------------------------------------------------- */
+const SIMPLE_NAV: NavGroup[] = [
+  {
+    label: "",
+    needs: "all",
+    items: [
+      { to: "/", label: "Home", icon: LayoutDashboard, end: true },
+      { to: "/pos", label: "Sell", icon: ShoppingCart, needs: ["sale.create"] },
+    ],
+  },
+  {
+    label: "Stock",
+    needs: ["inventory.view"],
+    items: [
+      { to: "/inventory", label: "What I have", icon: Boxes, end: true },
+      { to: "/inventory/replenishment", label: "Running low", icon: TrendingUp },
+      { to: "/inventory/qc", label: "Expiring & quarantine", icon: TriangleAlert },
+      { to: "/inventory/counts", label: "Stock count", icon: ClipboardList },
+    ],
+  },
+  {
+    label: "Buying",
+    needs: ["order.create"],
+    items: [
+      { to: "/distribution/orders", label: "My orders", icon: ClipboardList },
+      { to: "/distribution/portal", label: "Find a supplier", icon: Truck },
+      { to: "/procurement/receipts", label: "Receive a delivery", icon: PackageCheck },
+    ],
+  },
+  {
+    label: "Money",
+    needs: ["finance.view"],
+    items: [
+      { to: "/retail/sales", label: "Sales", icon: Receipt, needs: ["sale.create"] },
+      { to: "/finance/receivables", label: "Owed to me", icon: TrendingUp },
+      { to: "/finance/payables", label: "I owe", icon: CreditCard },
+      { to: "/documents", label: "Documents", icon: FileText },
+    ],
+  },
+  {
+    /* The way back. A short menu that cannot be escaped is a cage, not a
+       simplification — and a pharmacy needs a supplier's details or a staff
+       record occasionally without wanting them on the front page every day.
+       The app waffle in the header reaches everything else. */
+    label: "More",
+    needs: "all",
+    items: [
+      { to: "/suppliers", label: "Suppliers", icon: Truck, needs: ["order.create"] },
+      { to: "/insurance", label: "Insurance", icon: Shield, needs: ["insurance.view"] },
+      { to: "/users", label: "Who works here", icon: Users, needs: ["user.manage"] },
+      {
+        to: "/companies",
+        label: "Pharmacy details",
+        icon: Building2,
+        needs: ["organization.manage"],
+      },
+    ],
+  },
+];
+
 function ViewAsBanner() {
   const { user, stopImpersonating } = useAuth();
   if (!user?.impersonator) return null;
@@ -709,9 +785,17 @@ export function AppShell() {
   const sellsOverTheCounter = !["DEPOT", "HQ", "DISTRIBUTOR"].includes(
     user?.organization_type ?? "",
   );
-  const visible = NAV.filter(
-    (g) => canSee(g.needs) && (sellsOverTheCounter || g.label !== "Retail"),
-  ).map((g) => ({
+  /* A two-person pharmacy is offered the short menu.
+   *
+   * `simpleMode` is about what is *put in front of* somebody, never about what
+   * they may do: every screen stays routed and every permission check is
+   * unchanged, and "Everything else" leads to the full app grid. A pharmacy
+   * that grows changes its size in settings and the long menu comes back. */
+  const simpleMode = user?.organization_size === "MICRO";
+  const source = simpleMode ? SIMPLE_NAV : NAV;
+  const visible = source
+    .filter((g) => canSee(g.needs) && (sellsOverTheCounter || g.label !== "Retail"))
+    .map((g) => ({
     ...g,
     items: g.items.filter((i) => canSee(i.needs ?? g.needs)),
   }));

@@ -307,7 +307,15 @@ def test_requisition_submit_approve_and_consolidate(
 def test_no_self_approval_even_for_a_manager(
     depot: Organization, product: Product, approver: User
 ) -> None:
-    """An approver who raises the request may not decide it — the engine's rule."""
+    """An approver who raises the request may not decide it — the engine's rule.
+
+    Staffed on purpose. A MICRO organisation with nobody else holding the
+    competence may now self-approve, because refusing there produces no second
+    approver — only a depot that cannot order its own stock. The rule this test
+    is about applies where somebody else exists, so it makes sure somebody does.
+    """
+    depot.size = Organization.Size.MEDIUM
+    depot.save(update_fields=["size"])
     client = _auth(approver)
     requisition = client.post(
         "/api/procurement/requisitions/",
