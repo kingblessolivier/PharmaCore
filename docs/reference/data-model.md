@@ -2671,6 +2671,8 @@ Table `iam_organization`.
 | `onboarding_status` | Char(20) | one of: DRAFT, PENDING_REVIEW, ACTIVE, SUSPENDED |
 | `plan` | Char(20) | one of: BASIC, STANDARD, PREMIUM, ENTERPRISE |
 | `size` | Char(12) | one of: MICRO, SMALL, MEDIUM, ENTERPRISE · How this pharmacy is staffed. Drives navigation, the home screen, and how many people an approval can require — never what the system can do. |
+| `is_vat_registered` | Boolean | Registered for VAT with the RRA. Compulsory above RWF 20M turnover in 12 months, or RWF 5M in the preceding quarter. When off, no VAT is charged at the till and no VAT appears on an invoice. |
+| `vat_registration_no` | Char(30) |  |
 | `brand_color` | Char(9) |  |
 | `feature_flags` | JSON |  |
 | `require_coa_before_release` | Boolean | Refuse to release a lot from quarantine unless its Certificate of Analysis is on file and verified. |

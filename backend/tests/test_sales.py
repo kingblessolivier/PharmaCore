@@ -24,7 +24,21 @@ def _auth(user: User) -> APIClient:
 
 @pytest.fixture
 def pharmacy(db: None) -> Organization:
-    return Organization.objects.create(name="City Pharmacy", type=Organization.OrgType.RETAIL)
+    """A VAT-registered pharmacy, stated rather than assumed.
+
+    Registration is not the default any more, and it is not the common case:
+    the RRA makes it compulsory only above RWF 20M of turnover, and most
+    Rwandan community pharmacies are below that. These tests are about what a
+    registered shop charges, so they say so — a fixture that left it off would
+    now correctly compute no VAT and the assertions below would be testing
+    nothing.
+    """
+    return Organization.objects.create(
+        name="City Pharmacy",
+        type=Organization.OrgType.RETAIL,
+        is_vat_registered=True,
+        vat_registration_no="102938475",
+    )
 
 
 @pytest.fixture

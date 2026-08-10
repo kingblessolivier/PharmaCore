@@ -4,9 +4,14 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { Spinner } from "./components/ui";
 import { AuthProvider, useAuth } from "./lib/auth";
+import { hasBothRoles, storedWorkspace } from "./lib/workspace";
 import { isAdmin } from "./lib/roles";
 import { DashboardPage } from "./pages/DashboardPage";
+import { MoneyCentrePage } from "./pages/MoneyCentrePage";
 import { PharmacyDayPage } from "./pages/PharmacyDayPage";
+import { PharmacyPerformancePage } from "./pages/PharmacyPerformancePage";
+import { PharmacySetupPage } from "./pages/PharmacySetupPage";
+import { QuickReceivePage } from "./pages/QuickReceivePage";
 import { DepartmentsPage } from "./pages/DepartmentsPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -161,7 +166,14 @@ const forProcurement = (el: ReactNode) => (
  * front door leads to. */
 function Home() {
   const { user } = useAuth();
-  return user?.organization_size === "MICRO" ? <PharmacyDayPage /> : <DashboardPage />;
+  if (user?.organization_size !== "MICRO") return <DashboardPage />;
+  // The owner and the pharmacist are usually the same person with two
+  // different mornings — see lib/workspace.ts.
+  return hasBothRoles(user) && storedWorkspace() === "owner" ? (
+    <PharmacyPerformancePage />
+  ) : (
+    <PharmacyDayPage />
+  );
 }
 
 function App() {
@@ -178,6 +190,13 @@ function App() {
                   takings. Same route, same permissions — a different page for
                   a different kind of place. */}
               <Route path="/" element={<Home />} />
+              {/* The owner's two screens. Same data the finance app holds,
+                  arranged around the questions somebody who runs the shop
+                  actually asks. */}
+              <Route path="/pharmacy/money" element={<MoneyCentrePage />} />
+              <Route path="/pharmacy/performance" element={<PharmacyPerformancePage />} />
+              <Route path="/pharmacy/setup" element={<PharmacySetupPage />} />
+              <Route path="/inventory/receive" element={forPharmacy(<QuickReceivePage />)} />
               <Route path="/retail" element={<RetailHome />} />
               <Route path="/retail/prescriptions" element={forPharmacy(<PrescriptionsPage />)} />
               <Route

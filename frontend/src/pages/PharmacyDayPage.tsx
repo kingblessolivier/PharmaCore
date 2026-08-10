@@ -255,7 +255,7 @@ export function PharmacyDayPage() {
         </h2>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           <QuickAction to="/pos" icon={ShoppingCart} label="Sell" />
-          <QuickAction to="/procurement/receipts" icon={PackageCheck} label="Receive a delivery" />
+          <QuickAction to="/inventory/receive" icon={PackageCheck} label="Receive a delivery" />
           <QuickAction to="/distribution/orders/new" icon={ClipboardList} label="Order stock" />
           <QuickAction to="/inventory/counts" icon={Boxes} label="Count stock" />
           <QuickAction to="/products" icon={Boxes} label="Add a medicine" />

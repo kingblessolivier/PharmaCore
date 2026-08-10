@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import Any
 
 from rest_framework import serializers
 
 from apps.core.fields import QuantityAwareModelSerializer
+from apps.retail import tax as vat
 from apps.retail.models import (
-    TAX_RATES,
     ClinicalService,
     ClinicalServiceRecord,
     ControlledSubstanceRegister,
@@ -345,6 +344,9 @@ class SaleSerializer(QuantityAwareModelSerializer):
                 quantity=item["quantity"],
                 unit_code=item.get("unit"),
                 base_price=listing.retail_price,
-                tax_rate=TAX_RATES.get(product.tax_class, Decimal("0")),
+                # Not the product's class alone. An unregistered pharmacy
+                # charges no VAT whatever the medicine is rated at — see
+                # apps/retail/tax.py.
+                tax_rate=vat.rate_for(product=product, organization=sale.organization),
             )
         return sale

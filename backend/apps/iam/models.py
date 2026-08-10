@@ -185,6 +185,33 @@ class Organization(models.Model):
         ),
     )
 
+    #: Whether this pharmacy is registered for VAT with the RRA.
+    #:
+    #: Registration is compulsory above RWF 20,000,000 of turnover in twelve
+    #: months, or RWF 5,000,000 in the preceding quarter. Below that a pharmacy
+    #: is **not** VAT-registered and must not charge VAT — the 18% belongs to
+    #: nobody, and adding it to a paracetamol both overcharges the customer and
+    #: creates a liability the pharmacy never owed.
+    #:
+    #: Every sale line took its rate from the product's tax class alone, so
+    #: every pharmacy in the system charged VAT whether or not it was registered
+    #: to. Most Rwandan community pharmacies are under the threshold, so for
+    #: most of them the till was wrong on every line.
+    #:
+    #: Defaults to False, which is the true state of a pharmacy that has not
+    #: said otherwise. Registering is a thing somebody does deliberately, with a
+    #: certificate; assuming it silently is how the wrong default gets applied
+    #: to the many in order to suit the few.
+    is_vat_registered = models.BooleanField(
+        default=False,
+        help_text=(
+            "Registered for VAT with the RRA. Compulsory above RWF 20M turnover in "
+            "12 months, or RWF 5M in the preceding quarter. When off, no VAT is "
+            "charged at the till and no VAT appears on an invoice."
+        ),
+    )
+    vat_registration_no = models.CharField(max_length=30, blank=True, default="")
+
     @property
     def is_single_handed(self) -> bool:
         """One person carries every responsibility here.

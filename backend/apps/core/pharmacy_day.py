@@ -231,7 +231,7 @@ def _needs_attention(org_ids: list[int], today: date) -> list[dict[str, Any]]:
                     f"About {expiring_value:,.0f} RWF of stock. There is still time to "
                     "sell it, move it or send it back."
                 ),
-                "to": "/inventory/expiry",
+                "to": "/catalog/expiry",
                 "tone": "warning",
             }
         )

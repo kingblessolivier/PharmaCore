@@ -6,7 +6,8 @@ Org-scoped; reads for any authed user in the org, writes admin/manager-only and 
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
+from decimal import Decimal
 from typing import Any, cast
 
 from django.db.models import Q, QuerySet
@@ -21,10 +22,11 @@ from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
 
+from apps.catalog.models import Product
 from apps.core.lookups import lookup_pk
 from apps.iam.audit import record_audit
 from apps.iam.models import Organization, User
-from apps.iam.permissions import CanManageOrg
+from apps.iam.permissions import CanManageOrg, HasPermission
 from apps.iam.scoping import organizations_visible_to
 from apps.inventory import (
     analytics,
@@ -512,6 +514,68 @@ class PharmacyProductViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance: PharmacyProduct) -> None:
         self._audit("DELETE", instance)
         instance.delete()
+
+
+class QuickReceiveView(APIView):
+    """Stock that arrived without a purchase order.
+
+    A rep's van stops outside and the pharmacist buys four boxes. There was
+    never an order to receive against, and inventing one afterwards is
+    paperwork describing something that did not happen — so in practice the
+    delivery went unrecorded and the shelf and the system parted company.
+
+    Not a way round `IntakeView`: that one serves depots and refuses retail,
+    this one serves retail and refuses depots. See apps/inventory/quick_receive.
+    """
+
+    permission_classes = [IsAuthenticated, HasPermission.require("inventory.intake")]
+
+    def post(self, request: Request) -> Response:
+        from apps.inventory.quick_receive import QuickReceiveError, quick_receive
+
+        user = cast(User, request.user)
+        # A pharmacist standing at the counter has exactly one pharmacy. Asking
+        # them to name it in a query string is a question with one possible
+        # answer, so the body and then their own organisation are read first.
+        raw = request.data.get("organization") or request.query_params.get("organization")
+        organization = (
+            _require_org(request, Organization.objects.filter(pk=raw).first())
+            if raw
+            else user.organization
+        )
+        if organization is None:
+            raise ValidationError("Which pharmacy is this delivery for?")
+        _require_org(request, organization)
+        product = get_object_or_404(Product, pk=request.data.get("product"))
+
+        raw_expiry = str(request.data.get("expiry_date", ""))
+        try:
+            expiry = date.fromisoformat(raw_expiry)
+        except ValueError as exc:
+            raise ValidationError(
+                "The expiry date must be a real date, as it is printed on the box."
+            ) from exc
+
+        selling = request.data.get("selling_price")
+        try:
+            return Response(
+                quick_receive(
+                    organization=organization,
+                    product=product,
+                    quantity=Decimal(str(request.data.get("quantity", 0) or 0)),
+                    batch_number=str(request.data.get("batch_number", "")),
+                    expiry_date=expiry,
+                    unit_cost=Decimal(str(request.data.get("unit_cost", 0) or 0)),
+                    selling_price=None if selling in (None, "") else Decimal(str(selling)),
+                    supplier_name=str(request.data.get("supplier_name", "")),
+                    user=user,
+                ),
+                status=status.HTTP_201_CREATED,
+            )
+        except QuickReceiveError as exc:
+            raise ValidationError(str(exc)) from exc
+        except (TypeError, ArithmeticError) as exc:
+            raise ValidationError(f"Those figures could not be read: {exc}") from exc
 
 
 class InventoryBatchViewSet(viewsets.ReadOnlyModelViewSet):

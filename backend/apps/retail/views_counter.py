@@ -23,6 +23,7 @@ from apps.iam.models import Organization, User
 from apps.iam.permissions import HasPermission
 from apps.iam.scoping import organizations_visible_to
 from apps.retail import counter
+from apps.retail import tax as vat
 from apps.retail.counter import (
     active_promotions,
     apply_promotion,
@@ -367,7 +368,13 @@ class OfflineSyncViewSet(viewsets.ViewSet):
                 quantity=line["quantity"],
                 unit_code=line.get("unit"),
                 base_price=Decimal(str(line["unit_price"])),
-                tax_rate=Decimal(str(line.get("tax_rate", "0"))),
+                # The till may not name its own VAT rate. It used to take
+                # whatever the client sent, so a rate could be posted by anyone
+                # who could reach the endpoint, and an unregistered pharmacy
+                # charged 18% because the screen had been built assuming it.
+                tax_rate=vat.rate_for(
+                    product=Product.objects.get(pk=line["product"]), organization=organization
+                ),
             )
 
         try:
