@@ -65,6 +65,7 @@ import { applyTheme, storedTheme, type Theme } from "../lib/theme";
 import type { AppNotification, Organization, Paginated } from "../lib/types";
 import { ChangePasswordModal } from "./ChangePasswordModal";
 import { CommandPalette } from "./CommandPalette";
+import { WorkspaceSwitch } from "./WorkspaceSwitch";
 
 function BrandMark() {
   return (
@@ -686,7 +687,7 @@ const SIMPLE_NAV: NavGroup[] = [
     items: [
       { to: "/inventory", label: "What I have", icon: Boxes, end: true },
       { to: "/inventory/replenishment", label: "Running low", icon: TrendingUp },
-      { to: "/inventory/qc", label: "Expiring & quarantine", icon: TriangleAlert },
+      { to: "/catalog/expiry", label: "Expiring", icon: TriangleAlert },
       { to: "/inventory/counts", label: "Stock count", icon: ClipboardList },
     ],
   },
@@ -696,16 +697,16 @@ const SIMPLE_NAV: NavGroup[] = [
     items: [
       { to: "/distribution/orders", label: "My orders", icon: ClipboardList },
       { to: "/distribution/portal", label: "Find a supplier", icon: Truck },
-      { to: "/procurement/receipts", label: "Receive a delivery", icon: PackageCheck },
+      { to: "/inventory/receive", label: "Receive a delivery", icon: PackageCheck },
     ],
   },
   {
     label: "Money",
     needs: ["finance.view"],
     items: [
+      { to: "/pharmacy/money", label: "Money", icon: Wallet },
+      { to: "/pharmacy/performance", label: "How I am doing", icon: BarChart3 },
       { to: "/retail/sales", label: "Sales", icon: Receipt, needs: ["sale.create"] },
-      { to: "/finance/receivables", label: "Owed to me", icon: TrendingUp },
-      { to: "/finance/payables", label: "I owe", icon: CreditCard },
       { to: "/documents", label: "Documents", icon: FileText },
     ],
   },
@@ -724,6 +725,12 @@ const SIMPLE_NAV: NavGroup[] = [
         to: "/companies",
         label: "Pharmacy details",
         icon: Building2,
+        needs: ["organization.manage"],
+      },
+      {
+        to: "/pharmacy/setup",
+        label: "Set-up questions",
+        icon: Sliders,
         needs: ["organization.manage"],
       },
     ],
@@ -867,6 +874,9 @@ export function AppShell() {
           <kbd className="rounded border border-line px-1 font-mono text-[10px]">⌘K</kbd>
         </button>
         <div className="ml-auto flex items-center gap-3">
+          {/* Which of your two jobs you are doing. Renders nothing for
+              somebody who only holds one — see lib/workspace.ts. */}
+          <WorkspaceSwitch />
           <ThemeToggle />
           <NotificationsBell />
           <div className="flex items-center gap-2 text-sm">

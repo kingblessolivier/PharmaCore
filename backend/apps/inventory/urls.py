@@ -20,6 +20,7 @@ from apps.inventory.views import (
     PickWaveViewSet,
     PutawayRuleViewSet,
     QualityCheckViewSet,
+    QuickReceiveView,
     ReorderRuleViewSet,
     SensorCalibrationViewSet,
     SerialUnitViewSet,
@@ -65,5 +66,6 @@ router.register("pick-tasks", PickTaskViewSet, basename="pick-task")
 urlpatterns = [
     path("overview/", InventoryOverviewView.as_view(), name="inventory-overview"),
     path("intake", IntakeView.as_view(), name="intake"),
+    path("quick-receive/", QuickReceiveView.as_view(), name="quick-receive"),
     *router.urls,
 ]

@@ -9,6 +9,7 @@ from typing import Any, cast
 from django.conf import settings
 from django.db.models import Sum
 from django.utils import timezone
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -37,6 +38,74 @@ class PharmacyDayView(APIView):
         from apps.core.pharmacy_day import pharmacy_day
 
         return Response(pharmacy_day(cast(User, request.user)))
+
+
+class MoneyCentreView(APIView):
+    """Where the pharmacy's money is — takings, debts both ways, and cash."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        from apps.core.money_centre import money_centre
+
+        return Response(money_centre(cast(User, request.user)))
+
+
+class PharmacyPerformanceView(APIView):
+    """How the pharmacy is doing, in the words an owner would use."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        from apps.core.pharmacy_performance import pharmacy_performance
+
+        return Response(pharmacy_performance(cast(User, request.user)))
+
+
+class PharmacySetupView(APIView):
+    """The four questions that decide what this pharmacy is shown.
+
+    Only an administrator answers them: the answers change what every user of
+    the organisation sees, and whether the till charges VAT.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _organization(self, request: Request) -> Any:
+        user = cast(User, request.user)
+        organization = user.organization
+        if organization is None:
+            raise ValidationError("You are not attached to a pharmacy.")
+        if not (user.is_superuser or user.has_role("SYS_ADMIN") or user.has_role("ORG_ADMIN")):
+            raise PermissionDenied(
+                "Setting up the pharmacy is limited to administrators — the answers "
+                "change what everyone here sees."
+            )
+        return organization
+
+    def get(self, request: Request) -> Response:
+        from apps.core.setup import setup_state
+
+        return Response(setup_state(self._organization(request)))
+
+    def post(self, request: Request) -> Response:
+        from apps.core.setup import SetupError, apply_setup, setup_state
+
+        organization = self._organization(request)
+        try:
+            apply_setup(
+                organization=organization,
+                headcount=str(request.data.get("headcount", "")),
+                branches=int(request.data.get("branches", 1) or 1),
+                manages=list(request.data.get("manages") or []),
+                vat_registered=bool(request.data.get("vat_registered")),
+                vat_registration_no=str(request.data.get("vat_registration_no", "")),
+            )
+        except SetupError as exc:
+            raise ValidationError(str(exc)) from exc
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(f"Those answers could not be read: {exc}") from exc
+        return Response(setup_state(organization))
 
 
 class HealthView(APIView):

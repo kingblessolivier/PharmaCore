@@ -5,7 +5,7 @@
 # API reference
 
 
-**1119 routes.**
+**1123 routes.**
 
 Every route the project serves, generated from the URL resolver.
 For conventions — pagination, errors, auth, idempotency — read
@@ -1120,6 +1120,7 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/inventory/^warehouses\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `WarehouseViewSet` |  |
 | `/api/inventory/intake` | — | `IntakeView` |  |
 | `/api/inventory/overview/` | — | `InventoryOverviewView` | What needs a decision in inventory, rather than what exists in it. |
+| `/api/inventory/quick-receive/` | — | `QuickReceiveView` | Stock that arrived without a purchase order. |
 
 
 ## `/api/pharmacy`
@@ -1128,6 +1129,9 @@ For conventions — pagination, errors, auth, idempotency — read
 | Path | Methods | View | Purpose |
 | --- | --- | --- | --- |
 | `/api/pharmacy/day/` | — | `PharmacyDayView` | The morning briefing for a pharmacy that is one or two people. |
+| `/api/pharmacy/money/` | — | `MoneyCentreView` | Where the pharmacy's money is — takings, debts both ways, and cash. |
+| `/api/pharmacy/performance/` | — | `PharmacyPerformanceView` | How the pharmacy is doing, in the words an owner would use. |
+| `/api/pharmacy/setup/` | — | `PharmacySetupView` | The four questions that decide what this pharmacy is shown. |
 
 
 ## `/api/procurement`
