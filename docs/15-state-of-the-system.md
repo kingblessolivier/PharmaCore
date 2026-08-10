@@ -317,9 +317,16 @@ On order              100
 Recommended order   1,680
 ```
 
-That number, per product, per branch, is the single most valuable thing this
-system could compute that it does not compute today. `BackorderLine` captures
-unmet demand already — the forecast layer on top of it is missing.
+**Correction (10 Aug):** I wrote that this was missing. It is not. It is built
+and reachable — `apps/inventory/analytics.py` computes demand statistics over a
+rolling window, safety stock from a service level, reorder points, suggested
+orders and an ABC/XYZ matrix, and `ReplenishmentPage` renders all of it. I
+asserted a gap without probing for it, which is exactly the error this document
+was written to avoid.
+
+What is genuinely thin is *branch-level* demand: the statistics are computed per
+organization, so a chain cannot yet see that Musanze is short while Kigali is
+long on the same product.
 
 ---
 

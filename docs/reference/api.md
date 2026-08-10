@@ -5,7 +5,7 @@
 # API reference
 
 
-**1064 routes.**
+**1088 routes.**
 
 Every route the project serves, generated from the URL resolver.
 For conventions — pagination, errors, auth, idempotency — read
@@ -1231,6 +1231,37 @@ For conventions — pagination, errors, auth, idempotency — read
 | `/api/procurement/^supplier-profiles\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `SupplierProfileViewSet` | Supplier master: standing, trade terms, banking, scorecard, licences. |
 | `/api/procurement/overview/` | — | `ProcurementOverviewView` | Headline numbers for the Procurement home screen. |
 | `/api/procurement/statement/` | — | `SupplierStatementView` | Statement of account for one supplier — invoices, notes, payments, balance. |
+
+
+## `/api/quality`
+
+
+| Path | Methods | View | Purpose |
+| --- | --- | --- | --- |
+| `/api/quality/` | — | `APIRootView` | The default basic root view for DefaultRouter |
+| `/api/quality/<drf_format_suffix:format>` | — | `APIRootView` | The default basic root view for DefaultRouter |
+| `/api/quality/^actions/$` | GET | `CapaActionViewSet` | Actions across every case — the "what is on my plate" list. |
+| `/api/quality/^actions/(?P<pk>[^/.]+)/$` | GET | `CapaActionViewSet` | Actions across every case — the "what is on my plate" list. |
+| `/api/quality/^actions/(?P<pk>[^/.]+)/complete/$` | POST | `CapaActionViewSet` | Actions across every case — the "what is on my plate" list. |
+| `/api/quality/^actions/(?P<pk>[^/.]+)/complete\.(?P<format>[a-z0-9]+)/?$` | POST | `CapaActionViewSet` | Actions across every case — the "what is on my plate" list. |
+| `/api/quality/^actions/(?P<pk>[^/.]+)/verify/$` | POST | `CapaActionViewSet` | Actions across every case — the "what is on my plate" list. |
+| `/api/quality/^actions/(?P<pk>[^/.]+)/verify\.(?P<format>[a-z0-9]+)/?$` | POST | `CapaActionViewSet` | Actions across every case — the "what is on my plate" list. |
+| `/api/quality/^actions/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | GET | `CapaActionViewSet` | Actions across every case — the "what is on my plate" list. |
+| `/api/quality/^actions\.(?P<format>[a-z0-9]+)/?$` | GET | `CapaActionViewSet` | Actions across every case — the "what is on my plate" list. |
+| `/api/quality/^cases/$` | GET,POST | `QualityCaseViewSet` | Complaints, deviations and adverse events — one list, filtered by kind. |
+| `/api/quality/^cases/(?P<pk>[^/.]+)/$` | DELETE,GET,PATCH,PUT | `QualityCaseViewSet` | Complaints, deviations and adverse events — one list, filtered by kind. |
+| `/api/quality/^cases/(?P<pk>[^/.]+)/add-action/$` | POST | `QualityCaseViewSet` | Complaints, deviations and adverse events — one list, filtered by kind. |
+| `/api/quality/^cases/(?P<pk>[^/.]+)/add-action\.(?P<format>[a-z0-9]+)/?$` | POST | `QualityCaseViewSet` | Complaints, deviations and adverse events — one list, filtered by kind. |
+| `/api/quality/^cases/(?P<pk>[^/.]+)/close/$` | POST | `QualityCaseViewSet` | Complaints, deviations and adverse events — one list, filtered by kind. |
+| `/api/quality/^cases/(?P<pk>[^/.]+)/close\.(?P<format>[a-z0-9]+)/?$` | POST | `QualityCaseViewSet` | Complaints, deviations and adverse events — one list, filtered by kind. |
+| `/api/quality/^cases/(?P<pk>[^/.]+)/investigate/$` | POST | `QualityCaseViewSet` | Complaints, deviations and adverse events — one list, filtered by kind. |
+| `/api/quality/^cases/(?P<pk>[^/.]+)/investigate\.(?P<format>[a-z0-9]+)/?$` | POST | `QualityCaseViewSet` | Complaints, deviations and adverse events — one list, filtered by kind. |
+| `/api/quality/^cases/(?P<pk>[^/.]+)/report-to-regulator/$` | POST | `QualityCaseViewSet` | Record that this went to the authority, and under what reference. |
+| `/api/quality/^cases/(?P<pk>[^/.]+)/report-to-regulator\.(?P<format>[a-z0-9]+)/?$` | POST | `QualityCaseViewSet` | Record that this went to the authority, and under what reference. |
+| `/api/quality/^cases/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$` | DELETE,GET,PATCH,PUT | `QualityCaseViewSet` | Complaints, deviations and adverse events — one list, filtered by kind. |
+| `/api/quality/^cases/workload/$` | GET | `QualityCaseViewSet` | Complaints, deviations and adverse events — one list, filtered by kind. |
+| `/api/quality/^cases/workload\.(?P<format>[a-z0-9]+)/?$` | GET | `QualityCaseViewSet` | Complaints, deviations and adverse events — one list, filtered by kind. |
+| `/api/quality/^cases\.(?P<format>[a-z0-9]+)/?$` | GET,POST | `QualityCaseViewSet` | Complaints, deviations and adverse events — one list, filtered by kind. |
 
 
 ## `/api/retail`
