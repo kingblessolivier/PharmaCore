@@ -85,7 +85,7 @@ export function RequisitionWorkbenchPage() {
   const waitingDays = daysSince(req.approved_at);
 
   return (
-    <div className="flex h-[calc(100vh-5.5rem)] flex-col">
+    <div className="flex h-full flex-col">
       <div className="mb-2">
         <Link
           to="/procurement/requisitions"
@@ -245,86 +245,86 @@ export function RequisitionWorkbenchPage() {
               </WorkbenchGrid>
             </WorkbenchPanel>
           </WorkbenchTabs>
-        </div>
 
-        <LineArea title="Lines" count={lines.length}>
-          <table className="data-grid">
-            <thead>
-              <tr>
-                <th>Medicine</th>
-                <th className="text-right">Requested</th>
-                <th className="text-right">Approved</th>
-                <th className="text-right">Ordered</th>
-                <th className="text-right">Outstanding</th>
-                <th className="text-right">Est. unit cost</th>
-                <th className="text-right">Est. total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((line) => {
-                /* Approved for less than was asked is a decision somebody made
+          <LineArea title="Lines" count={lines.length}>
+            <table className="data-grid">
+              <thead>
+                <tr>
+                  <th>Medicine</th>
+                  <th className="text-right">Requested</th>
+                  <th className="text-right">Approved</th>
+                  <th className="text-right">Ordered</th>
+                  <th className="text-right">Outstanding</th>
+                  <th className="text-right">Est. unit cost</th>
+                  <th className="text-right">Est. total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((line) => {
+                  /* Approved for less than was asked is a decision somebody made
                    and nobody was told about — it is worth marking in the row. */
-                const cut =
-                  line.quantity_approved !== undefined && line.quantity_approved < line.quantity;
-                const notOrdered = (line.quantity_outstanding ?? 0) > 0;
-                return (
-                  <tr key={line.id ?? line.product}>
-                    <td className="text-ink-900">
-                      {line.product_name}
-                      {line.notes && (
-                        <span className="ml-2 text-micro text-ink-500">{line.notes}</span>
-                      )}
-                    </td>
-                    <td className="text-right tabular-nums">{line.quantity}</td>
-                    <td
-                      className={`text-right tabular-nums ${
-                        cut ? "font-semibold text-warning-700" : "text-ink-700"
-                      }`}
-                      title={cut ? "Approved for less than was requested" : ""}
-                    >
-                      {line.quantity_approved ?? "—"}
-                    </td>
-                    <td className="text-right tabular-nums text-ink-700">
-                      {line.quantity_ordered ?? "—"}
-                    </td>
-                    <td
-                      className={`text-right tabular-nums ${
-                        notOrdered ? "font-semibold text-warning-700" : "text-ink-500"
-                      }`}
-                    >
-                      {line.quantity_outstanding || "—"}
-                    </td>
-                    <td className="text-right tabular-nums text-ink-700">
-                      {money(Number(line.estimated_unit_cost))}
-                    </td>
-                    <td className="text-right font-medium tabular-nums text-ink-900">
-                      {money(Number(line.estimated_total ?? 0))}
+                  const cut =
+                    line.quantity_approved !== undefined && line.quantity_approved < line.quantity;
+                  const notOrdered = (line.quantity_outstanding ?? 0) > 0;
+                  return (
+                    <tr key={line.id ?? line.product}>
+                      <td className="text-ink-900">
+                        {line.product_name}
+                        {line.notes && (
+                          <span className="ml-2 text-micro text-ink-500">{line.notes}</span>
+                        )}
+                      </td>
+                      <td className="text-right tabular-nums">{line.quantity}</td>
+                      <td
+                        className={`text-right tabular-nums ${
+                          cut ? "font-semibold text-warning-700" : "text-ink-700"
+                        }`}
+                        title={cut ? "Approved for less than was requested" : ""}
+                      >
+                        {line.quantity_approved ?? "—"}
+                      </td>
+                      <td className="text-right tabular-nums text-ink-700">
+                        {line.quantity_ordered ?? "—"}
+                      </td>
+                      <td
+                        className={`text-right tabular-nums ${
+                          notOrdered ? "font-semibold text-warning-700" : "text-ink-500"
+                        }`}
+                      >
+                        {line.quantity_outstanding || "—"}
+                      </td>
+                      <td className="text-right tabular-nums text-ink-700">
+                        {money(Number(line.estimated_unit_cost))}
+                      </td>
+                      <td className="text-right font-medium tabular-nums text-ink-900">
+                        {money(Number(line.estimated_total ?? 0))}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {lines.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="py-6 text-center text-ink-500">
+                      Nothing requested on this document.
                     </td>
                   </tr>
-                );
-              })}
-              {lines.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="py-6 text-center text-ink-500">
-                    Nothing requested on this document.
-                  </td>
-                </tr>
+                )}
+              </tbody>
+              {lines.length > 0 && (
+                <tfoot>
+                  <tr>
+                    <td colSpan={6} className="text-right">
+                      Estimated total
+                    </td>
+                    <td className="text-right text-base tabular-nums">
+                      {money(Number(req.estimated_total))}
+                    </td>
+                  </tr>
+                </tfoot>
               )}
-            </tbody>
-            {lines.length > 0 && (
-              <tfoot>
-                <tr>
-                  <td colSpan={6} className="text-right">
-                    Estimated total
-                  </td>
-                  <td className="text-right text-base tabular-nums">
-                    {money(Number(req.estimated_total))}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </LineArea>
+            </table>
+          </LineArea>
+        </div>
       </Workbench>
 
       <ErrorNote error={submit.error} />

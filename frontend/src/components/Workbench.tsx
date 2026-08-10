@@ -24,7 +24,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { createContext, useContext, useId, useLayoutEffect, useRef, useState } from "react";
+import { createContext, useContext, useId, useState } from "react";
 
 /* ---------------------------------------------------------------- icon scale */
 
@@ -82,30 +82,8 @@ export function WorkbenchHeader({
   facts?: WorkbenchFact[];
   actions?: ReactNode;
 }) {
-  /* The header measures itself and publishes the result.
-   *
-   * Two stacked sticky elements need the lower one to know the height of the
-   * upper one, and that was a hardcoded `top-[57px]` — a guess at this
-   * header's rendered height. It was wrong the moment anyone changed a font
-   * size or a padding here, and it silently overlapped the tab bar with the
-   * content beneath it. A measured value cannot go stale. */
-  const ref = useRef<HTMLDivElement>(null);
-  const { setHeaderHeight } = useContext(StickyCtx);
-  useLayoutEffect(() => {
-    const node = ref.current;
-    if (!node) return;
-    const publish = () => setHeaderHeight(node.getBoundingClientRect().height);
-    publish();
-    const observer = new ResizeObserver(publish);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [setHeaderHeight]);
-
   return (
-    <div
-      ref={ref}
-      className="sticky top-0 z-20 border-b border-chrome-500 bg-chrome-100"
-    >
+    <div className="shrink-0 border-b border-chrome-500 bg-surface-0">
       <div className="flex flex-wrap items-start gap-x-6 gap-y-3 px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -176,14 +154,12 @@ export function WorkbenchTabs({
 }) {
   const [active, setActive] = useState(initial ?? tabs[0]?.id ?? "");
   const name = useId();
-  const { headerHeight } = useContext(StickyCtx);
   return (
     <TabCtx.Provider value={{ active, setActive, name }}>
       <div
         role="tablist"
         aria-label="Document sections"
-        style={{ top: headerHeight }}
-        className="sticky z-10 flex gap-1 overflow-x-auto border-b border-chrome-500 bg-surface-0 px-3"
+        className="sticky top-0 z-10 flex gap-1 overflow-x-auto border-b border-chrome-500 bg-surface-0 px-3"
       >
         {tabs.map((tab) => {
           const on = tab.id === active;
@@ -352,19 +328,10 @@ export function LineArea({
 }
 
 /** The page frame: header, tabs and lines stacked, only the middle scrolling. */
-/** Carries the header's measured height down to the tab bar that must clear it. */
-const StickyCtx = createContext<{ headerHeight: number; setHeaderHeight: (n: number) => void }>({
-  headerHeight: 0,
-  setHeaderHeight: () => {},
-});
-
 export function Workbench({ children }: { children: ReactNode }) {
-  const [headerHeight, setHeaderHeight] = useState(0);
   return (
-    <StickyCtx.Provider value={{ headerHeight, setHeaderHeight }}>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-chrome-500 bg-surface-0">
-        {children}
-      </div>
-    </StickyCtx.Provider>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-chrome-500 bg-surface-0">
+      {children}
+    </div>
   );
 }

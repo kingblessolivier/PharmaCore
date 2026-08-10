@@ -18,6 +18,7 @@ import {
 import { useDefaultOrg, useProducts, useSuppliers } from "../lib/recordData";
 import { Badge, Button, ConfirmModal, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
+import { shortDate } from "../lib/format";
 import {
   LICENCE_KINDS,
   money,
@@ -657,7 +658,7 @@ export function PerformanceTab({ profile }: { profile: SupplierProfile }) {
           </span>
           <span className="text-xs text-ink-500">
             {profile.scores_updated_at
-              ? `updated ${new Date(profile.scores_updated_at).toLocaleDateString()}`
+              ? `updated ${shortDate(profile.scores_updated_at)}`
               : "never scored"}
           </span>
         </div>

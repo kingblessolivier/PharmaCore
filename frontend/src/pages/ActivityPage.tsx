@@ -133,7 +133,7 @@ export function ActivityPage() {
             value: (r) => r.created_at,
             render: (r) => (
               <span className="whitespace-nowrap text-ink-500">
-                {new Date(r.created_at).toLocaleString()}
+                {dateTime(r.created_at)}
               </span>
             ),
           },

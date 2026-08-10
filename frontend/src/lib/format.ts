@@ -26,17 +26,32 @@ export function pct(value: string | number | null | undefined, dp = 1): string {
   return `${Number(value ?? 0).toFixed(dp)}%`;
 }
 
+/* Dates are written with the month as a word, always.
+ *
+ * `toLocaleDateString()` with no locale renders in whatever the *browser* is
+ * set to, so the same expiry date read "8/6/2026" on one machine and
+ * "6/8/2026" on another — and neither reader can tell which. On a screen where
+ * the number is a medicine's expiry that ambiguity has consequences: a batch
+ * good until August looks expired in June, and one that expired in June looks
+ * good until August.
+ *
+ * "06 Aug 2026" cannot be misread by anybody, in any locale, and is the format
+ * the generated documents already use — so the screen and the paperwork agree.
+ */
+const DAY = { day: "2-digit", month: "short", year: "numeric" } as const;
+const DAY_TIME = { ...DAY, hour: "2-digit", minute: "2-digit", hour12: false } as const;
+
 /** Short date for a grid cell; falls back to an em dash. */
 export function shortDate(value: string | null | undefined): string {
   if (!value) return "—";
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString();
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString("en-GB", DAY);
 }
 
 export function dateTime(value: string | null | undefined): string {
   if (!value) return "—";
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleString("en-GB", DAY_TIME);
 }
 
 const SUCCESS = new Set([

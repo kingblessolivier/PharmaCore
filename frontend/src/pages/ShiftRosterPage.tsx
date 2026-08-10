@@ -22,6 +22,7 @@ import {
 } from "../components/RecordKit";
 import { Badge, Button, ConfirmModal, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
+import { shortDate } from "../lib/format";
 import { useEmployees, useDefaultOrg } from "../lib/recordData";
 import type { Employee, Paginated, ShiftRoster } from "../lib/types";
 
@@ -358,7 +359,7 @@ export function ShiftRosterPage() {
               </button>
             </div>
             <span className="text-sm text-ink-600">
-              {anchor.toLocaleDateString()} – {weekEnd.toLocaleDateString()}
+              {shortDate(anchor.toISOString())} – {shortDate(weekEnd.toISOString())}
             </span>
             {gaps > 0 ? (
               <Badge tone="danger">
