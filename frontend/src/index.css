@@ -366,3 +366,56 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Scrollbars.
+
+   A dense screen has several scrolling regions at once — the nav, the work
+   area, a line grid, a drawer — and the platform default draws each one as a
+   wide grey trough with arrow buttons. On Windows that is 17px of chrome per
+   region, in a colour belonging to no palette, and four of them on screen read
+   as scaffolding rather than as part of the application.
+
+   These are 10px, track-less until hovered, and drawn from the same neutrals
+   as everything else. Firefox gets the two properties it supports; WebKit gets
+   the full treatment. Both keep the scrollbar *visible* — overlay scrollbars
+   that appear only while moving hide how much of a long table is left, which
+   on a document of two hundred lines is information the reader needs.
+--------------------------------------------------------------------------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--chrome-600) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--chrome-600);
+  border-radius: 999px;
+  /* The border is transparent and the background is clipped to the padding
+     box, which insets the thumb without needing a separate track element. */
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--chrome-700);
+  border-width: 2px;
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background-color: var(--ink-500);
+}
+
+/* Where two scrollbars meet. Left unstyled it renders as a grey square with a
+   resize grip, which is the most conspicuous default of the lot. */
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}

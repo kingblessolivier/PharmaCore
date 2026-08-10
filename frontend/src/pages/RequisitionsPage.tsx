@@ -390,7 +390,6 @@ function ConsolidateModal({
 
 export function RequisitionsPage() {
   const navigate = useNavigate();
-  const [open, setOpen] = useState<PurchaseRequisition | null>(null);
   const [creating, setCreating] = useState(false);
   const [consolidating, setConsolidating] = useState<PurchaseRequisition[] | null>(null);
 
@@ -401,7 +400,6 @@ export function RequisitionsPage() {
   });
 
   const rows = data?.results ?? [];
-  const current = open ? (rows.find((r) => r.id === open.id) ?? open) : null;
 
   return (
     <div>
@@ -505,7 +503,7 @@ export function RequisitionsPage() {
       />
 
       {creating && <RequisitionDrawer requisition={null} onClose={() => setCreating(false)} />}
-      {current && <RequisitionDrawer requisition={current} onClose={() => setOpen(null)} />}
+      
       {consolidating && (
         <ConsolidateModal requisitions={consolidating} onClose={() => setConsolidating(null)} />
       )}

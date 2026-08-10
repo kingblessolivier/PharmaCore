@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Badge, Button, PageHeader, SelectField, TextField } from "../components/ui";
 import { api } from "../lib/api";
-import { money, shortDate } from "../lib/format";
+import { shortDate } from "../lib/format";
 import { useDefaultOrg } from "../lib/recordData";
 import type { Paginated, PriceList } from "../lib/types";
 import { DataGrid } from "../components/DataGrid";
@@ -55,7 +55,6 @@ export function PriceListsPage() {
   });
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<PriceList | null>(null);
-  const [opened, setOpened] = useState<PriceList | null>(null);
 
   const [name, setName] = useState("");
   const [listType, setListType] = useState<"WHOLESALE" | "RETAIL" | "PROMOTIONAL" | "CONTRACT">(
@@ -292,7 +291,7 @@ export function PriceListsPage() {
         </Drawer>
       )}
 
-      {opened && <PriceListRows list={opened} onClose={() => setOpened(null)} />}
+      
 
       {editing && (
         <Drawer title="Edit Price List" onClose={() => setEditing(null)}>
@@ -344,55 +343,3 @@ export function PriceListsPage() {
  * `/api/catalog/product-prices/` served the rows the whole time with nothing
  * listing them, so a price list could be created, activated and relied on
  * without anyone being able to see a single price inside it. */
-interface ProductPrice {
-  id: number;
-  product_generic_name: string;
-  unit_price: string;
-  min_quantity: number;
-}
-
-function PriceListRows({ list, onClose }: { list: PriceList; onClose: () => void }) {
-  const { data, isLoading } = useQuery({
-    queryKey: ["product-prices", list.id],
-    queryFn: () =>
-      api<Paginated<ProductPrice>>(`/api/catalog/product-prices/?price_list=${list.id}`),
-  });
-  const rows = data?.results ?? [];
-
-  return (
-    <Drawer title={list.name} subtitle={`${list.list_type} price list`} onClose={onClose}>
-      <DataGrid
-        rows={rows}
-        getRowId={(r) => r.id}
-        loading={isLoading}
-        storageKey="product-prices"
-        exportName={`prices-${list.id}`}
-        searchPlaceholder="Search medicines…"
-        emptyMessage="Nothing priced on this list — every medicine falls back to the shelf price."
-        columns={[
-          { key: "product", header: "Medicine", value: (r) => r.product_generic_name },
-          {
-            // A break is what makes a list worth having: buy fifty, pay less
-            // each. Hiding it makes every row look like a flat price.
-            key: "min_quantity",
-            header: "From quantity",
-            numeric: true,
-            align: "right",
-            value: (r) => r.min_quantity,
-            render: (r) => (
-              <span className="tabular-nums">{r.min_quantity > 1 ? r.min_quantity : "any"}</span>
-            ),
-          },
-          {
-            key: "unit_price",
-            header: "Price each",
-            numeric: true,
-            align: "right",
-            value: (r) => Number(r.unit_price),
-            render: (r) => <span className="tabular-nums">{money(Number(r.unit_price))}</span>,
-          },
-        ]}
-      />
-    </Drawer>
-  );
-}

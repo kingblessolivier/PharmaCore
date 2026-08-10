@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BadgeCheck, Building2, Gauge, Plus, ShieldAlert, Tags, Trash2 } from "lucide-react";
+import { Gauge, Plus, ShieldAlert, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { DataGrid } from "../components/DataGrid";
 import {
@@ -37,8 +37,6 @@ const KINDS = [
   ["LOCAL_AGENT", "Local agent"],
   ["SERVICE", "Service provider"],
 ] as const;
-
-type Tab = "terms" | "licences" | "prices" | "performance";
 
 /* -------------------------------------------------------------------------- */
 
@@ -1016,8 +1014,6 @@ export function TermsTab({ profile }: { profile: SupplierProfile }) {
 
 export function SupplierMasterPage() {
   const navigate = useNavigate();
-  const [selected, setSelected] = useState<SupplierProfile | null>(null);
-  const [tab, setTab] = useState<Tab>("terms");
   const [creating, setCreating] = useState(false);
 
   const { data, isLoading } = useQuery({
@@ -1025,18 +1021,6 @@ export function SupplierMasterPage() {
     queryFn: () =>
       api<Paginated<SupplierProfile>>("/api/procurement/supplier-profiles/?page_size=500"),
   });
-
-  // Keep the open drawer in sync after a mutation refetches the list.
-  const current = selected
-    ? ((data?.results ?? []).find((p) => p.id === selected.id) ?? selected)
-    : null;
-
-  const tabs: [Tab, string, typeof Building2][] = [
-    ["terms", "Terms & contact", Building2],
-    ["licences", "Licences", BadgeCheck],
-    ["prices", "Contract prices", Tags],
-    ["performance", "Performance", Gauge],
-  ];
 
   return (
     <div>
@@ -1131,41 +1115,7 @@ export function SupplierMasterPage() {
 
       {creating && <NewSupplierProfile onClose={() => setCreating(false)} />}
 
-      {current && (
-        <Drawer
-          title={current.supplier_name}
-          badge={<StatusBadge status={current.standing} label={current.standing_display} />}
-          subtitle={
-            <>
-              TIN {current.supplier_tin || "—"} · {current.currency} · net{" "}
-              {current.payment_terms_days}d {current.incoterm && `· ${current.incoterm}`}
-            </>
-          }
-          onClose={() => setSelected(null)}
-        >
-          <div className="mb-4 flex gap-1 border-b border-line">
-            {tabs.map(([key, label, Icon]) => (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm ${
-                  tab === key
-                    ? "border-brand-600 font-semibold text-brand-700"
-                    : "border-transparent text-ink-600 hover:text-ink-900"
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {label}
-              </button>
-            ))}
-          </div>
 
-          {tab === "terms" && <TermsTab key={current.id} profile={current} />}
-          {tab === "licences" && <LicencesTab profile={current} />}
-          {tab === "prices" && <PriceAgreementsTab profile={current} />}
-          {tab === "performance" && <PerformanceTab profile={current} />}
-        </Drawer>
-      )}
     </div>
   );
 }
