@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "apps.procurement",
     "apps.core",
     "apps.events",
+    "apps.quality",
 ]
 
 # --- Media (generated document vault) ---
