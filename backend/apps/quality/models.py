@@ -270,3 +270,116 @@ class CapaAction(models.Model):
         if self.due_date is None or self.status == self.Status.VERIFIED:
             return False
         return self.due_date < timezone.localdate()
+
+
+class AuditEngagement(models.Model):
+    """A planned look at whether a part of the business does what it says.
+
+    Internal audit is not the audit *log*. The log records what happened; this
+    records somebody deliberately going to check — a branch's stock accuracy, a
+    supplier's paperwork, whether the cold chain SOP is actually followed.
+
+    It lives beside CAPA because that is where a finding has to end up. An
+    audit that produces a report and no owned, dated action is an audit nobody
+    acts on, which is the usual failure.
+    """
+
+    class Kind(models.TextChoices):
+        SELF_INSPECTION = "SELF_INSPECTION", "Self-inspection"
+        BRANCH = "BRANCH", "Branch audit"
+        SUPPLIER = "SUPPLIER", "Supplier audit"
+        PROCESS = "PROCESS", "Process audit"
+        REGULATORY = "REGULATORY", "Regulatory inspection"
+
+    class Status(models.TextChoices):
+        PLANNED = "PLANNED", "Planned"
+        IN_PROGRESS = "IN_PROGRESS", "In progress"
+        REPORTING = "REPORTING", "Reporting"
+        CLOSED = "CLOSED", "Closed"
+
+    reference = models.CharField(max_length=30, unique=True, blank=True, default="")
+    organization = models.ForeignKey(
+        "iam.Organization", on_delete=models.PROTECT, related_name="audit_engagements"
+    )
+    kind = models.CharField(max_length=20, choices=Kind.choices, default=Kind.SELF_INSPECTION)
+    status = models.CharField(max_length=15, choices=Status.choices, default=Status.PLANNED)
+    title = models.CharField(max_length=200)
+    scope = models.TextField(help_text="What is being examined, and what is deliberately not.")
+
+    #: What is being audited. A branch audit names an organisation; a supplier
+    #: audit names a supplier; a process audit names neither.
+    subject_organization = models.ForeignKey(
+        "iam.Organization", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    subject_supplier = models.ForeignKey(
+        "catalog.Supplier", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    lead_auditor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    planned_for = models.DateField(null=True, blank=True)
+    started_at = models.DateField(null=True, blank=True)
+    completed_at = models.DateField(null=True, blank=True)
+
+    summary = models.TextField(blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-planned_for", "-created_at"]
+        indexes = [models.Index(fields=["organization", "status"])]
+
+    def __str__(self) -> str:
+        return f"{self.reference or 'Audit'} — {self.title}"
+
+    @property
+    def open_findings(self) -> int:
+        return self.findings.exclude(status=AuditFinding.Status.CLOSED).count()
+
+
+class AuditFinding(models.Model):
+    """One thing the audit found, and what was said about it.
+
+    A finding carries a **management response** as well as an observation,
+    because an audit where the audited party never answered is half a
+    conversation. Where the finding is serious it raises a quality case, so the
+    corrective and preventive work runs through the same CAPA lifecycle as
+    everything else rather than in an audit-shaped silo.
+    """
+
+    class Status(models.TextChoices):
+        OPEN = "OPEN", "Open"
+        RESPONDED = "RESPONDED", "Management responded"
+        ACTIONS_RAISED = "ACTIONS_RAISED", "Actions raised"
+        CLOSED = "CLOSED", "Closed"
+
+    engagement = models.ForeignKey(
+        AuditEngagement, on_delete=models.CASCADE, related_name="findings"
+    )
+    severity = models.CharField(max_length=10, choices=Severity.choices, default=Severity.MINOR)
+    status = models.CharField(max_length=15, choices=Status.choices, default=Status.OPEN)
+    observation = models.TextField(help_text="What was seen, with the evidence for it.")
+    requirement = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="The SOP, licence condition or regulation this departs from.",
+    )
+    management_response = models.TextField(blank=True, default="")
+    responded_at = models.DateTimeField(null=True, blank=True)
+
+    #: Serious findings become quality cases so their actions are verified for
+    #: effectiveness like any other CAPA, rather than closed on assertion.
+    case = models.OneToOneField(
+        QualityCase, null=True, blank=True, on_delete=models.SET_NULL, related_name="audit_finding"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-severity", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.get_severity_display().split(' —')[0]} — {self.observation[:50]}"

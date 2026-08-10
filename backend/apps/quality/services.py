@@ -314,3 +314,143 @@ def open_workload(*, organization: Any) -> dict[str, Any]:
             is_reportable=True, reported_to_regulator_at__isnull=True
         ).count(),
     }
+
+
+# ---------------------------------------------------------------------------
+# Internal audit
+# ---------------------------------------------------------------------------
+
+
+@transaction.atomic
+def plan_audit(
+    *, organization: Any, title: str, scope: str, user: User | None = None, **fields: Any
+) -> Any:
+    """Schedule a look at whether some part of the business does what it says."""
+    from apps.quality.models import AuditEngagement
+
+    if not scope.strip():
+        raise QualityError(
+            "An audit needs a scope — what is being examined, and what deliberately is not."
+        )
+    engagement = AuditEngagement.objects.create(
+        organization=organization, title=title.strip(), scope=scope.strip(), **fields
+    )
+    year = timezone.localdate().year
+    seq = next_number(organization=organization, domain="quality", kind="AUD", year=year)
+    engagement.reference = f"AUD-{year}-{seq:04d}"
+    engagement.save(update_fields=["reference"])
+
+    record_audit(
+        action="AUDIT_PLANNED",
+        user=user,
+        organization=organization,
+        entity_type="audit_engagement",
+        entity_id=str(engagement.pk),
+        changes={"title": engagement.title, "kind": engagement.kind},
+    )
+    return engagement
+
+
+@transaction.atomic
+def raise_finding(
+    *,
+    engagement: Any,
+    observation: str,
+    severity: str = Severity.MINOR,
+    requirement: str = "",
+    user: User | None = None,
+) -> Any:
+    """Record what the audit found — and, if it is serious, start a CAPA.
+
+    A major or critical finding becomes a quality case immediately, so its
+    corrective and preventive work is verified for effectiveness like anything
+    else. An audit that closes its own findings on assertion is the failure
+    mode this exists to prevent.
+    """
+    from apps.quality.models import AuditFinding
+
+    if not observation.strip():
+        raise QualityError("A finding has to say what was actually seen.")
+
+    finding = AuditFinding.objects.create(
+        engagement=engagement,
+        observation=observation.strip(),
+        severity=severity,
+        requirement=requirement.strip(),
+    )
+    if severity in (Severity.CRITICAL, Severity.MAJOR):
+        finding.case = open_case(
+            organization=engagement.organization,
+            kind=QualityCase.Kind.DEVIATION,
+            source=QualityCase.Source.INSPECTION,
+            severity=severity,
+            title=f"{engagement.reference}: {observation.strip()[:120]}",
+            description=(
+                f"Raised by internal audit {engagement.reference} — {engagement.title}.\n\n"
+                f"{observation.strip()}"
+                + (f"\n\nAgainst: {requirement.strip()}" if requirement.strip() else "")
+            ),
+            user=user,
+        )
+        finding.status = AuditFinding.Status.ACTIONS_RAISED
+        finding.save(update_fields=["case", "status"])
+
+    if engagement.status == engagement.Status.PLANNED:
+        engagement.status = engagement.Status.IN_PROGRESS
+        engagement.save(update_fields=["status", "updated_at"])
+    return finding
+
+
+@transaction.atomic
+def respond_to_finding(*, finding: Any, response: str, user: User | None = None) -> Any:
+    """The audited party's answer. Half a conversation without it."""
+    from apps.quality.models import AuditFinding
+
+    if not response.strip():
+        raise QualityError("A response has to say what will be done, or why nothing will be.")
+    finding.management_response = response.strip()
+    finding.responded_at = timezone.now()
+    if finding.status == AuditFinding.Status.OPEN:
+        finding.status = AuditFinding.Status.RESPONDED
+    finding.save(update_fields=["management_response", "responded_at", "status"])
+    return finding
+
+
+@transaction.atomic
+def close_audit(*, engagement: Any, summary: str = "", user: User | None = None) -> Any:
+    """Close the engagement, if its findings are actually dealt with.
+
+    A finding that raised a quality case cannot be closed here while that case
+    is open — otherwise an audit closes on paper while the thing it found is
+    still wrong.
+    """
+    from apps.quality.models import AuditFinding
+
+    unanswered = engagement.findings.filter(status=AuditFinding.Status.OPEN).count()
+    if unanswered:
+        raise QualityError(
+            f"{unanswered} finding(s) have had no management response. An audit closed "
+            "without one is half a conversation."
+        )
+    live = engagement.findings.filter(case__isnull=False).exclude(
+        case__status__in=[CaseStatus.CLOSED, CaseStatus.REJECTED]
+    )
+    if live.exists():
+        raise QualityError(
+            f"{live.count()} finding(s) still have open quality cases. Close those first."
+        )
+
+    engagement.status = engagement.Status.CLOSED
+    engagement.summary = summary.strip()
+    engagement.completed_at = timezone.localdate()
+    engagement.save(update_fields=["status", "summary", "completed_at", "updated_at"])
+
+    record_audit(
+        action="AUDIT_CLOSED",
+        user=user,
+        organization=engagement.organization,
+        entity_type="audit_engagement",
+        entity_id=str(engagement.pk),
+        changes={"reference": engagement.reference},
+    )
+    return engagement
